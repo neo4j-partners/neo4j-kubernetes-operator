@@ -1,0 +1,132 @@
+name: Pages — Helm Repo
+
+# On every v* tag, package the Helm chart at that version (chart version === operator
+# version) and append it to the Helm repository index hosted under /charts/ on the
+# gh-pages branch.
+#
+# Users consume the repo via:
+#   helm repo add neo4j-operator https://priyolahiri.github.io/neo4j-kubernetes-operator/charts
+#   helm install neo4j-operator neo4j-operator/neo4j-operator
+#
+# The docs workflow (pages-docs.yml) writes to /, /latest/, /vX.Y/, /main/ on the
+# same gh-pages branch; concurrency: gh-pages serialises pushes so they cannot race.
+
+# NOTE (#245): no tag trigger — the classic-repo publication is invoked via
+# workflow_call from release.yml AFTER all release gates pass. Publishing on
+# tag push offered a chart whose appVersion pointed at an image that might
+# never exist (the gate-failed-after-tag case, observed live at v1.12.0).
+on:
+  workflow_call: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to package (e.g. v1.7.0-alpha). Must already exist.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+env:
+  CHART_DIR: charts/neo4j-operator
+  PAGES_BASE_URL: https://priyolahiri.github.io/neo4j-kubernetes-operator
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target tag
+        id: target
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          # Strip leading "v" for chart version (Helm SemVer)
+          clean="${tag#v}"
+          echo "tag=${tag}"     >> "$GITHUB_OUTPUT"
+          echo "version=${clean}" >> "$GITHUB_OUTPUT"
+          echo "Packaging chart at tag ${tag} → version ${clean}"
+
+      - name: Checkout source at tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.16.0
+
+      - name: Pin Chart.yaml version + appVersion to operator tag
+        run: |
+          # Chart version === operator version (matches release.yml convention)
+          sed -i "s/^version: .*/version: ${{ steps.target.outputs.version }}/"     "${CHART_DIR}/Chart.yaml"
+          sed -i "s/^appVersion: .*/appVersion: \"${{ steps.target.outputs.version }}\"/" "${CHART_DIR}/Chart.yaml"
+          echo "Updated Chart.yaml:"
+          grep -E "^(version|appVersion):" "${CHART_DIR}/Chart.yaml"
+
+      - name: Lint chart
+        run: helm lint "${CHART_DIR}"
+
+      - name: Package chart to staging directory
+        run: |
+          mkdir -p /tmp/chart-stage
+          helm package "${CHART_DIR}" \
+            --version "${{ steps.target.outputs.version }}" \
+            --app-version "${{ steps.target.outputs.version }}" \
+            --destination /tmp/chart-stage
+          ls -la /tmp/chart-stage
+
+      - name: Checkout gh-pages branch (initialise if missing)
+        # On first run, gh-pages may not exist yet (the docs workflow normally
+        # creates it via `mike deploy`, but ordering between the two workflows
+        # under the same concurrency group is not guaranteed on a fresh repo).
+        # Try a normal checkout first; fall back to creating an empty orphan.
+        run: |
+          mkdir gh-pages
+          cd gh-pages
+          git init -q -b gh-pages
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth 1 origin gh-pages
+            git checkout gh-pages
+          else
+            echo "gh-pages branch does not exist yet — bootstrapping empty orphan"
+            # Stay on the orphan gh-pages branch; nothing to checkout.
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-set origin URL with the GitHub Actions token for push auth.
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+
+      - name: Merge new chart into Helm repo index
+        working-directory: gh-pages
+        run: |
+          mkdir -p charts
+          # Move the freshly packaged tarball into /charts/
+          cp /tmp/chart-stage/*.tgz charts/
+          # Rebuild index, merging with the existing index so prior versions
+          # remain published. If no prior index exists (first-run bootstrap),
+          # --merge is a no-op when the file is absent.
+          if [[ -f charts/index.yaml ]]; then
+            helm repo index charts --merge charts/index.yaml --url "${PAGES_BASE_URL}/charts"
+          else
+            helm repo index charts --url "${PAGES_BASE_URL}/charts"
+          fi
+
+      - name: Commit and push to gh-pages
+        working-directory: gh-pages
+        run: |
+          git add charts/
+          if git diff --cached --quiet; then
+            echo "No changes to commit (chart already published?)"
+            exit 0
+          fi
+          git commit -m "chart: publish neo4j-operator-${{ steps.target.outputs.version }}"
+          git push origin gh-pages

@@ -1,0 +1,9 @@
+# Code owners — GitHub auto-requests review from the matching owner(s) on every PR.
+# Last match wins, so put path-scoped rules BELOW the catch-all if ownership splits.
+#
+# Example of future path-scoping:
+#   /internal/controller/  @priyolahiri
+#   /docs/                  @priyolahiri
+
+# Catch-all: the maintainer owns everything.
+*   @priyolahiri

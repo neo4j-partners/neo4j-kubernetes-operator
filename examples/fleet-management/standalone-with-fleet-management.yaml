@@ -1,0 +1,48 @@
+# NOTE: Aura Fleet Management is not covered by integration tests (it needs a real
+# Aura tenant/token) — validate in your own environment.
+# Neo4jEnterpriseStandalone with Aura Fleet Management
+#
+# This example shows a single-node deployment registered with Neo4j Aura Fleet Management.
+#
+# Prerequisites:
+#   1. Generate a token in the Aura console:
+#      Instances → Self-managed → Add deployment → Monitor deployment
+#   2. Create the token secret:
+#      kubectl create secret generic aura-fleet-token --from-literal=token='<your-token>'
+#   3. Create the admin secret:
+#      kubectl create secret generic neo4j-admin-secret \
+#        --from-literal=username=neo4j --from-literal=password=admin123
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: my-standalone
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  auraFleetManagement:
+    enabled: true
+    tokenSecretRef:
+      name: aura-fleet-token

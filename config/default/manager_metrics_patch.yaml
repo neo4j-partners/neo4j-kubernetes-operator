@@ -1,0 +1,17 @@
+# Expose the operator's /metrics endpoint on :8443 over HTTPS, with
+# Bearer-token authn + SubjectAccessReview authz (handled by
+# controller-runtime's SecureServing when --metrics-secure=true is
+# passed; see cmd/main.go's `SecureServing` wiring).
+#
+# Pinning these two flags together is essential — the
+# `controller-manager-metrics-service` Service names the port `https`,
+# so emitting plaintext HTTP on it would be a footgun for any operator
+# of the operator. The helm chart already pins both via
+# values.yaml::metrics.secure (default true); this patch keeps the
+# kustomize/OLM-deployed path in lockstep.
+- op: add
+  path: /spec/template/spec/containers/0/args/0
+  value: --metrics-bind-address=:8443
+- op: add
+  path: /spec/template/spec/containers/0/args/0
+  value: --metrics-secure=true

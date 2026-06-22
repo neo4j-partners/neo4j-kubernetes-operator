@@ -1,0 +1,56 @@
+{{- if .Values.preInstallChecks.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-pre-install
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "neo4j-operator.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: pre-install-check
+    spec:
+      restartPolicy: Never
+      # Dedicated pre-install hook SA (see pre-install-rbac.yaml). The operator
+      # ServiceAccount isn't created until the main install phase, so the hook
+      # Job can't use it — doing so wedges `helm install` at the pre-install
+      # phase with `serviceaccount not found`.
+      serviceAccountName: {{ include "neo4j-operator.fullname" . }}-pre-install
+      containers:
+      - name: check
+        image: {{ .Values.preInstallChecks.image }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Checking prerequisites for Neo4j Operator..."
+          FAILED=0
+
+          # cert-manager is OPTIONAL — required only for deployments that use
+          # cert-manager TLS (spec.tls.mode: cert-manager). The operator runs
+          # fine without it, so this is a WARNING, not a hard failure.
+          if kubectl get crd certificates.cert-manager.io > /dev/null 2>&1; then
+            echo "✓ cert-manager CRDs found"
+          else
+            echo "⚠ cert-manager CRDs not found — the operator will still install and run."
+            echo "  Install cert-manager only if you plan to use cert-manager TLS"
+            echo "  (spec.tls.mode: cert-manager). See: https://cert-manager.io/docs/installation/"
+          fi
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "Pre-install checks FAILED. Fix the issues above and retry."
+            exit 1
+          fi
+
+          echo ""
+          echo "All required pre-install checks passed."
+{{- end }}

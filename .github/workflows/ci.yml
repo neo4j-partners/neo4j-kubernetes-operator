@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.26'
+  KIND_VERSION: 'v0.27.0'
+
+jobs:
+  check-drift:
+    # Regenerate every artifact (CRDs, RBAC, kustomize lists, Helm chart
+    # ClusterRole + ArtifactHub annotation, OperatorHub bundle) and fail
+    # if anything is out of date. Catches the common "I added a CRD but
+    # forgot to update the chart / bundle / kustomization" class of bug.
+    # See `Generated artifacts` in CLAUDE.md for sources of truth.
+    name: Generated Artifacts In Sync
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run make check-drift
+      id: drift
+      run: |
+        # check-drift = sync-all + bundle + git diff --exit-code
+        # operator-sdk's createdAt: timestamp is ignored via -I in the diff.
+        make check-drift
+
+    # Both were ship-prep-only, meaning a chart template error or a CSV
+    # missing a new CRD only surfaced at release time. Static, seconds-fast.
+    # Helm is preinstalled on ubuntu-latest, but pin it anyway so the lint
+    # doesn't silently track whatever version the runner image ships.
+    - name: Setup Helm
+      uses: azure/setup-helm@v5
+      with:
+        version: v3.16.0
+
+    - name: Helm lint
+      run: make helm-lint
+
+    - name: OperatorHub CSV coverage
+      run: make check-csv-coverage
+
+    # Scoped to the drift step — a helm-lint or CSV-coverage failure has its
+    # own error output and must not be misdiagnosed as stale artifacts.
+    - name: Surface failure details
+      if: failure() && steps.drift.outcome == 'failure'
+      run: |
+        echo "## ❌ Generated artifacts are out of date" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Run \`make sync-all bundle\` locally and commit the result." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "If you added a new CRD, also add a description case to" >> $GITHUB_STEP_SUMMARY
+        echo "\`scripts/helm-sync-artifacthub-crds.sh\`." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```diff' >> $GITHUB_STEP_SUMMARY
+        git --no-pager diff -I'^    createdAt:' >> $GITHUB_STEP_SUMMARY || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run unit tests
+      run: |
+        export PYTHONUNBUFFERED=1
+        export FORCE_COLOR=1
+        set -o pipefail
+
+        # gotestsum runs `go test -json` under the hood and renders a clean
+        # per-test view, while emitting a JUnit report + the JSON event stream the
+        # summary step parses for failed/slowest tests. Pinned, ./bin-cached.
+        make gotestsum
+        make test-unit \
+          GO_TEST_CMD="./bin/gotestsum --format=testname --junitfile=unit-junit.xml --jsonfile=unit-tests.json --" \
+          | tee unit-test-output.log
+      env:
+        GOMAXPROCS: 2
+
+    - name: Generate test summary
+      if: always()
+      run: ./scripts/gotest-summary.sh unit-tests.json 20 || true
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: unit-test-results
+        path: |
+          coverage/
+          *.out
+          unit-test-output.log
+          unit-tests.json
+          unit-junit.xml
+        if-no-files-found: warn
+
+  invariant-guards:
+    # ADVISORY / NON-BLOCKING. Surfaces architectural-invariant and
+    # knowledge-base-drift violations for LLM-assisted contributors WITHOUT
+    # gating merge. Contributors who don't use an agent are never blocked by
+    # this job — the only blocking CI gates remain `check-drift` and
+    # `unit-tests`. The same guards run locally via `make check-knowledge` and
+    # are invoked by the agent skills under `.claude/skills/`. Every guard step
+    # is `continue-on-error: true`, so the job stays green even on a violation;
+    # the result is reported in the run summary for a human to review.
+    name: Invariant Guards (advisory)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Architectural invariants (advisory)
+      id: invariants
+      continue-on-error: true
+      run: ./scripts/check-invariants.sh
+
+    - name: Knowledge-base drift (advisory)
+      id: knowledge
+      continue-on-error: true
+      run: ./scripts/check-knowledge-drift.sh
+
+    - name: Summarize (non-blocking)
+      if: always()
+      run: |
+        inv='${{ steps.invariants.outcome }}'
+        kn='${{ steps.knowledge.outcome }}'
+        echo "## Invariant guards (advisory — does not block merge)" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Architectural invariants (\`scripts/check-invariants.sh\`): $inv" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Knowledge-base drift (\`scripts/check-knowledge-drift.sh\`): $kn" >> "$GITHUB_STEP_SUMMARY"
+        if [ "$inv" != "success" ] || [ "$kn" != "success" ]; then
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "⚠️ A guard reported a violation. This job is **advisory and does not block merge**, but please review the failed step log — see \`AGENTS.md\` / \`docs/knowledge/\`. Reproduce locally with \`make check-knowledge\`." >> "$GITHUB_STEP_SUMMARY"
+        fi

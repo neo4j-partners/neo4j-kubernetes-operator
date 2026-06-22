@@ -1,0 +1,54 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: neo4j-runAsNonRoot-not-disabled
+  annotations:
+    policies.kyverno.io/title: Neo4j must not override runAsNonRoot to false
+    policies.kyverno.io/category: Neo4j Operator Conformance
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Neo4jEnterpriseCluster, Neo4jEnterpriseStandalone
+    policies.kyverno.io/description: >-
+      The operator's default pod and container securityContext sets
+      runAsNonRoot=true. Users can override via spec.securityContext for
+      platforms like OpenShift, but overriding runAsNonRoot=false silently
+      lets Neo4j start as UID 0, which conflicts with Pod Security Standards
+      "restricted" and most cluster baselines. This policy audits any
+      override that explicitly disables runAsNonRoot.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: pod-securityContext-runAsNonRoot
+      match:
+        any:
+          - resources:
+              kinds:
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseCluster
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseStandalone
+      validate:
+        message: >-
+          spec.securityContext.podSecurityContext.runAsNonRoot must not be
+          set to false. Remove the override (the operator default is true)
+          or set it to true explicitly.
+        pattern:
+          spec:
+            =(securityContext):
+              =(podSecurityContext):
+                =(runAsNonRoot): true
+    - name: container-securityContext-runAsNonRoot
+      match:
+        any:
+          - resources:
+              kinds:
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseCluster
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseStandalone
+      validate:
+        message: >-
+          spec.securityContext.containerSecurityContext.runAsNonRoot must not
+          be set to false. Remove the override (the operator default is true)
+          or set it to true explicitly.
+        pattern:
+          spec:
+            =(securityContext):
+              =(containerSecurityContext):
+                =(runAsNonRoot): true

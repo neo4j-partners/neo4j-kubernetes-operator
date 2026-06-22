@@ -1,0 +1,132 @@
+# Property Sharding with Coordinated Backup Example
+# This example shows how to configure backups for sharded databases.
+# Note: backupConfig is not orchestrated for Neo4jShardedDatabase; use Neo4jBackup resources.
+
+# Property sharding cluster
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: backup-sharding-cluster
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "2026.04-enterprise"
+
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  topology:
+    servers: 5
+
+  storage:
+    size: 20Gi
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+
+  resources:
+    requests:
+      memory: 8Gi    # Production memory for property sharding
+      cpu: 2000m     # 2+ cores required for cross-shard queries
+    limits:
+      memory: 8Gi    # Stable production allocation
+      cpu: 2000m     # Consistent performance
+
+  propertySharding:
+    enabled: true
+    config:
+      # Extended retention for backup coordination
+      db.tx_log.rotation.retention_policy: "10 days"
+
+      # Backup-friendly settings
+      server.backup.enabled: "true"
+      server.backup.listen_address: "0.0.0.0:6362"
+
+---
+# Sharded database with backup configuration
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jShardedDatabase
+metadata:
+  name: backed-up-sharded-db
+  namespace: default
+spec:
+  clusterRef: backup-sharding-cluster
+
+  name: userdata
+
+  defaultCypherLanguage: "25"
+
+  propertySharding:
+    propertyShards: 4
+
+    graphShard:
+      primaries: 3
+      secondaries: 1
+
+    propertyShardTopology:
+      replicas: 2
+
+---
+# Manual backup job for immediate backup
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: manual-sharded-backup
+  namespace: default
+spec:
+  # Target the Neo4jShardedDatabase. A single Neo4jBackup captures ALL shards
+  # consistently — the operator backs up the whole `{name}*` shard set in one
+  # neo4j-admin invocation (graph shard + every property shard). There is no
+  # per-shard list.
+  target:
+    kind: ShardedDatabase
+    name: backed-up-sharded-db
+    clusterRef: backup-sharding-cluster   # required for ShardedDatabase targets
+
+  schedule: "0 3 * * *"   # daily at 03:00
+
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: manual-sharded
+    cloud:
+      credentialsSecretRef: backup-credentials
+
+  options:
+    backupType: AUTO       # FULL or DIFF chosen automatically
+    compress: true
+    # Sharded backups default remoteAddressResolution=true on Neo4j 2025.09+;
+    # set explicitly only to override.
+
+  retention:
+    maxAge: "7d"
+    maxCount: 7
+    deletePolicy: Delete
+
+# ── Backup credentials Secret (create this BEFORE you apply this manifest) ─────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic backup-credentials \
+#     --namespace default \
+#     --from-literal=access-key-id='<your-access-key>' \
+#     --from-literal=secret-access-key='<your-secret-key>'
+#
+# Referenced via spec.storage.credentials.secretRef: backup-credentials
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret

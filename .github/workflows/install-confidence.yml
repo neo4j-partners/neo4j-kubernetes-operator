@@ -1,0 +1,36 @@
+# Manual-dispatch pre-release gate: the full install/upgrade/uninstall matrix
+# on Kind. NOT part of per-PR CI by design (see scripts/install-confidence.sh
+# for the matrix). Run before tagging a release.
+name: Install Confidence
+on:
+  workflow_dispatch:
+    inputs:
+      prev-chart-version:
+        description: "Previous released chart version to upgrade from (empty = latest published)"
+        required: false
+        default: ""
+permissions:
+  contents: read
+jobs:
+  install-confidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install kind
+        # v0.27.0 to match KIND_VERSION in ci.yml/integration*.yml — its default
+        # node image is K8s >=1.32, which the chart's kubeVersion constraint
+        # requires. kind v0.24's default node (K8s 1.31) fails the very helm
+        # install this gate exists to certify (v1.12.0 first-tag failure).
+        run: go install sigs.k8s.io/kind@v0.27.0
+      - name: Install helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.16.0
+      - name: Run install-confidence matrix
+        env:
+          PREV_CHART_VERSION: ${{ inputs.prev-chart-version }}
+        run: make install-confidence

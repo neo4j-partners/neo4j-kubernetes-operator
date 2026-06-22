@@ -1,0 +1,37 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: neo4j-resource-limits-required
+  annotations:
+    policies.kyverno.io/title: Neo4j resource limits required
+    policies.kyverno.io/category: Neo4j Operator Conformance
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Neo4jEnterpriseCluster, Neo4jEnterpriseStandalone
+    policies.kyverno.io/description: >-
+      Audits Neo4j CRs without spec.resources.limits.memory or
+      spec.resources.limits.cpu. Neo4j Enterprise needs at least 1.5Gi of
+      memory and OOMKill loops are difficult to diagnose without explicit
+      limits. Requests-only configurations are accepted by the operator but
+      not recommended for production.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: resource-limits-memory-and-cpu
+      match:
+        any:
+          - resources:
+              kinds:
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseCluster
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseStandalone
+      validate:
+        message: >-
+          spec.resources.limits.memory and spec.resources.limits.cpu should
+          both be set. Neo4j Enterprise requires at least 1.5Gi memory; set
+          explicit limits to avoid runaway memory growth and unbounded CPU.
+        pattern:
+          spec:
+            resources:
+              limits:
+                memory: "?*"
+                cpu: "?*"

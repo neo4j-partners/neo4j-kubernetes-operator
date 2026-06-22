@@ -1,0 +1,421 @@
+# Operator Modes and Scope
+
+## Overview
+
+The operator has two separate axes of configuration:
+
+- **Operational mode**: production vs development (affects defaults, logging, and cache behavior).
+- **Watch scope**: cluster-wide, single namespace, or a fixed list of namespaces (affects RBAC and where CRs are reconciled).
+
+Choose both explicitly so your deployment matches your environment and security model.
+
+## Cheat sheet
+
+### Mode defaults
+
+| Setting | Production | Development |
+|---|---|---|
+| `--mode` | `production` | `dev` |
+| Metrics bind | `:8080` | `:8082` |
+| Health bind | `:8081` | `:8083` |
+| Cache strategy | `on-demand` | `on-demand` |
+| `--skip-cache-wait` | `false` | `true` (auto) |
+
+CLI flags and Helm values always override these defaults.
+
+### Common CLI flags
+
+```bash
+--mode=production|dev
+--leader-elect=true|false
+--metrics-bind-address=:8080
+--metrics-secure=true
+--health-probe-bind-address=:8081
+--cache-strategy=standard|lazy|selective|on-demand|none
+--ultra-fast
+--skip-cache-wait
+--controllers=cluster,standalone,database,backup,restore,plugin,shardeddatabase,user,role,rolebinding,authrule
+--zap-log-level=debug|info|warn|error|dpanic|panic|fatal
+```
+
+### Helm shortcuts
+
+- `developmentMode: true` adds `--mode=dev` and `--zap-devel=true`.
+- `metrics.enabled` controls `--metrics-bind-address` (`0` disables). Port comes from `metrics.service.port`.
+- `--health-probe-bind-address=:8081` is always set by the chart.
+- `leaderElection.enabled: true` passes `--leader-elect=true`.
+- `rbac.perNamespaceRoles: true` (with `operatorMode=namespaces` + a static `watchNamespaces` list) replaces the manager ClusterRole with one Role per namespace — see [Multi-Namespace Scope](#multi-namespace-scope).
+
+### Health and metrics endpoints (production defaults)
+
+```bash
+curl http://localhost:8081/healthz
+curl http://localhost:8081/readyz
+curl http://localhost:8080/metrics
+```
+
+### Environment variables
+
+```bash
+export WATCH_NAMESPACE=team-a,team-b   # empty = all namespaces
+export GOMEMLIMIT=500MiB
+export GOMAXPROCS=4
+```
+
+## Quick Start (Beginner)
+
+**1) Choose a scope**
+
+- **Cluster scope** (default): one operator manages Neo4j in any namespace.
+- **Namespace scope**: one operator manages Neo4j only in its own namespace.
+- **Multi-namespace**: one operator manages a fixed list of namespaces.
+
+**2) Install with Helm (recommended)**
+
+The examples below use the Helm chart repository. See the [Installation Guide](installation.md) for the full set of installation methods (chart repo, OCI registry, kubectl-apply bundle, source clone).
+
+```bash
+helm repo add neo4j-operator https://priyolahiri.github.io/neo4j-kubernetes-operator/charts
+helm repo update
+
+# Cluster scope (default)
+helm install neo4j-operator neo4j-operator/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace
+
+# Namespace scope
+helm install neo4j-operator neo4j-operator/neo4j-operator \
+  --namespace team-a \
+  --create-namespace \
+  --set operatorMode=namespace
+
+# Multi-namespace scope
+helm install neo4j-operator neo4j-operator/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace \
+  --set operatorMode=namespaces \
+  --set watchNamespaces={team-a,team-b}
+```
+
+**3) Development? Use Kind and in-cluster only.**
+
+Use `make dev-cluster` and `make deploy-dev`. Do not run the operator on your host.
+
+**4) Install without Helm (Kustomize or kubectl)**
+
+```bash
+# Install CRDs
+kubectl apply -f config/crd/bases/
+
+# Production overlay
+kubectl apply -k config/overlays/prod
+
+# Development overlay (Kind only)
+kubectl apply -k config/overlays/dev
+```
+
+## Operator Modes
+
+### Production Mode
+
+Production mode is the default when `--mode` is not set. Use it for real workloads.
+Explicit flags and Helm values always override the mode defaults.
+
+**Key behavior (binary defaults):**
+
+- **Mode**: `production`
+- **Metrics bind**: `:8080` (unless overridden)
+- **Health bind**: `:8081` (unless overridden)
+- **Cache strategy**: `on-demand` (unless overridden)
+- **Leader election**: off by default (recommended for HA)
+- **Controllers loaded**: all controllers — cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule
+
+**Helm defaults that matter:**
+
+- `leaderElection.enabled: true` (passes `--leader-elect=true`)
+- `logLevel: info`
+- `metrics.enabled: true` with port `8080`
+- `--health-probe-bind-address=:8081` is always set by the chart
+
+### Development Mode (In-Cluster Only)
+
+Development mode is optimized for faster iteration, but it **must run in-cluster**. Use Kind for dev and test clusters.
+
+**How to enable:**
+
+- **CLI/Kustomize**: add `--mode=dev`
+- **Helm**: set `developmentMode: true`
+
+**Default behavior in dev mode:**
+
+- **Metrics bind**: `:8082` (unless overridden)
+- **Health bind**: `:8083` (unless overridden)
+- **Cache strategy**: `on-demand` (or `none` if `--ultra-fast`)
+- **skip-cache-wait**: auto-enabled if not explicitly set
+- **API rate limits**: QPS 100, Burst 200
+- **Controllers loaded**: defaults to all controllers (cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule); narrow with `--controllers`
+
+Helm always sets `--metrics-bind-address` and `--health-probe-bind-address`, so the dev-mode defaults above only apply when you run the binary directly or override those values.
+
+**In-cluster dev workflow (Kind only):**
+```bash
+make dev-cluster
+make docker-build IMG=neo4j-operator:dev
+kind load docker-image neo4j-operator:dev --name neo4j-operator-dev
+make deploy-dev
+kubectl logs -f -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
+```
+
+Note: `config/overlays/dev` sets the dev image, namespace, and `--mode=dev`. If you customize via Kustomize, keep `--mode=dev` in the manager args or use Helm `developmentMode: true`.
+
+## Scope and RBAC
+
+Scope determines where the operator watches CRs, and RBAC determines what it can read/write.
+
+### Feature availability by RBAC shape
+
+| Feature | Manager ClusterRole (`cluster`, or `namespaces` default) | Namespaced Roles (`namespace`, or `namespaces` + `perNamespaceRoles`) |
+|---|---|---|
+| CR reconciliation (clusters, standalones, databases, backups, restores, users/roles, plugins) | ✅ | ✅ |
+| TLS via `ClusterIssuer` (or namespaced `Issuer`) | ✅ | ✅ — cert-manager does the cluster-scoped resolution |
+| External Secrets via `ClusterSecretStore` (or namespaced `SecretStore`) | ✅ | ✅ — the external-secrets operator does the resolution |
+| Pattern-based `watchNamespaces` (`glob:`/`regex:`/`label:`) | ✅ | ❌ — needs a cluster-scoped namespace list/watch; rejected at render time with `perNamespaceRoles` |
+| Availability-zone auto-discovery (`spec.topology.placement`) | ✅ | Degraded: best-effort zone spread + `TopologyZoneDiscoveryDegraded` event. ✅ with `rbac.clusterScopedReads: true` |
+| `spec.topology.enforceDistribution: true` | ✅ | ❌ unless `spec.topology.availabilityZones` is set explicitly, or `rbac.clusterScopedReads: true` |
+| Storage expansion (`allowVolumeExpansion` validation) | ✅ | ❌ — fails with an RBAC error. ✅ with `rbac.clusterScopedReads: true` |
+
+### Cluster Scope
+
+- **RBAC**: ClusterRole + ClusterRoleBinding
+- **Use when**: One operator should manage Neo4j in any namespace.
+- **Helm**: `operatorMode: cluster` (default)
+- **Non-Helm**: leave `WATCH_NAMESPACE` unset/empty.
+
+### Namespace Scope
+
+- **RBAC**: Role + RoleBinding in the operator namespace
+- **Use when**: Strict separation per team/namespace.
+- **Helm**: `operatorMode: namespace`
+- **Non-Helm**: set `WATCH_NAMESPACE=<namespace>`.
+- **Adding namespaces**: deploy another operator in that namespace or switch to multi-namespace/cluster scope.
+
+**What works in namespace scope.** Almost everything — including the features people often assume need cluster-wide RBAC:
+
+- **TLS via a `ClusterIssuer`** (incl. the default `issuerRef.kind: ClusterIssuer`) — fully supported. The operator only *references* the issuer in the `Certificate` it creates; **cert-manager** resolves the `ClusterIssuer` and issues the cert using its own permissions. The operator never reads the issuer itself, so no cluster-scoped RBAC is required on the operator. A namespaced `Issuer` works too.
+- **External Secrets via a `ClusterSecretStore`** — fully supported, for the same reason: the operator only references the store in the `ExternalSecret` it creates; the **external-secrets operator** does the cluster-scoped resolution. A namespaced `SecretStore` works too.
+
+**The two behavioral differences: availability-zone auto-discovery and storage-expansion validation.** The operator itself performs exactly two cluster-scoped reads, and a namespaced Role can't grant either:
+
+- **`nodes` (zone auto-discovery)** — used solely to *enumerate* zones for `spec.topology.placement` (topology-spread / anti-affinity). Degrades gracefully: the operator skips enumeration and applies **best-effort zone spread via the zone label key** (the Kubernetes scheduler still spreads across zones), emitting a `TopologyZoneDiscoveryDegraded` warning event — no stuck reconcile. The only case that needs action from you is `spec.topology.enforceDistribution: true` — a hard "N servers across ≥N zones" guarantee the operator can't verify without seeing the nodes. Set `spec.topology.availabilityZones` explicitly (no node read needed) and enforced distribution works in namespace scope too. See [#202](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/202).
+- **`storageclasses` (storage expansion)** — before expanding PVCs the operator validates the StorageClass has `allowVolumeExpansion: true` (a deliberate safety check it will not skip). Without the read, growing `spec.storage.size` fails the reconcile with a clear RBAC error instead of patching PVCs blind.
+
+**Opt back in with `rbac.clusterScopedReads: true`** — a minimal read-only ClusterRole (`nodes` + `storageclasses`, get/list/watch only) bound to the operator's ServiceAccount, restoring both features while manager permissions stay namespaced. Default `false` so ClusterRole-free installs stay ClusterRole-free.
+
+### Multi-Namespace Scope
+
+- **RBAC**: ClusterRole + ClusterRoleBinding (default), or per-namespace Roles — see below.
+- **Use when**: One operator should manage a fixed list of namespaces.
+- **Helm**:
+  ```yaml
+  operatorMode: namespaces
+  watchNamespaces:
+    - team-a
+    - team-b
+  ```
+- **Non-Helm**: set `WATCH_NAMESPACE=team-a,team-b` (comma-separated).
+- **Adding namespaces**: update `watchNamespaces` (or `WATCH_NAMESPACE`) and upgrade/redeploy the operator.
+
+**Pattern support (dynamic):**
+
+- **Globs**: `glob:team-*` or `team-*`
+- **Regex**: `regex:^team-.*$`
+- **Labels**: `label:{env=prod,tier=backend}` (braces allow commas)
+- Patterns require cluster-scope RBAC because the operator must list/watch namespaces.
+- The operator restarts its manager when namespace matches change.
+
+**Per-namespace Roles (no ClusterRole) — `rbac.perNamespaceRoles`:**
+
+Security-strict clusters that forbid ClusterRoles can run a multi-namespace operator with **only** namespaced `Role` + `RoleBinding` objects. Set `rbac.perNamespaceRoles=true` (default `false`):
+
+```yaml
+operatorMode: namespaces
+watchNamespaces:
+  - team-a
+  - team-b
+rbac:
+  perNamespaceRoles: true
+```
+
+This emits one `Role` + `RoleBinding` per listed namespace (identical permissions to the ClusterRole, generated from the same source so they can't drift) and **no manager ClusterRole/ClusterRoleBinding**. A static list watches scoped caches only — it never lists/watches the cluster-scoped `namespaces` resource — so it needs no cluster-scoped manager grants.
+
+Requirements (each enforced at `helm` render time — install fails fast with a clear message otherwise):
+
+- **`operatorMode` must be `namespaces`.** Ignored in `cluster`/`namespace` mode.
+- **Every `watchNamespaces` entry must be a plain namespace name.** A glob/regex/label/prefix pattern (`team-*`, `regex:…`, `label:…`) is **rejected** — pattern matching needs a cluster-scoped namespace list/watch a Role cannot grant. Use `perNamespaceRoles=false` (ClusterRole) if you need patterns. You cannot have *no ClusterRole* **and** *pattern matching*.
+- **Each listed namespace must already exist** — Helm creates the `Role`+`RoleBinding` *in* each namespace but does not create the namespace.
+
+What you lose vs. the ClusterRole: **availability-zone auto-discovery** and **storage-expansion validation** (the same two namespace-scope limitations — see "Namespace Scope" above), both restorable with `rbac.clusterScopedReads: true`. TLS via `ClusterIssuer`, external-secrets, backups, and all CR reconciliation work unchanged.
+
+> For a **completely** ClusterRole-free install, also set `preInstallChecks.enabled=false`. The optional pre-install check runs as a Helm hook that reads cluster-scoped CRDs via a transient ClusterRole (auto-deleted after the hook); the metrics endpoint's `metrics-auth`/`metrics-reader` ClusterRoles remain only when `metrics.secure=true`, because the Kubernetes authn/authz APIs they use are inherently cluster-scoped.
+
+Note: backup workflows create per-namespace RBAC (ServiceAccount/Role/RoleBinding) as needed for backup jobs.
+
+## Helm Configuration
+
+Key values for modes and scope in `charts/neo4j-operator/values.yaml`:
+
+```yaml
+# Scope
+operatorMode: cluster        # cluster | namespace | namespaces
+watchNamespaces: []          # used only for operatorMode=namespaces
+
+# Mode
+developmentMode: false
+logLevel: info
+
+# Metrics and leader election
+metrics:
+  enabled: true
+  service:
+    port: 8080
+leaderElection:
+  enabled: true
+```
+
+Examples:
+
+```bash
+# Development mode + cluster scope
+helm upgrade --install neo4j-operator neo4j-operator/neo4j-operator \
+  --namespace neo4j-operator-dev \
+  --create-namespace \
+  --set developmentMode=true \
+  --set logLevel=debug
+
+# Multi-namespace scope
+helm upgrade --install neo4j-operator neo4j-operator/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace \
+  --set operatorMode=namespaces \
+  --set watchNamespaces={team-a,team-b}
+```
+
+## Non-Helm Configuration
+
+If you deploy with Kustomize or raw manifests, configure scope and mode explicitly:
+
+**Recommended Kustomize targets:**
+
+- `config/overlays/prod` (production)
+- `config/overlays/dev` (development, Kind only)
+- `config/overlays/namespace-scoped` (single namespace)
+
+**Scope (env var):**
+```yaml
+- name: WATCH_NAMESPACE
+  value: team-a,team-b
+```
+
+Pattern examples:
+```bash
+WATCH_NAMESPACE=team-*,regex:^prod-,label:{env=prod}
+```
+
+**Mode (args):**
+```yaml
+args:
+  - --mode=dev
+```
+
+Reference overlays:
+
+- `config/overlays/prod`
+- `config/overlays/dev`
+- `config/overlays/namespace-scoped`
+
+## Cache Strategies
+
+Cache strategy controls how aggressively the operator caches resources via controller-runtime.
+
+| Strategy | Behavior | When to Use |
+|----------|----------|-------------|
+| `standard` | Default controller-runtime cache for types used by controllers. | Large/stable clusters. |
+| `lazy` | Caches essential Neo4j CRDs and uses a longer resync in production. | RBAC-restricted or large clusters. |
+| `selective` | Caches only the high-frequency Neo4j CRDs (cluster, standalone, database, backup, restore); plugin/user/role objects are read directly when needed. | Resource-constrained environments. |
+| `on-demand` | Caches essential Neo4j CRDs; other types use the direct client. | Default choice. |
+| `none` | Direct API client; skips caching entirely. | Fast dev iteration only. |
+
+Set via:
+
+```bash
+--cache-strategy=on-demand
+--cache-strategy=none
+--ultra-fast           # equivalent to none and enables skip-cache-wait
+--skip-cache-wait      # readiness does not wait for cache sync
+```
+
+## Controller Selection (Dev Mode)
+
+In development mode, you can load only a subset of controllers:
+
+```bash
+--controllers=cluster,standalone,database
+```
+
+Valid controller names:
+
+- `cluster`
+- `standalone`
+- `database`
+- `backup`
+- `restore`
+- `plugin`
+- `shardeddatabase`
+- `user`
+- `role`
+- `rolebinding`
+- `authrule`
+
+The default dev `--controllers` value is the full list above; override with `--controllers` to narrow scope.
+
+## Logging and Metrics
+
+**Logging (zap):**
+
+- `--zap-log-level=debug|info|warn|error|dpanic|panic|fatal`
+- `--zap-devel=true|false`
+- `--zap-encoder=json|console`
+- `--zap-stacktrace-level=debug|info|warn|error|dpanic|panic|fatal`
+
+**Operator metrics endpoint:**
+
+- `--metrics-bind-address=:8080` (set to `0` to disable)
+- `--metrics-secure=true` (TLS, production mode only)
+
+Helm sets `--metrics-bind-address` based on `metrics.enabled` and `metrics.service.port`.
+
+## Troubleshooting
+
+**Operator sees no CRs:**
+
+- Verify `WATCH_NAMESPACE` (empty for cluster scope).
+- Confirm `operatorMode` in Helm matches your intent.
+
+**RBAC forbidden errors:**
+
+- Cluster scope or multi-namespace requires ClusterRole/ClusterRoleBinding.
+- Namespace scope requires Role/RoleBinding in the operator namespace.
+- Validate with `kubectl auth can-i` using the operator ServiceAccount.
+
+**Metrics not reachable:**
+
+- Ensure `metrics.enabled: true` or `--metrics-bind-address` is not `0`.
+- Confirm the Service port matches the bind address.
+
+## Additional Resources
+
+- `docs/developer_guide/architecture.md`
+- `docs/developer_guide/development.md`
+- `docs/user_guide/guides/monitoring.md`
+- `docs/user_guide/guides/performance.md`
+- `docs/user_guide/guides/troubleshooting.md`

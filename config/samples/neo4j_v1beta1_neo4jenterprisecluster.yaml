@@ -1,0 +1,16 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: sample-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: 5.26.0-enterprise
+  topology:
+    servers: 3
+  storage:
+    className: standard
+    size: 10Gi
+  auth:
+    adminSecret: neo4j-admin-secret

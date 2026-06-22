@@ -1,0 +1,64 @@
+# Standalone Neo4j that trusts an internal CA so it can talk to a corporate
+# OIDC provider whose TLS cert isn't in the JDK's default truststore.
+#
+# Same pattern as examples/clusters/cluster-with-trusted-cas.yaml but for
+# the simpler standalone case.
+#
+# Prerequisites (create BEFORE applying — this manifest does NOT create them):
+#   kubectl create namespace neo4j-dev
+#   kubectl create secret generic neo4j-admin-secret --namespace neo4j-dev \
+#     --from-literal=username=neo4j --from-literal=password='<your-secure-password>'
+# Also requires the ClusterIssuer referenced below to already exist.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oidc-trusted-ca
+  namespace: neo4j-dev
+spec:
+  secretName: oidc-trusted-ca           # → trustedCASecrets[0].name below
+  duration: 8760h
+  issuerRef:
+    name: corp-ca-cluster-issuer
+    kind: ClusterIssuer
+  commonName: idp.corp.example.com
+  dnsNames:
+    - idp.corp.example.com
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: dev-standalone
+  namespace: neo4j-dev
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: 2026.04.0-enterprise
+  storage:
+    # className omitted -> inherits the cluster's default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving the pod Pending.
+    # className: managed-csi
+    size: 10Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+    authenticationProviders: [native, oidc-corp]
+    authorizationProviders: [native, oidc-corp]
+    # oidc is a map keyed by provider name (referenced as oidc-<name> in the
+    # authentication/authorizationProviders lists above).
+    oidc:
+      corp:
+        displayName: "Corporate SSO"
+        wellKnownDiscoveryURI: https://idp.corp.example.com/.well-known/openid-configuration
+        audience: neo4j-standalone   # audience = your OIDC client ID
+
+  # Neo4j's JVM truststore is augmented with this Secret's ca.crt entry so
+  # the well_known_discovery_uri fetch above succeeds. The JDK default cacerts
+  # are preserved — public CAs still work.
+  trustedCASecrets:
+    - name: oidc-trusted-ca
+
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"

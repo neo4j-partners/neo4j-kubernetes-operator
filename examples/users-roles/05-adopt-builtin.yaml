@@ -1,0 +1,23 @@
+# Adopting the built-in `editor` role to lock it down.
+#
+# Neo4j's built-in `editor` role grants WRITE on all graphs by default. If
+# you want to keep the role but tighten its privileges, set
+# `adoptBuiltin: true` and list the desired privileges. The controller will
+# reconcile drift on every loop, but will NEVER drop the built-in role on
+# CR delete.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: editor
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  name: editor
+  adoptBuiltin: true
+  privileges:
+    - "GRANT MATCH {*} ON GRAPH * TO editor"
+    - "GRANT WRITE ON GRAPH * TO editor"
+    # DELETE is the graph privilege for removing nodes/relationships
+    # (DROP applies to schema objects like databases and indexes, not graphs).
+    - "DENY DELETE ON GRAPH * TO editor"

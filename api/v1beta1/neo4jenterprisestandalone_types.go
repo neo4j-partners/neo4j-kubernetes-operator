@@ -1,0 +1,296 @@
+/*
+Copyright 2025 Priyo Lahiri.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1beta1
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// Neo4jEnterpriseStandaloneSpec defines the desired state of Neo4jEnterpriseStandalone
+type Neo4jEnterpriseStandaloneSpec struct {
+	// +kubebuilder:validation:Required
+	Image ImageSpec `json:"image"`
+
+	// +kubebuilder:validation:Required
+	Storage StorageSpec `json:"storage"`
+
+	// AcceptLicenseAgreement is your explicit acceptance of the Neo4j Enterprise
+	// license. Neo4j Enterprise is commercial software owned by Neo4j, Inc.; this
+	// operator is independent and does not provide or accept that license on your
+	// behalf — you must hold your own valid license. Set "yes" to accept the
+	// commercial license agreement, or "eval" to accept the 30-day evaluation
+	// license. Required: the operator refuses to deploy until you set it.
+	// +kubebuilder:validation:Enum=yes;eval
+	// +optional
+	AcceptLicenseAgreement string `json:"acceptLicenseAgreement,omitempty"`
+
+	// Resource requirements for Neo4j pod
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Environment variables for Neo4j pod
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// ExtraEnvFrom projects entire Secrets or ConfigMaps as environment
+	// variables on the neo4j container. Same semantics as
+	// Neo4jEnterpriseCluster.spec.extraEnvFrom — required when this
+	// standalone hosts a `Neo4jDatabase` with `spec.seedURI` against a
+	// cloud-backed source (S3/GCS/Azure) and `spec.seedCredentials` is
+	// set, so the Neo4j JVM's AWS/GCP/Azure SDK default credential chain
+	// can authenticate the seed fetch.
+	//
+	// Same actionable-error + annotation-gated auto-inherit semantics as
+	// the cluster field (see Neo4jEnterpriseCluster docs): set
+	// `neo4j.com/auto-inherit-seed-creds=true` on this CR to let the
+	// operator add missing entries automatically (triggers a pod restart).
+	// +optional
+	ExtraEnvFrom []corev1.EnvFromSource `json:"extraEnvFrom,omitempty"`
+
+	// Node selector for pod scheduling
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// Tolerations for pod scheduling
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// Affinity rules for pod scheduling
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// SecurityContext allows overriding pod/container security settings (e.g., for OpenShift SCC compatibility)
+	SecurityContext *SecurityContextSpec `json:"securityContext,omitempty"`
+
+	// Custom configuration for Neo4j (single mode only)
+	Config map[string]string `json:"config,omitempty"`
+
+	TLS *TLSSpec `json:"tls,omitempty"`
+
+	Auth *AuthSpec `json:"auth,omitempty"`
+
+	Service *ServiceSpec `json:"service,omitempty"`
+
+	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
+
+	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
+	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
+
+	// Audit configures compliance-oriented logging. Shared with
+	// Neo4jEnterpriseCluster — see the AuditSpec docstring for the
+	// rationale on how spec.audit relates to spec.monitoring.
+	// +optional
+	Audit *AuditSpec `json:"audit,omitempty"`
+
+	// NetworkPolicy controls emission of a Kubernetes NetworkPolicy that
+	// restricts ingress to the standalone pod. Public client ports
+	// (7474/7473/7687) remain open to any pod; the backup port (6362)
+	// is restricted to operator-managed backup pods only.
+	//
+	// Disabled by default; requires a CNI that enforces NetworkPolicy
+	// (Calico/Cilium/Antrea/Weave). See the shared NetworkPolicySpec
+	// docstring on the cluster type for the full rationale.
+	// +optional
+	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
+	// MCP server configuration for this standalone deployment
+	MCP *MCPServerSpec `json:"mcp,omitempty"`
+
+	// AuraFleetManagement enables integration with Neo4j Aura Fleet Management
+	// for monitoring this standalone deployment from the Aura console.
+	// See: https://neo4j.com/docs/aura/fleet-management/
+	// +optional
+	AuraFleetManagement *AuraFleetManagementSpec `json:"auraFleetManagement,omitempty"`
+
+	// UpgradeStrategy specifies how to handle rolling upgrades
+	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
+
+	// TrustedCASecrets references Secrets containing additional CA certificates
+	// (key defaults to "ca.crt") that Neo4j-the-server should trust for outgoing
+	// TLS connections — e.g. OIDC providers behind a corporate CA, LDAPS, Aura
+	// Fleet Management, and plugin download mirrors.
+	//
+	// See `Neo4jEnterpriseClusterSpec.TrustedCASecrets` for the full
+	// description; standalone behaviour is identical.
+	// +optional
+	TrustedCASecrets []TrustedCASecret `json:"trustedCASecrets,omitempty"`
+
+	// ExtraVolumes are additional pod volumes to attach to the Neo4j pod.
+	// Mount points must be wired separately via `extraVolumeMounts`.
+	// +optional
+	ExtraVolumes []corev1.Volume `json:"extraVolumes,omitempty"`
+
+	// ExtraVolumeMounts are additional volume mounts for the Neo4j container.
+	// Each entry must reference a volume defined in `extraVolumes`. Mount paths
+	// that collide with operator-managed paths (`/data`, `/logs`, `/conf`,
+	// `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`) are rejected.
+	// +optional
+	ExtraVolumeMounts []corev1.VolumeMount `json:"extraVolumeMounts,omitempty"`
+}
+
+// Neo4jEnterpriseStandaloneStatus defines the observed state of Neo4jEnterpriseStandalone
+type Neo4jEnterpriseStandaloneStatus struct {
+	// Conditions represent the current state of the standalone deployment
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Phase represents the current phase of the standalone deployment
+	Phase string `json:"phase,omitempty"`
+
+	// Message provides additional information about the current state
+	Message string `json:"message,omitempty"`
+
+	// Endpoints provides connection information
+	Endpoints *EndpointStatus `json:"endpoints,omitempty"`
+
+	// Version shows the current Neo4j version
+	Version string `json:"version,omitempty"`
+
+	// Ready indicates if the standalone deployment is ready for connections
+	Ready bool `json:"ready,omitempty"`
+
+	// LastStartTime shows when the standalone deployment was last started
+	LastStartTime *metav1.Time `json:"lastStartTime,omitempty"`
+
+	// PodStatus provides information about the Neo4j pod
+	PodStatus *StandalonePodStatus `json:"podStatus,omitempty"`
+
+	// DatabaseStatus provides information about the Neo4j database
+	DatabaseStatus *StandaloneDatabaseStatus `json:"databaseStatus,omitempty"`
+
+	// AuraFleetManagementStatus reports the current state of the Aura Fleet Management integration.
+	AuraFleetManagement *AuraFleetManagementStatus `json:"auraFleetManagement,omitempty"`
+
+	// Diagnostics holds the most recently collected live diagnostics from the standalone instance.
+	// Populated when spec.monitoring.enabled=true and the standalone is Ready.
+	// +optional
+	Diagnostics *StandaloneDiagnosticsStatus `json:"diagnostics,omitempty"`
+
+	// ObservedGeneration reflects the generation most recently observed by the controller
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// StandalonePodStatus provides information about the Neo4j pod
+type StandalonePodStatus struct {
+	// PodName is the name of the Neo4j pod
+	PodName string `json:"podName,omitempty"`
+
+	// PodIP is the IP address of the Neo4j pod
+	PodIP string `json:"podIP,omitempty"`
+
+	// NodeName is the name of the Kubernetes node hosting the pod
+	NodeName string `json:"nodeName,omitempty"`
+
+	// Phase is the current phase of the pod
+	Phase corev1.PodPhase `json:"phase,omitempty"`
+
+	// StartTime is when the pod was started
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+
+	// RestartCount is the number of times the pod has been restarted
+	RestartCount int32 `json:"restartCount,omitempty"`
+
+	// Conditions represent the current conditions of the pod
+	Conditions []corev1.PodCondition `json:"conditions,omitempty"`
+}
+
+// StandaloneDatabaseStatus provides information about the Neo4j database
+type StandaloneDatabaseStatus struct {
+	// DatabaseMode shows the current database mode (should be "SINGLE")
+	DatabaseMode string `json:"databaseMode,omitempty"`
+
+	// DatabaseName shows the active database name
+	DatabaseName string `json:"databaseName,omitempty"`
+
+	// StorageSize shows the current storage usage
+	StorageSize string `json:"storageSize,omitempty"`
+
+	// ConnectionCount shows the number of active connections
+	ConnectionCount int32 `json:"connectionCount,omitempty"`
+
+	// LastHealthCheck shows when the last health check was performed
+	LastHealthCheck *metav1.Time `json:"lastHealthCheck,omitempty"`
+
+	// HealthStatus shows the current health status of the database
+	HealthStatus string `json:"healthStatus,omitempty"`
+}
+
+// StandaloneDiagnosticsStatus holds live diagnostics collected from the Neo4j standalone instance.
+type StandaloneDiagnosticsStatus struct {
+	// Databases lists the most recently observed state of each database.
+	// +optional
+	Databases []DatabaseDiagnosticInfo `json:"databases,omitempty"`
+
+	// Users lists the users currently present in the standalone's `system`
+	// database (from SHOW USERS). Useful for observing the effect of
+	// Neo4jUser / Neo4jRoleBinding reconciliation.
+	// +optional
+	Users []UserDiagnosticInfo `json:"users,omitempty"`
+
+	// UserCount is the total number of users observed via SHOW USERS.
+	// +optional
+	UserCount int `json:"userCount,omitempty"`
+
+	// Roles lists the roles currently present in the standalone's `system`
+	// database (from SHOW ROLES YIELD role, immutable).
+	// +optional
+	Roles []RoleDiagnosticInfo `json:"roles,omitempty"`
+
+	// RoleCount is the total number of roles observed via SHOW ROLES.
+	// +optional
+	RoleCount int `json:"roleCount,omitempty"`
+
+	// LastCollected is the timestamp of the most recent successful diagnostics collection.
+	// +optional
+	LastCollected *metav1.Time `json:"lastCollected,omitempty"`
+
+	// CollectionError holds the last error message if diagnostics collection failed.
+	// Empty when collection succeeds.
+	// +optional
+	CollectionError string `json:"collectionError,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.status.version`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+
+// Neo4jEnterpriseStandalone declaratively manages a single-node
+// Neo4j Enterprise deployment for development, testing, and
+// low-availability production workloads. Built on the same clustering
+// infrastructure as Neo4jEnterpriseCluster but with replicas=1, so
+// it is fully compatible with the rest of the CRD ecosystem
+// (Neo4jDatabase, Neo4jPlugin, Neo4jBackup, Neo4jRestore, Neo4jUser,
+// Neo4jRole, …). For high-availability workloads requiring
+// fault tolerance, use Neo4jEnterpriseCluster instead.
+type Neo4jEnterpriseStandalone struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   Neo4jEnterpriseStandaloneSpec   `json:"spec,omitempty"`
+	Status Neo4jEnterpriseStandaloneStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// Neo4jEnterpriseStandaloneList contains a list of Neo4jEnterpriseStandalone
+type Neo4jEnterpriseStandaloneList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Neo4jEnterpriseStandalone `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&Neo4jEnterpriseStandalone{}, &Neo4jEnterpriseStandaloneList{})
+}

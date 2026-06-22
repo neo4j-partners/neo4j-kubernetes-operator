@@ -1,0 +1,25 @@
+# External authentication: a user authenticatable via OIDC (Okta) and LDAP.
+#
+# Neo4j requires the auth providers themselves (`oidc-okta`, `ldap1`) to be
+# configured at the DBMS level via `dbms.security.authentication_providers`
+# and the matching `dbms.security.{oidc,ldap}.<name>.*` settings. The
+# Neo4jUser CR only binds the user identity to those providers.
+#
+# `passwordSecretRef` is omitted here, so this user has no native password —
+# only the external providers can authenticate them.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: alice
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  username: alice
+  externalAuth:
+    - provider: oidc-okta
+      id: alice@example.com
+    - provider: ldap1
+      id: "uid=alice,ou=people,dc=example,dc=com"
+  roles:
+    - editor

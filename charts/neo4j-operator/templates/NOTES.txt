@@ -1,0 +1,104 @@
+🎉 Neo4j Kubernetes Operator has been installed!
+
+Release Name: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Chart Version: {{ .Chart.Version }}
+App Version: {{ .Chart.AppVersion }}
+
+{{- if eq .Values.operatorMode "cluster" }}
+📍 Mode: Cluster-wide (watching all namespaces)
+{{- else if eq .Values.operatorMode "namespace" }}
+📍 Mode: Namespace-scoped (watching namespace: {{ .Release.Namespace }})
+{{- else if eq .Values.operatorMode "namespaces" }}
+📍 Mode: Multi-namespace (watching: {{ join ", " .Values.watchNamespaces }})
+{{- end }}
+
+## Verify Installation
+
+Check the operator deployment:
+  kubectl get deployment -n {{ .Release.Namespace }} {{ include "neo4j-operator.fullname" . }}
+
+Check the operator logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "neo4j-operator.name" . }} -f
+
+Verify CRDs are installed:
+  kubectl get crds | grep neo4j
+
+## Lifecycle
+
+Upgrading? Apply the new release's CRDs first (helm does not upgrade CRDs):
+  kubectl apply --server-side -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/<version>/neo4j-kubernetes-operator.yaml
+
+Uninstalling? Delete all Neo4j CRs FIRST (finalizers need the running operator), then helm uninstall.
+
+## Quick Start
+
+{{- /* spec.image is an object (repo/tag), not a string. Split the
+       repo:tag default image so the rendered manifests are schema-valid.
+       tag = segment after the last ':'; repo = everything before it (so a
+       registry:port prefix survives). */ -}}
+{{- $tag := .Values.neo4j.defaultImage | splitList ":" | last }}
+{{- $repo := trimSuffix (printf ":%s" $tag) .Values.neo4j.defaultImage }}
+
+1. Create a secret for Neo4j authentication:
+   kubectl create secret generic neo4j-admin-secret \
+     --from-literal=username=neo4j \
+     --from-literal=password=your-secure-password
+
+2. Deploy a Neo4j standalone instance:
+   cat <<EOF | kubectl apply -f -
+   apiVersion: neo4j.neo4j.com/v1beta1
+   kind: Neo4jEnterpriseStandalone
+   metadata:
+     name: my-neo4j
+   spec:
+     image:
+       repo: {{ $repo | quote }}
+       tag: {{ $tag | quote }}
+     storage:
+       size: {{ .Values.neo4j.defaultStorageSize | quote }}
+     auth:
+       adminSecret: neo4j-admin-secret
+   EOF
+
+3. Or deploy a Neo4j cluster:
+   cat <<EOF | kubectl apply -f -
+   apiVersion: neo4j.neo4j.com/v1beta1
+   kind: Neo4jEnterpriseCluster
+   metadata:
+     name: my-cluster
+   spec:
+     image:
+       repo: {{ $repo | quote }}
+       tag: {{ $tag | quote }}
+     topology:
+       servers: 3
+     storage:
+       size: {{ .Values.neo4j.defaultStorageSize | quote }}
+     auth:
+       adminSecret: neo4j-admin-secret
+   EOF
+
+{{- if .Values.metrics.enabled }}
+
+## Metrics
+
+Metrics are exposed at:
+  {{ if .Values.metrics.secure }}https{{ else }}http{{ end }}://{{ include "neo4j-operator.fullname" . }}-metrics.{{ .Release.Namespace }}:{{ .Values.metrics.service.port }}/metrics
+
+{{- if .Values.metrics.serviceMonitor.enabled }}
+ServiceMonitor has been created for Prometheus Operator integration.
+{{- end }}
+{{- end }}
+
+## Documentation
+
+For more information, visit:
+- GitHub: https://github.com/priyolahiri/neo4j-kubernetes-operator
+- Neo4j Documentation: https://neo4j.com/docs/
+
+## Support
+
+For issues and support:
+- GitHub Issues: https://github.com/priyolahiri/neo4j-kubernetes-operator/issues
+- Neo4j Community: https://community.neo4j.com/

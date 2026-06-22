@@ -1,0 +1,158 @@
+repos:
+  # Essential file checks (fast)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--allow-multiple-documents']
+        exclude: ^(config/manager/|charts/).*\.ya?ml$
+      # - id: check-added-large-files
+      #   args: ['--maxkb=1000']  # Limit to 1MB
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Fast Go code quality checks
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: gofmt
+        args: [-w, -s]
+        language: system
+        files: \.go$
+
+      - id: go-imports
+        name: go imports
+        entry: bash
+        args:
+          - -c
+          - |
+            GOPATH=$(go env GOPATH)
+            if [ ! -f "$GOPATH/bin/goimports" ]; then
+              go install golang.org/x/tools/cmd/goimports@latest
+            fi
+            # Exclude machine-generated files. controller-gen and goimports
+            # disagree on import-alias style for single-use imports (e.g.
+            # `v1 "k8s.io/api/core/v1"` vs bare). Running goimports on
+            # zz_generated*.go fights with `make generate` and breaks the
+            # commit on every CRD-touching change.
+            find . -name 'zz_generated*.go' -prune -o -name '*.go' -print | xargs "$GOPATH/bin/goimports" -w
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: go mod tidy
+        language: system
+        files: ^go\.(mod|sum)$
+        pass_filenames: false
+
+      - id: golangci-lint-fast
+        name: golangci-lint (fast)
+        entry: bash
+        args:
+          - -c
+          - |
+            if [ ! -f ./bin/golangci-lint ]; then
+              echo "Installing golangci-lint..."
+              make golangci-lint >/dev/null 2>&1 || {
+                echo "Warning: Could not install golangci-lint, skipping"
+                exit 0
+              }
+            fi
+            echo "Running golangci-lint..."
+            ./bin/golangci-lint run --config .golangci-precommit.yml --timeout=2m || {
+              echo "Note: golangci-lint found issues. Run 'make lint' for full details."
+              exit 0
+            }
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+      - id: staticcheck-fast
+        name: staticcheck (essential checks)
+        entry: bash
+        args:
+          - -c
+          - |
+            if [ ! -f ./bin/staticcheck ]; then
+              echo "Installing staticcheck..."
+              make staticcheck >/dev/null 2>&1 || {
+                echo "Warning: Could not install staticcheck, skipping"
+                exit 0
+              }
+            fi
+            echo "Running staticcheck (essential checks only)..."
+            ./bin/staticcheck -checks=inherit,-ST1000,-ST1003,-ST1016,-ST1020,-ST1021,-ST1022 ./... || {
+              echo "Note: staticcheck found issues. Run 'make lint-staticcheck' for full details."
+              exit 0
+            }
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+      # Drift gate — fires when anything that feeds a generator changes.
+      # Mirrors the CI 'Generated Artifacts In Sync' check so it cannot
+      # surprise you in CI. On failure, regenerated files are left in the
+      # working tree; review, `git add -u`, and recommit.
+      #
+      # On success, the bundle CSV's createdAt: timestamp is reset to
+      # whatever was staged, otherwise every commit attempt would leave
+      # a fresh timestamp in the working tree and pre-commit's auto-fix
+      # detector would roll the commit back.
+      - id: check-drift
+        name: generated artifacts in sync
+        entry: bash
+        args:
+          - -c
+          - |
+            echo "Running make check-drift (regenerates CRDs/RBAC/helm/bundle and diffs)..."
+            if ! make check-drift; then
+              echo ""
+              echo "Generated artifacts were stale. They have been regenerated in your"
+              echo "working tree — review the diff, 'git add -u' the changes, and recommit."
+              exit 1
+            fi
+            # check-drift passed — the only diff make bundle produced
+            # against HEAD is the createdAt: timestamp (everything else
+            # was already in sync). Drop that churn so pre-commit doesn't
+            # see a hook-modified working tree and roll back the commit.
+            CSV=bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
+            if git diff --quiet --staged -- "$CSV" 2>/dev/null && ! git diff --quiet -- "$CSV" 2>/dev/null; then
+                git checkout -- "$CSV"
+            elif ! git diff --quiet --staged -- "$CSV" 2>/dev/null; then
+                # CSV has a staged change; restore working tree to the staged version
+                git checkout-index -f -- "$CSV"
+            fi
+        language: system
+        pass_filenames: false
+        # Trigger on anything that feeds a generator: kubebuilder type/marker
+        # sources, RBAC markers in controllers, generator scripts, the CSV
+        # source-of-truth, and the generated trees themselves (in case
+        # someone hand-edits a generated file).
+        files: ^(api/v1beta1/.*\.go|internal/controller/.*_controller\.go|scripts/(helm-sync-.*|check-csv-coverage|update-alm-examples).*|config/manifests/bases/.*\.csv\.yaml|config/(crd|rbac|samples|manifests)/.*|charts/neo4j-operator/(crds|templates|Chart\.yaml).*|bundle/.*)$
+
+  # Security checks (fast)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # YAML validation (fast)
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c=.yamllint.yaml]
+        files: \.(yaml|yml)$
+
+  # Commit message validation
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.29.1
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]

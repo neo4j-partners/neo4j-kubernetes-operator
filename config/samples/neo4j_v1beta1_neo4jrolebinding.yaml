@@ -1,0 +1,9 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRoleBinding
+metadata:
+  name: example-rolebinding
+spec:
+  clusterRef: sample-cluster
+  username: alice@example.com
+  roles:
+    - editor

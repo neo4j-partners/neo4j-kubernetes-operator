@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: neo4j-operator-system
+
+resources:
+  - ../../default
+
+images:
+  # Match the BASE's already-transformed image name (see prod overlay note).
+  - name: ghcr.io/priyolahiri/neo4j-kubernetes-operator
+    newName: ghcr.io/priyolahiri/neo4j-kubernetes-operator
+    newTag: latest
+
+patches:
+  - path: ha-patch.yaml
+    target:
+      kind: Deployment
+      name: controller-manager

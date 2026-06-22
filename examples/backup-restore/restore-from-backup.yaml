@@ -1,0 +1,86 @@
+# ============================================================
+# Restore from a Neo4jBackup reference.
+#
+# NOTE on hooks: spec.options.{preRestore,postRestore} hooks run ONLY when
+# clusterRef targets a Neo4jEnterpriseStandalone (the Job-based restore path).
+# Cluster targets restore via Cypher (seedURI) and never invoke hooks.
+#   - preRestore Cypher hooks run BEFORE the instance is stopped
+#     (so statements like CALL db.checkpoint() hit a live Bolt endpoint).
+#   - postRestore hooks run AFTER the restored database is registered/started.
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: simple-restore
+  labels:
+    environment: development
+    restore-type: backup-reference
+spec:
+  # Matches the CR created by examples/standalone/single-node-standalone.yaml —
+  # change to YOUR instance name. (Hooks are standalone-only.)
+  clusterRef: standalone-neo4j
+  databaseName: neo4j
+  source:
+    type: backup
+    backupRef: simple-backup  # Reference to the backup resource
+  # spec.force confirms overwriting an existing database on standalone
+  # targets (options.replaceExisting applies to cluster targets)
+  force: true
+  options:
+    preRestore:
+      cypherStatements:
+        - "CALL db.checkpoint()"   # flush pending writes before the instance stops
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes()"
+        - "CALL dbms.security.clearAuthCache()"
+  # stopCluster: true scales the standalone down for an offline restore and
+  # brings it back up afterwards. With stopCluster: false the operator REFUSES
+  # to restore while server pods are running (it never writes into a live PVC).
+  stopCluster: true
+  timeout: "1h"
+
+---
+# More complex restore with job hooks (standalone target — job hooks, like all
+# hooks, only run on the standalone Job-based restore path).
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: restore-with-validation
+  labels:
+    environment: staging
+    restore-type: with-hooks
+spec:
+  clusterRef: staging-standalone   # Neo4jEnterpriseStandalone
+  databaseName: myapp
+  source:
+    type: backup
+    backupRef: daily-backup
+  options:
+    postRestore:
+      job:
+        template:
+          container:
+            image: neo4j:5.26.0-enterprise
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "Validating restored database..."
+                # -a is required: the hook Job runs in its own pod, so
+                # cypher-shell must be pointed at the instance's service
+                # (<standalone-name>-client) — without it, it dials localhost.
+                cypher-shell -a neo4j://staging-standalone-client:7687 \
+                  -u neo4j -p "$NEO4J_PASSWORD" -d myapp \
+                  "MATCH (n) RETURN count(n) as nodeCount"
+                echo "Database validation completed"
+            env:
+              - name: NEO4J_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: neo4j-admin-secret
+                    key: password
+        timeout: "10m"
+  force: true   # confirms overwriting the existing database (standalone target)
+  stopCluster: true
+  timeout: "2h"

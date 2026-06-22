@@ -1,0 +1,75 @@
+# Neo4j Enterprise Standalone with LDAP Authentication
+# Demonstrates LDAP + native auth on a standalone deployment
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
+
+# ── LDAP bind credentials Secret (create this BEFORE you apply this manifest) ──
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic ldap-bind-secret \
+#     --namespace default \
+#     --from-literal=username='cn=svc,dc=example,dc=com' \
+#     --from-literal=password='<ldap-bind-password>'
+#
+# Referenced via spec.auth.ldap.authorization.systemAccountSecretRef: ldap-bind-secret
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: ldap-standalone
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  storage:
+    # className omitted -> inherits the cluster's default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving the pod Pending.
+    # className: managed-csi
+    size: "10Gi"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "1"
+  auth:
+    authenticationProviders:
+      - ldap
+      - native
+    authorizationProviders:
+      - ldap
+      - native
+    adminSecret: neo4j-admin-secret
+    ldap:
+      host: "ldap://ldap.example.com:389"
+      useStartTLS: true
+      authentication:
+        userDNTemplate: "uid={0},ou=users,dc=example,dc=com"
+      authorization:
+        userSearchBase: "ou=users,dc=example,dc=com"
+        userSearchFilter: "(&(objectClass=*)(uid={0}))"
+        groupMembershipAttributes:
+          - memberOf
+        groupToRoleMapping:
+          "cn=admins,ou=groups,dc=example,dc=com": "admin"
+          "cn=readers,ou=groups,dc=example,dc=com": "reader"
+        useSystemAccount: true
+        systemAccountSecretRef: ldap-bind-secret
+  tls:
+    mode: disabled

@@ -1,0 +1,321 @@
+# Multi-Tenancy Example (database-per-tenant on a shared cluster)
+#
+# This demonstrates LOGICAL multi-tenancy: one cluster hosting a separate
+# Neo4jDatabase per tenant, each with its own topology and its own backup
+# schedule. Isolation here is at the DATABASE / access-control level.
+#
+# What this gives you:
+#   - Multiple databases per cluster, one (or more) per tenant
+#   - Per-tenant backup cadence (daily / hourly / weekly below)
+#   - Access isolation via per-tenant users/roles/privileges — see
+#     ../users-roles/ (grant each tenant's users access only to their database)
+#
+# What it does NOT give you (tenants share the same Neo4j pods):
+#   - Hard CPU/memory isolation, or network isolation between tenants.
+#     A per-namespace ResourceQuota would cap the whole cluster, not one tenant,
+#     and a NetworkPolicy can't separate tenants that share pods. For hard
+#     resource/network isolation, run a SEPARATE cluster per tenant instead.
+
+---
+# Shared infrastructure namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-multi-tenant
+  labels:
+    purpose: multi-tenancy
+---
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create namespace neo4j-multi-tenant   # this manifest also defines it; create it first
+#   kubectl create secret generic cluster-admin-secret \
+#     --namespace neo4j-multi-tenant \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: cluster-admin-secret
+---
+# ── Tenant Secrets (create these BEFORE you apply this manifest) ───────────────
+# Per-tenant credentials are intentionally NOT defined inline: `kubectl apply -f`
+# would re-apply them every run and OVERWRITE real values with placeholders. The
+# namespace is defined by this manifest, so create it first, then the Secrets:
+#
+#   kubectl create namespace neo4j-multi-tenant
+#
+#   # Per-tenant S3 backup credentials — REQUIRED: the Neo4jBackup resources below
+#   # reference these via spec.storage.cloud.credentialsSecretRef and will fail to
+#   # authenticate to S3 without them:
+#   kubectl create secret generic tenant-a-s3-credentials --namespace neo4j-multi-tenant \
+#     --from-literal=AWS_ACCESS_KEY_ID='<tenant-a-access-key>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<tenant-a-secret-key>' \
+#     --from-literal=AWS_REGION='us-east-1'   # required: read as a non-optional env var
+#   # ...repeat for tenant-b-s3-credentials and tenant-c-s3-credentials.
+---
+# Multi-tenant Neo4j Cluster
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-tenant-cluster
+  namespace: neo4j-multi-tenant
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+
+  # Larger server cluster to handle multiple tenants
+  topology:
+    servers: 5  # 5 servers will self-organize to support multiple database topologies
+
+  # Resource allocation for multi-tenancy
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+
+  storage:
+    className: fast-ssd
+    size: 200Gi
+
+  auth:
+    adminSecret: cluster-admin-secret
+    authenticationProviders: ["native"]
+
+  # Multi-tenant configuration
+  config:
+    # Memory allocation
+    server.memory.heap.initial_size: "8G"
+    server.memory.heap.max_size: "8G"
+    server.memory.pagecache.size: "16G"
+    # Transaction management
+    db.transaction.timeout: "300s"
+    db.transaction.concurrent.maximum: "1000"
+    dbms.routing_ttl: "300s"
+    # Enable database management
+    dbms.max_databases: "50"
+---
+# TENANT A: E-commerce Platform
+---
+# Tenant A main database
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-a-production
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-a
+    environment: production
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_a_prod
+  wait: true
+  ifNotExists: true
+
+  # Dedicated resources for tenant A
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  options:
+    txLogEnrichment: "DIFF"
+
+  # E-commerce schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT tenant_a_user_id IF NOT EXISTS FOR (u:User) REQUIRE u.userId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_product_sku IF NOT EXISTS FOR (p:Product) REQUIRE p.sku IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_order_id IF NOT EXISTS FOR (o:Order) REQUIRE o.orderId IS UNIQUE"
+      - "CREATE INDEX tenant_a_user_email IF NOT EXISTS FOR (u:User) ON (u.email)"
+      - "CREATE INDEX tenant_a_product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
+---
+# Tenant A staging database
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-a-staging
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-a
+    environment: staging
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_a_staging
+  wait: true
+  ifNotExists: true
+
+  topology:
+    primaries: 1
+    secondaries: 1
+---
+# TENANT B: Social Network
+---
+# Tenant B database with graph-specific optimizations
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-b-production
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-b
+    environment: production
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_b_social
+  wait: true
+  ifNotExists: true
+
+  topology:
+    primaries: 2
+    secondaries: 2  # More secondaries for read-heavy workload
+
+  # Social network schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT tenant_b_user_id IF NOT EXISTS FOR (u:Person) REQUIRE u.personId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_b_post_id IF NOT EXISTS FOR (p:Post) REQUIRE p.postId IS UNIQUE"
+      - "CREATE INDEX tenant_b_person_name IF NOT EXISTS FOR (p:Person) ON (p.name)"
+      - "CREATE INDEX tenant_b_post_timestamp IF NOT EXISTS FOR (p:Post) ON (p.timestamp)"
+      - "CREATE INDEX tenant_b_friendship IF NOT EXISTS FOR ()-[f:FRIENDS_WITH]-() ON (f.since)"
+---
+# TENANT C: Analytics Platform (Neo4j 2025.x)
+---
+# Tenant C using Neo4j 2025.x features
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-c-analytics
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-c
+    environment: production
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_c_analytics
+  wait: true
+  ifNotExists: true
+
+  # Use modern Cypher for analytics
+  defaultCypherLanguage: "25"
+
+  topology:
+    primaries: 3  # More primaries for parallel analytics
+    secondaries: 1
+
+  # Analytics schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT tenant_c_metric_id IF NOT EXISTS FOR (m:Metric) REQUIRE m.metricId IS UNIQUE"
+      - "CREATE INDEX tenant_c_metric_timestamp IF NOT EXISTS FOR (m:Metric) ON (m.timestamp)"
+      - "CREATE INDEX tenant_c_metric_type IF NOT EXISTS FOR (m:Metric) ON (m.type)"
+---
+# Tenant-specific backup configurations
+---
+# Tenant A daily backups
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: tenant-a-backup
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-a
+spec:
+  target:
+    kind: Database
+    name: tenant_a_prod
+    clusterRef: multi-tenant-cluster   # required for kind: Database
+    namespace: neo4j-multi-tenant
+
+  schedule: "0 1 * * *"  # Daily at 1 AM
+
+  storage:
+    type: s3
+    bucket: tenant-backups
+    path: "tenant-a/daily"
+    cloud:
+      credentialsSecretRef: tenant-a-s3-credentials
+
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+---
+# Tenant B hourly backups (high-frequency social data)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: tenant-b-backup
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-b
+spec:
+  target:
+    kind: Database
+    name: tenant_b_social
+    clusterRef: multi-tenant-cluster   # required for kind: Database
+    namespace: neo4j-multi-tenant
+
+  schedule: "0 * * * *"  # Hourly
+
+  storage:
+    type: s3
+    bucket: tenant-backups
+    path: "tenant-b/hourly"
+    cloud:
+      credentialsSecretRef: tenant-b-s3-credentials
+
+  options:
+    backupType: "AUTO"  # FULL on the first run, DIFF thereafter (self-bootstrapping; a bare DIFF fails until a FULL exists)
+    compress: true
+
+  retention:
+    maxAge: "7d"
+    maxCount: 168  # 7 days of hourly backups
+---
+# Tenant C weekly full backups (analytics workload)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: tenant-c-backup
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-c
+spec:
+  target:
+    kind: Database
+    name: tenant_c_analytics
+    clusterRef: multi-tenant-cluster   # required for kind: Database
+    namespace: neo4j-multi-tenant
+
+  schedule: "0 3 * * 0"  # Weekly on Sunday at 3 AM
+
+  storage:
+    type: s3
+    bucket: tenant-backups
+    path: "tenant-c/weekly"
+    cloud:
+      credentialsSecretRef: tenant-c-s3-credentials
+
+  options:
+    backupType: "FULL"
+    pageCache: "4G"  # Large cache for big analytics DB
+
+  retention:
+    maxAge: "90d"
+    maxCount: 12
+
+# ── Per-tenant access isolation (recommended) ────────────────────────────────
+# Grant each tenant's users access only to their own database with Neo4jUser /
+# Neo4jRole / Neo4jRoleBinding. See ../users-roles/ for ready-to-adapt examples.
+#
+# ── Hard resource / network isolation ────────────────────────────────────────
+# Database-per-tenant on a shared cluster does NOT isolate CPU/memory or network
+# between tenants (they share the same pods). If you need that, run a separate
+# Neo4jEnterpriseCluster per tenant (one per namespace) instead of databases.

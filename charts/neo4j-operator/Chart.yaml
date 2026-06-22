@@ -1,0 +1,82 @@
+apiVersion: v2
+name: neo4j-operator
+description: Neo4j Enterprise Operator for Kubernetes - Manages Neo4j Enterprise deployments (v5.26+)
+type: application
+version: 0.0.1
+appVersion: "0.0.1"
+kubeVersion: ">=1.32.0-0"
+keywords:
+  - neo4j
+  - graph
+  - database
+  - operator
+  - kubernetes
+home: https://github.com/priyolahiri/neo4j-kubernetes-operator
+sources:
+  - https://github.com/priyolahiri/neo4j-kubernetes-operator
+maintainers:
+  - name: Priyo Lahiri
+    email: priyolahiri@users.noreply.github.com
+annotations:
+  # Artifact Hub annotations
+  artifacthub.io/operator: "true"
+  artifacthub.io/operatorCapabilities: Full Lifecycle
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/crds: |-
+    - kind: Neo4jAuthRule
+      version: v1beta1
+      description: Attribute-based access control (ABAC) — claims-to-roles mapping evaluated at OIDC authentication time (Neo4j 2026.03+)
+    - kind: Neo4jBackup
+      version: v1beta1
+      description: Manages Neo4j backup operations
+    - kind: Neo4jDatabase
+      version: v1beta1
+      description: Manages Neo4j databases within clusters
+    - kind: Neo4jEnterpriseCluster
+      version: v1beta1
+      description: Manages Neo4j Enterprise cluster deployments
+    - kind: Neo4jEnterpriseStandalone
+      version: v1beta1
+      description: Manages Neo4j Enterprise standalone deployments
+    - kind: Neo4jPlugin
+      version: v1beta1
+      description: Manages Neo4j plugin installations (APOC, GDS, Bloom, etc.)
+    - kind: Neo4jRestore
+      version: v1beta1
+      description: Manages Neo4j restore operations
+    - kind: Neo4jRoleBinding
+      version: v1beta1
+      description: Role grants for users provisioned externally (SSO/LDAP/OIDC first-login)
+    - kind: Neo4jRole
+      version: v1beta1
+      description: Declarative Neo4j role management with privilege-drift reconciliation
+    - kind: Neo4jShardedDatabase
+      version: v1beta1
+      description: Manages Neo4j property-sharded databases (Infinigraph, GA in 2025.12+)
+    - kind: Neo4jUser
+      version: v1beta1
+      description: Declarative Neo4j user management (passwords from Secrets, role bindings, status, external auth)
+  artifacthub.io/recommendations: |
+    - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+      description: For TLS certificate management
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/maintainers: |
+    - name: Priyo Lahiri
+      email: priyolahiri@users.noreply.github.com
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://priyolahiri.github.io/neo4j-kubernetes-operator/
+    - name: Support
+      url: https://github.com/priyolahiri/neo4j-kubernetes-operator/issues
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial Helm chart implementation
+    - kind: added
+      description: Support for both cluster-wide and namespace-scoped deployments
+    - kind: added
+      description: Configurable RBAC and resource management
+    - kind: added
+      description: "Neo4jUser, Neo4jRole, Neo4jRoleBinding CRDs for declarative user, role, and privilege management"
+    - kind: added
+      description: "Cluster status surfacing for SHOW USERS / SHOW ROLES via status.diagnostics"

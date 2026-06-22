@@ -1,0 +1,9 @@
+{{- /*
+Render user-supplied extra manifests (values.extraManifests). Each entry is
+templated against the release context (tpl) so values like
+{{ .Release.Namespace }} work inside the manifests.
+*/ -}}
+{{- range .Values.extraManifests }}
+---
+{{ tpl (toYaml .) $ }}
+{{- end }}

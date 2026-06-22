@@ -1,0 +1,135 @@
+name: Pages — Docs
+
+# Builds the documentation site with mkdocs-material and publishes it to the
+# gh-pages branch as a versioned subdirectory using mike.
+#
+#   - Push to main         → publishes to /main/ alias  (rolling preview)
+#   - workflow_call from release.yml (after every release gate has passed)
+#     → publishes /vX.Y/ and updates the /latest/ alias. The versioned
+#     publication deliberately has NO tag trigger of its own: publishing on
+#     tag push ran in PARALLEL with the release gates, so a failed release
+#     left /vX.Y/ + latest advertising a version that never shipped (#245,
+#     observed live on the first v1.12.0 tag). The called workflow inherits
+#     the caller's GITHUB_REF (the tag), so the derivation below is unchanged.
+#
+# The chart-publishing workflow (pages-helm.yml) writes to /charts/ on the
+# same gh-pages branch; concurrency: gh-pages serialises pushes between the
+# two workflows so they cannot race.
+#
+# Naming history: the rolling-preview alias was called `dev` until June
+# 2026. Renamed to `main` because the operator already uses `dev` as a
+# CLI flag value (--mode=dev vs --mode=production); having "dev" mean
+# two different things in this codebase was a footgun. The `main` alias
+# matches the git branch name 1:1 with no overload.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_call: {}
+  workflow_dispatch:
+    inputs:
+      version-alias:
+        description: 'Version label to publish under (e.g. v1.7, latest, dev)'
+        required: true
+        type: string
+      update-latest:
+        description: 'Also update the "latest" alias'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write   # mike needs to push to gh-pages
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+# Silence the mkdocs-material team's MkDocs 2.0 deprecation banner on
+# every mkdocs/mike invocation. The banner is a vendor protest message
+# (https://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/)
+# unrelated to our docs and noisy in CI logs. The env var is the
+# officially documented suppression switch in mkdocs-material itself
+# (see material/templates/__init__.py).
+env:
+  NO_MKDOCS_2_WARNING: "true"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with full history for mike)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+
+      - name: Install mkdocs-material + mike
+        run: |
+          pip install --upgrade pip
+          pip install -r docs/requirements.txt
+
+      - name: Determine deploy parameters
+        id: params
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # vX.Y.Z → vX.Y (drop the patch — patch releases overwrite)
+            full_tag="${GITHUB_REF#refs/tags/}"
+            short="${full_tag%.*}"
+            echo "alias=${short}"   >> "$GITHUB_OUTPUT"
+            echo "extra=latest"     >> "$GITHUB_OUTPUT"
+            echo "title=${full_tag}" >> "$GITHUB_OUTPUT"
+            echo "Publishing tag ${full_tag} as ${short} (and updating 'latest')"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "alias=${{ inputs.version-alias }}" >> "$GITHUB_OUTPUT"
+            if [[ "${{ inputs.update-latest }}" == "true" ]]; then
+              echo "extra=latest" >> "$GITHUB_OUTPUT"
+            else
+              echo "extra="       >> "$GITHUB_OUTPUT"
+            fi
+            echo "title=${{ inputs.version-alias }}" >> "$GITHUB_OUTPUT"
+            echo "Manual deploy: ${{ inputs.version-alias }}"
+          else
+            echo "alias=main"  >> "$GITHUB_OUTPUT"
+            echo "extra="      >> "$GITHUB_OUTPUT"
+            echo "title=main"  >> "$GITHUB_OUTPUT"
+            echo "Publishing main branch to /main/"
+          fi
+
+      - name: Verify mkdocs strict build
+        run: mkdocs build --strict --site-dir /tmp/mkdocs-verify
+
+      - name: Deploy with mike
+        run: |
+          mike deploy \
+            --push \
+            --update-aliases \
+            --title "${{ steps.params.outputs.title }}" \
+            "${{ steps.params.outputs.alias }}" \
+            ${{ steps.params.outputs.extra }}
+
+      - name: Set default redirect to /latest/ (idempotent)
+        if: contains(steps.params.outputs.extra, 'latest')
+        run: mike set-default --push latest
+
+      # One-time cleanup after the dev → main rename (June 2026).
+      # Runs only on push-to-main deploys; mike delete errors when the
+      # version is already gone, so `|| true` makes it idempotent — once
+      # the old `dev` entry has been removed from versions.json, every
+      # subsequent run is a no-op. Safe to leave in the workflow
+      # indefinitely; can be deleted in a few release cycles.
+      - name: Remove orphan 'dev' alias (one-time cleanup)
+        if: steps.params.outputs.alias == 'main'
+        run: mike delete dev --push 2>/dev/null || true

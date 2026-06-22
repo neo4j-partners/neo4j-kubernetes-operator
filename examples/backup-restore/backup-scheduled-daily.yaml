@@ -1,0 +1,103 @@
+# ============================================================
+# Scheduled Daily Backup to S3 — explicit credentials
+#
+# Create the AWS credentials secret first (all three keys are required —
+# the backup Job reads AWS_REGION as a non-optional env var, so omitting it
+# fails the pod with CreateContainerConfigError):
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
+#     --from-literal=AWS_REGION=us-east-1
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: daily-backup
+  labels:
+    environment: production
+    backup-type: scheduled
+    schedule: daily
+spec:
+  target:
+    kind: Cluster
+    name: my-neo4j  # kind=Cluster: the Neo4jEnterpriseCluster OR Neo4jEnterpriseStandalone instance name (clusterRef unused; backs up all databases)
+  # schedule is a flat cron string — no nesting
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  storage:
+    type: s3
+    bucket: production-neo4j-backups
+    path: daily-backups
+    cloud:
+      provider: aws
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
+  # NOTE: for cloud storage (s3/gcs/azure) the operator does NOT prune objects —
+  # configure bucket lifecycle rules instead. retention is applied only for
+  # type=pvc storage, and only when the Neo4jBackup CR is deleted.
+  retention:
+    maxAge: "7d"
+    maxCount: 7
+  options:
+    compress: true
+    backupType: AUTO   # FULL on first run, DIFF afterwards
+    # tempPath stages in the pod's ephemeral /tmp (works out of the box). For
+    # LARGE or production cloud backups, prefer tempStorage (a dedicated
+    # staging PVC) so staging can't fill the node's ephemeral disk.
+    tempPath: /tmp/neo4j-backup-temp
+  # Set suspend: true to temporarily pause this scheduled backup. The operator
+  # propagates it to the underlying CronJob (no scheduled Jobs fire while
+  # suspended); removing spec.schedule entirely deletes the CronJob.
+  suspend: false
+
+# ── AWS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# AWS_REGION is required: the backup Job reads it from this Secret (the operator
+# wires it as a non-optional env var), so omit it and the Job pod won't start.
+# Referenced via spec.storage.cloud.credentialsSecretRef: aws-backup-credentials
+
+---
+# ============================================================
+# Weekly Backup with longer retention — IRSA workload identity
+# (no static credentials required)
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: weekly-backup
+  labels:
+    environment: production
+    backup-type: scheduled
+    schedule: weekly
+spec:
+  target:
+    kind: Cluster
+    name: single-node-cluster
+  schedule: "0 1 * * 0"  # Weekly on Sunday at 1 AM UTC
+  storage:
+    type: s3
+    bucket: production-neo4j-backups
+    path: weekly-backups
+    cloud:
+      provider: aws
+      identity:
+        provider: aws
+        autoCreate:
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
+  retention:
+    maxAge: "90d"
+    maxCount: 12
+  options:
+    compress: true
+    backupType: FULL
+    # See the note above: tempPath uses ephemeral /tmp; use tempStorage for
+    # large/production cloud backups.
+    tempPath: /tmp/neo4j-backup-temp
+  suspend: false

@@ -1,0 +1,73 @@
+# NOTE: online storage expansion is not exercised by integration tests (Kind's
+# local-path provisioner can't expand PVCs) — validate on a StorageClass with
+# allowVolumeExpansion: true.
+# Storage Expansion Example
+#
+# This example demonstrates how to expand storage on a running Neo4j cluster.
+# The operator automatically handles PVC expansion and StatefulSet recreation
+# with zero downtime — pods keep running throughout the process.
+#
+# Prerequisites:
+#   1. StorageClass must have allowVolumeExpansion: true
+#      kubectl get storageclass standard -o jsonpath='{.allowVolumeExpansion}'
+#
+#   2. Create admin credentials:
+#      kubectl create secret generic neo4j-admin-secret \
+#        --from-literal=username=neo4j \
+#        --from-literal=password=your-secure-password
+#
+# Usage:
+#   1. Deploy this cluster:
+#      kubectl apply -f storage-expansion.yaml
+#
+#   2. Wait for the cluster to reach Ready:
+#      kubectl get neo4jenterprisecluster storage-demo -w
+#
+#   3. Expand storage by patching the size field:
+#      kubectl patch neo4jenterprisecluster storage-demo \
+#        --type=merge \
+#        -p '{"spec":{"storage":{"size":"20Gi"}}}'
+#
+#   4. Watch the expansion:
+#      kubectl get neo4jenterprisecluster storage-demo -w
+#      # Phase transitions: Ready -> Expanding -> Ready
+#
+#   5. Verify PVC sizes:
+#      kubectl get pvc -l neo4j.com/cluster=storage-demo
+#
+# Note: Reducing storage size is not supported (Kubernetes does not allow PVC shrink).
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: storage-demo
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 3
+
+  # Start with 10Gi, then expand to 20Gi using kubectl patch (see usage above)
+  storage:
+    className: standard  # Must have allowVolumeExpansion: true
+    size: "10Gi"
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  tls:
+    mode: disabled
+
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret

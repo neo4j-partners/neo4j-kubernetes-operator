@@ -1,0 +1,200 @@
+apiVersion: operators.coreos.com/v1beta1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: "[\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jAuthRule\",\n    \"metadata\": {\n      \"name\": \"emea-business-hours\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"condition\": \"abac.oidc.user_attribute('region') = 'EMEA'\\n  AND time.transaction('UTC').hour \\u003e= 6\\n  AND time.transaction('UTC').hour \\u003c 18\\n\",\n      \"deletionPolicy\": \"Drop\",\n      \"enabled\": true,\n      \"enforceRoles\": true,\n      \"grantedRoles\": [\n        \"reader\"\n      ],\n      \"name\": \"emea_business_hours\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jBackup\",\n    \"metadata\": {\n      \"name\": \"example-backup\"\n    },\n    \"spec\": {\n      \"options\": {\n        \"backupType\": \"FULL\",\n        \"compress\": true\n      },\n      \"storage\": {\n        \"pvc\": {\n          \"name\": \"neo4j-backup-pvc\",\n          \"size\": \"20Gi\",\n          \"storageClassName\": \"standard\"\n        },\n        \"type\": \"pvc\"\n      },\n      \"target\": {\n        \"kind\": \"Cluster\",\n        \"name\": \"sample-cluster\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jDatabase\",\n    \"metadata\": {\n      \"name\": \"example-database\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"name\": \"exampledb\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jEnterpriseCluster\",\n    \"metadata\": {\n      \"name\": \"sample-cluster\"\n    },\n    \"spec\": {\n      \"acceptLicenseAgreement\": \"eval\",\n      \"auth\": {\n        \"adminSecret\": \"neo4j-admin-secret\"\n      },\n      \"image\": {\n        \"repo\": \"neo4j\",\n        \"tag\": \"5.26.0-enterprise\"\n      },\n      \"storage\": {\n        \"className\": \"standard\",\n        \"size\": \"10Gi\"\n      },\n      \"topology\": {\n        \"servers\": 3\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jEnterpriseStandalone\",\n    \"metadata\": {\n      \"name\": \"sample-standalone\"\n    },\n    \"spec\": {\n      \"acceptLicenseAgreement\": \"eval\",\n      \"auth\": {\n        \"adminSecret\": \"neo4j-admin-secret\"\n      },\n      \"image\": {\n        \"repo\": \"neo4j\",\n        \"tag\": \"5.26.0-enterprise\"\n      },\n      \"storage\": {\n        \"className\": \"standard\",\n        \"size\": \"10Gi\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jPlugin\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"neo4j-kubernetes-operator\"\n      },\n      \"name\": \"neo4jplugin-cluster-sample\",\n      \"namespace\": \"default\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"config\": {\n        \"apoc.export.file.enabled\": \"true\",\n        \"apoc.import.file.enabled\": \"true\",\n        \"apoc.import.file.use_neo4j_config\": \"true\"\n      },\n      \"enabled\": true,\n      \"name\": \"apoc\",\n      \"source\": {\n        \"type\": \"official\"\n      },\n      \"version\": \"5.26.0\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jPlugin\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"neo4j-kubernetes-operator\"\n      },\n      \"name\": \"neo4jplugin-standalone-sample\",\n      \"namespace\": \"default\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-standalone\",\n      \"config\": {\n        \"gds.enterprise.license_file\": \"/licenses/gds.license\"\n      },\n      \"dependencies\": [\n        {\n          \"name\": \"apoc\",\n          \"optional\": false,\n          \"versionConstraint\": \"\\u003e=5.26.0\"\n        }\n      ],\n      \"enabled\": true,\n      \"name\": \"graph-data-science\",\n      \"resources\": {\n        \"cpuLimit\": \"500m\",\n        \"memoryLimit\": \"1Gi\",\n        \"threadPoolSize\": 4\n      },\n      \"security\": {\n        \"allowedProcedures\": [\n          \"gds.*\",\n          \"apoc.load.*\"\n        ],\n        \"sandbox\": true\n      },\n      \"source\": {\n        \"type\": \"community\"\n      },\n      \"version\": \"2.10.0\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRestore\",\n    \"metadata\": {\n      \"name\": \"example-restore\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"databaseName\": \"exampledb\",\n      \"source\": {\n        \"backupRef\": \"example-backup\",\n        \"type\": \"backup\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRole\",\n    \"metadata\": {\n      \"name\": \"example-role\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"name\": \"analytics_reader\",\n      \"privileges\": [\n        \"GRANT ACCESS ON DATABASE neo4j TO analytics_reader\",\n        \"GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics_reader\"\n      ]\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRoleBinding\",\n    \"metadata\": {\n      \"name\": \"example-rolebinding\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"roles\": [\n        \"editor\"\n      ],\n      \"username\": \"alice@example.com\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jShardedDatabase\",\n    \"metadata\": {\n      \"name\": \"example-sharded\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"defaultCypherLanguage\": \"25\",\n      \"name\": \"shardeddb\",\n      \"propertySharding\": {\n        \"graphShard\": {\n          \"primaries\": 1,\n          \"secondaries\": 0\n        },\n        \"propertyShardTopology\": {\n          \"replicas\": 1\n        },\n        \"propertyShards\": 2\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jUser\",\n    \"metadata\": {\n      \"name\": \"example-user\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"passwordSecretRef\": {\n        \"name\": \"app-reader-creds\"\n      },\n      \"roles\": [\n        \"reader\"\n      ],\n      \"username\": \"app_reader\"\n    }\n  }\n]"
+    capabilities: Full Lifecycle
+    categories: Database
+    containerImage: REPLACE_IMAGE
+    description: Automates Neo4j Enterprise graph database clusters and standalone
+      instances on Kubernetes.
+  name: neo4j-kubernetes-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Neo4jBackup declaratively manages a Neo4j backup. The operator
+        runs `neo4j-admin database backup` against the referenced cluster or standalone
+        target, writes the backup to local PVC storage or to a supported cloud bucket
+        (S3 / GCS / Azure Blob / MinIO), records the outcome on .status, and (optionally)
+        enforces retention. Schedules are expressed via standard cron syntax.
+      displayName: Neo4j Backup
+      kind: Neo4jBackup
+      name: neo4jbackups.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jDatabase declaratively manages a single named Neo4j database
+        inside a referenced cluster or standalone. The operator issues CREATE / ALTER
+        / DROP DATABASE statements against the system database, with optional topology
+        (primaries/secondaries), Cypher language version (5 or 25), seed-from-URI,
+        and IF NOT EXISTS semantics. Cluster-level concerns (image, storage, auth,
+        TLS, plugins) stay on the cluster/standalone CR — Neo4jDatabase only owns
+        database-scope CREATE DATABASE options.
+      displayName: Neo4j Database
+      kind: Neo4jDatabase
+      name: neo4jdatabases.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jEnterpriseCluster declaratively manages a Neo4j Enterprise
+        causal cluster (minimum 2 servers). The operator builds a single `{name}-server`
+        StatefulSet whose pods self-organize into primary/secondary roles at runtime
+        via `serverModeConstraint`, wires up V2 discovery on port 6000, manages cert-manager-driven
+        TLS, plugin installation (APOC, GDS, Bloom, …), backup and restore integration,
+        optional Aura Fleet Management registration, optional MCP server, and live
+        cluster diagnostics. For single-node development workloads, use Neo4jEnterpriseStandalone
+        instead.
+      displayName: Neo4j Enterprise Cluster
+      kind: Neo4jEnterpriseCluster
+      name: neo4jenterpriseclusters.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jEnterpriseStandalone declaratively manages a single-node Neo4j
+        Enterprise deployment for development, testing, and low-availability production
+        workloads. Built on the same clustering infrastructure as Neo4jEnterpriseCluster
+        but with replicas=1, so it is fully compatible with the rest of the CRD ecosystem
+        (Neo4jDatabase, Neo4jPlugin, Neo4jBackup, Neo4jRestore, Neo4jUser, Neo4jRole,
+        …). For high-availability workloads requiring fault tolerance, use Neo4jEnterpriseCluster
+        instead.
+      displayName: Neo4j Enterprise Standalone
+      kind: Neo4jEnterpriseStandalone
+      name: neo4jenterprisestandalones.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jPlugin declaratively installs and manages a Neo4j plugin (APOC,
+        Graph Data Science, Bloom, GenAI, n10s, GraphQL, or a custom plugin) on a
+        referenced cluster or standalone. The controller merges the plugin name into
+        the StatefulSet's NEO4J_PLUGINS env var (without overwriting plugins added
+        by other controllers), applies plugin-specific configuration, and triggers
+        a controlled rolling restart. Multiple Neo4jPlugin resources targeting the
+        same deployment coexist and stack additively.
+      displayName: Neo4j Plugin
+      kind: Neo4jPlugin
+      name: neo4jplugins.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jRestore declaratively restores a Neo4j database from a previously-completed
+        Neo4jBackup or directly from a storage location (PVC or cloud bucket). The
+        operator launches a Job that runs `neo4j-admin database restore` against the
+        referenced cluster or standalone target, with optional pre-restore hooks and
+        configurable handling of an existing same-named database. The referenced cluster/standalone
+        must be Ready before the restore proceeds; failed restores do not silently
+        retry without a spec change.
+      displayName: Neo4j Restore
+      kind: Neo4jRestore
+      name: neo4jrestores.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jShardedDatabase declaratively manages a property-sharded Neo4j
+        database (Neo4j 2025.12+ feature). The operator coordinates the graph shard
+        and N property shards, each with its own topology (primaries / secondaries),
+        sets the database's default Cypher language version (5 or 25), and surfaces
+        shard-level health on .status. Use a regular Neo4jDatabase resource for non-sharded
+        (single-graph) workloads.
+      displayName: Neo4j Sharded Database
+      kind: Neo4jShardedDatabase
+      name: neo4jshardeddatabases.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jUser declaratively manages a user in Neo4j (password from
+        a Secret, role bindings, account status, home database, external auth providers).
+      displayName: Neo4j User
+      kind: Neo4jUser
+      name: neo4jusers.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jRole declaratively manages a role in Neo4j and its privileges,
+        with full drift reconciliation against SHOW ROLE PRIVILEGES AS COMMANDS.
+      displayName: Neo4j Role
+      kind: Neo4jRole
+      name: neo4jroles.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jRoleBinding manages role grants for users provisioned externally
+        (e.g. SSO/LDAP first-login). The operator never creates or drops the user;
+        it only manages role grants.
+      displayName: Neo4j Role Binding
+      kind: Neo4jRoleBinding
+      name: neo4jrolebindings.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jAuthRule declaratively manages an attribute-based access control
+        (ABAC) auth rule. Conditions reference OIDC token claims via abac.oidc.user_attribute()
+        and grant the listed roles when the condition evaluates true at authentication
+        time. Requires Neo4j 2026.03 or later.
+      displayName: Neo4j Auth Rule
+      kind: Neo4jAuthRule
+      name: neo4jauthrules.neo4j.neo4j.com
+      version: v1beta1
+  description: |
+    The Neo4j Enterprise Operator for Kubernetes automates the deployment and
+    management of Neo4j Enterprise graph database clusters and standalone
+    instances on Kubernetes. It extends the Kubernetes API with declarative
+    custom resources for the entire Neo4j operational surface — clusters,
+    databases, users, roles, plugins, backups, and restores — so day-2
+    operations are configuration-driven and reconciled by the operator.
+
+    ### Supported Deployments
+    - **Neo4jEnterpriseCluster** — High-availability clusters (minimum 2 servers; tens of
+      servers in practice) with automatic discovery, split-brain detection, and rolling upgrades
+    - **Neo4jEnterpriseStandalone** — Single-node instances for development and testing
+
+    ### Key Features
+    - Automated cluster formation with V2 discovery (Neo4j 5.26 LTS and the CalVer release line — 2025.x, 2026.x, and onward)
+    - TLS encryption via cert-manager with automatic certificate rotation, plus a JVM truststore (`spec.trustedCASecrets`) for self-signed enterprise CAs (LDAP / OIDC providers behind internal PKI)
+    - Authentication providers — Native, LDAP, and OIDC/SSO are wired through typed `spec.auth` fields. JWT is covered via OIDC ID tokens. Kerberos can be configured via direct `spec.config` keys plus a keytab mounted from `spec.extraVolumes`.
+    - Plugin management via the `Neo4jPlugin` CRD — APOC, Graph Data Science, Bloom, GenAI, n10s, GraphQL, and custom plugins, with automatic security configuration and rolling restarts
+    - Scheduled backups to S3, GCS, Azure Blob Storage, or PVC — with Workload Identity (cloud IAM) and custom S3-compatible endpoints (e.g. MinIO), encryption, and retention
+    - Point-in-time restore and cross-cloud disaster recovery
+    - Database lifecycle management via Neo4jDatabase CRD
+    - Declarative user, role, and privilege management via Neo4jUser, Neo4jRole, and Neo4jRoleBinding CRDs
+    - Property-based access control (PBAC) inside Neo4jRole.spec.privileges (FOR pattern WHERE …)
+    - Attribute-based access control (ABAC) via Neo4jAuthRule, mapping OIDC token claims to role grants (Neo4j 2026.03+)
+    - Property sharding (Infinigraph) support for Neo4j 2025.12+
+    - Storage volume expansion — PVC sizes can be increased after creation; the operator coordinates the StatefulSet recreation with zero downtime (StorageClass must allow volume expansion)
+    - Optional MCP (Model Context Protocol) server alongside each cluster or standalone, exposing Neo4j to Anthropic / Claude clients
+    - Live cluster diagnostics surfaced in CR status (servers, databases, users, roles)
+    - Prometheus metrics, ServiceMonitor, and PrometheusRule integration
+    - Neo4j Aura Fleet Management integration
+
+    ### Custom Resources
+    The operator manages 11 namespaced CRDs:
+    - `Neo4jEnterpriseCluster`, `Neo4jEnterpriseStandalone` — Neo4j workloads
+    - `Neo4jDatabase`, `Neo4jShardedDatabase` — databases inside a cluster or standalone
+    - `Neo4jPlugin` — plugin installations
+    - `Neo4jBackup`, `Neo4jRestore` — backup and restore operations
+    - `Neo4jUser`, `Neo4jRole`, `Neo4jRoleBinding`, `Neo4jAuthRule` — declarative authentication, authorization, and access control
+
+    ### Supported Neo4j Versions
+    - Neo4j 5.26 LTS (the final SemVer release)
+    - Neo4j CalVer releases (2025.x, 2026.x, and onward)
+
+    ### Documentation
+    Full documentation, examples, and migration guides:
+    https://priyolahiri.github.io/neo4j-kubernetes-operator/
+  displayName: Neo4j Kubernetes Operator
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - neo4j
+  - graph-database
+  - kubernetes-operator
+  - neo4j-enterprise
+  - graph
+  links:
+  - name: GitHub Repository
+    url: https://github.com/priyolahiri/neo4j-kubernetes-operator
+  - name: Neo4j Documentation
+    url: https://neo4j.com/docs/
+  - name: Operator Documentation
+    url: https://priyolahiri.github.io/neo4j-kubernetes-operator/
+  maintainers:
+  - email: 1254077+priyolahiri@users.noreply.github.com
+    name: Priyadarshi Lahiri
+  maturity: alpha
+  minKubeVersion: "1.32.0"
+  provider:
+    name: Priyo Lahiri
+    url: https://github.com/priyolahiri
+  version: 0.0.0

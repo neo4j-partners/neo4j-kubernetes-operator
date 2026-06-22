@@ -1,0 +1,37 @@
+# ============================================================
+# Destructive restore: overwrite an EXISTING database from a backup.
+#
+#   - force: true            confirms overwriting the existing database
+#   - replaceExisting: true  equivalent option-level confirmation
+#   - source.type: backup    pulls from a Neo4jBackup CR's latest successful run
+#
+# On a CLUSTER target the operator restores via Cypher
+# (dbms.recreateDatabase with a seedURI — no Job, no downtime for other
+# databases). Restoring over an EXISTING database REQUIRES force: true or
+# options.replaceExisting: true — without either the restore fails with an
+# actionable message instead of silently wiping the database.
+#
+# Hooks (spec.options.{preRestore,postRestore}) run ONLY on standalone
+# targets (the Job-based path) — they are intentionally absent here.
+# For point-in-time recovery, see restore-pitr-basic.yaml.
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: restore-orders
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  databaseName: orders
+  # Confirm the destructive overwrite of the existing database
+  force: true
+  source:
+    type: backup
+    backupRef: full-backup
+  options:
+    # Replace the existing database rather than failing if it exists
+    replaceExisting: true
+  # spec.timeout bounds how long the operator waits for the re-seeded
+  # database to converge online across the cluster (default 5m — raise it
+  # for multi-GB stores seeded from object storage).
+  timeout: "30m"

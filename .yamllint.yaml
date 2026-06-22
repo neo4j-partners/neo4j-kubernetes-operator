@@ -1,0 +1,29 @@
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
+  brackets:
+    max-spaces-inside: 1
+    max-spaces-inside-empty: 0
+  indentation:
+    spaces: 2
+    indent-sequences: whatever  # workflows use 4-space sequences; syntax coverage matters, style does not
+    check-multi-line-strings: false
+
+ignore: |
+  /config/
+  /charts/
+  /hack/
+  /dev-data/
+  *.yaml.tmpl
+  *.yml.tmpl
+  .golangci.yml
+  .golangci*.yml
+  bundle/

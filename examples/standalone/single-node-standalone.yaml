@@ -1,0 +1,109 @@
+# Single-node Neo4j Enterprise Standalone deployment
+# This creates a standalone Neo4j deployment in single mode (not clustered)
+# Suitable for development, testing, and simple production workloads that don't need scaling
+#
+# NEW: Now supports Neo4jDatabase resources! You can create databases in standalone
+# deployments using the Neo4jDatabase custom resource with clusterRef pointing to this standalone.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: standalone-neo4j
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  # Neo4j Enterprise Edition (required for this operator)
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # 5.26 LTS; any CalVer release works too, e.g. "2026.04-enterprise" (operator auto-detects)
+    pullPolicy: IfNotPresent
+
+  # Storage configuration
+  storage:
+    # className is intentionally omitted so the PVC inherits your cluster's
+    # DEFAULT StorageClass — portable across Kind, AKS, EKS, GKE, etc.
+    # To pin a specific class, uncomment and set one that EXISTS on your cluster
+    # (the operator rejects a non-existent class instead of leaving the pod Pending):
+    #   Kind/minikube: standard   AKS: managed-csi   EKS: gp3   GKE: standard-rwo
+    # className: managed-csi
+    size: "10Gi"        # Adjust based on your data needs
+
+  # Resource allocation
+  resources:
+    requests:
+      memory: "2Gi"     # Initial memory allocation
+      cpu: "500m"       # Initial CPU allocation
+    limits:
+      memory: "4Gi"     # Maximum memory
+      cpu: "2"          # Maximum CPU cores
+
+  # TLS disabled for simplicity (enable for production)
+  tls:
+    mode: disabled
+
+  # Authentication configuration
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret  # Reference to admin credentials secret
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb  # Example annotation
+
+  # Custom Neo4j configuration (single mode is automatically set)
+  config:
+    # Memory settings
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "1G"
+
+    # Security settings
+    # Auth is enabled by default in Neo4j Enterprise; the operator sets the
+    # initial admin credentials via NEO4J_AUTH from spec.auth.adminSecret.
+    dbms.security.procedures.unrestricted: "gds.*,apoc.*"
+
+    # Logging settings
+    # db.logs.query.enabled is an enum: OFF | INFO | VERBOSE (not a boolean).
+    db.logs.query.enabled: "INFO"
+    db.logs.query.threshold: "1s"
+
+  # Environment variables (optional)
+  # Note: NEO4J_ACCEPT_LICENSE_AGREEMENT is managed by the operator
+  env: []
+
+  # Node selector for pod scheduling (optional; uncomment to constrain).
+  # NOTE: do not pin an architecture here unless your nodes match — e.g.
+  # `kubernetes.io/arch: amd64` leaves the pod Pending on arm64 nodes
+  # (Apple Silicon Kind clusters).
+  # nodeSelector:
+  #   kubernetes.io/arch: amd64
+
+  # Tolerations for pod scheduling (optional; uncomment if your nodes are
+  # tainted, e.g. a dedicated `neo4j=true:NoSchedule` node pool).
+  # tolerations:
+  #   - key: "neo4j"
+  #     operator: "Equal"
+  #     value: "true"
+  #     effect: "NoSchedule"
+
+  # Monitoring
+  monitoring:
+    enabled: true
+    slowQueryThreshold: "5s"
+    explainPlan: true
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret

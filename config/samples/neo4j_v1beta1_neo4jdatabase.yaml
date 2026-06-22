@@ -1,0 +1,7 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: example-database
+spec:
+  name: exampledb
+  clusterRef: sample-cluster

@@ -1,0 +1,282 @@
+# End-to-End Neo4j Deployment Example
+# This example demonstrates a complete production-ready deployment with:
+# - Neo4j Enterprise Cluster with TLS
+# - Database creation with topology constraints
+# - Automated backups to cloud storage
+# - Monitoring and alerting setup
+
+---
+# Namespace for the deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-production
+---
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create namespace neo4j-production   # this manifest also defines it; create it first
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace neo4j-production \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
+---
+# ── S3 backup credentials Secret (create this BEFORE you apply this manifest) ──
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create namespace neo4j-production   # this manifest also defines it; create it first
+#   kubectl create secret generic s3-backup-credentials \
+#     --namespace neo4j-production \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# Referenced via the Neo4jBackup's spec.storage.cloud.credentialsSecretRef
+---
+# Neo4j Enterprise Cluster
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-cluster
+  namespace: neo4j-production
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # or "2025.01.0-enterprise" for CalVer
+
+  # High availability topology
+  topology:
+    servers: 5  # 5 servers will self-organize into primary/secondary roles
+    placement:
+      # Spread servers across zones via pod anti-affinity.
+      antiAffinity:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        type: preferred   # "preferred" or "required"
+    availabilityZones:
+      - us-east-1a
+      - us-east-1b
+      - us-east-1c
+
+  # TLS configuration
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+
+  # Authentication
+  auth:
+    adminSecret: neo4j-admin-secret
+    authenticationProviders: ["native"]
+
+  # Storage configuration
+  storage:
+    className: fast-ssd
+    size: 100Gi
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  # JVM and Neo4j configuration
+  config:
+    # JVM settings
+    server.memory.heap.initial_size: "4G"
+    server.memory.heap.max_size: "4G"
+    server.memory.pagecache.size: "8G"
+    # Query / transaction timeout
+    db.transaction.timeout: "300s"
+    # Clustering settings (minimum_initial_system_primaries_count is derived
+    # from spec.topology by the operator — do not set it here)
+    dbms.cluster.discovery.log_level: "INFO"
+    # Password policy
+    dbms.security.auth_minimum_password_length: "12"
+
+  # Monitoring — enabling this turns on Prometheus metrics (port 2004); the
+  # operator creates the metrics Service. A ServiceMonitor is included as a
+  # separate resource at the end of this file.
+  monitoring:
+    enabled: true
+---
+# Create main database with topology constraints
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: main-database
+  namespace: neo4j-production
+spec:
+  clusterRef: production-cluster
+  name: maindb
+  wait: true
+  ifNotExists: true
+
+  # Topology distribution
+  topology:
+    primaries: 3
+    secondaries: 2
+
+  # Database options
+  options:
+    txLogEnrichment: "DIFF"
+
+  # Initial schema and indexes
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT user_email_unique IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE"
+      - "CREATE INDEX user_created_index IF NOT EXISTS FOR (u:User) ON (u.createdAt)"
+      - "CREATE INDEX product_name_index IF NOT EXISTS FOR (p:Product) ON (p.name)"
+---
+# Analytics database (Neo4j 2025.x with Cypher 25)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database
+  namespace: neo4j-production
+spec:
+  clusterRef: production-cluster
+  name: analytics
+  wait: true
+  ifNotExists: true
+
+  # For Neo4j 2025.x - use modern Cypher
+  defaultCypherLanguage: "25"
+
+  topology:
+    primaries: 2
+    secondaries: 1
+---
+# Automated daily backups
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: daily-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+
+  # Daily at 2 AM UTC
+  schedule: "0 2 * * *"
+
+  # S3 storage
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: "production/daily"
+    cloud:
+      credentialsSecretRef: s3-backup-credentials
+
+  # Backup options
+  options:
+    backupType: "AUTO"  # Automatically choose FULL or DIFF
+    compress: true
+    pageCache: "2G"     # Dedicated page cache for backup
+
+  # Retention policy
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+    deletePolicy: Delete
+---
+# Weekly full backup
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: weekly-full-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+
+  # Weekly on Sunday at 3 AM UTC
+  schedule: "0 3 * * 0"
+
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: "production/weekly"
+    cloud:
+      credentialsSecretRef: s3-backup-credentials
+
+  options:
+    backupType: "FULL"  # Force full backup
+    compress: true
+
+  retention:
+    maxAge: "90d"
+    maxCount: 12
+---
+# Install APOC plugin
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+metadata:
+  name: apoc-plugin
+  namespace: neo4j-production
+spec:
+  # References the cluster defined above
+  clusterRef: production-cluster
+
+  # Plugin configuration
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  # Plugin source
+  source:
+    type: official
+
+  # APOC configuration (Neo4j 5.26+ uses environment variables)
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+    "apoc.trigger.enabled": "true"
+---
+# Monitoring service
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j-metrics
+  namespace: neo4j-production
+  labels:
+    app: neo4j
+    monitoring: prometheus
+spec:
+  selector:
+    neo4j.com/cluster: production-cluster
+  ports:
+    - name: metrics
+      port: 2004
+      targetPort: 2004
+---
+# ServiceMonitor for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: neo4j-cluster-monitor
+  namespace: neo4j-production
+spec:
+  selector:
+    matchLabels:
+      app: neo4j
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

@@ -1,0 +1,33 @@
+apiVersion: scorecard.operatorframework.io/v1alpha3
+kind: Configuration
+metadata:
+  name: scorecard-config
+stages:
+- parallel: false
+  tests:
+  - entrypoint:
+    - scorecard-test
+    image: quay.io/operator-framework/scorecard-test:v1.29.0
+    labels:
+      suite: basic
+      test: basic-check-spec
+    storage:
+      spec:
+        mountPath: /tmp/scorecard
+    pluginConfig:
+      basic-check-spec:
+        states:
+          spec: warn
+  - entrypoint:
+    - scorecard-test
+    image: quay.io/operator-framework/scorecard-test:v1.29.0
+    labels:
+      suite: olm
+      test: olm-status-descriptors
+    storage:
+      spec:
+        mountPath: /tmp/scorecard
+    pluginConfig:
+      olm-status-descriptors:
+        states:
+          status-descriptors: warn

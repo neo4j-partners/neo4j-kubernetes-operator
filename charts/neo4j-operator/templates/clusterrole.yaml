@@ -1,0 +1,250 @@
+# This file is GENERATED. DO NOT EDIT.
+#
+# Source of truth: +kubebuilder:rbac:* markers in internal/controller/*.go.
+# To change the operator's permissions:
+#   1. Edit the relevant +kubebuilder:rbac:groups=...,resources=...,verbs=... marker
+#   2. Run 'make manifests' (regenerates config/rbac/role.yaml)
+#   3. Run 'make helm-sync-rbac' (regenerates this file)
+#
+# CI's 'make check-drift' fails if these are out of sync.
+{{ if and .Values.rbac.create (eq (include "neo4j-operator.createClusterRole" .) "true") -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-manager-role
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+    - ""
+  resources:
+    - configmaps
+    - endpoints
+    - persistentvolumeclaims
+    - secrets
+    - serviceaccounts
+    - services
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - ""
+  resources:
+    - events
+  verbs:
+    - create
+    - patch
+- apiGroups:
+    - ""
+  resources:
+    - nodes
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - ""
+  resources:
+    - pods
+  verbs:
+    - delete
+    - get
+    - list
+    - watch
+- apiGroups:
+    - ""
+  resources:
+    - pods/log
+  verbs:
+    - get
+- apiGroups:
+    - apps
+  resources:
+    - deployments
+    - statefulsets
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - batch
+  resources:
+    - cronjobs
+    - jobs
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - cert-manager.io
+  resources:
+    - certificates
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - cert-manager.io
+  resources:
+    - clusterissuers
+    - issuers
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - monitoring.coreos.com
+  resources:
+    - prometheusrules
+    - servicemonitors
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - neo4j.neo4j.com
+  resources:
+    - neo4jauthrules
+    - neo4jbackups
+    - neo4jdatabases
+    - neo4jenterpriseclusters
+    - neo4jenterprisestandalones
+    - neo4jplugins
+    - neo4jrestores
+    - neo4jrolebindings
+    - neo4jroles
+    - neo4jshardeddatabases
+    - neo4jusers
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - neo4j.neo4j.com
+  resources:
+    - neo4jauthrules/finalizers
+    - neo4jbackups/finalizers
+    - neo4jdatabases/finalizers
+    - neo4jenterpriseclusters/finalizers
+    - neo4jenterprisestandalones/finalizers
+    - neo4jplugins/finalizers
+    - neo4jrestores/finalizers
+    - neo4jrolebindings/finalizers
+    - neo4jroles/finalizers
+    - neo4jshardeddatabases/finalizers
+    - neo4jusers/finalizers
+  verbs:
+    - update
+- apiGroups:
+    - neo4j.neo4j.com
+  resources:
+    - neo4jauthrules/status
+    - neo4jbackups/status
+    - neo4jdatabases/status
+    - neo4jenterpriseclusters/status
+    - neo4jenterprisestandalones/status
+    - neo4jplugins/status
+    - neo4jrestores/status
+    - neo4jrolebindings/status
+    - neo4jroles/status
+    - neo4jshardeddatabases/status
+    - neo4jusers/status
+  verbs:
+    - get
+    - patch
+    - update
+- apiGroups:
+    - networking.k8s.io
+  resources:
+    - ingresses
+    - networkpolicies
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - rbac.authorization.k8s.io
+  resources:
+    - rolebindings
+    - roles
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - route.openshift.io
+  resources:
+    - routes
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - storage.k8s.io
+  resources:
+    - storageclasses
+  verbs:
+    - get
+    - list
+    - watch
+{{- if .Values.rbac.externalSecretsIntegration }}
+- apiGroups:
+    - external-secrets.io
+  resources:
+    - clustersecretstores
+    - secretstores
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - external-secrets.io
+  resources:
+    - externalsecrets
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+{{- end }}
+{{- end }}

@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1beta1
+kind: Subscription
+metadata:
+  name: neo4j-operator-sub
+  namespace: neo4j-operator-system
+spec:
+  channel: alpha
+  name: neo4j-kubernetes-operator
+  source: neo4j-operator-catalog
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

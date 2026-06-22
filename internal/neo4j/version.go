@@ -1,0 +1,346 @@
+/*
+Copyright 2025 Priyo Lahiri.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package neo4j
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// Version represents a parsed Neo4j version
+type Version struct {
+	Major    int
+	Minor    int
+	Patch    int
+	IsCalver bool
+	Raw      string
+}
+
+// ParseVersion parses a Neo4j version string into a structured Version
+func ParseVersion(versionString string) (*Version, error) {
+	if versionString == "" {
+		return nil, fmt.Errorf("empty version string")
+	}
+
+	// Store raw version
+	v := &Version{Raw: versionString}
+
+	// Remove common prefixes and suffixes
+	cleaned := versionString
+	cleaned = strings.TrimPrefix(cleaned, "v")
+	cleaned = strings.TrimPrefix(cleaned, "neo4j-")
+	cleaned = strings.TrimPrefix(cleaned, "neo4j:")
+
+	// Remove any suffix after a dash (like -enterprise, -community)
+	if idx := strings.Index(cleaned, "-"); idx != -1 {
+		cleaned = cleaned[:idx]
+	}
+
+	// Split by dots
+	parts := strings.Split(cleaned, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid version format: %s", versionString)
+	}
+
+	// Parse major version
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+	v.Major = major
+
+	// Parse minor version
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+	v.Minor = minor
+
+	// Parse patch version if present
+	if len(parts) >= 3 {
+		patch, err := strconv.Atoi(parts[2])
+		if err != nil {
+			// Some versions might have non-numeric patch like "5.26.0-beta1"
+			// In this case, we'll use 0 as the patch
+			v.Patch = 0
+		} else {
+			v.Patch = patch
+		}
+	}
+
+	// Determine if this is a CalVer version (2025.x.x format)
+	v.IsCalver = major >= 2025
+
+	return v, nil
+}
+
+// IsSupported checks if the version meets minimum requirements.
+// Neo4j 5.26.x is the final semver LTS release; the project moved to CalVer
+// (2025.x.x+) after that — no 5.27+ semver versions exist or will exist.
+func (v *Version) IsSupported() bool {
+	// CalVer versions (2025.x.x and later) are all supported
+	if v.IsCalver {
+		return true
+	}
+
+	// SemVer: only 5.26.x is supported — the last LTS semver release
+	return v.Major == 5 && v.Minor == 26
+}
+
+// Compare compares two versions
+// Returns -1 if v < other, 0 if v == other, 1 if v > other
+func (v *Version) Compare(other *Version) int {
+	// Compare major
+	if v.Major < other.Major {
+		return -1
+	}
+	if v.Major > other.Major {
+		return 1
+	}
+
+	// Compare minor
+	if v.Minor < other.Minor {
+		return -1
+	}
+	if v.Minor > other.Minor {
+		return 1
+	}
+
+	// Compare patch
+	if v.Patch < other.Patch {
+		return -1
+	}
+	if v.Patch > other.Patch {
+		return 1
+	}
+
+	return 0
+}
+
+// String returns the version as a string
+func (v *Version) String() string {
+	if v.Patch > 0 {
+		return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+	}
+	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
+}
+
+// GetImageVersion extracts the version from a Neo4j image tag
+func GetImageVersion(image string) (*Version, error) {
+	// Extract tag from image
+	// Format: neo4j:5.26.0-enterprise or neo4j:2025.01.0-enterprise
+	parts := strings.Split(image, ":")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid image format: %s", image)
+	}
+
+	tag := parts[len(parts)-1]
+	return ParseVersion(tag)
+}
+
+// GetKubernetesDiscoveryParameter returns the correct discovery parameter based on version
+func GetKubernetesDiscoveryParameter(version *Version) string {
+	if version.IsCalver {
+		// CalVer versions (2025.x) use the new parameter without v2
+		return "dbms.kubernetes.discovery.service_port_name"
+	}
+	// SemVer versions (5.x) use the v2 parameter
+	return "dbms.kubernetes.discovery.v2.service_port_name"
+}
+
+// GetBackupCommand generates the correct neo4j-admin database backup command.
+// fromAddresses is a comma-separated list of host:port backup endpoints (port 6362).
+// If fromAddresses is empty, the --from flag is omitted (local backup).
+//
+// The database-name argument is ALWAYS quoted with double quotes so that glob
+// patterns (e.g. "products*" for sharded backups) and any future special
+// characters are not expanded by the shell before reaching neo4j-admin. The
+// shell strips the outer double quotes before invoking neo4j-admin, so quoting
+// is transparent for plain names.
+func GetBackupCommand(version *Version, databaseName string, backupPath string, allDatabases bool, fromAddresses string) string {
+	cmd := "neo4j-admin database backup"
+
+	if fromAddresses != "" {
+		cmd += " --from=" + fromAddresses
+	}
+	// backupPath is assembled from user-controlled spec fields
+	// (storage.bucket, storage.path, chainFromBackup) and the whole command
+	// runs via `/bin/sh -c` in a pod holding cloud credentials — single-quote
+	// it so no metacharacter in those fields can escape into the shell
+	// (defense-in-depth; the validator also rejects suspicious charsets).
+	// Unlike GetRestoreCommand's from-path, to-path is never a deliberate
+	// command substitution, so unconditional quoting is safe.
+	cmd += " --to-path=" + shellQuoteArg(backupPath)
+
+	if allDatabases {
+		cmd += ` "*"`
+	} else if databaseName != "" {
+		cmd += ` "` + databaseName + `"`
+	}
+
+	return cmd
+}
+
+// GetRestoreCommand generates the correct restore command based on version.
+// The database name is shell-quoted as defense-in-depth (callers also validate
+// it against the Neo4j database-name pattern). backupPath is NOT quoted here: it
+// is sometimes a deliberate `$(ls … | tail -1)` command substitution for PVC
+// sources (rule 44) and sometimes a pre-quoted cloud URI — the caller owns that
+// quoting decision.
+func GetRestoreCommand(version *Version, databaseName string, backupPath string) string {
+	// Base command is the same for both versions
+	cmd := "neo4j-admin database restore"
+
+	// Add source path
+	cmd += " --from-path=" + backupPath
+
+	// Add database name
+	cmd += " " + shellQuoteArg(databaseName)
+
+	return cmd
+}
+
+// shellQuoteArg wraps s in single quotes for safe use inside `/bin/sh -c`,
+// escaping any embedded single quotes. Mirrors the controller's shellQuote;
+// duplicated here to keep the neo4j package free of a controller import.
+func shellQuoteArg(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// SupportsMetadataOption checks if version supports --include-metadata option
+func (v *Version) SupportsMetadataOption() bool {
+	// All supported versions (5.26+ and 2025.x) support metadata option
+	return v.IsSupported()
+}
+
+// SupportsCypherLanguageVersion checks if version supports DEFAULT LANGUAGE CYPHER
+func (v *Version) SupportsCypherLanguageVersion() bool {
+	// Only CalVer versions (2025.x) support Cypher language version
+	return v.IsCalver
+}
+
+// SupportsRemoteAddressResolution checks if version supports --remote-address-resolution flag (2025.09+).
+func (v *Version) SupportsRemoteAddressResolution() bool {
+	if !v.IsCalver {
+		return false
+	}
+	if v.Major > 2025 {
+		return true
+	}
+	return v.Major == 2025 && v.Minor >= 9
+}
+
+// SupportsPreferDiffAsParent checks if version supports --prefer-diff-as-parent flag (2025.04+).
+func (v *Version) SupportsPreferDiffAsParent() bool {
+	if !v.IsCalver {
+		return false
+	}
+	if v.Major > 2025 {
+		return true
+	}
+	return v.Major == 2025 && v.Minor >= 4
+}
+
+// SupportsParallelDownload checks if version supports --parallel-download flag (2025.11+).
+func (v *Version) SupportsParallelDownload() bool {
+	if !v.IsCalver {
+		return false
+	}
+	if v.Major > 2025 {
+		return true
+	}
+	return v.Major == 2025 && v.Minor >= 11
+}
+
+// SupportsSkipRecovery checks if version supports --skip-recovery flag (2025.11+).
+func (v *Version) SupportsSkipRecovery() bool {
+	return v.SupportsParallelDownload()
+}
+
+// SupportsAdvancedBackupFlags checks if version supports flags like --parallel-download and --skip-recovery.
+// Deprecated: use SupportsParallelDownload instead.
+func (v *Version) SupportsAdvancedBackupFlags() bool {
+	return v.SupportsParallelDownload()
+}
+
+// SupportsSourceDatabaseFilter checks if version supports --source-database in restore
+func (v *Version) SupportsSourceDatabaseFilter() bool {
+	// Available from 2025.02+
+	if v.IsCalver {
+		return v.Minor >= 2
+	}
+	return false
+}
+
+// RecreateDatabaseProcedure returns the Cypher procedure name to invoke for
+// `dbms.[cluster.]recreateDatabase`, varying by Neo4j version:
+//
+//   - SemVer 5.24+ (incl. 5.26 LTS): `dbms.cluster.recreateDatabase`
+//   - CalVer 2025.02–2025.03:        `dbms.cluster.recreateDatabase`
+//   - CalVer 2025.04+:               `dbms.recreateDatabase` (the `cluster.`
+//     form was deprecated in favor of the unprefixed name in 2025.04)
+//
+// Returns "" if the version doesn't support recreate at all (pre-5.24 SemVer
+// or pre-2025.02 CalVer, which shouldn't happen given the operator's
+// supported versions but kept as a defensive fallback). Callers should
+// check for empty and skip the recreate step.
+//
+// See https://neo4j.com/docs/operations-manual/current/database-administration/standard-databases/recreate-database/
+// and the same path under /5/ for the 5.26 reference.
+func (v *Version) RecreateDatabaseProcedure() string {
+	if v.IsCalver {
+		// 2026.x+ (any minor): cluster.* form was deprecated in
+		// 2025.04 and the unprefixed name is the only one going
+		// forward. Same applies to 2025.04+.
+		if v.Major > 2025 {
+			return "dbms.recreateDatabase"
+		}
+		if v.Major == 2025 && v.Minor >= 4 {
+			return "dbms.recreateDatabase"
+		}
+		// 2025.02 and 2025.03: only the cluster.* form exists.
+		if v.Major == 2025 && v.Minor >= 2 {
+			return "dbms.cluster.recreateDatabase"
+		}
+		// Pre-2025.02 (shouldn't be reachable given supported
+		// versions, but kept for safety): no recreate.
+		return ""
+	}
+	// SemVer path: introduced in 5.24, present in 5.26 LTS.
+	if v.Major == 5 && v.Minor >= 24 {
+		return "dbms.cluster.recreateDatabase"
+	}
+	return ""
+}
+
+// SupportsAuthRules reports whether this Neo4j version exposes the AUTH RULE
+// DDL used by attribute-based access control (ABAC). ABAC was introduced in
+// Neo4j 2026.03. 5.26 LTS and earlier CalVer (2025.x, 2026.01, 2026.02) do
+// not have AUTH RULE support; the Neo4jAuthRule controller refuses to
+// reconcile against clusters whose version returns false here.
+//
+// See https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/.
+func (v *Version) SupportsAuthRules() bool {
+	if !v.IsCalver {
+		return false
+	}
+	if v.Major > 2026 {
+		return true
+	}
+	return v.Major == 2026 && v.Minor >= 3
+}

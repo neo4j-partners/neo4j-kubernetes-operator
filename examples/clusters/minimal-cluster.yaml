@@ -1,0 +1,83 @@
+# Minimal Neo4j Enterprise cluster example
+# This creates a cluster with minimum 2 servers that self-organize
+# Servers can host databases with different primary/secondary topologies
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: minimal-cluster
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  # Neo4j Enterprise Edition (required for this operator)
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # 5.26 LTS; any CalVer release works too, e.g. "2026.04-enterprise" (operator auto-detects)
+    pullPolicy: IfNotPresent
+
+  # Minimal cluster topology: 2 servers (minimum required for clustering)
+  # Servers self-organize and can host databases with different topologies
+  topology:
+    servers: 2        # Minimum servers for clustering
+    # Optional: Constrain all servers to a specific mode (PRIMARY, SECONDARY, or NONE)
+    # serverModeConstraint: NONE
+
+  # Storage configuration
+  storage:
+    # className is intentionally omitted so the PVCs inherit your cluster's
+    # DEFAULT StorageClass — portable across Kind, AKS, EKS, GKE, etc.
+    # To pin a specific class, uncomment and set one that EXISTS on your cluster
+    # (the operator rejects a non-existent class instead of leaving pods Pending):
+    #   Kind/minikube: standard   AKS: managed-csi   EKS: gp3   GKE: standard-rwo
+    # className: managed-csi
+    size: "10Gi"        # Adjust based on your data needs
+
+  # Resource allocation
+  resources:
+    requests:
+      memory: "2Gi"     # Initial memory allocation
+      cpu: "500m"       # Initial CPU allocation
+    limits:
+      memory: "4Gi"     # Maximum memory
+      cpu: "2"          # Maximum CPU cores
+
+  # TLS disabled for simplicity (enable for production)
+  # Note: TLS clusters work reliably with the operator's optimizations
+  tls:
+    mode: disabled
+  # To enable TLS:
+  # tls:
+  #   mode: cert-manager
+  #   issuerRef:
+  #     name: ca-cluster-issuer
+  #     kind: ClusterIssuer
+
+  # Authentication configuration
+  # IMPORTANT: The operator requires a secret for authentication
+  # Create the secret before deploying the cluster:
+  #   kubectl create secret generic neo4j-admin-secret \
+  #     --from-literal=username=neo4j \
+  #     --from-literal=password=your-secure-password
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+
+  # Additional environment variables (optional)
+  # NOTE: NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator
+  # and should not be set manually
+  env: []
+
+---
+# Prerequisites:
+# 1. Create admin credentials secret BEFORE applying this cluster:
+#    kubectl create secret generic neo4j-admin-secret \
+#      --from-literal=username=neo4j \
+#      --from-literal=password=your-secure-password
+#
+# 2. Apply the cluster:
+#    kubectl apply -f minimal-cluster.yaml
+#
+# NOTE: For single-node deployments without clustering, use Neo4jEnterpriseStandalone instead.
+# See examples/standalone/single-node-standalone.yaml for non-clustered deployments.

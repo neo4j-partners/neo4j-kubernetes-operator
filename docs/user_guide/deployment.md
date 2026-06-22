@@ -1,0 +1,144 @@
+# Deployment Guide
+
+This guide provides deployment options for the Neo4j Enterprise Operator, optimized for different environments and use cases.
+
+## Deployment Options Overview
+
+| Target | Make Command | Image Source | Use Case |
+|--------|-------------|-------------|----------|
+| **Development** | `make deploy-dev` | Built locally (`neo4j-operator:dev`) | Development with debug features |
+| **Production** | `make deploy-prod` | Built locally (`neo4j-operator:latest`) | Production deployment (local build) |
+| **Development Registry** | `make deploy-dev-registry` | Pre-built `neo4j-operator:dev` | Development with pre-built image |
+| **Production Registry** | `make deploy-prod-registry` | ghcr.io registry | Production deployment (requires registry access) |
+
+## Quick Start
+
+### Standard Deployment (Recommended)
+
+For development and production using locally built images:
+
+```bash
+# Create development cluster
+make dev-cluster
+
+# Deploy operator (builds and uses local image automatically)
+make deploy-dev   # for development
+# or
+make deploy-prod  # for production
+```
+
+This approach:
+
+- ✅ Builds operator from your current code automatically
+- ✅ No registry authentication required
+- ✅ Fast iteration cycle
+- ✅ Complete control over image content
+
+### Production Deployment
+
+For production environments:
+
+```bash
+# Clone and install
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
+cd neo4j-kubernetes-operator
+
+# Install CRDs
+make install
+
+# Deploy production operator (builds local image automatically)
+make deploy-prod
+
+# Alternative: Registry-based deployment (requires ghcr.io access)
+make deploy-prod-registry
+```
+
+## Deployment Details
+
+### Local Image Deployment
+
+`make deploy-dev` and `make deploy-prod` are aliases for the `-local` targets below — the same local-build path shown in the overview table above. Use whichever name you prefer; the `-local` variants are the explicit form.
+
+**`make deploy-dev-local`** (alias: `make deploy-dev`):
+
+- Builds `neo4j-operator:dev` image locally
+- Loads image into Kind cluster automatically
+- Deploys to `neo4j-operator-dev` namespace
+- Runs the operator with `--mode=dev`
+
+**`make deploy-prod-local`** (alias: `make deploy-prod`):
+
+- Builds `neo4j-operator:latest` image locally
+- Loads image into Kind cluster automatically
+- Deploys to `neo4j-operator-system` namespace
+- Production resource limits and settings
+- No debug overhead
+
+### Registry-Based Deployment
+
+These variants skip the local image build and pull from a registry instead. Use them when you have a pre-built image and want to deploy without rebuilding from source.
+
+**`make deploy-prod-registry`**:
+
+- Uses `ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest` (via the `config/overlays/prod-registry` kustomize overlay)
+- Requires authenticated access to ghcr.io
+- Suitable for production environments with registry access
+- Automatic updates when new versions are released
+
+**`make deploy-dev-registry`**:
+
+- Uses the `config/overlays/dev` overlay without rebuilding the image
+- The `neo4j-operator:dev` image must already be present in the cluster (pre-loaded into Kind, or pullable from a configured registry)
+- Development namespace with debug features
+
+## Verification
+
+After deployment, verify the operator is running:
+
+```bash
+# Check operator status
+kubectl get deployments -n neo4j-operator-system  # for prod deployments
+# or
+kubectl get deployments -n neo4j-operator-dev     # for dev deployments
+
+# Check operator logs
+kubectl logs -f deployment/neo4j-operator-controller-manager -n <namespace>
+
+# Verify CRDs are installed
+kubectl get crd | grep neo4j
+```
+
+## Cleanup
+
+To remove the operator and CRDs:
+
+```bash
+# Remove operator deployment
+make undeploy-prod  # or make undeploy-dev
+
+# Remove CRDs (this will delete all Neo4j instances)
+make uninstall
+```
+
+## Troubleshooting
+
+### Image Pull Issues
+
+If you see `ImagePullBackOff` errors:
+
+1. **For `-local` deployments**: Ensure Kind cluster is running and image was loaded successfully
+2. **For registry deployments**: Check ghcr.io access and authentication
+3. **Solution**: Use local deployment options (`make deploy-*-local`)
+
+### Namespace Issues
+
+- Production deployments use `neo4j-operator-system` namespace
+- Development deployments use `neo4j-operator-dev` namespace
+- Integration tests expect operator in `neo4j-operator-system`
+
+### Best Practices
+
+- ✅ Use `make deploy-*-local` for development and testing
+- ✅ Test locally before deploying to production
+- ✅ Use production overlays (`make deploy-prod-local`) for staging environments
+- ✅ Keep operator and Neo4j versions compatible (5.26+ required)

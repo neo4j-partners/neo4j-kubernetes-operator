@@ -1,0 +1,58 @@
+# Neo4j cluster example for read-heavy workloads
+# This creates a cluster with 5 servers
+# Databases can be configured with read replicas for horizontal scaling
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: cluster-with-replicas
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  # 5-server cluster for read scaling workloads
+  # Databases can use different topologies (e.g., 3 primaries + 2 secondaries)
+  topology:
+    servers: 5        # More servers allow flexible database topologies
+
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "30Gi"
+
+  # Differentiated resources (optional)
+  resources:
+    requests:
+      memory: "3Gi"
+      cpu: "750m"
+    limits:
+      memory: "6Gi"
+      cpu: "3"
+
+  # TLS disabled for simplicity
+  tls:
+    mode: disabled
+
+  # Environment variables
+
+  # Configuration optimized for read workloads
+  config:
+    # Optimize for read performance
+    server.memory.pagecache.size: "1g"
+    # Query routing configuration for read scaling
+    dbms.routing.default_router: "SERVER"
+    # Enable query logging for monitoring read performance
+    db.logs.query.enabled: "INFO"
+
+---
+# Note: Create admin secret before deploying:
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password

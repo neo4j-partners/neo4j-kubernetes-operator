@@ -1,0 +1,63 @@
+# ============================================================
+# Incremental (AUTO) Backup of a specific database to S3
+#
+# When Kind=Database:
+#   - target.name    = the Neo4j database name (e.g. "orders")
+#   - target.clusterRef = the Neo4jEnterpriseCluster name
+#
+# Create the AWS credentials secret first:
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
+#     --from-literal=AWS_REGION=us-east-1
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: incremental-backup
+  namespace: default
+spec:
+  target:
+    kind: Database
+    name: orders                  # The Neo4j database to back up
+    clusterRef: my-neo4j-cluster  # The Neo4jEnterpriseCluster that hosts this database
+  # schedule is a flat cron string — not spec.schedule.cron
+  schedule: "0 */6 * * *"  # Every 6 hours
+  options:
+    # AUTO: creates a FULL backup if none exists, otherwise creates DIFF (incremental)
+    backupType: AUTO
+    compress: true
+    pageCache: "2G"
+    # tempPath stages in the pod's ephemeral /tmp (works out of the box; the
+    # operator creates the directory). For LARGE or production cloud backups,
+    # prefer tempStorage (a dedicated staging PVC) so staging can't fill the
+    # node's ephemeral disk:
+    #   tempStorage:
+    #     size: 50Gi
+    tempPath: /tmp/neo4j-backup-temp
+    # preferDiffAsParent: true  # CalVer 2025.04+ only — use latest DIFF as parent for chained diffs
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: incremental/orders      # Path/prefix within the bucket
+    cloud:
+      provider: aws
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
+  retention:
+    maxAge: "3d"
+    maxCount: 12  # Keep last 12 incremental backups
+
+# ── AWS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic aws-backup-credentials \
+#     --namespace default \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# AWS_REGION is required: the backup Job reads it from this Secret (the operator
+# wires it as a non-optional env var), so omit it and the Job pod won't start.
+# Referenced via spec.storage.cloud.credentialsSecretRef: aws-backup-credentials

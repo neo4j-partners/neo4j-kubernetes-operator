@@ -1,0 +1,136 @@
+# Point-in-Time Recovery (PITR) with Neo4jRestore.
+#
+# IMPORTANT — target type matters:
+#   • Neo4jRestore `source.type: pitr` drives `neo4j-admin database restore
+#     --restore-until`, which the operator runs as a Job. This path applies ONLY
+#     to a Neo4jEnterpriseStandalone target (clusterRef → a standalone).
+#   • For a CLUSTER, point-in-time recovery is done the cluster-native way:
+#     create a Neo4jDatabase with spec.seedConfig.restoreUntil (the operator
+#     rejects source.type=pitr against a cluster target with an actionable error).
+#     See examples/databases/database-from-s3-seed.yaml for seedConfig.restoreUntil.
+#
+# PITR restores from a base backup and rolls forward to a point in time using
+# transaction logs in spec.source.pitr.logStorage.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: pitr-restore
+  labels:
+    environment: production
+    restore-type: pitr
+spec:
+  # Must reference a Neo4jEnterpriseStandalone (PITR is standalone-only).
+  clusterRef: recovery-standalone
+  databaseName: production-db
+  source:
+    type: pitr
+    pointInTime: "2025-01-04T12:30:00Z"  # roll forward to this instant
+    pitr:
+      baseBackup:
+        type: backup
+        backupRef: daily-backup
+      logStorage:
+        type: s3
+        bucket: transaction-logs
+        path: production/logs
+        cloud:
+          provider: aws
+  options:
+    replaceExisting: true
+    # Hooks run only on standalone targets (this example). preRestore Cypher
+    # hooks run BEFORE the instance is stopped; postRestore hooks run AFTER
+    # the restored database is registered/started.
+    preRestore:
+      cypherStatements:
+        - "CALL db.checkpoint()"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes()"
+        - "CALL dbms.security.clearAuthCache()"
+        - "MATCH (n:AuditLog) WHERE n.timestamp > datetime() - duration('PT1H') RETURN count(n) as recentAudits"
+  force: true
+  stopCluster: true
+  timeout: "3h"
+
+---
+# Advanced PITR using a storage-based base backup (no Neo4jBackup CR — point
+# directly at a base backup in object storage).
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: pitr-advanced-restore
+  labels:
+    environment: production
+    restore-type: pitr-advanced
+spec:
+  # Must reference a Neo4jEnterpriseStandalone (PITR is standalone-only).
+  clusterRef: dr-standalone
+  databaseName: critical-app
+  source:
+    type: pitr
+    pointInTime: "2025-01-04T14:45:30Z"
+    pitr:
+      baseBackup:
+        type: storage
+        storage:
+          type: s3
+          bucket: base-backups
+          path: production/base-backup-20250104
+          cloud:
+            provider: aws
+        backupPath: /backup/base-backup-20250104
+      logStorage:
+        type: s3
+        bucket: transaction-logs
+        path: production/logs
+        cloud:
+          provider: aws
+  options:
+    replaceExisting: true
+    preRestore:
+      job:
+        template:
+          container:
+            image: alpine:latest
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "Preparing disaster recovery environment..."
+                echo "Validating target readiness..."
+                echo "Pre-restore preparation completed"
+        timeout: "5m"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes(600)"
+        - "CALL dbms.security.clearAuthCache()"
+        - "CREATE CONSTRAINT disaster_recovery_marker IF NOT EXISTS FOR (n:DisasterRecovery)
+           REQUIRE n.timestamp IS UNIQUE"
+        - "MERGE (dr:DisasterRecovery {timestamp: datetime()})
+           SET dr.restored_from = 'PITR', dr.point_in_time = '2025-01-04T14:45:30Z'"
+      job:
+        template:
+          container:
+            image: neo4j:5.26.0-enterprise
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "Running post-restore validation..."
+                # -a points cypher-shell at the standalone's service — the hook
+                # Job runs in its own pod, so omitting it dials localhost.
+                cypher-shell -a neo4j://dr-standalone-client:7687 \
+                  -u neo4j -p "$NEO4J_PASSWORD" -d critical-app \
+                  "MATCH (n) RETURN labels(n)[0] as label, count(n) as count ORDER BY label"
+                echo "Validation completed successfully"
+            env:
+              - name: NEO4J_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: dr-standalone-admin-secret
+                    key: password
+        timeout: "15m"
+  force: true
+  stopCluster: true
+  timeout: "4h"

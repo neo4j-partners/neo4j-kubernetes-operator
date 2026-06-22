@@ -1,0 +1,415 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: priyolahiri/neo4j-kubernetes-operator
+  CHART_REGISTRY: ghcr.io/priyolahiri/charts
+  GO_VERSION: '1.26'
+
+jobs:
+  # Compute the release tag once and share it across all dependent jobs.
+  # This eliminates the duplicated tag-parsing logic that previously appeared
+  # three times in the file.
+  determine-tag:
+    name: Determine Release Tag
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+      clean_tag: ${{ steps.tag.outputs.clean_tag }}
+    steps:
+    - name: Compute tag
+      id: tag
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG_NAME="${{ github.event.inputs.tag }}"
+        fi
+        CLEAN_TAG=${TAG_NAME#v}
+        echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+        echo "clean_tag=${CLEAN_TAG}" >> $GITHUB_OUTPUT
+
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run unit tests
+      run: make test-unit
+
+    - name: Validate build
+      run: make build
+
+    # Belt-and-braces: tags are normally cut from a green main, but a tag on
+    # any other commit would bypass the per-PR drift gate entirely — and a
+    # release with stale generated artifacts ships a chart/bundle that doesn't
+    # match the code.
+    - name: Verify generated artifacts in sync
+      run: make check-drift
+
+    - name: Generate manifests
+      run: make manifests
+
+    # Upload generated CRDs as an artifact so create-release can reuse them
+    # exactly, guaranteeing the released manifests are identical to what was
+    # validated here without re-running controller-gen a second time.
+    - name: Upload generated manifests
+      uses: actions/upload-artifact@v7
+      with:
+        name: generated-manifests
+        path: config/crd/bases/
+        retention-days: 1
+
+  # The full install/upgrade/uninstall matrix on Kind (scripts/
+  # install-confidence.sh). Blocking by design: a release cannot be tagged
+  # with a broken helm install, CRD-refresh upgrade, or uninstall path.
+  # Runs in parallel with validate-release; adds ~10-15 min to the release
+  # only on the critical path if it's the slower of the two.
+  install-confidence:
+    name: Install Confidence Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    # kind v0.27.0 to match KIND_VERSION in ci.yml/integration*.yml — its
+    # default node image is K8s >=1.32, which the chart's kubeVersion floor
+    # requires. kind v0.24's default node (K8s 1.31) fails the very helm
+    # install this gate exists to certify (v1.12.0 first-tag failure).
+    - name: Install kind
+      run: go install sigs.k8s.io/kind@v0.27.0
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v5
+      with:
+        version: 3.16.0
+
+    - name: Run install-confidence matrix
+      run: make install-confidence
+
+  build-and-push:
+    name: Build and Push Container
+    runs-on: ubuntu-latest
+    needs: [validate-release, install-confidence, determine-tag]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write  # Required for Cosign keyless OIDC signing
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v5
+      with:
+        # Pin to match pages-helm.yml + .tool-versions. Without an
+        # explicit version the action installs whatever Helm 3.x is
+        # current at job time, so the release workflow would silently
+        # drift from the pages workflow that pins v3.16.0.
+        version: 3.16.0
+
+    - name: Get build date
+      id: build-date
+      run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+    - name: Extract operator metadata
+      id: meta
+      uses: docker/metadata-action@v6
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=tag
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+
+    - name: Build and push operator image
+      id: build-operator
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        build-args: |
+          VERSION=${{ needs.determine-tag.outputs.clean_tag }}
+          BUILD_DATE=${{ steps.build-date.outputs.date }}
+          VCS_REF=${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # Keyless signing using Sigstore/Cosign. No long-lived secrets required;
+    # the OIDC token from the GitHub Actions workflow is used as proof of identity.
+    # Signatures are published to the public Rekor transparency log.
+    - name: Sign operator image
+      run: |
+        cosign sign --yes \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-operator.outputs.digest }}
+
+    - name: Log in to GHCR for Helm
+      run: |
+        helm registry login ghcr.io \
+          --username "${{ github.actor }}" \
+          --password "${{ secrets.GITHUB_TOKEN }}"
+
+    - name: Update Helm chart version
+      run: |
+        CLEAN_TAG="${{ needs.determine-tag.outputs.clean_tag }}"
+        sed -i "s/^version: .*/version: ${CLEAN_TAG}/" charts/neo4j-operator/Chart.yaml
+        sed -i "s/^appVersion: .*/appVersion: \"${CLEAN_TAG}\"/" charts/neo4j-operator/Chart.yaml
+        echo "Updated Chart.yaml:"
+        grep -E "^(version|appVersion):" charts/neo4j-operator/Chart.yaml
+
+    - name: Lint Helm chart
+      run: helm lint charts/neo4j-operator
+
+    - name: Package and push Helm chart (OCI)
+      run: |
+        helm package charts/neo4j-operator \
+          --version "${{ needs.determine-tag.outputs.clean_tag }}" \
+          --app-version "${{ needs.determine-tag.outputs.clean_tag }}"
+        helm push "neo4j-operator-${{ needs.determine-tag.outputs.clean_tag }}.tgz" \
+          "oci://${{ env.CHART_REGISTRY }}"
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-and-push, determine-tag]
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    # Reuse the CRDs generated and validated in the validate-release job.
+    # This ensures the released manifests are byte-for-byte identical to what
+    # was validated, without running controller-gen a second time.
+    - name: Download generated manifests
+      uses: actions/download-artifact@v8
+      with:
+        name: generated-manifests
+        path: config/crd/bases/
+
+    - name: Generate release artifacts
+      env:
+        TAG_NAME: ${{ needs.determine-tag.outputs.tag_name }}
+        CLEAN_TAG: ${{ needs.determine-tag.outputs.clean_tag }}
+      run: |
+        # Generate the OLM bundle/CSV using pre-generated CRDs (SKIP_MANIFESTS=true)
+        # and validate it is well-formed at release time. Use `bundle-release`
+        # (not `bundle`) so the CSV's createdAt: annotation gets stamped with the
+        # real UTC timestamp. Plain `make bundle` writes a stable placeholder so
+        # dev/CI PRs don't conflict on the timestamp — that placeholder must NOT
+        # ship in a release.
+        make bundle-release \
+          SKIP_MANIFESTS=true \
+          VERSION="${CLEAN_TAG}" \
+          CHANNELS=alpha \
+          DEFAULT_CHANNEL=alpha \
+          IMG="${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
+
+        # Safety net: fail loudly if the placeholder timestamp survived. The only
+        # way this fires is a future refactor of bundle-release that drops the
+        # restamp step — better to fail the release than ship 2020 to users.
+        if grep -q 'createdAt: "2020-01-01T00:00:00Z"' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml; then
+          echo "::error::CSV createdAt: is still the dev placeholder. Refusing to ship a bundle with a placeholder timestamp." >&2
+          exit 1
+        fi
+
+        mkdir -p release-artifacts
+
+        # CRD-only manifest (concatenated from all CRD bases)
+        cat config/crd/bases/*.yaml > release-artifacts/neo4j-kubernetes-operator.yaml
+
+        # Complete operator manifest (CRDs + RBAC + Deployment) with OPERATOR_VERSION
+        # stamped to the release tag via a kustomize strategic merge patch overlay.
+        # This avoids the fragile regex/sed approach that breaks on formatting changes.
+        make kustomize
+        mkdir -p config/overlays/release-temp
+        cat > config/overlays/release-temp/version-patch.yaml << EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: controller-manager
+        spec:
+          template:
+            spec:
+              containers:
+              - name: manager
+                env:
+                - name: OPERATOR_VERSION
+                  value: "${TAG_NAME}"
+        EOF
+        cat > config/overlays/release-temp/kustomization.yaml << EOF
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        resources:
+        - ../../default
+        # Pin the released image EXPLICITLY. Previously the pin worked only
+        # as a side effect of \`make bundle-release\` mutating
+        # config/manager/kustomization.yaml earlier in this job — one step
+        # reorder away from shipping :latest.
+        images:
+        - name: ghcr.io/priyolahiri/neo4j-kubernetes-operator
+          newTag: "${TAG_NAME}"
+        patches:
+        - path: version-patch.yaml
+          target:
+            kind: Deployment
+            labelSelector: "control-plane=controller-manager"
+        EOF
+        ./bin/kustomize build config/overlays/release-temp \
+          > release-artifacts/neo4j-kubernetes-operator-complete.yaml
+        rm -rf config/overlays/release-temp
+        # Assert the pin actually landed — fail the release rather than ship
+        # an artifact pointing at :latest.
+        grep -q "image: ghcr.io/priyolahiri/neo4j-kubernetes-operator:${TAG_NAME}" \
+          release-artifacts/neo4j-kubernetes-operator-complete.yaml || {
+          echo "ERROR: complete.yaml is not pinned to ${TAG_NAME}" >&2; exit 1; }
+
+    - name: Generate release notes
+      id: release-notes
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG_NAME: ${{ needs.determine-tag.outputs.tag_name }}
+        CLEAN_TAG: ${{ needs.determine-tag.outputs.clean_tag }}
+      run: |
+        echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+        sed -e "s|__TAG__|${TAG_NAME}|g" -e "s|__VERSION__|${CLEAN_TAG}|g" \
+          .github/release-notes-template.md > release-notes.md
+
+        curl -sSf \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+          -d "{\"tag_name\":\"${TAG_NAME}\"}" > auto-notes.json
+
+        python3 - <<'PY'
+        import json
+
+        with open("auto-notes.json", "r") as handle:
+            body = json.load(handle).get("body", "").strip()
+
+        if body:
+            with open("release-notes.md", "a") as handle:
+                handle.write("\n\n## Changelog\n\n")
+                handle.write(body)
+        PY
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v3
+      with:
+        tag_name: ${{ steps.release-notes.outputs.TAG_NAME }}
+        name: Neo4j Kubernetes Operator ${{ steps.release-notes.outputs.TAG_NAME }}
+        body_path: release-notes.md
+        files: |
+          release-artifacts/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Versioned docs + classic Helm repo publish ONLY after every gate and
+  # artifact above exists (#245) — these used to fire on the tag push, in
+  # parallel with the gates. The called workflows inherit this run's
+  # GITHUB_REF (the tag), so their version derivation is unchanged.
+  publish-docs:
+    name: Publish Versioned Docs
+    needs: [create-release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/pages-docs.yml
+
+  publish-helm:
+    name: Publish Helm Repo (classic)
+    needs: [create-release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/pages-helm.yml
+
+  # Incident reporter (#245): if ANY job in the release failed, open an issue
+  # with the failed jobs and a link — a failed tag should never be silent.
+  # With publication ordered behind the gates there is nothing to roll back;
+  # this job is the paper trail.
+  release-failure-incident:
+    name: Release Failure Incident
+    if: failure()
+    needs: [determine-tag, validate-release, install-confidence, build-and-push, create-release, publish-docs, publish-helm]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      actions: read
+    steps:
+    - name: File incident issue
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.determine-tag.outputs.tag_name }}
+      run: |
+        FAILED=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" \
+          --jq '[.jobs[] | select(.conclusion=="failure") | .name] | join(", ")')
+        {
+          echo "Release run for \`${TAG}\` failed before completing publication."
+          echo ""
+          echo "**Failed job(s):** ${FAILED:-see run}"
+          echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo ""
+          echo "Publication is ordered behind the gates (#245), so nothing user-facing"
+          echo "was published by this run unless create-release succeeded. If the tag"
+          echo "needs to move: re-cutting is safe only while the grace window is open —"
+          echo "run the release-retract workflow in dry-run mode to check (#246)."
+        } > /tmp/incident.md
+        gh issue create \
+          --repo "${GITHUB_REPOSITORY}" \
+          --title "Release ${TAG} failed: ${FAILED:-unknown job}" \
+          --label bug \
+          --body-file /tmp/incident.md

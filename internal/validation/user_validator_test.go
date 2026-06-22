@@ -1,0 +1,224 @@
+/*
+Copyright 2025 Priyo Lahiri.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package validation
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
+)
+
+func newUserValidatorClient(t *testing.T, objs ...client.Object) client.Client {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	if err := neo4jv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+}
+
+func sampleCluster() *neo4jv1beta1.Neo4jEnterpriseCluster {
+	return &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
+	}
+}
+
+func samplePasswordSecret(name string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns"},
+		Data:       map[string][]byte{"password": []byte("supersecret")},
+	}
+}
+
+func TestUserValidator_UsernameRules(t *testing.T) {
+	cl := newUserValidatorClient(t, sampleCluster(), samplePasswordSecret("creds"))
+	v := NewUserValidator(cl)
+
+	cases := []struct {
+		name      string
+		username  string
+		wantError bool
+	}{
+		{"valid", "alice", false},
+		{"valid with dot/hyphen", "alice.smith-1", false},
+		{"valid email-style SSO username", "alice@example.com", false},
+		{"starts with digit", "1bob", true},
+		{"backtick rejected (injection guard)", "al`ice", true},
+		{"too long", strings.Repeat("a", 70), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			user := &neo4jv1beta1.Neo4jUser{
+				ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ns"},
+				Spec: neo4jv1beta1.Neo4jUserSpec{
+					ClusterRef:        "c",
+					Username:          tc.username,
+					PasswordSecretRef: &neo4jv1beta1.SecretKeyRef{Name: "creds"},
+				},
+			}
+			res := v.Validate(context.Background(), user)
+			gotError := len(res.Errors) > 0
+			if gotError != tc.wantError {
+				t.Fatalf("username %q: gotError=%v wantError=%v errs=%v", tc.username, gotError, tc.wantError, res.Errors)
+			}
+		})
+	}
+}
+
+func TestUserValidator_RequiresAuth(t *testing.T) {
+	cl := newUserValidatorClient(t, sampleCluster())
+	v := NewUserValidator(cl)
+
+	user := &neo4jv1beta1.Neo4jUser{
+		ObjectMeta: metav1.ObjectMeta{Name: "alice", Namespace: "ns"},
+		Spec:       neo4jv1beta1.Neo4jUserSpec{ClusterRef: "c", Username: "alice"},
+	}
+	res := v.Validate(context.Background(), user)
+	if len(res.Errors) == 0 {
+		t.Fatalf("expected error when neither password nor externalAuth is set")
+	}
+
+	user.Spec.ExternalAuth = []neo4jv1beta1.ExternalAuthProvider{{Provider: "oidc-okta", ID: "alice@okta"}}
+	res = v.Validate(context.Background(), user)
+	for _, e := range res.Errors {
+		if strings.Contains(e.Error(), "auth provider") {
+			t.Fatalf("did not expect 'auth provider' error after adding externalAuth, got %v", res.Errors)
+		}
+	}
+}
+
+func TestUserValidator_PasswordSecretMissing(t *testing.T) {
+	cl := newUserValidatorClient(t, sampleCluster())
+	v := NewUserValidator(cl)
+	user := &neo4jv1beta1.Neo4jUser{
+		ObjectMeta: metav1.ObjectMeta{Name: "alice", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jUserSpec{
+			ClusterRef:        "c",
+			Username:          "alice",
+			PasswordSecretRef: &neo4jv1beta1.SecretKeyRef{Name: "missing"},
+		},
+	}
+	res := v.Validate(context.Background(), user)
+	// #259: a not-yet-applied Secret is a transient dependency → Pending,
+	// never a validation Error (which would route the user to Failed).
+	if len(res.Errors) != 0 {
+		t.Fatalf("missing secret must not be an error: %v", res.Errors)
+	}
+	if len(res.Pending) == 0 {
+		t.Fatalf("expected Pending entry for missing secret")
+	}
+}
+
+func TestUserValidator_PasswordSecretWrongKey(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "creds", Namespace: "ns"},
+		Data:       map[string][]byte{"other": []byte("x")},
+	}
+	cl := newUserValidatorClient(t, sampleCluster(), secret)
+	v := NewUserValidator(cl)
+	user := &neo4jv1beta1.Neo4jUser{
+		ObjectMeta: metav1.ObjectMeta{Name: "alice", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jUserSpec{
+			ClusterRef:        "c",
+			Username:          "alice",
+			PasswordSecretRef: &neo4jv1beta1.SecretKeyRef{Name: "creds"},
+		},
+	}
+	res := v.Validate(context.Background(), user)
+	if len(res.Errors) == 0 {
+		t.Fatalf("expected error for missing key")
+	}
+}
+
+func TestUserValidator_NativeProviderInExternalAuthRejected(t *testing.T) {
+	cl := newUserValidatorClient(t, sampleCluster(), samplePasswordSecret("creds"))
+	v := NewUserValidator(cl)
+	user := &neo4jv1beta1.Neo4jUser{
+		ObjectMeta: metav1.ObjectMeta{Name: "alice", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jUserSpec{
+			ClusterRef:   "c",
+			Username:     "alice",
+			ExternalAuth: []neo4jv1beta1.ExternalAuthProvider{{Provider: "native", ID: "alice"}},
+		},
+	}
+	res := v.Validate(context.Background(), user)
+	if len(res.Errors) == 0 {
+		t.Fatalf("expected rejection of 'native' in externalAuth, got none")
+	}
+}
+
+func TestUserValidator_PublicWarning(t *testing.T) {
+	cl := newUserValidatorClient(t, sampleCluster(), samplePasswordSecret("creds"))
+	v := NewUserValidator(cl)
+	user := &neo4jv1beta1.Neo4jUser{
+		ObjectMeta: metav1.ObjectMeta{Name: "alice", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jUserSpec{
+			ClusterRef:        "c",
+			Username:          "alice",
+			PasswordSecretRef: &neo4jv1beta1.SecretKeyRef{Name: "creds"},
+			Roles:             []string{"PUBLIC", "reader"},
+		},
+	}
+	res := v.Validate(context.Background(), user)
+	if len(res.Warnings) == 0 {
+		t.Fatalf("expected a warning about explicit PUBLIC, got %v", res.Warnings)
+	}
+}
+
+// TestUserValidator_MissingSecretIsPendingNotFailed pins #259: a not-yet-applied
+// password Secret is a TRANSIENT dependency — it must land in result.Pending
+// (routing the user to phase Pending, like missing roles) instead of
+// result.Errors (which routes to Failed and contradicts the documented
+// apply-order-is-irrelevant convergence).
+func TestUserValidator_MissingSecretIsPendingNotFailed(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "default"},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	v := NewUserValidator(c)
+
+	user := &neo4jv1beta1.Neo4jUser{
+		ObjectMeta: metav1.ObjectMeta{Name: "u", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jUserSpec{
+			ClusterRef:        "c",
+			Username:          "app_user",
+			PasswordSecretRef: &neo4jv1beta1.SecretKeyRef{Name: "not-applied-yet"},
+		},
+	}
+	res := v.Validate(context.Background(), user)
+	if len(res.Errors) != 0 {
+		t.Fatalf("missing Secret must not be a validation ERROR (routes to Failed); got: %v", res.Errors)
+	}
+	if len(res.Pending) != 1 || !strings.Contains(res.Pending[0], "not-applied-yet") {
+		t.Fatalf("missing Secret must be reported via Pending; got: %v", res.Pending)
+	}
+}

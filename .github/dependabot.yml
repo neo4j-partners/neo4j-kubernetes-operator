@@ -1,0 +1,54 @@
+version: 2
+updates:
+  # Go modules
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - go
+    reviewers:
+      - priyolahiri
+    commit-message:
+      prefix: "deps"
+    open-pull-requests-limit: 10
+    groups:
+      k8s:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+      controller-runtime:
+        patterns:
+          - "sigs.k8s.io/controller-runtime"
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+    reviewers:
+      - priyolahiri
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 5
+
+  # Dockerfiles
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - docker
+    reviewers:
+      - priyolahiri
+    commit-message:
+      prefix: "deps"
+    open-pull-requests-limit: 5

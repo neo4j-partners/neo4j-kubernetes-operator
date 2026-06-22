@@ -1,0 +1,56 @@
+{{/*
+Opt-in read-only ClusterRole for namespace-scoped installs (rbac.clusterScopedReads).
+
+The operator performs exactly two cluster-scoped reads of its own:
+  * nodes (get/list/watch)          — availability-zone auto-discovery for
+                                      spec.topology.placement
+  * storageclasses (get/list/watch) — allowVolumeExpansion validation before
+                                      a storage expansion patches PVCs
+In cluster mode (and namespaces mode without perNamespaceRoles) these grants
+live in the generated manager ClusterRole, so this template is suppressed
+(createClusterRole=true means the superset already exists). It renders only
+for installs whose manager permissions are namespaced Roles — operatorMode=
+namespace, or namespaces with rbac.perNamespaceRoles=true — where the user
+explicitly opts back in to these two reads. Verbs mirror the corresponding
+rules in config/rbac/role.yaml; keep them in sync if the markers change.
+*/}}
+{{- if and .Values.rbac.create .Values.rbac.clusterScopedReads (eq (include "neo4j-operator.createClusterRole" .) "false") }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-cluster-reader
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - storageclasses
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-cluster-reader-rolebinding
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "neo4j-operator.fullname" . }}-cluster-reader
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

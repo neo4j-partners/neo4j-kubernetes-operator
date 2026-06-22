@@ -1,0 +1,196 @@
+# ============================================================
+# MinIO Backup — Neo4j backup to a self-hosted S3-compatible store
+# ============================================================
+#
+# MinIO is a high-performance, S3-compatible object store commonly
+# used for on-premises or air-gapped Kubernetes environments.
+#
+# Quick MinIO setup (for testing — not production-hardened):
+#
+#   kubectl create namespace minio
+#   kubectl -n minio create deployment minio --image=quay.io/minio/minio \
+#     -- /bin/sh -c 'minio server /data --console-address :9001'
+#   kubectl -n minio expose deployment minio --port=9000 --target-port=9000
+#
+# Or with the MinIO Operator (recommended for production):
+#   https://min.io/docs/minio/kubernetes/upstream/
+#
+# Once MinIO is running, create a bucket and access credentials:
+#   kubectl run minio-client --rm -it --restart=Never \
+#     --image=minio/mc --command -- /bin/sh -c "
+#       mc alias set local http://minio.minio.svc:9000 minioadmin minioadmin;
+#       mc mb local/neo4j-backups"
+#
+# Then create the credentials Secret:
+#   kubectl create secret generic minio-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=minioadmin \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=minioadmin \
+#     --from-literal=AWS_REGION=us-east-1
+#
+# ============================================================
+
+# ── MinIO backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic minio-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID='minioadmin' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='minioadmin' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# Referenced via spec.storage.cloud.credentialsSecretRef: minio-backup-credentials
+#
+# ── Restoring to a CLUSTER from MinIO ────────────────────────────────────────
+# Cluster restores seed via the Neo4j server JVMs, which need the MinIO
+# endpoint configuration in addition to the credentials Secret. Add to the
+# Neo4jEnterpriseCluster spec before restoring (triggers one rolling restart):
+#
+#   spec:
+#     env:
+#     - name: AWS_ENDPOINT_URL_S3
+#       value: "http://minio.minio.svc:9000"
+#     - name: JAVA_TOOL_OPTIONS
+#       value: "-Daws.s3.forcePathStyle=true"
+# ─────────────────────────────────────────────────────────────────────────────
+
+---
+# ============================================================
+# Variant 1: One-shot full backup to MinIO
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: minio-backup-full
+spec:
+  target:
+    kind: Cluster
+    name: my-cluster   # Your Neo4jEnterpriseCluster name
+
+  storage:
+    type: s3
+    bucket: neo4j-backups          # Bucket name in MinIO
+    path: cluster/full             # Key prefix within the bucket
+    cloud:
+      provider: aws
+      credentialsSecretRef: minio-backup-credentials
+
+      # ── MinIO-specific fields ────────────────────────────────
+      # endpointURL: the in-cluster MinIO service address.
+      # Replace namespace "minio" and port 9000 if your setup differs.
+      endpointURL: http://minio.minio.svc:9000
+
+      # forcePathStyle: REQUIRED for MinIO.
+      # Standard S3 uses subdomain-style URLs (bucket.endpoint/key); MinIO
+      # uses path-style URLs (endpoint/bucket/key). This injects
+      # -Daws.s3.forcePathStyle=true into the neo4j-admin JVM process.
+      forcePathStyle: true
+      # ─────────────────────────────────────────────────────────
+
+  options:
+    backupType: FULL
+    compress: true
+    # For staging large databases, use `tempStorage` (mounts a volume at the
+    # staging path). A bare `tempPath` requires the directory to already
+    # exist in the container.
+
+---
+# ============================================================
+# Variant 2: Scheduled incremental backup to MinIO
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: minio-backup-scheduled
+spec:
+  target:
+    kind: Cluster
+    name: my-cluster
+
+  # Hourly backup. backupType AUTO self-bootstraps: the FIRST run on an empty
+  # directory is a FULL, every subsequent run is a DIFF off it — so the
+  # schedule works from the very first fire. (A standalone backupType: DIFF
+  # would fail every run until a FULL exists in the same directory: "No
+  # existing backup found here".) For a true "weekly FULL + hourly DIFF"
+  # cadence, run TWO Neo4jBackup CRs and chain them with spec.chainFromBackup
+  # — see the mixed-cadence section of the Backup & Restore guide.
+  schedule: "0 * * * *"
+
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: cluster/incremental
+    cloud:
+      provider: aws
+      credentialsSecretRef: minio-backup-credentials
+      endpointURL: http://minio.minio.svc:9000
+      forcePathStyle: true
+
+  options:
+    backupType: AUTO   # FULL on the first run, DIFF thereafter (self-bootstrapping)
+    compress: true
+    # preferDiffAsParent chains diff backups off the latest DIFF instead of
+    # the latest FULL. Requires Neo4j CalVer 2025.04+ — uncomment it there;
+    # on 5.26.x it is rejected (the operator fails the backup rather than
+    # silently ignore it).
+    # preferDiffAsParent: true
+
+  retention:
+    maxAge: "7d"
+    maxCount: 168   # 7 days × 24 hours
+
+---
+# ============================================================
+# Variant 3: External MinIO (TLS, outside the cluster)
+#
+# For MinIO exposed behind an Ingress or LoadBalancer with a valid
+# TLS certificate. Change the endpoint to the external hostname.
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: minio-backup-external
+spec:
+  target:
+    kind: Cluster
+    name: my-cluster
+
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: cluster/full
+    cloud:
+      provider: aws
+      credentialsSecretRef: minio-backup-credentials
+      # External MinIO over HTTPS
+      endpointURL: https://minio.example.com
+      forcePathStyle: true
+
+  options:
+    backupType: FULL
+    compress: true
+
+---
+# ============================================================
+# Troubleshooting
+# ============================================================
+#
+# 1. Check the backup Job logs:
+#      kubectl get jobs -l app.kubernetes.io/name=neo4j-backup
+#      kubectl logs job/<job-name>
+#
+# 2. Verify the backup reached MinIO:
+#      kubectl run minio-client --rm -it --restart=Never \
+#        --image=minio/mc --command -- /bin/sh -c "
+#          mc alias set local http://minio.minio.svc:9000 minioadmin minioadmin;
+#          mc ls local/neo4j-backups/cluster/"
+#
+# 3. Common issues:
+#    - "NoSuchBucket": create the bucket first (mc mb local/neo4j-backups)
+#    - "connection refused": verify the endpointURL and that MinIO pods are ready
+#    - "SignatureDoesNotMatch": check AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+#    - "SSL handshake failed": use http:// for in-cluster MinIO without TLS,
+#      or ensure your MinIO TLS cert is trusted by the neo4j container
+#    - Path-style not working: confirm forcePathStyle: true is set and the
+#      JAVA_TOOL_OPTIONS env var appears in the backup pod's env
+#      (kubectl describe pod <backup-pod>)

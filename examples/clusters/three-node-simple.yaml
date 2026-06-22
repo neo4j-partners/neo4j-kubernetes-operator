@@ -1,0 +1,86 @@
+# Three-server Neo4j Enterprise cluster (TLS disabled for testing)
+# This creates a highly available Neo4j cluster with 3 servers that self-organize
+# Ideal for testing, development, or environments without cert-manager
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: three-node-simple
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  # Neo4j Enterprise Edition
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # 5.26 LTS; any CalVer release works too, e.g. "2026.04-enterprise" (operator auto-detects)
+    pullPolicy: IfNotPresent
+
+  # Three-server cluster topology for high availability
+  # Servers self-organize for optimal fault tolerance
+  topology:
+    servers: 3        # Three servers for optimal cluster operations
+
+  # Storage configuration
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "20Gi"      # Reduced for testing
+
+  # Resource allocation (suitable for testing)
+  resources:
+    requests:
+      memory: "2Gi"   # Lower memory for testing
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  # TLS disabled for simplicity (no cert-manager required)
+  tls:
+    mode: disabled
+
+  # Service configuration
+  service:
+    type: ClusterIP
+
+  # Authentication configuration
+  # The operator manages NEO4J_ACCEPT_LICENSE_AGREEMENT automatically
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+
+  # Custom Neo4j configuration
+  config:
+    # Enable query logging for monitoring
+    db.logs.query.enabled: "INFO"
+    # Increase transaction timeout for long operations
+    db.transaction.timeout: "60s"
+    # Enable metrics collection
+    server.metrics.enabled: "true"
+
+---
+# Deployment Notes:
+#
+# 1. Create admin credentials first:
+#    kubectl create secret generic neo4j-admin-secret \
+#      --from-literal=username=neo4j \
+#      --from-literal=password=your-secure-password
+#
+# 2. Deploy the cluster:
+#    kubectl apply -f three-node-simple.yaml
+#
+# 3. Expected deployment time: 2-3 minutes total
+#    - All server pods start simultaneously (ParallelPodManagement)
+#    - Servers discover each other and self-organize
+#    - Cluster formation completes automatically
+#
+# 4. Monitor deployment progress:
+#    kubectl get pods -l app.kubernetes.io/name=neo4j -w
+#
+# 5. Access Neo4j Browser:
+#    kubectl port-forward svc/three-node-simple-client 7474:7474 7687:7687
+#    open http://localhost:7474

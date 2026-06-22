@@ -1,0 +1,24 @@
+{{- if and .Values.rbac.create (eq (include "neo4j-operator.createClusterRole" .) "true") -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-manager-rolebinding
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "neo4j-operator.fullname" . }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- /*
+  The metrics-auth ClusterRoleBinding used to live here, gated on
+  createClusterRole — which made it a dangling roleRef (the chart never defined
+  the metrics-auth-role ClusterRole) and skipped it entirely in namespace mode.
+  It now lives in the generated metrics-rbac.yaml, defined next to its
+  ClusterRole and gated on metrics.secure independent of operatorMode.
+  See scripts/helm-sync-rbac.sh.
+*/ -}}

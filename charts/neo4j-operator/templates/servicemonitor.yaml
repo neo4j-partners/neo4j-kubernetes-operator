@@ -1,0 +1,58 @@
+{{/* metrics.enabled must be in the guard: the ServiceMonitor itself only
+     renders when metrics are on, so with metrics disabled there is nothing
+     to scrape and failing the render would block a valid install. */}}
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled .Values.metrics.secure (not .Values.metrics.serviceMonitor.bearerTokenSecret.name) }}
+{{- fail "metrics.secure=true requires metrics.serviceMonitor.bearerTokenSecret.name when the ServiceMonitor is enabled — the secured endpoint authenticates via TokenReview and an unauthenticated scrape gets 401. Create a service-account token Secret bound to the metrics-reader ClusterRole, or set metrics.secure=false." }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled -}}
+{{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") -}}
+{{- fail "metrics.serviceMonitor.enabled=true but the Prometheus Operator CRD (monitoring.coreos.com/v1) is not installed in this cluster. Install the Prometheus Operator first, or set metrics.serviceMonitor.enabled=false." -}}
+{{- end -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}
+  namespace: {{ default .Release.Namespace .Values.metrics.serviceMonitor.namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: {{ .Values.metrics.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+    honorLabels: {{ .Values.metrics.serviceMonitor.honorLabels }}
+    {{- if .Values.metrics.secure }}
+    # Secure metrics: controller-runtime serves /metrics over HTTPS with a
+    # self-signed cert by default, requiring a Bearer token whose SA has
+    # the `metrics-reader` ClusterRole bound. insecureSkipVerify=true
+    # accepts the self-signed cert; production setups should swap this
+    # for a cert-manager-issued CA bundle.
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+    {{- with .Values.metrics.serviceMonitor.bearerTokenSecret.name }}
+    bearerTokenSecret:
+      name: {{ . }}
+      key: {{ $.Values.metrics.serviceMonitor.bearerTokenSecret.key | default "token" }}
+    {{- end }}
+    {{- end }}
+    {{- with .Values.metrics.serviceMonitor.relabelings }}
+    relabelings:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.metrics.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "neo4j-operator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: metrics
+{{- end }}

@@ -1,0 +1,186 @@
+site_name: Neo4j Kubernetes Operator
+site_description: A Kubernetes operator for Neo4j Enterprise — declarative clusters, databases, users, roles, backups, and plugins.
+site_url: https://priyolahiri.github.io/neo4j-kubernetes-operator/
+site_author: Priyo Lahiri
+
+repo_url: https://github.com/priyolahiri/neo4j-kubernetes-operator
+repo_name: priyolahiri/neo4j-kubernetes-operator
+edit_uri: edit/main/docs/
+
+# docs/README.md duplicates docs/index.md for GitHub-flavoured directory
+# rendering; the dated planning docs in docs/plans/ are internal-only;
+# requirements.txt is consumed by the docs workflow, not part of the site.
+# Anchor with leading slash so nested READMEs (e.g. gitops/README.md) aren't matched.
+exclude_docs: |
+  /README.md
+  /requirements.txt
+  /plans/
+  # The granular regression-rule dumps + knowledge index stay in-repo reference
+  # for agents/maintainers (they read these from the tree, not the site). The
+  # foundational invariants ARE published (knowledge/invariants.md, in nav).
+  /knowledge/README.md
+  /knowledge/operations.md
+  /knowledge/backup-restore.md
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.share
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+extra_css:
+  - stylesheets/neo4j.css
+
+plugins:
+  - search
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Anchor link to this section
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.smartsymbols
+
+extra:
+  version:
+    provider: mike
+    default: latest
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/priyolahiri/neo4j-kubernetes-operator
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/r/neo4j/neo4j-enterprise
+
+nav:
+  - Home: index.md
+
+  - Get Started:
+      - Quickstart: user_guide/getting_started.md
+      - Installation: user_guide/installation.md
+      - Deployment: user_guide/deployment.md
+      - Operator Modes: user_guide/operator-modes.md
+      - Try the Demo: user_guide/guides/demo.md
+      - Supported Neo4j Versions: user_guide/version_support.md
+      - Migrating from a Prior Version: user_guide/migration_guide.md
+
+  - Configure & Deploy:
+      - Configuration: user_guide/configuration.md
+      - Examples Catalog: user_guide/examples_gallery.md
+      - Resource Sizing: user_guide/guides/resource_sizing.md
+      - Clustering: user_guide/clustering.md
+      - Topology Placement: user_guide/topology_placement.md
+      - Property Sharding: user_guide/property_sharding.md
+      - External Access (LB / NodePort / Ingress / Route): user_guide/external_access.md
+      - Plugin Management: user_guide/guides/plugins.md
+      - Seed URI: user_guide/guides/seed-uri.md
+      - Aura Fleet Management: user_guide/aura_fleet_management.md
+      - MCP Client Setup: user_guide/guides/mcp_client_setup.md
+
+  - Security:
+      - Overview: user_guide/security.md
+      - Authentication & Authorization: user_guide/guides/security.md
+      - TLS Configuration: user_guide/tls_configuration.md
+      - Users, Roles & Auth Rules: user_guide/user_role_management.md
+
+  - Operate:
+      - Backup & Restore: user_guide/guides/backup_restore.md
+      - Upgrades: user_guide/guides/upgrades.md
+      - Storage Expansion: user_guide/guides/storage_expansion.md
+      - Fault Tolerance: user_guide/guides/fault_tolerance.md
+      - Monitoring:
+          - Overview: user_guide/guides/monitoring.md
+          - Prometheus & Grafana: user_guide/guides/prometheus-grafana-setup.md
+          - Kubernetes Events: user_guide/guides/kubernetes-events.md
+      - Performance:
+          - Tuning Neo4j Workloads: user_guide/performance.md
+          - Tuning the Operator: user_guide/guides/performance.md
+
+  - Troubleshoot:
+      - General Troubleshooting: user_guide/guides/troubleshooting.md
+      - Backup & Restore Issues: user_guide/troubleshooting/backup_restore.md
+      - Split-Brain Recovery: user_guide/troubleshooting/split-brain-recovery.md
+
+  - Reference:
+      - CRD Reference:
+          - Neo4jEnterpriseCluster: api_reference/neo4jenterprisecluster.md
+          - Neo4jEnterpriseStandalone: api_reference/neo4jenterprisestandalone.md
+          - Neo4jDatabase: api_reference/neo4jdatabase.md
+          - Neo4jShardedDatabase: api_reference/neo4jshardeddatabase.md
+          - Neo4jUser: api_reference/neo4juser.md
+          - Neo4jRole: api_reference/neo4jrole.md
+          - Neo4jRoleBinding: api_reference/neo4jrolebinding.md
+          - Neo4jAuthRule: api_reference/neo4jauthrule.md
+          - Neo4jPlugin: api_reference/neo4jplugin.md
+          - Neo4jBackup: api_reference/neo4jbackup.md
+          - Neo4jRestore: api_reference/neo4jrestore.md
+      - GitOps Integration: gitops/README.md
+
+  - Contribute:
+      - Developer Quickstart: developer_guide/QUICKSTART.md
+      - Development: developer_guide/development.md
+      - Contributing: developer_guide/contributing.md
+      - Collaboration: developer_guide/collaboration.md
+      - CI/CD & Workflows: developer_guide/ci_and_workflows.md
+      - Architecture: developer_guide/architecture.md
+      - Testing: developer_guide/testing.md
+      - Release Verification: developer_guide/release_verification.md
+      - Makefile Reference: developer_guide/makefile_reference.md
+      - OpenShift OLM: developer_guide/openshift_olm.md
+      - AI-Assisted Contribution:
+          - Contributing with an LLM Agent: developer_guide/llm-contribution.md
+          - Agent Guardrails: developer_guide/AGENT-GUARDRAILS.md
+          - Project Invariants: knowledge/invariants.md

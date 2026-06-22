@@ -1,0 +1,148 @@
+# Advanced Property Sharding Example
+# This example demonstrates production-ready property sharding configuration
+# with high-performance resource allocation, TLS, and comprehensive monitoring
+#
+# PRODUCTION REQUIREMENTS:
+# - 3+ servers for HA graph shard primaries (5+ for larger datasets)
+# - 16-20GB memory per server for high performance
+# - 4+ CPU cores per server for concurrent cross-shard queries
+# - High-speed, low-latency networking (10Gbps+)
+# - TLS encryption for security
+# - Comprehensive monitoring
+
+# Prerequisites: Create admin secret (REQUIRED)
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=production-secure-password
+
+# Property sharding enabled cluster with production-grade configuration
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-sharding-cluster
+  namespace: default
+  labels:
+    environment: production
+    feature: property-sharding
+spec:
+  acceptLicenseAgreement: "eval"
+  # Latest Neo4j version for best property sharding support
+  image:
+    repo: neo4j
+    tag: "2026.04-enterprise"
+
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  # Production cluster sizing (3+ servers for HA; 5+ for larger datasets)
+  topology:
+    servers: 5  # 3+ recommended for HA, consider 7 for larger datasets
+
+  storage:
+    size: 100Gi
+    className: fast-ssd  # High-performance storage class
+
+  # High-performance resource allocation (minimum 4GB, this is for large datasets)
+  resources:
+    requests:
+      memory: 16Gi   # High-performance allocation for large datasets
+      cpu: 4000m     # 4+ cores for optimal cross-shard performance
+    limits:
+      memory: 20Gi   # Maximum performance for enterprise workloads
+      cpu: 6000m     # Additional CPU for high-throughput shard coordination
+
+  # Property sharding with performance tuning
+  propertySharding:
+    enabled: true
+    config:
+      # Required settings (applied automatically)
+      internal.dbms.sharded_property_database.enabled: "true"
+      db.query.default_language: "CYPHER_25"
+      internal.dbms.sharded_property_database.allow_external_shard_access: "false"
+
+      # Performance tuning
+      db.tx_log.rotation.retention_policy: "14 days"  # Longer retention for large datasets
+      internal.dbms.sharded_property_database.property_pull_interval: "5ms"  # Faster sync
+
+      # Memory optimization
+      server.memory.heap.max_size: "12G"
+      server.memory.pagecache.size: "6G"
+
+      # Connection pooling
+      server.bolt.thread_pool_min_size: "10"
+      server.bolt.thread_pool_max_size: "100"
+
+  # TLS configuration for production
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+---
+# Production sharded database with sophisticated property distribution
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jShardedDatabase
+metadata:
+  name: ecommerce-sharded-db
+  namespace: default
+  labels:
+    application: ecommerce
+    database-type: sharded
+spec:
+  clusterRef: production-sharding-cluster
+
+  # E-commerce product database
+  name: ecommerce
+
+  defaultCypherLanguage: "25"
+
+  propertySharding:
+    # Optimal shard count for large dataset
+    propertyShards: 8
+
+    # High-availability graph shard (critical path)
+    graphShard:
+      primaries: 3     # Raft consensus with fault tolerance
+      secondaries: 2   # Read replicas
+
+    # Fault-tolerant property shards
+    propertyShardTopology:
+      replicas: 2      # Redundant replicas
+
+  # Cluster-wide property-sharding tuning (hash ring, replication factor, etc.)
+  # lives on the Neo4jEnterpriseCluster's spec.propertySharding.config — not on
+  # the Neo4jShardedDatabase. See the cluster above.
+
+  # Seed from backups (shard-suffixed artifacts required in the bucket)
+  seedURI: "s3://ecommerce-backups/sharded/"
+  seedConfig:
+    config:
+      region: "us-east-1"
+  seedCredentials:
+    secretRef: "s3-credentials"
+
+# ── S3 backup credentials Secret (create this BEFORE you apply this manifest) ──
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic s3-credentials \
+#     --namespace default \
+#     --from-literal=access-key-id='<your-access-key>' \
+#     --from-literal=secret-access-key='<your-secret-key>'
+#
+# Referenced via spec.seedCredentials.secretRef: s3-credentials
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret

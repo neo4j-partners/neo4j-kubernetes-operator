@@ -1,0 +1,95 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: neo4j-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - endpoints
+  - persistentvolumeclaims
+  - secrets
+  - serviceaccounts
+  - services
+  - events
+  - pods
+  - pods/exec
+  - pods/log
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups
+  - neo4jdatabases
+  - neo4jenterpriseclusters
+  - neo4jenterprisestandalones
+  - neo4jplugins
+  - neo4jrestores
+  - neo4jshardeddatabases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups/finalizers
+  - neo4jdatabases/finalizers
+  - neo4jenterpriseclusters/finalizers
+  - neo4jenterprisestandalones/finalizers
+  - neo4jplugins/finalizers
+  - neo4jrestores/finalizers
+  - neo4jshardeddatabases/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups/status
+  - neo4jdatabases/status
+  - neo4jenterpriseclusters/status
+  - neo4jenterprisestandalones/status
+  - neo4jplugins/status
+  - neo4jrestores/status
+  - neo4jshardeddatabases/status
+  verbs:
+  - get
+  - patch
+  - update

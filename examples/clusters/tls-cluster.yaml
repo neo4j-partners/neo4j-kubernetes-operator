@@ -1,0 +1,43 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: tls-cluster-example
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+  topology:
+    servers: 2        # Two servers for minimal TLS testing
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "10Gi"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+  # TLS configuration using cert-manager
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+  env:
+  config:
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "512m"
+    # Additional Neo4j configuration
+    db.logs.query.enabled: "INFO"
+    db.logs.query.threshold: "1s"

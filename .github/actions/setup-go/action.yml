@@ -1,0 +1,38 @@
+name: 'Setup Go Environment'
+description: 'Sets up Go with caching and downloads dependencies'
+
+inputs:
+  go-version:
+    description: 'Go version to use'
+    required: false
+    default: '1.26'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: ${{ inputs.go-version }}
+        # Caches BOTH the module download cache and the Go build cache (GOCACHE),
+        # keyed on go.sum — so compiles across jobs/runs reuse build output.
+        cache: true
+
+    # Cache the make-managed tool binaries AND the envtest k8s assets. All of
+    # controller-gen, kustomize, ginkgo, yq, setup-envtest — plus the etcd/
+    # kube-apiserver assets envtest downloads via `--bin-dir $(LOCALBIN)` — live
+    # under ./bin. Versions are pinned in the Makefile, so its hash is the key;
+    # restore-keys lets a Makefile edit reuse the unchanged tools and re-fetch
+    # only what moved. Also removes the sum.golang.org dependency that flaked the
+    # yq download (the binary is restored, not re-fetched).
+    - name: Cache tool binaries + envtest assets (./bin)
+      uses: actions/cache@v5
+      with:
+        path: bin
+        key: tools-${{ runner.os }}-${{ hashFiles('Makefile') }}
+        restore-keys: |
+          tools-${{ runner.os }}-
+
+    - name: Download dependencies
+      shell: bash
+      run: go mod download

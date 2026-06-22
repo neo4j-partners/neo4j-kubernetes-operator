@@ -1,0 +1,5 @@
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates
+COPY manager /manager
+USER 65532:65532
+ENTRYPOINT ["/manager"]

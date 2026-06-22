@@ -1,0 +1,38 @@
+---
+# Self-signed ClusterIssuer for development and testing
+# This allows TLS-enabled Neo4j clusters to work in dev/test environments
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-cluster-issuer
+spec:
+  selfSigned: {}
+---
+# Development CA Certificate
+# Creates a CA certificate that can be used for development
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: selfsigned-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: selfsigned-ca
+  secretName: selfsigned-ca-secret
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-cluster-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# CA Issuer using the self-signed CA
+# This is the recommended issuer for development/testing
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: ca-cluster-issuer
+spec:
+  ca:
+    secretName: selfsigned-ca-secret

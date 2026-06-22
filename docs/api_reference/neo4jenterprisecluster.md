@@ -1,0 +1,1334 @@
+# Neo4jEnterpriseCluster API Reference
+
+The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Enterprise clusters with high availability, automatic failover, and horizontal scaling capabilities.
+
+## Overview
+
+- **API Version**: `neo4j.neo4j.com/v1beta1`
+- **Kind**: `Neo4jEnterpriseCluster`
+- **Supported Neo4j Versions**: 5.26.x (last semver LTS) and 2025.01.0+ (CalVer)
+- **Architecture**: Server-based deployment with unified StatefulSet
+- **Minimum Servers**: 2 (required for clustering)
+- **Maximum Servers**: 100 (validated limit)
+
+## Architecture
+
+**Server-Based Architecture**: `Neo4jEnterpriseCluster` uses a unified server-based architecture introduced in Neo4j 5.26.x:
+
+- **Single StatefulSet**: `{cluster-name}-server` with configurable replica count
+- **Server Pods**: Named `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
+- **Self-Organization**: Servers automatically organize into primary/secondary roles for databases
+- **Backup**: Use the [`Neo4jBackup` CRD](neo4jbackup.md) — each CR spawns a Kubernetes Job. There is no persistent backup pod or sidecar.
+- **Role Flexibility**: Servers can host multiple databases with different roles
+
+**When to Use**:
+
+- Production workloads requiring high availability
+- Multi-database deployments with different topology requirements
+- Workloads needing horizontal read scaling
+- Enterprise features like advanced backup, security, and monitoring
+- Large datasets requiring property sharding (Neo4j 2025.12+)
+
+**For single-node deployments**, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
+
+## Related Resources
+
+- [`Neo4jDatabase`](neo4jdatabase.md) - Create databases within the cluster
+- [`Neo4jShardedDatabase`](neo4jshardeddatabase.md) - Create sharded databases for horizontal scaling
+- [`Neo4jPlugin`](neo4jplugin.md) - Install plugins (APOC, GDS, etc.)
+- [`Neo4jBackup`](neo4jbackup.md) - Schedule automated backups
+- [`Neo4jRestore`](neo4jrestore.md) - Restore from backups
+
+## Spec
+
+The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise cluster.
+
+### Core Configuration
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `image` | [`ImageSpec`](#imagespec) | **Required** | The Neo4j Docker image configuration |
+| `topology` | [`TopologyConfiguration`](#topologyconfiguration) | **Required** | Cluster topology (number of servers) |
+| `storage` | [`StorageSpec`](#storagespec) | **Required** | Storage configuration for data persistence |
+| `acceptLicenseAgreement` | `string` (`yes` \| `eval`) | **Required** | Your explicit acceptance of the Neo4j Enterprise license. `yes` accepts the commercial license agreement; `eval` accepts the 30-day evaluation license. This operator is **independent** and does **not** accept the license on your behalf — you must hold your own valid Neo4j Enterprise license. The operator refuses to deploy until this is set. |
+| `auth` | [`AuthSpec`](#authspec) | Optional | Authentication configuration |
+
+### Kubernetes Integration
+
+| Field | Type | Description |
+|---|---|---|
+| `resources` | `*corev1.ResourceRequirements` | CPU and memory resources |
+| `env` | `[]corev1.EnvVar` | Environment variables for Neo4j pods |
+| `nodeSelector` | `map[string]string` | Node selector constraints |
+| `tolerations` | `[]corev1.Toleration` | Pod tolerations |
+| `affinity` | `*corev1.Affinity` | Pod affinity rules |
+| `securityContext` | [`*SecurityContextSpec`](#securitycontextspec) | Pod/container security overrides |
+
+### Neo4j Configuration
+
+| Field | Type | Description |
+|---|---|---|
+| `config` | `map[string]string` | Custom Neo4j configuration |
+
+### Operations
+
+| Field | Type | Description |
+|---|---|---|
+| `upgradeStrategy` | [`UpgradeStrategySpec`](#upgradestrategyspec) | Upgrade strategy configuration |
+
+To back up a cluster, create a separate [`Neo4jBackup`](neo4jbackup.md) CR. To
+restore a cluster from a backup, create a separate `Neo4jRestore` CR after the
+cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
+
+### Networking
+
+| Field | Type | Description |
+|---|---|---|
+| `service` | [`ServiceSpec`](#servicespec) | Service configuration for external access |
+
+### Extensions
+
+| Field | Type | Description |
+|---|---|---|
+| `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
+| `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
+| `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
+| `monitoring` | [`MonitoringSpec`](#monitoringspec) | Query monitoring configuration |
+| `audit` | [`AuditSpec`](#auditspec) | Compliance-oriented logging — security.log + query.log tuning for PCI / HIPAA / GDPR. `audit.enabled=true` is a one-flag opt-in to secure-by-default query-literal redaction. |
+| `networkPolicy` | [`NetworkPolicySpec`](#networkpolicyspec) | Optional NetworkPolicy emission that restricts ingress to port 6362 to operator-managed backup pods. Disabled by default. Requires a CNI that enforces NetworkPolicy (Calico/Cilium/Antrea/Weave). |
+| `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
+| `trustedCASecrets` | `[]`[`TrustedCASecret`](#trustedcasecret) | CA bundles to add to Neo4j's JVM truststore (OIDC, LDAPS, plugin downloads, peer-cluster replication) |
+| `extraVolumes` | `[]corev1.Volume` | Arbitrary pod volumes mounted into the Neo4j pod; reference them via `extraVolumeMounts` |
+| `extraVolumeMounts` | `[]corev1.VolumeMount` | Mount points for `extraVolumes` (or, rarely, operator-managed volumes); operator-managed paths are rejected by the validator |
+| `extraEnvFrom` | `[]corev1.EnvFromSource` | Standard Kubernetes pass-through. Projects entire Secrets or ConfigMaps as environment variables onto the Neo4j container. Intended for credential bundles (e.g. cloud seed credentials for `seedURI`-based restores). |
+| `podServiceAccountAnnotations` | `map[string]string` | Annotations stamped onto the operator-managed ServiceAccount the Neo4j **server pods** run under. Use for cloud **Workload Identity** so the JVM can assume a cloud role when it fetches a seed URI (cluster restore, `Neo4jDatabase`/`Neo4jShardedDatabase` seeding) — e.g. `eks.amazonaws.com/role-arn` (AWS IRSA), `iam.gke.io/gcp-service-account` (GKE WI), or the Azure WI labels. Merged additively (operator owns only the keys you list; out-of-band annotations preserved). Set this **before** the pods start (or roll the StatefulSet after adding it) so the identity webhook injects the token at pod admission. |
+
+## Type Definitions
+
+### ImageSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `repo` | `string` | **Required.** Image repository (e.g. `"neo4j"`) |
+| `tag` | `string` | **Required.** Image tag |
+| `pullPolicy` | `string` | Pull policy: `"Always"`, `"IfNotPresent"`, `"Never"` (default: `"IfNotPresent"`) |
+| `pullSecrets` | `[]string` | Image pull secrets |
+
+### TopologyConfiguration
+
+Defines the cluster server topology and role constraints.
+
+| Field | Type | Description |
+|---|---|---|
+| `servers` | `int32` | **Required**. Number of Neo4j servers (minimum: 2, maximum: 100) |
+| `minSystemPrimaries` | `*int32` | System-database primary count written to `dbms.cluster.minimum_initial_system_primaries_count` at cluster formation, and the floor the cluster can later be scaled down to. Default: `min(3, servers)`. Validator: must be ≥ 2 and ≤ `servers`; an even value draws a warning (an even voting set has no clean write-quorum majority — prefer 3, 5, …). Note this is a bootstrap **floor**, not a cap: Neo4j makes **all** initially-joined servers system primaries; the setting only defines how many must be present to bootstrap and the minimum the system database can shrink to |
+| `serverModeConstraint` | `string` | Global server mode constraint: `"NONE"` (default), `"PRIMARY"`, `"SECONDARY"` |
+| `serverRoles` | [`[]ServerRoleHint`](#serverrolehint) | Per-server role constraints (overrides global constraint) |
+| `placement` | [`*PlacementConfig`](#placementconfig) | Advanced placement and scheduling configuration |
+| `availabilityZones` | `[]string` | Target availability zones for server distribution |
+| `enforceDistribution` | `bool` | Enforce server distribution across topology domains |
+
+**Server Role Management**:
+
+- Servers self-organize into primary/secondary roles at the **database level**
+- Role constraints influence which databases a server can host:
+  - `NONE`: Server can host databases in any mode (default)
+  - `PRIMARY`: Server only hosts databases in primary mode
+  - `SECONDARY`: Server only hosts databases in secondary mode
+- Use `serverRoles` for granular per-server control
+
+**Validation**:
+
+- Minimum 2 servers required for clustering
+- Cannot configure all servers as `SECONDARY` (cluster needs primaries)
+- Server indices in `serverRoles` must be within range (0 to servers-1)
+
+### ServerRoleHint
+
+Specifies role constraints for individual servers.
+
+| Field | Type | Description |
+|---|---|---|
+| `serverIndex` | `int32` | **Required**. Server index (0-based, must be < servers count) |
+| `modeConstraint` | `string` | **Required**. Role constraint: `"NONE"`, `"PRIMARY"`, `"SECONDARY"` |
+
+### StorageSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `className` | `string` | Storage class for the data PVCs. **Optional** — if omitted, the PVCs inherit the cluster's default StorageClass. When set, the named class must exist: the operator reports an explicit error (a `StorageClassNotFound` event and `Failed` status) rather than leaving server pods `Pending`. Immutable after creation. |
+| `size` | `string` | **Required.** Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. **Cannot be decreased** (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have `allowVolumeExpansion: true`. |
+| `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) permanently removes PVCs on deletion; `"Retain"` preserves them. **Use `Retain` for production to prevent data loss.** See [Storage and PVC Retention](../user_guide/configuration.md#storage-and-pvc-retention). |
+
+### AuthSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `authenticationProviders` | `[]string` | Ordered list of authentication providers (e.g., `["ldap", "native"]`). Default: `["native"]` |
+| `authorizationProviders` | `[]string` | Ordered list of authorization providers. Default: `["native"]` |
+| `adminSecret` | `string` | Secret containing admin username and password (keys: `username`, `password`) |
+| `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External secrets configuration |
+| `ldap` | [`*Neo4jLDAPSpec`](#neo4jldapspec) | LDAP authentication and authorization configuration |
+| `oidc` | `map[string]`[`Neo4jOIDCProviderSpec`](#neo4joidcproviderspec) | OIDC/SSO providers. Map key = provider name (used in `authenticationProviders` as `oidc-<key>`). For JWT-based auth, use OIDC — Neo4j ID tokens are JWTs. |
+| `authCacheTTL` | `string` | Auth cache TTL (e.g., `"10m"`, `"600s"`). Maps to `dbms.security.auth_cache_ttl` |
+| `trustStore` | [`*SecretKeyRef`](#secretkeyref-truststore) | Custom JVM truststore for LDAPS or OIDC with internal CAs |
+
+### Neo4jLDAPSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `host` | `string` | **Required.** LDAP server URL (e.g., `ldap://host:389` or `ldaps://host:636`) |
+| `useStartTLS` | `*bool` | Enable STARTTLS (use with `ldap://`, not `ldaps://`). **Defaults to `true` when host starts with `ldap://` and the field is unset** — the Neo4j security checklist's secure-by-default. Set to `false` explicitly to opt out (dev / mock-LDAP setups). |
+| `authentication` | [`*LDAPAuthenticationSpec`](#ldapauthenticationspec) | User authentication settings |
+| `authorization` | [`*LDAPAuthorizationSpec`](#ldapauthorizationspec) | Group/role authorization settings |
+| `debugGroupLogging` | `*bool` | Debug-level LDAP group logging (disable in production) |
+
+### LDAPAuthenticationSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `userDNTemplate` | `string` | DN template for binding. `{0}` = username. Example: `"{0}@example.com"` |
+| `searchForAttribute` | `*bool` | Use attribute-based user lookup instead of DN template |
+| `attribute` | `string` | LDAP attribute to search (e.g., `"samaccountname"`) |
+| `cacheEnabled` | `*bool` | Cache authentication results |
+
+### LDAPAuthorizationSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `userSearchBase` | `string` | Base DN for user search (e.g., `"dc=example,dc=com"`) |
+| `userSearchFilter` | `string` | LDAP filter for user search. `{0}` = username |
+| `groupMembershipAttributes` | `[]string` | User attributes containing group membership (e.g., `["memberOf"]`) |
+| `groupToRoleMapping` | `map[string]string` | Map of LDAP group DNs to comma-separated Neo4j roles |
+| `accessPermittedGroup` | `string` | Restrict access to members of this group |
+| `useSystemAccount` | `*bool` | Use a system account for authorization queries |
+| `systemAccountSecretRef` | `string` | Secret name with `username` and `password` keys for the system account |
+| `nestedGroupsEnabled` | `*bool` | Enable recursive group resolution |
+| `nestedGroupsSearchFilter` | `string` | Filter for nested group lookups. `{0}` = user DN |
+
+### Neo4jOIDCProviderSpec
+
+> **⚠️ All URI fields require `https://`** — Neo4j 2026.x rejects `http://` for `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` at config-parse time, and the cluster fails to start. There is no insecure-mode override. Self-hosted IDPs without TLS need a TLS-terminating proxy plus the proxy's CA in [`spec.trustedCASecrets`](#trustedcasecret).
+
+| Field | Type | Description |
+|---|---|---|
+| `displayName` | `string` | Display name on login screen |
+| `wellKnownDiscoveryURI` | `string` | OIDC discovery endpoint (auto-configures other endpoints). **HTTPS only.** |
+| `authEndpoint` | `string` | Authorization endpoint (manual override). **HTTPS only.** |
+| `tokenEndpoint` | `string` | Token endpoint (manual override). **HTTPS only.** |
+| `jwksURI` | `string` | JWKS endpoint (manual override). **HTTPS only.** |
+| `userInfoURI` | `string` | UserInfo endpoint (manual override). **HTTPS only.** |
+| `issuer` | `string` | Issuer identifier (manual override). **HTTPS only.** |
+| `audience` | `string` | **Required.** Expected JWT `aud` claim |
+| `authFlow` | `string` | `"pkce"` (default) or `"implicit"` |
+| `claims` | [`*OIDCClaimsSpec`](#oidcclaimsspec) | JWT claim mapping |
+| `getGroupsFromUserInfo` | `*bool` | Fetch groups from UserInfo endpoint |
+| `getUsernameFromUserInfo` | `*bool` | Fetch username from UserInfo endpoint |
+| `groupToRoleMapping` | `map[string]string` | Map of IdP groups to comma-separated Neo4j roles |
+| `authParams` | `string` | Extra authorization endpoint params (semicolon-separated) |
+| `tokenParams` | `string` | Extra token endpoint params (semicolon-separated) |
+
+### OIDCClaimsSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `username` | `string` | JWT claim for Neo4j username (default: `"sub"`) |
+| `groups` | `string` | JWT claim for groups/roles |
+
+### SecretKeyRef (TrustStore)
+
+Used by the legacy singular `spec.auth.trustStore` field. New configurations
+should prefer the plural [`TrustedCASecret`](#trustedcasecret) list at
+`spec.trustedCASecrets`; both fields are merged at reconcile time so
+backward compatibility is preserved.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | **Required.** Name of Secret containing CA certificate (PEM format) |
+| `key` | `string` | Key in the Secret containing the CA cert (default: `"ca.crt"`) |
+
+### TrustedCASecret
+
+References a Secret containing a PEM-encoded CA certificate to add to Neo4j's
+JVM truststore. Used by `spec.trustedCASecrets`.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | **Required.** Name of the Secret. Doubles as the keytool alias inside the JKS, so names must be unique across the list. |
+| `key` | `string` | Key within the Secret. Defaults to `"ca.crt"` — the layout cert-manager-issued Secrets use. |
+
+The operator merges every entry into a JKS truststore at
+`/truststore/truststore.jks` (password `changeit`) using a `truststore-init`
+init container, then sets `-Djavax.net.ssl.trustStore` on the JVM. The JDK's
+default `cacerts` is used as the seed, so adding internal CAs does not
+remove trust in public CAs.
+
+Example with cert-manager:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: oidc-tls }
+spec:
+  secretName: oidc-tls    # ← name to reference below
+  issuerRef: { name: corp-ca, kind: ClusterIssuer }
+  commonName: idp.corp.example.com
+  dnsNames: [idp.corp.example.com]
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+spec:
+  acceptLicenseAgreement: "eval"
+  trustedCASecrets:
+    - name: oidc-tls      # default key "ca.crt" matches cert-manager
+```
+
+For the *less common* case where a Neo4j SSL policy needs a CA at a specific
+filesystem path (e.g. `dbms.ssl.policy.<name>.truststore_path`), use
+`spec.extraVolumes` + `spec.extraVolumeMounts` instead — the operator does
+not parse policy config to wire up filesystem mounts automatically.
+
+### SecurityContextSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `podSecurityContext` | `*corev1.PodSecurityContext` | Pod-level security settings |
+| `containerSecurityContext` | `*corev1.SecurityContext` | Container-level security settings |
+
+### TLSSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `mode` | `string` | TLS mode: `"cert-manager"` (default) or `"disabled"`. The validator rejects any other value. |
+| `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference. **Required when `mode: cert-manager`.** Validator rejects a `cert-manager` mode with no `issuerRef`. |
+| `certificateSecret` | `string` | TLS secret name (manual certificates) |
+| `trustedCASecret` | `string` | Secret containing a trusted CA certificate (key: `ca.crt`) for verifying Neo4j TLS connections. When omitted, the operator auto-discovers the CA from the cert-manager-generated Secret. |
+| `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External Secrets configuration |
+| `duration` | `*string` | Certificate duration (e.g., `"2160h"`) |
+| `renewBefore` | `*string` | Renewal window before expiry (e.g., `"360h"`) |
+| `subject` | [`*CertificateSubject`](#certificatesubject) | Certificate subject fields |
+| `usages` | `[]string` | Certificate usages |
+| `strictPeerValidation` | `*bool` | Intra-cluster TLS posture. **Default: `true`** (Neo4j's canonical production posture). When `true`, the operator emits `dbms.ssl.policy.cluster.trust_all=false`, `client_auth=REQUIRE` (mutual TLS), and `verify_hostname=true`, and projects the cert-manager Secret's `ca.crt` to `/ssl/trusted/ca.crt` as the trust anchor. When `false`, reverts to the legacy `trust_all=true` + `client_auth=NONE` posture — Neo4j's own docs flag this as *"debugging only, since it does not offer security."* The opt-out exists for external issuers that do not populate `ca.crt` in their Secret output. See the [TLS Configuration Guide](../user_guide/tls_configuration.md) for details. |
+
+### IssuerRef
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | **Required.** Issuer resource name |
+| `kind` | `string` | Issuer resource kind. Default: `"ClusterIssuer"`. Use `"Issuer"` for namespace-scoped issuers, or any external issuer kind (e.g. `"AWSPCAClusterIssuer"`, `"VaultIssuer"`, `"GoogleCASClusterIssuer"`) |
+| `group` | `string` | API group of the issuer. Default: `cert-manager.io`. Set to the external issuer's API group when using third-party issuers (e.g. `"awspca.cert-manager.io"`) |
+
+**Examples**:
+
+```yaml
+# Standard cert-manager ClusterIssuer (default)
+issuerRef:
+  name: ca-cluster-issuer
+  kind: ClusterIssuer
+
+# Namespace-scoped Issuer
+issuerRef:
+  name: my-issuer
+  kind: Issuer
+
+# AWS Private CA (external issuer)
+issuerRef:
+  name: aws-pca-issuer
+  kind: AWSPCAClusterIssuer
+  group: awspca.cert-manager.io
+
+# HashiCorp Vault
+issuerRef:
+  name: vault-issuer
+  kind: VaultIssuer
+  group: cert.cert-manager.io
+```
+
+### CertificateSubject
+
+| Field | Type | Description |
+|---|---|---|
+| `organizations` | `[]string` | Organization names |
+| `countries` | `[]string` | Country codes |
+| `organizationalUnits` | `[]string` | Organizational units |
+| `localities` | `[]string` | Localities |
+| `provinces` | `[]string` | Provinces/States |
+
+### ExternalSecretsConfig
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable External Secrets integration |
+| `secretStoreRef` | [`*SecretStoreRef`](#secretstoreref) | SecretStore or ClusterSecretStore reference |
+| `refreshInterval` | `string` | Refresh interval (e.g., `"1h"`) |
+| `data` | [`[]ExternalSecretData`](#externalsecretdata) | External secret data mappings |
+
+### SecretStoreRef
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | SecretStore name |
+| `kind` | `string` | `"SecretStore"` or `"ClusterSecretStore"` |
+
+### ExternalSecretData
+
+| Field | Type | Description |
+|---|---|---|
+| `secretKey` | `string` | Target secret key |
+| `remoteRef` | [`*ExternalSecretRemoteRef`](#externalsecretremoteref) | Remote secret reference |
+
+### ExternalSecretRemoteRef
+
+| Field | Type | Description |
+|---|---|---|
+| `key` | `string` | External secret key |
+| `property` | `string` | Property within the secret |
+| `version` | `string` | Secret version |
+
+### AuraFleetManagementSpec
+
+Enables integration with [Neo4j Aura Fleet Management](https://neo4j.com/docs/aura/fleet-management/) for monitoring this cluster from the Aura console. The fleet-management plugin is pre-bundled in all Neo4j Enterprise images (no internet access required).
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable Aura Fleet Management integration (default: `false`) |
+| `tokenSecretRef` | [`*SecretKeyRef`](#secretkeyref-token) | Reference to the Kubernetes Secret holding the Aura registration token (optional; registration deferred if omitted) |
+
+**Status fields** (read-only, set by the operator):
+
+| Field | Description |
+|---|---|
+| `status.auraFleetManagement.registered` | `true` once `fleetManagement.registerToken` succeeded |
+| `status.auraFleetManagement.lastRegistrationTime` | Timestamp of last successful registration |
+| `status.auraFleetManagement.message` | Human-readable status or error detail |
+
+**Example**:
+
+```yaml
+auraFleetManagement:
+  enabled: true
+  tokenSecretRef:
+    name: aura-fleet-token  # kubectl create secret generic aura-fleet-token --from-literal=token='<token>'
+    key: token              # defaults to "token"
+```
+
+See [Aura Fleet Management Guide](../user_guide/aura_fleet_management.md) for full setup instructions.
+
+---
+
+### SecretKeyRef (Token)
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | **Required.** Name of the Kubernetes Secret containing the registration token |
+| `key` | `string` | Key within the Secret (default: `"token"`) |
+
+---
+
+### PropertyShardingSpec
+
+Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, distributing properties across multiple databases for better scalability. Available in Neo4j 2025.12+ Enterprise.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable property sharding for this cluster (default: `false`) |
+| `config` | `map[string]string` | Advanced property sharding configuration |
+
+**System Requirements** (validated by operator):
+
+- **Neo4j Version**: 2025.12+ Enterprise
+- **Minimum Servers**: 2 servers (3+ recommended for HA graph shard primaries)
+- **Memory**: 4GB minimum, 8GB+ recommended per server
+- **CPU**: 1+ core minimum, 2+ cores recommended per server
+- **Authentication**: Admin secret required
+- **Storage**: Persistent storage class required
+
+**Required Configuration** (automatically applied when enabled):
+
+- `internal.dbms.sharded_property_database.enabled: "true"`
+- `db.query.default_language: "CYPHER_25"`
+- `internal.dbms.sharded_property_database.allow_external_shard_access: "false"`
+
+**Performance Tuning Options**:
+
+```yaml
+propertySharding:
+  enabled: true
+  config:
+    # Transaction log retention (critical for shard sync)
+    db.tx_log.rotation.retention_policy: "14 days"
+
+    # Property synchronization interval
+    internal.dbms.sharded_property_database.property_pull_interval: "10ms"
+
+    # Memory optimization
+    server.memory.heap.max_size: "12G"
+    server.memory.pagecache.size: "6G"
+
+    # Connection pooling for cross-shard queries
+    server.bolt.thread_pool_min_size: "10"
+    server.bolt.thread_pool_max_size: "100"
+```
+
+**Resource Recommendations**:
+
+*Development:*
+```yaml
+resources:
+  requests:
+    memory: 4Gi    # Absolute minimum for dev/test
+    cpu: 2000m     # 2 cores for cross-shard queries
+  limits:
+    memory: 8Gi    # Recommended for production
+    cpu: 2000m
+```
+
+*Production:*
+```yaml
+resources:
+  requests:
+    memory: 4Gi    # Minimum requirement
+    cpu: 2000m     # Cross-shard performance
+  limits:
+    memory: 8Gi    # Recommended for production
+    cpu: 4000m     # Handle peak loads
+```
+
+**Validation Errors**:
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| `property sharding requires Neo4j 2025.12+` | Old Neo4j version | Upgrade to 2025.12+ Enterprise |
+| `spec.topology.servers in body should be greater than or equal to 2` | Invalid server count | Increase server count to 2+ (3+ recommended for HA) |
+| `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
+| `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
+
+For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).
+
+### MonitoringSpec
+
+Query performance monitoring and analytics configuration.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable query monitoring (default: `true`) |
+| `slowQueryThreshold` | `string` | Slow query threshold — maps to `db.logs.query.threshold` (default: `"5s"`) |
+| `explainPlan` | `bool` | Enable query plan explanation in logs. Has performance impact — recommended `false` in production (default: `false`) |
+| `queryLogLevel` | `string` | Query log verbosity: `OFF`, `INFO`, or `VERBOSE` (default: `"INFO"`) |
+| `obfuscateLiterals` | `bool` | Obfuscate literal values in query logs to protect sensitive data (default: `false`) |
+| `metricsFilter` | `string` | Glob pattern for which Neo4j metrics to expose, e.g. `"*"` for all (maps to `server.metrics.filter`) |
+| `metricsPrefix` | `string` | Custom prefix for Neo4j metric names (maps to `server.metrics.prefix`) |
+| `sampling` | [`*QuerySamplingConfig`](#querysamplingconfig) | Query sampling configuration |
+| `metricsExport` | [`*QueryMetricsExportConfig`](#querymetricsexportconfig) | Metrics export configuration |
+
+### QuerySamplingConfig
+
+Query sampling configuration for performance monitoring.
+
+| Field | Type | Description |
+|---|---|---|
+| `rate` | `string` | Sampling rate (0.0 to 1.0) |
+| `maxQueriesPerSecond` | `int32` | Maximum queries to sample per second |
+
+### QueryMetricsExportConfig
+
+Metrics export configuration for query monitoring.
+
+| Field | Type | Description |
+|---|---|---|
+| `prometheus` | `bool` | Export to Prometheus |
+| `customEndpoint` | `string` | Export to custom endpoint |
+| `interval` | `string` | Export interval |
+
+### PlacementConfig
+
+Advanced placement and scheduling configuration.
+
+| Field | Type | Description |
+|---|---|---|
+| `topologySpread` | [`*TopologySpreadConfig`](#topologyspreadconfig) | Topology spread constraints |
+| `antiAffinity` | [`*PodAntiAffinityConfig`](#podantiaffinityconfig) | Pod anti-affinity rules |
+| `nodeSelector` | `map[string]string` | Node selection constraints |
+| `requiredDuringScheduling` | `bool` | Hard placement requirements |
+
+### TopologySpreadConfig
+
+Controls how servers are distributed across cluster topology.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable topology spread constraints |
+| `topologyKey` | `string` | Topology domain (e.g., `"topology.kubernetes.io/zone"`) |
+| `maxSkew` | `int32` | Maximum allowed imbalance between domains |
+| `whenUnsatisfiable` | `string` | Action when constraints can't be satisfied |
+| `minDomains` | `*int32` | Minimum number of eligible domains |
+
+### PodAntiAffinityConfig
+
+Prevents servers from being scheduled on the same nodes/zones.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable anti-affinity rules |
+| `topologyKey` | `string` | Anti-affinity topology domain |
+| `type` | `string` | Constraint type: `"required"` or `"preferred"` |
+
+### ServiceSpec
+
+Configures how Neo4j is exposed outside the Kubernetes cluster.
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `string` | Service type: `"ClusterIP"`, `"NodePort"`, `"LoadBalancer"` (default: `"ClusterIP"`) |
+| `annotations` | `map[string]string` | Service annotations (e.g., for cloud load balancer configuration) |
+| `loadBalancerIP` | `string` | Static IP for LoadBalancer service (cloud provider specific) |
+| `loadBalancerSourceRanges` | `[]string` | IP ranges allowed to access LoadBalancer |
+| `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
+| `dnsName` | `string` | Public DNS hostname (e.g. `"neo4j.example.com"`). Surfaces as the `external-dns.alpha.kubernetes.io/hostname` annotation on the front-facing Service and (when enabled) the Ingress so [external-dns](https://github.com/kubernetes-sigs/external-dns) creates the matching cloud DNS record; also added to the cert-manager `Certificate` SAN list when `spec.tls` is enabled. See the [External Access guide](../user_guide/external_access.md#public-dns-via-external-dns). |
+| `ingress` | [`IngressSpec`](#ingressspec) | Ingress configuration |
+| `route` | [`RouteSpec`](#routespec) | OpenShift Route configuration |
+
+### AuditSpec
+
+Compliance-oriented logging configuration. Neo4j 5.x / 2025.x has no
+unified `dbms.security.audit.*` block (those were 4.x keys, removed) —
+"audit logging" in modern Neo4j is the combination of `security.log`
+(controlled by `dbms.security.*`) and `query.log` (controlled by
+`db.logs.query.*`). This spec exposes the audit-relevant subset of
+those keys as typed fields.
+
+| Field | Type | Neo4j Config Key | Description |
+|---|---|---|---|
+| `enabled` | `bool` | — | Master flag. When `true` AND `obfuscateQueryLiterals` is unset, the operator defaults the emitted obfuscation value to `true` (secure-by-default). Default `false`. |
+| `logSuccessfulAuthentication` | `*bool` | `dbms.security.log_successful_authentication` | When `false`, only FAILED logins appear in `security.log`. Unset → Neo4j default (`true`) applies. |
+| `obfuscateQueryLiterals` | `*bool` | `db.logs.query.obfuscate_literals` | Redact literal values in `query.log`. Strongly recommended for PCI / HIPAA / GDPR. Unset + `enabled=true` → defaults to `true`. Doesn't redact node labels, relationship types, or property keys. |
+| `parameterLogging` | `*bool` | `db.logs.query.parameter_logging_enabled` | Include parameter VALUES in `query.log`. Set `false` when parameter values are sensitive. Unset → Neo4j default (`true`) applies. |
+
+**Overlap with [`MonitoringSpec`](#monitoringspec)**: both touch
+`db.logs.query.obfuscate_literals`. When set on both, `spec.audit` wins
+— the operator emits monitoring first, then audit, and Neo4j's
+last-write-wins config semantics give audit the final value. User
+`spec.config` overrides (appended last) still win over both.
+
+### NetworkPolicySpec
+
+Controls operator emission of a Kubernetes NetworkPolicy that hardens
+ingress to the Neo4j server pods. Most importantly, closes the backup
+port (6362) to non-backup pods — Neo4j security checklist gap addressed
+in issue #128.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | When `true`, the operator emits a NetworkPolicy named `<cluster>-server-netpol` (cluster) or `<standalone>-standalone-netpol` (standalone). Public client ports (7474/7473/7687) remain open to any pod; intra-cluster ports (6000/7000/7688) are restricted to peer servers; backup port (6362) is restricted to operator-managed backup pods. Default `false`. |
+
+**CNI prerequisite**: NetworkPolicy is enforced only by Calico, Cilium,
+Antrea, Weave, and most managed offerings. Flannel does NOT enforce
+NetworkPolicy — enabling this on a flannel cluster creates the resource
+but has no effect on traffic. See
+[Network Security](../user_guide/security.md#operator-managed-network-policy-recommended)
+for details.
+
+### IngressSpec
+
+Configures an Ingress resource for HTTP(S) access to Neo4j Browser.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable Ingress creation |
+| `className` | `string` | Ingress class name (e.g., `"nginx"`) |
+| `annotations` | `map[string]string` | Ingress annotations |
+| `host` | `string` | Hostname for the Ingress |
+| `tlsSecretName` | `string` | TLS secret name for Ingress |
+
+### RouteSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable OpenShift Route creation |
+| `host` | `string` | Hostname for the Route (optional) |
+| `path` | `string` | Path for the Route (default: `"/"`) |
+| `annotations` | `map[string]string` | Route annotations |
+| `tls` | [`*RouteTLSSpec`](#routetlsspec) | TLS settings for the Route |
+| `targetPort` | `int32` | Target service port (default: `7474`) |
+
+### RouteTLSSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `termination` | `string` | TLS termination: `"edge"`, `"reencrypt"`, `"passthrough"` |
+| `insecureEdgeTerminationPolicy` | `string` | `"None"`, `"Allow"`, `"Redirect"` |
+| `secretName` | `string` | Secret containing certificate (reencrypt/passthrough) |
+
+### MCPServerSpec
+
+Optional MCP server deployment for the cluster using the official [`mcp/neo4j`](https://hub.docker.com/r/mcp/neo4j) image ([github.com/neo4j/mcp](https://github.com/neo4j/mcp)). Requires the APOC plugin for the `get-schema` tool.
+
+**HTTP transport** (default): no credentials stored in the pod — each client request carries a Basic Auth or Bearer token `Authorization` header. A Service is created at `<name>-mcp:8080`; the endpoint path is `/mcp` (fixed).
+
+**STDIO transport**: `NEO4J_USERNAME` and `NEO4J_PASSWORD` are injected from the admin secret (or a custom secret via `spec.mcp.auth`). No Service is created.
+
+For client configuration, see the [MCP Client Setup Guide](../user_guide/guides/mcp_client_setup.md).
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable MCP server deployment (default: `false`) |
+| `image` | [`*ImageSpec`](#imagespec) | MCP server image. Defaults to `mcp/neo4j:latest`. Pin a version with `image.tag`. |
+| `transport` | `string` | Transport mode: `"http"` (default) or `"stdio"` |
+| `readOnly` | `bool` | Disable the `write-cypher` tool when `true` (default: `true`) |
+| `database` | `string` | Default Neo4j database for MCP queries |
+| `schemaSampleSize` | `*int32` | Schema sampling size for `get-schema`. Use `-1` to sample entire graph. |
+| `telemetry` | `*bool` | Enable anonymous usage telemetry sent to Neo4j. When unset, uses the server default (`true`). Set to `false` to opt out. |
+| `logLevel` | `string` | Log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency` |
+| `logFormat` | `string` | Log output format: `text` (default) or `json` |
+| `http` | [`*MCPHTTPConfig`](#mcphttpconfig) | HTTP transport configuration (only used when `transport: http`) |
+| `auth` | [`*MCPAuthSpec`](#mcpauthspec) | Override Neo4j credentials for STDIO transport. Ignored in HTTP mode (credentials come per-request from the client). |
+| `replicas` | `*int32` | Number of MCP pod replicas (default: `1`). Only meaningful for HTTP. |
+| `resources` | `*corev1.ResourceRequirements` | Resource requirements for MCP pods |
+| `env` | `[]corev1.EnvVar` | Extra environment variables. Operator-managed vars (`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_TRANSPORT_MODE`, `NEO4J_MCP_HTTP_*`, etc.) are silently ignored. |
+| `securityContext` | [`*SecurityContextSpec`](#securitycontextspec) | Pod/container security context overrides |
+
+### MCPHTTPConfig
+
+HTTP transport configuration. Only applied when `spec.mcp.transport: http`.
+
+| Field | Type | Description |
+|---|---|---|
+| `host` | `string` | HTTP bind host (default: `0.0.0.0`) |
+| `port` | `int32` | HTTP bind port. Default: `8080` without TLS, `8443` with TLS. |
+| `tls` | [`*MCPTLSSpec`](#mcptlsspec) | Optional container-level TLS. When unset, handle TLS at the Ingress layer instead. |
+| `authHeaderName` | `string` | Name of the HTTP header carrying credentials (default: `Authorization`). Override when a proxy rewrites the standard header. |
+| `service` | [`*MCPServiceSpec`](#mcpservicespec) | Kubernetes Service and Ingress/Route exposure settings |
+
+### MCPTLSSpec
+
+Enables container-level TLS on the `mcp/neo4j` HTTP server by mounting a Kubernetes TLS secret and injecting `NEO4J_MCP_HTTP_TLS_ENABLED=true` with the cert/key file paths. For most deployments, Ingress-level TLS termination is simpler.
+
+| Field | Type | Description |
+|---|---|---|
+| `secretName` | `string` | **Required.** Name of a Kubernetes TLS secret (`type: kubernetes.io/tls`) containing the certificate and private key. |
+| `certKey` | `string` | Key in the secret for the certificate file (default: `tls.crt`) |
+| `keyKey` | `string` | Key in the secret for the private key file (default: `tls.key`) |
+
+### MCPServiceSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `string` | Service type: `"ClusterIP"` (default), `"NodePort"`, `"LoadBalancer"` |
+| `annotations` | `map[string]string` | Service annotations |
+| `loadBalancerIP` | `string` | Static LoadBalancer IP |
+| `loadBalancerSourceRanges` | `[]string` | Allowed source ranges |
+| `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
+| `port` | `int32` | Service port for MCP HTTP (default: same as container port) |
+| `ingress` | [`*IngressSpec`](#ingressspec) | Ingress configuration. Path is always `/mcp` (fixed by the official image). |
+| `route` | [`*RouteSpec`](#routespec) | OpenShift Route configuration |
+
+### MCPAuthSpec
+
+Overrides the Neo4j credentials injected into the MCP pod. **Only effective for STDIO transport.** In HTTP mode the server authenticates per-request using the client's `Authorization` header.
+
+| Field | Type | Description |
+|---|---|---|
+| `secretName` | `string` | Secret containing username/password keys. Defaults to the cluster admin secret when unset. |
+| `usernameKey` | `string` | Username key name (default: `username`) |
+| `passwordKey` | `string` | Password key name (default: `password`) |
+
+### UpgradeStrategySpec
+
+Configures how the operator handles Neo4j version upgrades.
+
+| Field | Type | Description |
+|---|---|---|
+| `strategy` | `string` | Upgrade strategy: `"RollingUpgrade"` (default) or `"Recreate"` |
+| `preUpgradeHealthCheck` | `bool` | Enable health validation before upgrade (default: `true`) |
+| `maxUnavailableDuringUpgrade` | `*int32` | Max unavailable replicas during upgrade (default: `1`) |
+| `upgradeTimeout` | `string` | Timeout for the entire upgrade process (default: `"30m"`) |
+| `postUpgradeHealthCheck` | `bool` | Enable health validation after upgrade (default: `true`) |
+| `healthCheckTimeout` | `string` | Timeout for health checks (default: `"5m"`) |
+| `stabilizationTimeout` | `string` | Wait time for cluster stabilization (default: `"3m"`) |
+| `autoPauseOnFailure` | `bool` | Pause upgrade on failure for manual intervention (default: `true`) |
+
+## Status
+
+The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
+
+| Field | Type | Description |
+|---|---|---|
+| `phase` | `string` | Cluster phase: `"Initializing"`, `"Forming"`, `"Ready"`, `"Paused"`, `"Failed"` |
+| `ready` | `bool` | Whether the cluster is ready for connections |
+| `message` | `string` | Human-readable status message |
+| `conditions` | `[]metav1.Condition` | Cluster conditions (e.g. `Ready`, `ServersHealthy`, `DatabasesHealthy`) |
+| `replicas` | `map[string]ReplicaStatus` | Status of each replica (servers / ready counts) |
+| `endpoints` | [`EndpointStatus`](#endpointstatus) | Service endpoints |
+| `version` | `string` | Current Neo4j version |
+| `upgradeStatus` | [`*UpgradeStatus`](#upgradestatus) | Detailed upgrade progress information |
+| `lastUpgradeTime` | `*metav1.Time` | When the last upgrade was performed |
+| `propertyShardingReady` | `bool` | Whether property sharding is configured and ready (Neo4j 2025.12+) |
+| `auraFleetManagement` | `object` | State of the Aura Fleet Management integration (when `spec.auraFleetManagement.enabled=true`) |
+| `observedGeneration` | `int64` | Last observed generation |
+| `diagnostics` | [`*DiagnosticsStatus`](#diagnosticsstatus) | Live diagnostics collected when `spec.monitoring.enabled=true` and cluster is `Ready`. |
+
+### EndpointStatus
+
+Service endpoints and connection information populated by the controller on
+every status update. Schema is shared between `Neo4jEnterpriseCluster` and
+`Neo4jEnterpriseStandalone`; both controllers resolve URLs against the
+`{name}-client` ClusterIP (the legacy standalone `{name}-service` name remains
+as a deprecated alias for one release).
+
+| Field | Type | Description |
+|---|---|---|
+| `bolt` | `string` | Bolt protocol endpoint (e.g. `bolt+s://<service>:7687` when TLS is enabled, `bolt://...` when disabled) |
+| `http` | `string` | HTTP endpoint for Neo4j Browser |
+| `https` | `string` | HTTPS endpoint for Neo4j Browser |
+| `internal` | [`InternalEndpoints`](#internalendpoints) | In-cluster service FQDNs (headless + client; cluster only) |
+| `connectionExamples` | [`ConnectionExamples`](#connectionexamples) | Ready-to-paste connection strings driven by `spec.service.type` (ClusterIP / NodePort / LoadBalancer) |
+
+### InternalEndpoints
+
+| Field | Type | Description |
+|---|---|---|
+| `headless` | `string` | Headless service FQDN used for pod-level discovery |
+| `client` | `string` | Client service FQDN used for client connections |
+
+### ConnectionExamples
+
+Connection-string snippets generated from `spec.service.type` and the
+LoadBalancer-assigned external IP (when applicable). On a `LoadBalancer`
+service the external IP is filled in once the cloud provider's controller
+has assigned one; until then a `<external-ip>` placeholder is substituted.
+For `NodePort` the bolt port and HTTPS port appear as `<bolt-node-port>` /
+`<http-node-port>` placeholders since those are dynamically assigned and
+visible via `kubectl get svc`.
+
+| Field | Type | Description |
+|---|---|---|
+| `portForward` | `string` | kubectl port-forward command (always available) |
+| `browserURL` | `string` | Neo4j Browser URL |
+| `boltURI` | `string` | Bolt connection URI (uses `bolt+ssc://` when TLS is enabled, since cert-manager-issued certs typically aren't trusted by external clients) |
+| `neo4jURI` | `string` | Neo4j routing-driver URI |
+| `pythonExample` | `string` | Python driver connection snippet |
+| `javaExample` | `string` | Java driver connection snippet |
+
+### UpgradeStatus
+
+Detailed upgrade progress tracking.
+
+| Field | Type | Description |
+|---|---|---|
+| `phase` | `string` | Upgrade phase: `"Pending"`, `"InProgress"`, `"Paused"`, `"Completed"`, `"Failed"` |
+| `startTime` | `*metav1.Time` | When the upgrade started |
+| `completionTime` | `*metav1.Time` | When the upgrade completed |
+| `currentStep` | `string` | Current upgrade step description |
+| `previousVersion` | `string` | Version before upgrade |
+| `targetVersion` | `string` | Version being upgraded to |
+| `progress` | [`*UpgradeProgress`](#upgradeprogress) | Upgrade progress statistics |
+| `message` | `string` | Additional upgrade details |
+| `lastError` | `string` | Last error encountered during upgrade |
+
+### UpgradeProgress
+
+Upgrade progress across servers.
+
+| Field | Type | Description |
+|---|---|---|
+| `total` | `int32` | Total number of servers to upgrade |
+| `upgraded` | `int32` | Number of servers successfully upgraded |
+| `inProgress` | `int32` | Number of servers currently being upgraded |
+| `pending` | `int32` | Number of servers pending upgrade |
+| `servers` | [`*NodeUpgradeProgress`](#nodeupgradeprogress) | Server upgrade details |
+
+### NodeUpgradeProgress
+
+Server-specific upgrade progress.
+
+| Field | Type | Description |
+|---|---|---|
+| `total` | `int32` | Total number of servers |
+| `upgraded` | `int32` | Number of servers successfully upgraded |
+| `inProgress` | `int32` | Number of servers currently being upgraded |
+| `pending` | `int32` | Number of servers pending upgrade |
+| `currentLeader` | `string` | Current leader server |
+
+### DiagnosticsStatus
+
+Live diagnostics collected from `SHOW SERVERS` and `SHOW DATABASES` when `spec.monitoring.enabled=true` and the cluster is in `Ready` phase. Updated on every reconcile cycle.
+
+| Field | Type | Description |
+|---|---|---|
+| `servers` | `[]ServerDiagnostic` | SHOW SERVERS results. Each entry has `name`, `address`, `state`, `health`, `hostingDatabases`. |
+| `servers[].name` | `string` | Server display name. |
+| `servers[].address` | `string` | Bolt address of the server. |
+| `servers[].state` | `string` | Lifecycle state: `Enabled`, `Cordoned`, `Deallocating`. |
+| `servers[].health` | `string` | Health status: `Available` or `Unavailable`. |
+| `servers[].hostingDatabases` | `int` | Number of databases currently hosted on this server. |
+| `databases` | `[]DatabaseDiagnostic` | SHOW DATABASES results. Each entry has `name`, `status`, `requestedStatus`, `role`, `default`. |
+| `databases[].name` | `string` | Database name. |
+| `databases[].status` | `string` | Current status: `online`, `offline`, `quarantined`. |
+| `databases[].requestedStatus` | `string` | Desired status as requested by the operator. |
+| `databases[].role` | `string` | Role on the last-contacted server: `primary`, `secondary`. |
+| `databases[].default` | `bool` | Whether this is the cluster's default database. |
+| `lastCollected` | `string` (RFC3339) | Timestamp of the most recent successful collection. |
+| `collectionError` | `string` | Error message from the last failed collection; empty on success. |
+
+### Conditions
+
+The operator maintains the following condition types on `status.conditions` (standard `metav1.Condition`):
+
+| Condition Type | `True` when | `False` when | `Unknown` when |
+|---|---|---|---|
+| `ServersHealthy` | All servers are `state=Enabled` **and** `health=Available` | Any server is Cordoned, Deallocating, or Unavailable | Diagnostics cannot be collected (cluster not Ready or Bolt unreachable) |
+| `DatabasesHealthy` | All user databases have `status=online` | Any database has `requestedStatus=online` but `status≠online` | Diagnostics cannot be collected (cluster not Ready or Bolt unreachable) |
+
+> **Note:** The `system` database is excluded from the `DatabasesHealthy` check because it has special internal lifecycle behavior.
+
+## Examples
+
+### Basic Cluster
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: basic-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j  # Note: field name is 'repo', not 'repository'
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 3  # Creates StatefulSet basic-cluster-server with 3 replicas
+  storage:
+    className: standard
+    size: 10Gi
+  auth:
+    adminSecret: neo4j-admin-secret  # Note: field name is 'adminSecret'
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      cpu: "2"
+      memory: 8Gi
+```
+
+### Cluster with Server Role Constraints
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: role-constrained-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 5
+    # Global constraint: all servers default to any role
+    serverModeConstraint: NONE
+    # Per-server role hints (overrides global constraint)
+    serverRoles:
+      - serverIndex: 0
+        modeConstraint: PRIMARY    # Server-0: only primary databases
+      - serverIndex: 1
+        modeConstraint: PRIMARY    # Server-1: only primary databases
+      - serverIndex: 2
+        modeConstraint: SECONDARY  # Server-2: only secondary databases
+      - serverIndex: 3
+        modeConstraint: SECONDARY  # Server-3: only secondary databases
+      - serverIndex: 4
+        modeConstraint: NONE       # Server-4: any database mode
+    # Advanced placement for high availability
+    placement:
+      topologySpread:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+        whenUnsatisfiable: DoNotSchedule
+      antiAffinity:
+        enabled: true
+        topologyKey: kubernetes.io/hostname
+        type: required
+    availabilityZones:
+      - us-east-1a
+      - us-east-1b
+      - us-east-1c
+    enforceDistribution: true
+  storage:
+    className: fast-ssd
+    size: 50Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+```
+
+### Cluster with Query Monitoring
+
+> Backups are configured separately via the [`Neo4jBackup` CRD](neo4jbackup.md) — see the next example.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: monitored-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 3  # Creates monitored-cluster-server StatefulSet
+  storage:
+    className: fast-ssd
+    size: 50Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+  # Enhanced query monitoring
+  monitoring:
+    enabled: true
+    slowQueryThreshold: "1s"
+    queryLogLevel: "INFO"
+    obfuscateLiterals: true
+    sampling:
+      rate: "0.1"
+      maxQueriesPerSecond: 100
+    metricsExport:
+      prometheus: true
+      interval: "30s"
+```
+
+### Create Scheduled Backup (Separate Resource)
+
+```yaml
+# Note: Backups are now managed via Neo4jBackup CRD
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: daily-cluster-backup
+spec:
+  target:
+    kind: Cluster
+    name: monitored-cluster
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: daily/
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+  options:
+    compress: true
+    backupType: FULL
+```
+
+### Cluster with LoadBalancer Service
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: public-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 5  # Creates public-cluster-server StatefulSet with 5 replicas
+  storage:
+    className: standard
+    size: 20Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+  # LoadBalancer service configuration
+  service:
+    type: LoadBalancer
+    annotations:
+      # AWS NLB example
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    loadBalancerSourceRanges:
+      - "10.0.0.0/8"      # Corporate network
+      - "172.16.0.0/12"   # VPN range
+    externalTrafficPolicy: Local  # Preserve client IPs
+```
+
+### Cluster with Ingress
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: ingress-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 3  # Creates ingress-cluster-server StatefulSet
+  storage:
+    className: fast-ssd
+    size: 20Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+  # TLS configuration
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+  # Ingress configuration
+  service:
+    ingress:
+      enabled: true
+      className: nginx
+      host: neo4j.example.com
+      tlsSecretName: neo4j-tls
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+```
+
+## Management Commands
+
+### Basic Operations
+
+```bash
+# Create a cluster
+kubectl apply -f cluster.yaml
+
+# List clusters
+kubectl get neo4jenterprisecluster
+
+# Get cluster details
+kubectl describe neo4jenterprisecluster my-cluster
+
+# Check cluster status
+kubectl get neo4jenterprisecluster my-cluster -o yaml
+
+# Port forward for local access
+kubectl port-forward svc/my-cluster-client 7474:7474 7687:7687
+```
+
+### Cluster Operations
+
+```bash
+# Scale cluster (change server count)
+kubectl patch neo4jenterprisecluster my-cluster -p '{"spec":{"topology":{"servers":5}}}'
+
+# Update Neo4j version
+kubectl patch neo4jenterprisecluster my-cluster -p '{"spec":{"image":{"tag":"2025.01.0-enterprise"}}}'
+
+# Check cluster health
+kubectl exec my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
+
+# Monitor server pods
+kubectl get pods -l neo4j.com/cluster=my-cluster
+kubectl logs my-cluster-server-0 -c neo4j
+```
+
+## Usage Patterns
+
+### Multi-Database Architecture
+
+```yaml
+# 1. Create cluster with role-optimized servers
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-db-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  topology:
+    servers: 6
+    serverRoles:
+      - serverIndex: 0
+        modeConstraint: PRIMARY    # Dedicated for write workloads
+      - serverIndex: 1
+        modeConstraint: PRIMARY
+      - serverIndex: 2
+        modeConstraint: SECONDARY  # Dedicated for read workloads
+      - serverIndex: 3
+        modeConstraint: SECONDARY
+      - serverIndex: 4
+        modeConstraint: NONE       # Mixed workloads
+      - serverIndex: 5
+        modeConstraint: NONE
+  # ... other configuration
+
+---
+# 2. Create databases with specific topologies
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: user-database
+spec:
+  clusterRef: multi-db-cluster
+  name: users
+  topology:
+    primaries: 2    # Uses servers 0-1 (PRIMARY constraint)
+    secondaries: 2  # Uses servers 2-3 (SECONDARY constraint)
+
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database
+spec:
+  clusterRef: multi-db-cluster
+  name: analytics
+  topology:
+    primaries: 1    # Uses server 4 or 5 (NONE constraint)
+    secondaries: 3  # Uses remaining servers
+```
+
+### Development vs Production
+
+```yaml
+# Development cluster (minimal resources)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: dev-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  topology:
+    servers: 2  # Minimum for clustering
+  storage:
+    className: standard
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  tls:
+    mode: disabled
+
+---
+# Property Sharding cluster (Neo4j 2025.12+)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: sharding-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: 2025.12-enterprise
+  topology:
+    servers: 7  # Sufficient for property sharding workloads
+  storage:
+    className: fast-ssd
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 2
+      memory: 8Gi
+    limits:
+      cpu: 4
+      memory: 16Gi
+  propertySharding:
+    enabled: true
+    config:
+      db.tx_log.rotation.retention_policy: "14 days"
+      internal.dbms.sharded_property_database.property_pull_interval: "5ms"
+      server.memory.heap.max_size: "12G"
+      server.memory.pagecache.size: "6G"
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+---
+# Production cluster (high availability)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: prod-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  topology:
+    servers: 5
+    placement:
+      topologySpread:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+      antiAffinity:
+        enabled: true
+        type: required
+    availabilityZones: [us-east-1a, us-east-1b, us-east-1c]
+    enforceDistribution: true
+  storage:
+    className: fast-ssd
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 2
+      memory: 8Gi
+    limits:
+      cpu: 4
+      memory: 16Gi
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+  auth:
+    adminSecret: neo4j-admin-secret
+```
+
+## Best Practices
+
+1. **Resource Planning**: Allocate sufficient memory (≥4Gi) and CPU for Neo4j Enterprise workloads
+2. **High Availability**: Use odd number of servers (3, 5) and distribute across availability zones
+3. **Server Role Optimization**: Use role constraints to optimize server usage for specific workload patterns
+4. **Storage**: Use fast SSD storage classes (`fast-ssd`, `premium-ssd`) for production workloads
+5. **Security**: Always enable TLS and use strong password policies in production
+6. **Monitoring**: Enable query monitoring and centralized logging for performance insights
+7. **Backup Strategy**: Define a `Neo4jBackup` CR per backup target (one-shot or scheduled via `spec.schedule`) with appropriate `retention` policies
+8. **Scaling**: Plan for growth - scaling up is easier than scaling down
+
+## Troubleshooting
+
+### Common Issues
+
+```bash
+# Check cluster formation
+kubectl exec my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
+
+# Check pod status
+kubectl get pods -l neo4j.com/cluster=my-cluster
+kubectl describe pod my-cluster-server-0
+
+# Check operator logs
+kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
+
+# Verify split-brain detection
+kubectl get events --field-selector reason=SplitBrainDetected
+```
+
+### Resource Conflicts
+
+```bash
+# Check resource version conflicts
+kubectl get events --field-selector reason=UpdateConflict
+
+# Force reconciliation with a no-op annotation change
+kubectl annotate neo4jenterprisecluster my-cluster \
+  troubleshooting.neo4j.com/reconcile="$(date +%s)" --overwrite
+```
+
+For more information:
+
+- [Configuration Best Practices](../user_guide/configuration.md#best-practices-for-specconfig)
+- [Property Sharding Guide](../user_guide/property_sharding.md)
+- [Split-Brain Recovery Guide](../user_guide/troubleshooting/split-brain-recovery.md)
+- [Resource Sizing Guide](../user_guide/guides/resource_sizing.md)
+- [Fault Tolerance Guide](../user_guide/guides/fault_tolerance.md)

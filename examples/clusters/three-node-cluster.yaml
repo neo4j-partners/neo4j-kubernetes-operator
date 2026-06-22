@@ -1,0 +1,85 @@
+# Three-server Neo4j Enterprise cluster example
+# This creates a highly available Neo4j cluster with 3 servers
+# Servers self-organize to host databases with configurable topologies
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: three-node-cluster
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  # Neo4j Enterprise Edition
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # 5.26 LTS; any CalVer release works too, e.g. "2026.04-enterprise" (operator auto-detects)
+    pullPolicy: IfNotPresent
+
+  # Three-server cluster topology for high availability
+  # Servers self-organize to host databases with different topologies
+  topology:
+    servers: 3        # 3 servers for optimal fault tolerance
+
+  # Storage configuration
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "50Gi"      # Larger storage for production
+
+  # Production resource allocation
+  resources:
+    requests:
+      memory: "4Gi"   # Higher memory for cluster workload
+      cpu: "1"        # More CPU for cluster coordination
+    limits:
+      memory: "8Gi"
+      cpu: "4"
+
+  # TLS with cert-manager (recommended for production)
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer  # Uses self-signed CA for development
+      kind: ClusterIssuer      # For production, replace with your own issuer
+
+  # Service configuration
+  service:
+    type: ClusterIP     # Use LoadBalancer for external access
+
+  # Authentication configuration
+  # The operator manages authentication automatically
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+
+  # Custom Neo4j configuration for production
+  config:
+    # Enable query logging for monitoring
+    db.logs.query.enabled: "INFO"
+    # Increase transaction timeout for long operations
+    db.transaction.timeout: "60s"
+    # Enable metrics collection
+    server.metrics.enabled: "true"
+
+---
+# Deployment Notes:
+#
+# 1. Create admin credentials first:
+#    kubectl create secret generic neo4j-admin-secret \
+#      --from-literal=username=neo4j \
+#      --from-literal=password=your-secure-password
+#
+# 2. For TLS mode, cert-manager and ClusterIssuer are automatically set up:
+#    Development clusters include a self-signed ClusterIssuer (ca-cluster-issuer)
+#
+# 3. Expected deployment time: 2-3 minutes total
+#    - All server pods start in parallel (ParallelPodManagement)
+#    - Servers discover each other and form cluster
+#    - Databases can then be created with specific topologies
+#
+# 4. Monitor deployment progress:
+#    kubectl get pods -l app.kubernetes.io/name=neo4j -w

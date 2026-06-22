@@ -1,0 +1,86 @@
+# Cluster that trusts one or more internal CAs (e.g. a corporate CA fronting an
+# OIDC provider, or an internal service Neo4j calls over TLS) via the operator's
+# declarative spec.trustedCASecrets mechanism.
+#
+# Pattern:
+#   1. cert-manager Certificate produces a Secret containing tls.crt, tls.key,
+#      ca.crt — the operator only needs the ca.crt entry.
+#   2. spec.trustedCASecrets references that Secret. The default key "ca.crt"
+#      matches the cert-manager layout, so no `key` override is needed.
+#   3. The operator runs an init container that seeds /truststore/truststore.jks
+#      from the JDK's default cacerts (preserving public CA trust) and imports
+#      each supplied CA, then sets -Djavax.net.ssl.trustStore on the JVM.
+#
+# Note: intra-cluster (server-to-server) and client (bolt/https) TLS policies are
+# managed by the operator via spec.tls — do NOT hand-write dbms.ssl.policy.*
+# entries in spec.config (Neo4j's only SSL scopes are bolt/https/cluster/backup,
+# and the operator owns them; a custom policy collides with the managed ones).
+#
+# Prerequisites (create BEFORE applying — this manifest does NOT create them):
+#   kubectl create namespace neo4j-prod
+#   kubectl create secret generic neo4j-admin-secret --namespace neo4j-prod \
+#     --from-literal=username=neo4j --from-literal=password='<your-secure-password>'
+# Also requires the corp-ca-cluster-issuer ClusterIssuer referenced below to exist.
+---
+# A separate Issuer/ClusterIssuer is assumed to exist; this Certificate just
+# produces the Secret the operator references.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oidc-trusted-ca
+  namespace: neo4j-prod
+spec:
+  secretName: oidc-trusted-ca   # → referenced by trustedCASecrets[0].name below
+  duration: 8760h               # 1 year
+  issuerRef:
+    name: corp-ca-cluster-issuer
+    kind: ClusterIssuer
+  commonName: idp.corp.example.com
+  dnsNames:
+    - idp.corp.example.com
+---
+# ── A second internal CA to trust (create this BEFORE you apply) ───────────────
+# Holds an additional internal CA as ca.crt — e.g. the CA for another internal
+# service the Neo4j JVM connects to over TLS. Create it out-of-band from your
+# real PEM file (kubectl base64-encodes it):
+#
+#   kubectl create secret generic internal-service-ca \
+#     --namespace neo4j-prod \
+#     --from-file=ca.crt=internal-ca.pem
+#
+# Referenced via spec.trustedCASecrets below.
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: prod-cluster
+  namespace: neo4j-prod
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: 2026.04.0-enterprise
+  topology:
+    servers: 3
+  storage:
+    className: gp3-encrypted
+    size: 100Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+    authenticationProviders: [native, oidc-corp]
+    authorizationProviders: [native, oidc-corp]
+    # oidc is a map keyed by provider name (referenced as oidc-<name> in the
+    # authentication/authorizationProviders lists above).
+    oidc:
+      corp:
+        displayName: "Corporate SSO"
+        wellKnownDiscoveryURI: https://idp.corp.example.com/.well-known/openid-configuration
+        audience: neo4j-cluster   # audience = your OIDC client ID
+
+  # ─── Declarative multi-CA trust ───────────────────────────────────────────
+  # Neo4j's JVM truststore is augmented with each Secret's ca.crt entry. The
+  # JDK default cacerts are preserved, so public CAs (Let's Encrypt, etc.)
+  # still work alongside these internal CAs.
+  trustedCASecrets:
+    - name: oidc-trusted-ca           # cert-manager Certificate Secret
+    - name: internal-service-ca

@@ -1,0 +1,87 @@
+# NOTE: cloud (GCS/Azure) seeding is not covered by integration tests — S3/MinIO
+# carries that coverage. Validate against your own bucket and credentials.
+# Example: Creating a Neo4j database from Google Cloud Storage using seed URI
+# This example demonstrates using system-wide authentication (workload identity)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database-from-gcs
+  namespace: default
+spec:
+  # Reference to the Neo4j Enterprise cluster
+  clusterRef: analytics-cluster
+
+  # Database name in Neo4j
+  name: analytics
+
+  # Seed URI pointing to Google Cloud Storage backup
+  seedURI: "gs://my-neo4j-backups/analytics-database-backup.backup"
+
+  # Database topology - single primary for analytics workload
+  topology:
+    primaries: 1
+    secondaries: 2
+
+  # Seed configuration
+  seedConfig:
+    # Use transaction ID for point-in-time recovery
+    restoreUntil: "txId:98765"
+
+    # CloudSeedProvider configuration
+    config:
+      compression: "lz4"
+      validation: "lenient"
+
+  # No explicit credentials - using workload identity/system-wide authentication
+  # Ensure your Neo4j pods have appropriate IAM roles or service account annotations:
+  # annotations:
+  #   iam.gke.io/gcp-service-account: neo4j-backup-reader@my-project.iam.gserviceaccount.com
+
+  # Database options optimized for analytics
+  # Wait for database to be ready
+  wait: true
+  ifNotExists: true
+  defaultCypherLanguage: "25"
+
+---
+# ── GCS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band. GOOGLE_APPLICATION_CREDENTIALS is the JSON service-account key file
+# contents — prefer --from-file to load it straight from disk:
+#
+#   kubectl create secret generic gcs-backup-credentials \
+#     --namespace default \
+#     --from-file=GOOGLE_APPLICATION_CREDENTIALS=sa.json \
+#     --from-literal=GOOGLE_CLOUD_PROJECT='my-project'
+#
+# Or pass the JSON inline:
+#
+#   kubectl create secret generic gcs-backup-credentials \
+#     --namespace default \
+#     --from-literal=GOOGLE_APPLICATION_CREDENTIALS='<service-account-json>' \
+#     --from-literal=GOOGLE_CLOUD_PROJECT='my-project'
+#
+# Referenced via spec.seedCredentials.secretRef: gcs-backup-credentials
+---
+# Alternative configuration using explicit credentials
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database-with-explicit-creds
+  namespace: default
+spec:
+  clusterRef: analytics-cluster
+  name: analytics-explicit
+  seedURI: "gs://my-neo4j-backups/analytics-database-backup.backup"
+
+  # Reference explicit credentials secret
+  seedCredentials:
+    secretRef: gcs-backup-credentials
+
+  topology:
+    primaries: 1
+    secondaries: 2
+
+  wait: true
+  ifNotExists: true

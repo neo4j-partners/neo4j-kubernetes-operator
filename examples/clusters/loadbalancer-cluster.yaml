@@ -1,0 +1,96 @@
+# NOTE: external access via LoadBalancer/NodePort/Ingress/OpenShift Route is not
+# covered by the operator's integration tests (it needs real cluster networking) —
+# validate this exposure path in your own environment.
+# LoadBalancer Service Example for Neo4j Enterprise Cluster
+# This example shows how to expose a Neo4j cluster using a LoadBalancer service
+# Uses server-based architecture with 5 servers that self-organize
+# Suitable for cloud environments (AWS, GCP, Azure)
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
+
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: loadbalancer-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 5        # Five servers for flexible database topologies
+
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "20Gi"
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  # LoadBalancer service configuration
+  service:
+    type: LoadBalancer
+
+    # Cloud-specific annotations
+    annotations:
+      # AWS Network Load Balancer
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+      # GCP Load Balancer (uncomment for GCP)
+      # cloud.google.com/load-balancer-type: "Internal"
+
+      # Azure Load Balancer (uncomment for Azure)
+      # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+
+    # Restrict access to specific IP ranges
+    loadBalancerSourceRanges:
+      - "10.0.0.0/8"      # Corporate network
+      - "172.16.0.0/12"   # VPN range
+      - "192.168.0.0/16"  # Private network
+
+    # Preserve client source IPs
+    externalTrafficPolicy: Local
+
+  # Authentication
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+
+  # Environment variables
+
+  # Configuration
+  config:
+    # Memory settings
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "1G"
+
+    # Query logging
+    db.logs.query.enabled: "INFO"
+    db.logs.query.threshold: "1s"
+
+    # Network settings for better performance
+    server.bolt.listen_address: "0.0.0.0:7687"
+    server.http.listen_address: "0.0.0.0:7474"

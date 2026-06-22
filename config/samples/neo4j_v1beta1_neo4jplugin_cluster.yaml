@@ -1,0 +1,26 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+metadata:
+  labels:
+    app.kubernetes.io/name: neo4j-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: neo4jplugin-cluster-sample
+  namespace: default
+spec:
+  # References a Neo4jEnterpriseCluster deployment
+  clusterRef: sample-cluster
+
+  # Plugin configuration
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  # Plugin source - official Neo4j repository
+  source:
+    type: official
+
+  # APOC-specific configuration
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+    "apoc.import.file.use_neo4j_config": "true"

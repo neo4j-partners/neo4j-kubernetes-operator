@@ -1,0 +1,10 @@
+apiVersion: operators.coreos.com/v1beta1
+kind: CatalogSource
+metadata:
+  name: neo4j-operator-catalog
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: quay.io/your-org/neo4j-operator-catalog:latest
+  displayName: Neo4j Operator Catalog
+  publisher: Neo4j

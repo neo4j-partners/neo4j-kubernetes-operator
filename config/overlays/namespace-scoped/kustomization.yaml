@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base configuration without cluster-wide RBAC
+resources:
+- ../../crd
+- ../../manager
+- namespace-role.yaml
+- namespace-rolebinding.yaml
+- service_account.yaml
+
+# Development-specific image overrides
+images:
+- name: controller
+  newName: neo4j-operator
+  newTag: dev
+
+# Namespace for deployment
+namespace: neo4j-operator-dev
+
+# Patches to limit operator to single namespace
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: WATCH_NAMESPACE
+        value: neo4j-operator-dev
+  target:
+    kind: Deployment
+    name: controller-manager

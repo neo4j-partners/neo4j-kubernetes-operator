@@ -1,0 +1,15 @@
+title = "Neo4j Kubernetes Operator Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for example files and test fixtures"
+paths = [
+    '''examples/.*\.yaml$''',
+    '''docs/.*\.md$''',
+    '''test/.*\.go$''',
+    # Test-fixture sample credentials (base64 of "neo4jpassword"/"appuserpass"),
+    # not real secrets.
+    '''hack/test-samples\.sh$'''
+]

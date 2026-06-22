@@ -1,0 +1,16 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 120
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+  indentation:
+    spaces: 2
+
+ignore: |
+  **/charts/neo4j-operator/templates/*
+  **/charts/neo4j-operator/crds/*

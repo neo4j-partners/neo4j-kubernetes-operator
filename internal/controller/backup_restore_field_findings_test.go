@@ -1,0 +1,339 @@
+/*
+Copyright 2025 Priyo Lahiri.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+// Pinning tests for the v1.12.0 field findings (#251, #253-#256): bugs that
+// shipped because the documented paths were never the tested paths. Each test
+// here executes the path the DOCS teach, not the path the original specs took.
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
+)
+
+func fieldFindingsCluster(tag string) *neo4jv1beta1.Neo4jEnterpriseCluster {
+	return &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "ec", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			AcceptLicenseAgreement: "eval",
+			Image:                  neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: tag},
+			Topology:               neo4jv1beta1.TopologyConfiguration{Servers: 2},
+		},
+	}
+}
+
+func fieldFindingsBackup(opts *neo4jv1beta1.BackupOptions) *neo4jv1beta1.Neo4jBackup {
+	return &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target: neo4jv1beta1.BackupTarget{
+				Kind:       neo4jv1beta1.BackupTargetKindDatabase,
+				Name:       "neo4j",
+				ClusterRef: "ec",
+			},
+			Storage: neo4jv1beta1.StorageLocation{
+				Type: "pvc",
+				PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
+			},
+			Options: opts,
+		},
+	}
+}
+
+// #256: a user-supplied options.tempPath must get a mkdir prelude — neo4j-admin
+// refuses a staging path that doesn't exist, and nothing else creates it (the
+// shipped MinIO example failed on exactly this).
+func TestBuildBackupCommand_TempPathGetsMkdirPrelude(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(&neo4jv1beta1.BackupOptions{TempPath: "/tmp/neo4j-backup-staging"})
+
+	cmd, err := r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand: %v", err)
+	}
+	if !strings.Contains(cmd, "mkdir -p '/tmp/neo4j-backup-staging' && ") {
+		t.Errorf("tempPath must be created before neo4j-admin runs; got: %q", cmd)
+	}
+	if !strings.Contains(cmd, "--temp-path='/tmp/neo4j-backup-staging'") {
+		t.Errorf("expected quoted --temp-path; got: %q", cmd)
+	}
+}
+
+// #255: `neo4j-admin backup validate` exists only on CalVer images. On 5.26
+// the clause must be SKIPPED (previously it was emitted, rejected by the CLI,
+// and swallowed by `|| true` — the user silently got no validation).
+func TestBuildBackupCommand_ValidateGatedOnCalver(t *testing.T) {
+	vTrue := true
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(&neo4jv1beta1.BackupOptions{Validate: &vTrue})
+
+	cmd, err := r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand (5.26): %v", err)
+	}
+	if strings.Contains(cmd, "backup validate") {
+		t.Errorf("validate clause must be skipped on 5.26 (subcommand doesn't exist); got: %q", cmd)
+	}
+
+	cmd, err = r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("2026.04-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand (calver): %v", err)
+	}
+	if !strings.Contains(cmd, "backup validate") {
+		t.Errorf("validate clause expected on CalVer; got: %q", cmd)
+	}
+}
+
+// #253: both spec.force and options.replaceExisting are documented as the
+// overwrite confirmation; the Job command builders must honor BOTH (only
+// force was wired, so the documented replaceExisting path failed with
+// "Database ... already exists").
+func TestRestoreOverwriteConfirmed(t *testing.T) {
+	cases := []struct {
+		name string
+		spec neo4jv1beta1.Neo4jRestoreSpec
+		want bool
+	}{
+		{"force only", neo4jv1beta1.Neo4jRestoreSpec{Force: true}, true},
+		{"replaceExisting only", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
+		{"both", neo4jv1beta1.Neo4jRestoreSpec{Force: true, Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
+		{"neither", neo4jv1beta1.Neo4jRestoreSpec{}, false},
+		{"nil options", neo4jv1beta1.Neo4jRestoreSpec{Options: nil}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &neo4jv1beta1.Neo4jRestore{Spec: tc.spec}
+			if got := restoreOverwriteConfirmed(r); got != tc.want {
+				t.Errorf("restoreOverwriteConfirmed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Retention-on-delete field findings: the cleanup Job was (1) owner-ref'd to
+// the CR being deleted — the GC raced (and beat) the prune script — and
+// (2) built on `find -printf`, which busybox/alpine find doesn't implement,
+// so even a surviving Job died under `set -e`. Verified live: maxCount=2 with
+// 7 artifacts pruned nothing.
+func TestBuildRetentionScript_BusyboxPortable(t *testing.T) {
+	policy := &neo4jv1beta1.RetentionPolicy{MaxCount: 2, MaxAge: "7d"}
+	script := buildRetentionScript(policy, "chain")
+	if strings.Contains(script, "-printf") {
+		t.Errorf("retention script must not use find -printf (unsupported on busybox/alpine):\n%s", script)
+	}
+	if !strings.Contains(script, "stat -c '%Y %n'") {
+		t.Errorf("expected busybox-portable stat -c mtime listing:\n%s", script)
+	}
+	if !strings.Contains(script, "MAX_COUNT=2") {
+		t.Errorf("maxCount not rendered:\n%s", script)
+	}
+}
+
+func TestCleanupJobHasNoOwnerReference(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(nil)
+	backup.Spec.Retention = &neo4jv1beta1.RetentionPolicy{MaxCount: 2}
+	backup.Spec.Options = &neo4jv1beta1.BackupOptions{BackupType: "FULL"}
+
+	if err := r.cleanupBackupArtifacts(context.Background(), backup); err != nil {
+		t.Fatalf("cleanupBackupArtifacts: %v", err)
+	}
+	jobs := &batchv1.JobList{}
+	if err := r.List(context.Background(), jobs); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("expected exactly one cleanup Job, got %d", len(jobs.Items))
+	}
+	if len(jobs.Items[0].OwnerReferences) != 0 {
+		t.Errorf("cleanup Job must NOT be owner-ref'd to the CR being deleted (GC races the prune script); got: %v", jobs.Items[0].OwnerReferences)
+	}
+}
+
+// #227: PVC-backed backup Jobs must serialize on the chain directory via
+// flock — the operator's Job-creation gate can't stop two CronJob children
+// (FULL parent + DIFF child sharing the dir via chainFromBackup) firing into
+// the same reconcile gap. The lock is fd-based (no nested quoting) and held
+// for the whole command chain; cloud targets have no shared fs to lock.
+func TestBuildBackupCommand_PVCChainDirFlock(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(nil)
+
+	cmd, err := r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand: %v", err)
+	}
+	wantPrefix := "mkdir -p '/backup/bk/' && exec 9>'/backup/bk/.chain.lock' && flock -w 3600 9 && "
+	if !strings.HasPrefix(cmd, wantPrefix) {
+		t.Fatalf("PVC backup command must take the chain-dir flock before neo4j-admin:\nwant prefix %q\ngot %q", wantPrefix, cmd)
+	}
+
+	// A DIFF child chained into another CR's dir locks the PARENT's chain
+	// root — that's the directory the two CRs contend on.
+	backup.Spec.ChainFromBackup = "daily-full"
+	cmd, err = r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand (chained): %v", err)
+	}
+	if !strings.Contains(cmd, "exec 9>'/backup/daily-full/.chain.lock'") {
+		t.Fatalf("chained backup must lock the parent chain root, got %q", cmd)
+	}
+
+	// Cloud targets: no flock (nothing to lock on object storage).
+	backup = fieldFindingsBackup(nil)
+	backup.Spec.Storage = neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "bkt"}
+	cmd, err = r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand (s3): %v", err)
+	}
+	if strings.Contains(cmd, "flock") {
+		t.Fatalf("cloud backup must not attempt flock, got %q", cmd)
+	}
+}
+
+// #227 (backup analog of the seed-proxy deadline): a one-shot backup whose
+// pod can never start (missing PVC -> unschedulable, bad image -> pull error)
+// must surface the pod's real condition, not "Backup job is running" forever.
+// backupJobStartupState reports running=false with a diagnosis until a pod
+// actually runs.
+func TestBackupJobStartupState(t *testing.T) {
+	jobName := "bk-backup"
+	mkPod := func(name string, phase corev1.PodPhase, conds []corev1.PodCondition, css []corev1.ContainerStatus) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default",
+				Labels: map[string]string{"batch.kubernetes.io/job-name": jobName},
+			},
+			Status: corev1.PodStatus{Phase: phase, Conditions: conds, ContainerStatuses: css},
+		}
+	}
+
+	t.Run("unschedulable pod yields diagnosis, not running", func(t *testing.T) {
+		pod := mkPod("bk-backup-x", corev1.PodPending, []corev1.PodCondition{{
+			Type: corev1.PodScheduled, Status: corev1.ConditionFalse,
+			Message: `persistentvolumeclaim "sharded-backup-pvc" not found`,
+		}}, nil)
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if running {
+			t.Fatal("must not report running while the pod is Pending/unschedulable")
+		}
+		if !strings.Contains(diag, "unschedulable") || !strings.Contains(diag, "not found") {
+			t.Fatalf("diagnosis must name the scheduling failure, got %q", diag)
+		}
+	})
+
+	t.Run("image pull error yields diagnosis", func(t *testing.T) {
+		pod := mkPod("bk-backup-y", corev1.PodPending, nil, []corev1.ContainerStatus{{
+			Name:  "backup",
+			State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff", Message: "Back-off pulling image"}},
+		}})
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if running || !strings.Contains(diag, "ImagePullBackOff") {
+			t.Fatalf("running=%v diag=%q; want running=false naming ImagePullBackOff", running, diag)
+		}
+	})
+
+	t.Run("ContainerCreating is not a stuck diagnosis", func(t *testing.T) {
+		pod := mkPod("bk-backup-z", corev1.PodPending, nil, []corev1.ContainerStatus{{
+			Name:  "backup",
+			State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}},
+		}})
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if running || strings.Contains(diag, "ContainerCreating") {
+			t.Fatalf("ContainerCreating must not be flagged as stuck; got running=%v diag=%q", running, diag)
+		}
+	})
+
+	t.Run("running pod reports running with no diagnosis", func(t *testing.T) {
+		pod := mkPod("bk-backup-r", corev1.PodRunning, nil, nil)
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if !running || diag != "" {
+			t.Fatalf("running pod must report running with empty diag; got running=%v diag=%q", running, diag)
+		}
+	})
+}
+
+// Footgun B (v1.12.1 release-verify): an operator-created backup PVC must NOT
+// be owner-ref'd to the Neo4jBackup CR — otherwise `kubectl delete
+// neo4jbackup` cascade-deletes the PVC and every backup in it. Backups are
+// durable; reclaiming storage is an explicit `kubectl delete pvc`.
+func TestEnsureBackupPVC_CreatedWithoutOwnerRef(t *testing.T) {
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default", UID: "uid-nightly"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "ec"},
+			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
+		},
+	}
+	r := newShardedTestReconciler(t, backup)
+	ctx := context.Background()
+
+	require.NoError(t, r.ensureBackupPVC(ctx, backup))
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "backup-pvc", Namespace: "default"}, pvc))
+	assert.Empty(t, pvc.OwnerReferences, "operator-created backup PVC must have no owner reference (CR deletion must not eat backups)")
+}
+
+// Protective migration: a v1.12.0-created backup PVC that still carries the
+// CR's controller owner-ref must have it stripped on reconcile (removing an
+// owner-ref never triggers deletion), while unrelated owner-refs are kept.
+func TestEnsureBackupPVC_StripsStaleOwnerRef(t *testing.T) {
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default", UID: "uid-nightly"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "ec"},
+			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
+		},
+	}
+	ctrlRef := true
+	owned := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "backup-pvc", Namespace: "default",
+			OwnerReferences: []metav1.OwnerReference{
+				{APIVersion: "v1", Kind: "ConfigMap", Name: "unrelated", UID: "uid-other"},
+				{APIVersion: "neo4j.neo4j.com/v1beta1", Kind: "Neo4jBackup", Name: "nightly", UID: "uid-nightly", Controller: &ctrlRef},
+			},
+		},
+	}
+	r := newShardedTestReconciler(t, backup, owned)
+	ctx := context.Background()
+
+	require.NoError(t, r.ensureBackupPVC(ctx, backup))
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "backup-pvc", Namespace: "default"}, pvc))
+	for _, ref := range pvc.OwnerReferences {
+		assert.NotEqual(t, "uid-nightly", string(ref.UID), "the backup CR's owner-ref must be stripped")
+	}
+	require.Len(t, pvc.OwnerReferences, 1, "unrelated owner-refs must be preserved")
+	assert.Equal(t, "unrelated", pvc.OwnerReferences[0].Name)
+}

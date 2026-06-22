@@ -1,0 +1,35 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: neo4j-monitoring-enabled
+  annotations:
+    policies.kyverno.io/title: Neo4j monitoring recommended
+    policies.kyverno.io/category: Neo4j Operator Conformance
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/subject: Neo4jEnterpriseCluster, Neo4jEnterpriseStandalone
+    policies.kyverno.io/description: >-
+      Audits Neo4j CRs that do not enable spec.monitoring. With monitoring
+      enabled the operator populates status.diagnostics (servers and
+      databases), evaluates the ServersHealthy and DatabasesHealthy
+      conditions, and exports the neo4j_operator_server_health Prometheus
+      metric.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: monitoring-should-be-enabled
+      match:
+        any:
+          - resources:
+              kinds:
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseCluster
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseStandalone
+      validate:
+        message: >-
+          spec.monitoring.enabled is not true. Production deployments should
+          enable monitoring so the operator collects SHOW SERVERS / SHOW
+          DATABASES diagnostics and exposes per-server health metrics.
+        pattern:
+          spec:
+            monitoring:
+              enabled: true

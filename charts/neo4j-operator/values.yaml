@@ -1,0 +1,321 @@
+# Default values for neo4j-operator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Number of operator replicas
+replicaCount: 1
+
+image:
+  repository: ghcr.io/priyolahiri/neo4j-kubernetes-operator
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Operator deployment mode
+# cluster: Operator watches all namespaces (requires ClusterRole)
+# namespace: Operator watches only its own namespace (uses Role)
+# namespaces: Operator watches specific namespaces (requires ClusterRole)
+operatorMode: cluster
+
+# Namespaces to watch (only used when operatorMode is "namespaces")
+watchNamespaces: []
+
+# Development mode settings
+developmentMode: false
+logLevel: info  # debug, info, warn, error
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account.
+  # For cloud provider integration (backup to S3/GCS/Azure), add the appropriate annotation:
+  #   AWS EKS (IRSA):                eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/ROLE"
+  #   GCP GKE (Workload Identity):   iam.gke.io/gcp-service-account: "SA@PROJECT.iam.gserviceaccount.com"
+  #   Azure AKS (Workload Identity): azure.workload.identity/client-id: "CLIENT-ID"
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+rbac:
+  # Specifies whether RBAC resources should be created
+  create: true
+  # Grant the operator RBAC for the external-secrets.io integration
+  # (clustersecretstores, secretstores, externalsecrets). Default: off.
+  #
+  # The integration is opt-in per-CR via
+  # spec.tls.externalSecrets.enabled / spec.auth.externalSecrets.enabled on
+  # Neo4jEnterpriseCluster (and standalone). Setting this to true grants
+  # cluster-wide CRUD on ExternalSecret resources — only enable if you
+  # actually use that integration. Per the November 2025 security review
+  # recommendation #1 (reduce RBAC blast radius).
+  #
+  # If left false but a Neo4j CR sets externalSecrets.enabled=true, the
+  # operator will get RBAC-denied when trying to create the ExternalSecret
+  # — clear failure mode, easy to debug.
+  externalSecretsIntegration: false
+  # Use per-namespace Roles instead of a manager ClusterRole, for
+  # operatorMode=namespaces with a STATIC watchNamespaces list (plain
+  # namespace names). Lets security-strict clusters that forbid ClusterRoles
+  # run one operator across several namespaces with least privilege. Default:
+  # off — the manager ClusterRole is used, so existing installs are unchanged.
+  #
+  # When enabled, the chart emits one Role + RoleBinding per listed namespace
+  # (same rule set as the ClusterRole, generated from the same source so it
+  # can't drift) and emits NO manager ClusterRole/ClusterRoleBinding. The
+  # metrics ClusterRoles are unaffected (the authn/authz APIs are
+  # cluster-scoped regardless of operatorMode).
+  #
+  # Requirements (enforced at render time — `helm install` fails fast with a
+  # clear message otherwise):
+  #   * operatorMode MUST be "namespaces".
+  #   * Every watchNamespaces entry MUST be a plain namespace name. A
+  #     glob/regex/label/prefix pattern (e.g. "team-*", "regex:^team-",
+  #     "label:env=prod") is rejected: matching namespaces are discovered via
+  #     a cluster-scoped namespace list/watch, which a namespaced Role cannot
+  #     grant. Use perNamespaceRoles=false (ClusterRole) for patterns.
+  #   * Each listed namespace MUST already exist — Helm creates the
+  #     Role+RoleBinding in it but does not create the namespace itself.
+  perNamespaceRoles: false
+  # Opt-in read-only ClusterRole (nodes + storageclasses, get/list/watch)
+  # for installs whose manager permissions are namespaced Roles —
+  # operatorMode=namespace, or namespaces with perNamespaceRoles=true.
+  # Restores the operator's only two cluster-scoped reads in those modes:
+  #   * nodes          — availability-zone auto-discovery for
+  #                      spec.topology.placement (otherwise best-effort
+  #                      spread + TopologyZoneDiscoveryDegraded event)
+  #   * storageclasses — allowVolumeExpansion validation (otherwise storage
+  #                      expansion fails with an RBAC error)
+  # Default off so ClusterRole-free installs stay ClusterRole-free. Ignored
+  # when the manager ClusterRole renders anyway (cluster mode, or namespaces
+  # mode without perNamespaceRoles) — that role is a superset of this one.
+  clusterScopedReads: false
+
+# Init container image used by Neo4jPlugin spec.installMode=VerifiedDownload.
+# When a Neo4jPlugin opts into VerifiedDownload, the operator injects this
+# image as an init container on the target StatefulSet's pod template; the
+# container downloads spec.source.url, verifies the sha256/sha512 against
+# spec.source.checksum, and drops the JAR into the shared /plugins
+# emptyDir before Neo4j starts. Empty value falls back to the operator's
+# baked-in default (curlimages/curl:8.5.0). Air-gapped clusters should
+# point this at an internal mirror.
+pluginInitContainer:
+  image: ""
+
+podAnnotations: {}
+
+# Disable to let platform defaults (e.g., OpenShift SCC) control pod security settings
+podSecurityContextEnabled: true
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Liveness and readiness probe configuration
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8081
+  initialDelaySeconds: 15
+  periodSeconds: 20
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: 8081
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Metrics configuration
+metrics:
+  enabled: true
+  # When secure=true (default), the operator serves /metrics over HTTPS
+  # with controller-runtime's TokenReview-based authn + SubjectAccessReview
+  # authz against the `metrics-reader` ClusterRole. Scrapers (Prometheus,
+  # kubectl) must present a Bearer token whose ServiceAccount has the
+  # `metrics-reader` ClusterRole bound — without it the request is 401/403.
+  # Closes the November 2025 security review's #5 recommendation (front
+  # metrics with authn instead of plain HTTP).
+  #
+  # Set secure=false ONLY for legacy scrapers that can't do bearer auth.
+  # In that mode metrics are reachable to any pod with NetworkPolicy
+  # allowance and the operator's authz check is bypassed.
+  secure: true
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  # ServiceMonitor for Prometheus Operator. When metrics.secure=true the
+  # ServiceMonitor needs bearerTokenSecret + tlsConfig.insecureSkipVerify=true
+  # (or a properly-issued CA bundle); the template wires the bearer-token
+  # SA path automatically and exposes scheme/tls/bearerTokenSecret as
+  # values you can override.
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    honorLabels: false
+    relabelings: []
+    metricRelabelings: []
+    # Bearer token Prometheus uses to authenticate to the operator's
+    # metrics endpoint. Defaults to the operator's own ServiceAccount
+    # token Secret — but Kubernetes 1.24+ doesn't auto-create those, so
+    # for newer clusters you need a manually-created Secret of type
+    # kubernetes.io/service-account-token referencing a SA bound to the
+    # `metrics-reader` ClusterRole. Set this to that Secret's name.
+    # REQUIRED when metrics.secure=true and the ServiceMonitor is enabled —
+    # the chart fails the render otherwise (an unauthenticated scrape of the
+    # TokenReview-secured endpoint gets 401, silently).
+    bearerTokenSecret:
+      name: ""
+      key: "token"
+
+# Leader election configuration
+leaderElection:
+  enabled: true
+  # NOTE: the lease always lives in the release namespace — the operator binary
+  # has no flag to relocate it, so a configurable namespace here would move the
+  # RBAC away from where leader election actually happens and break it. The
+  # former `namespace` value was removed for that reason.
+
+# This project does NOT use admission webhooks (all validation is inline in
+# internal/validation/). The former `webhook:` values block was removed: with
+# webhook.enabled=true the chart rendered a --webhook-port flag the binary
+# doesn't define, crash-looping the operator.
+
+# NetworkPolicy for the operator pod itself.
+#
+# When networkPolicy.enabled=true and ingress/egress are left empty, the
+# chart ships sensible defaults:
+#   * Ingress: allow Prometheus scrape on the metrics + health ports
+#     from any pod in any namespace.
+#   * Egress: DNS (53), K8s API (443/6443), and Bolt (7687/7473/7474) +
+#     discovery (6000) to workload namespaces — required for the
+#     operator to reconcile clusters it manages.
+# Set ingress and/or egress explicitly to override the defaults.
+# NOTE: the default egress assumes the API server listens on 443 or 6443.
+# If your cluster's API endpoint uses another port (some managed
+# offerings), set egress explicitly or the operator cannot reach the API.
+#
+# This policy covers the *operator* pod only. Neo4j workload pods live
+# in user namespaces; apply the per-cluster manifests in
+# examples/security/networkpolicy-{cluster,standalone}.yaml to protect
+# them. Operator-managed per-cluster NetworkPolicies are a planned
+# follow-up — see examples/security/README.md.
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Priority Class
+priorityClassName: ""
+
+# Additional environment variables
+env: []
+# - name: VARIABLE_NAME
+#   value: "value"
+
+# Additional environment variables from ConfigMaps or Secrets
+envFrom: []
+# - configMapRef:
+#     name: config-map-name
+# - secretRef:
+#     name: secret-name
+
+# Additional volumes
+volumes: []
+# - name: extra-volume
+#   configMap:
+#     name: extra-volume-config
+
+# Additional volume mounts
+volumeMounts: []
+# - name: extra-volume
+#   mountPath: /etc/extra
+
+# Operator configuration (informational — these values are not consumed at runtime;
+# operator behavior is configured via CRD specs and controller flags)
+config:
+  # Maximum number of concurrent reconciles
+  maxConcurrentReconciles: 1
+  # Requeue interval for resources
+  requeueInterval: 30s
+  # Cache sync timeout
+  cacheSyncTimeout: 2m
+
+# Neo4j-specific configuration
+neo4j:
+  # Default Neo4j enterprise image to use if not specified in CR
+  defaultImage: neo4j:5.26.0-enterprise
+  # Default resource requirements for Neo4j pods if not specified in CR
+  defaultResources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  # Default storage size for Neo4j persistent volumes
+  defaultStorageSize: "10Gi"
+  # Default storage class (leave empty to use cluster default)
+  defaultStorageClass: ""
+
+# NOTE: there is intentionally no operator-level `backup:` or `tls:` block.
+# Backups are configured per-CR via Neo4jBackup; metrics TLS is controlled by
+# `metrics.secure` (above); Neo4j instance TLS is configured per-CR via
+# spec.tls on Neo4jEnterpriseCluster/Standalone. Earlier chart versions shipped
+# dead `backup:`/`tls:` values that no template consumed — removed so they
+# can't be set with no effect.
+
+# Extra manifests to deploy
+extraManifests: []
+# - apiVersion: v1
+#   kind: ConfigMap
+#   metadata:
+#     name: extra-configmap
+#   data:
+#     key: value
+
+# Pre-install checks — validates prerequisites before deploying the operator.
+# Image needs a shell (the check runs `/bin/sh -c`) + kubectl. Pinned to a
+# specific version for reproducibility/air-gap; alpine/k8s is alpine-based (has
+# a shell), unlike the distroless registry.k8s.io/kubectl and rancher/kubectl.
+# (bitnami/kubectl was dropped — its versioned tags are no longer published.)
+preInstallChecks:
+  enabled: true
+  image: alpine/k8s:1.32.0

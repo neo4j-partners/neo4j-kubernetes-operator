@@ -1,0 +1,33 @@
+# DEPRECATED - Use apoc-plugin-example.yaml instead
+# This example shows the legacy approach for reference only
+# For Neo4j 5.26+, see apoc-plugin-example.yaml for the correct configuration
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+metadata:
+  name: cluster-apoc-plugin
+  namespace: default
+spec:
+  # References a Neo4jEnterpriseCluster deployment
+  clusterRef: my-cluster
+
+  # Plugin configuration
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  # Plugin source - official Neo4j plugin repository
+  source:
+    type: official
+
+  # DEPRECATED: This approach works but is not optimal for Neo4j 5.26+
+  # See apoc-plugin-example.yaml for the recommended approach
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "apoc.*"
+    sandbox: false

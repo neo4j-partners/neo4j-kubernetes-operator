@@ -1,0 +1,150 @@
+# Basic Property Sharding Example
+# This example demonstrates the minimal but functional configuration for property sharding
+#
+# IMPORTANT: Property sharding has specific resource requirements:
+# - Minimum 2 servers (3+ recommended for HA)
+# - 4Gi+ memory per server (8Gi+ recommended for production)
+# - 2+ CPU cores per server for cross-shard query performance
+# - Authentication required via admin secret
+# - Storage class must be specified
+
+# Prerequisites: Create admin secret (REQUIRED)
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password
+
+# Step 1: Create a property sharding enabled cluster
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: basic-sharding-cluster
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  # Property sharding requires Neo4j 2025.12+
+  image:
+    repo: neo4j
+    tag: "2026.04-enterprise"
+
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  # 3+ servers recommended for HA graph shard primaries
+  topology:
+    servers: 3
+
+  storage:
+    size: 5Gi
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+
+  # Resources must be sufficient for property sharding
+  resources:
+    requests:
+      memory: 4Gi    # Property sharding requires 4GB+ memory (8GB+ recommended for production)
+      cpu: 2000m     # 2+ cores required for cross-shard queries
+    limits:
+      memory: 8Gi    # Recommended for property sharding workloads
+      cpu: 2000m     # Stable performance for production
+
+  # Enable property sharding with default configuration
+  propertySharding:
+    enabled: true
+    # Default config is applied automatically:
+    # - internal.dbms.sharded_property_database.enabled: "true"
+    # - db.query.default_language: "CYPHER_25"
+    # - internal.dbms.sharded_property_database.allow_external_shard_access: "false"
+
+---
+# Step 2: Create a sharded database targeting the cluster
+# This creates the virtual database that users connect to
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jShardedDatabase
+metadata:
+  name: basic-sharded-db
+  namespace: default
+spec:
+  # Target the property sharding enabled cluster
+  clusterRef: basic-sharding-cluster
+
+  # Virtual database name (what users connect to)
+  name: products
+
+  # Cypher 25 required for property sharding
+  defaultCypherLanguage: "25"
+
+  # Basic property sharding configuration
+  propertySharding:
+    # Create 2 property shards (minimal setup)
+    propertyShards: 2
+
+    # Graph shard topology (nodes/relationships without properties)
+    graphShard:
+      primaries: 2    # Fault tolerant
+      secondaries: 1
+
+    # Property shard topology (properties only)
+    propertyShardTopology:
+      replicas: 1     # Simple setup
+
+  # Standard database options
+  wait: true          # Wait for creation
+  ifNotExists: true   # Don't fail if exists
+
+---
+# Step 3: Usage Instructions and Verification
+
+# Deploy this configuration:
+# kubectl apply -f basic-property-sharding.yaml
+
+# Wait for cluster to be ready (may take 2-3 minutes):
+# kubectl get neo4jenterpriseclusters basic-sharding-cluster -w
+
+# Wait for sharded database to be ready:
+# kubectl get neo4jshardeddatabases basic-sharded-db -w
+
+# Access the virtual database:
+# kubectl port-forward svc/basic-sharding-cluster-client 7687:7687 7474:7474
+
+# Connect with Neo4j Browser:
+# Open http://localhost:7474
+# Connect with bolt://localhost:7687
+# Username: neo4j
+# Password: your-secure-password
+# Database: products (the virtual sharded database)
+
+# Example queries that work transparently:
+#
+# Create data (properties distributed automatically):
+# CREATE (p:Product {
+#   id: "12345",           // Stays in graph shard (fast access)
+#   name: "Widget",        // Stays in graph shard (frequently accessed)
+#   description: "..."     // May go to property shard (large content)
+# })
+#
+# Query data (unified view across shards):
+# MATCH (p:Product) RETURN p.name, p.description LIMIT 10
+#
+# Check shard status:
+# :use system
+# SHOW DATABASES WHERE name STARTS WITH "products-"
+#
+# Verify virtual database:
+# SHOW DATABASES WHERE name = "products"
+
+# Monitoring commands:
+#
+# Check cluster status:
+# kubectl describe neo4jenterprisecluster basic-sharding-cluster
+#
+# Check sharded database status:
+# kubectl describe neo4jshardeddatabase basic-sharded-db
+#
+# View operator logs:
+# kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
+#
+# Monitor resource usage:
+# kubectl top pods -l app.kubernetes.io/name=basic-sharding-cluster --containers

@@ -1,0 +1,103 @@
+# Development Workflow Example
+#
+# A lightweight, single-node dev setup: a Neo4jEnterpriseStandalone plus a
+# development database (with schema) and a separate integration-test database.
+# Apply it, then drive data loading / migrations / CI from your own pipeline with
+# cypher-shell (see the notes at the bottom) — those steps are intentionally NOT
+# bundled as in-cluster Jobs here.
+#
+# ── Prerequisites (create BEFORE applying) ────────────────────────────────────
+#   kubectl create namespace neo4j-dev      # this manifest also defines it; create it first
+#   kubectl create secret generic dev-admin-secret --namespace neo4j-dev \
+#     --from-literal=username=neo4j --from-literal=password='<your-secure-password>'
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-dev
+---
+# Lightweight standalone instance for development
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: dev-instance
+  namespace: neo4j-dev
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+
+  # Minimal resources for development
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "1"
+      memory: "4Gi"
+
+  storage:
+    # className omitted -> inherits the cluster default StorageClass (portable).
+    # className: managed-csi
+    size: 10Gi
+
+  auth:
+    adminSecret: dev-admin-secret
+
+  # Development-friendly settings
+  config:
+    dbms.security.procedures.unrestricted: "apoc.*"
+    db.transaction.timeout: "0"          # no timeout — convenient for debugging
+    db.logs.query.enabled: "VERBOSE"     # log everything while developing
+    db.logs.query.threshold: "0"
+---
+# Development database with schema (constraints + indexes created on first reconcile)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: dev-database
+  namespace: neo4j-dev
+spec:
+  clusterRef: dev-instance
+  name: devdb
+  wait: true
+  ifNotExists: true
+  initialData:
+    source: cypher
+    cypherStatements:
+      # User management
+      - "CREATE CONSTRAINT user_id IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE"
+      - "CREATE CONSTRAINT user_email IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE"
+      - "CREATE INDEX user_name IF NOT EXISTS FOR (u:User) ON (u.name)"
+      # Product catalog
+      - "CREATE CONSTRAINT product_id IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE"
+      - "CREATE INDEX product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
+      # Orders
+      - "CREATE CONSTRAINT order_id IF NOT EXISTS FOR (o:Order) REQUIRE o.id IS UNIQUE"
+      - "CREATE INDEX order_status IF NOT EXISTS FOR (o:Order) ON (o.status)"
+---
+# Separate database for integration tests
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: test-database
+  namespace: neo4j-dev
+spec:
+  clusterRef: dev-instance
+  name: testdb
+  wait: false           # NOWAIT — faster test setup
+  ifNotExists: true
+
+# ── Loading data, migrations & CI ─────────────────────────────────────────────
+# Run these from your dev machine or CI pipeline against the standalone's Bolt
+# endpoint (use the routing scheme; bolt+s:// if TLS is enabled):
+#
+#   kubectl -n neo4j-dev port-forward svc/dev-instance-client 7687:7687 &
+#   cypher-shell -a neo4j://localhost:7687 -u neo4j -p "$PASSWORD" -d devdb \
+#     -f ./seed-data.cypher          # load sample data
+#   cypher-shell -a neo4j://localhost:7687 -u neo4j -p "$PASSWORD" -d devdb \
+#     -f ./migrations/V2__add_indexes.cypher   # apply a migration
+#
+# In CI, point your test suite at testdb (created above) and tear it down by
+# deleting the Neo4jDatabase, or recreate the standalone for a clean slate.

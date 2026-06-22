@@ -1,0 +1,34 @@
+# NOTE: external access via LoadBalancer/NodePort/Ingress/OpenShift Route is not
+# covered by the operator's integration tests (it needs real cluster networking) —
+# validate this exposure path in your own environment.
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: route-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 3
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: 10Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+  service:
+    # Keep ClusterIP service and expose externally via OpenShift Route
+    type: ClusterIP
+    route:
+      enabled: true
+      host: route-cluster.apps.example.com
+      tls:
+        termination: edge   # edge | reencrypt | passthrough
+  securityContext:
+    # Let platform defaults inject UID/FSGroup; adjust if your SCC requires specific IDs
+    podSecurityContext:
+      runAsNonRoot: true

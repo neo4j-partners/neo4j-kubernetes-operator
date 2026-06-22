@@ -1,0 +1,35 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: smoke-test
+  namespace: default
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+  storage:
+    className: standard
+    size: "1Gi"
+  persistence:
+    enabled: true
+    retentionPolicy: Delete
+    accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      memory: "1.5Gi"
+      cpu: "50m"
+    limits:
+      memory: "2Gi"
+      cpu: "500m"
+  tls:
+    mode: disabled
+  auth:
+    provider: native
+    adminSecret: neo4j-smoke-secret
+  config:
+    server.memory.heap.initial_size: "512M"
+    server.memory.heap.max_size: "1G"
+    server.memory.pagecache.size: "256M"
+  monitoring:
+    enabled: false

@@ -1,0 +1,100 @@
+# NOTE: external access via LoadBalancer/NodePort/Ingress/OpenShift Route is not
+# covered by the operator's integration tests (it needs real cluster networking) —
+# validate this exposure path in your own environment.
+# NodePort Service Example for Neo4j Enterprise Cluster
+# This example shows how to expose a Neo4j cluster using NodePort services
+# Uses server-based architecture with 4 servers that self-organize
+# Suitable for on-premises or development environments
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
+
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: nodeport-cluster
+spec:
+  acceptLicenseAgreement: "eval"
+
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 4        # Four servers for flexible database topologies
+
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "10Gi"
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  # NodePort service configuration
+  service:
+    type: NodePort
+
+    # Optional: Annotations for service
+    annotations:
+      # Custom annotations if needed
+      example.com/owner: "data-team"
+
+    # Note: NodePort will automatically assign ports in the 30000-32767 range
+    # You can check the assigned ports with:
+    # kubectl get svc nodeport-cluster-client -o yaml
+
+  # Authentication
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+
+  # Environment variables
+
+  # Configuration
+  config:
+    # Memory settings
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "512m"
+
+    # Enable metrics (the operator also exposes Prometheus metrics automatically
+    # when spec.monitoring.enabled: true)
+    server.metrics.enabled: "true"
+
+    # Query logging
+    db.logs.query.enabled: "INFO"
+    db.logs.query.threshold: "500ms"
+
+---
+# Example: How to access the NodePort service
+#
+# 1. Get the NodePort assignments:
+#    kubectl get svc nodeport-cluster-client
+#
+# 2. Get a node IP:
+#    kubectl get nodes -o wide
+#
+# 3. Connect using the node IP and NodePort:
+#    - Browser: http://<node-ip>:<http-nodeport>
+#    - Bolt: bolt://<node-ip>:<bolt-nodeport>
+#
+# 4. Alternative: Use kubectl port-forward for easier access:
+#    kubectl port-forward svc/nodeport-cluster-client 7474:7474 7687:7687

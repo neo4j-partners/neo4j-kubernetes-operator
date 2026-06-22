@@ -1,0 +1,90 @@
+# ============================================================
+# S3 Backup — Variant 1: Explicit AWS credentials via Secret
+# ============================================================
+#
+# Create the AWS credentials secret first (all three keys are required —
+# the backup Job reads AWS_REGION as a non-optional env var, so omitting it
+# fails the pod with CreateContainerConfigError):
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
+#     --from-literal=AWS_REGION=us-east-1
+#
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: s3-backup
+  labels:
+    environment: production
+    backup-type: cloud
+spec:
+  target:
+    kind: Cluster
+    name: my-neo4j  # kind=Cluster: the Neo4jEnterpriseCluster OR Neo4jEnterpriseStandalone instance name (clusterRef unused; backs up all databases)
+  storage:
+    type: s3
+    bucket: my-neo4j-backups           # S3 bucket name
+    path: cluster-backups              # Path/prefix within the bucket
+    cloud:
+      provider: aws
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
+  options:
+    compress: true
+    backupType: FULL
+    # tempPath is recommended for cloud uploads to avoid partial writes
+    tempPath: /tmp/neo4j-backup-temp
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+
+# ── AWS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# AWS_REGION is required: the backup Job reads it from this Secret (the operator
+# wires it as a non-optional env var), so omit it and the Job pod won't start.
+# Referenced via spec.storage.cloud.credentialsSecretRef: aws-backup-credentials
+
+---
+# ============================================================
+# S3 Backup — Variant 2: Workload Identity (IRSA / EKS Pod Identity)
+#
+# Use this when your EKS nodes/pods have an IAM role that grants
+# S3 access — no static credentials needed.
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: s3-backup-irsa
+  labels:
+    environment: production
+    backup-type: cloud
+spec:
+  target:
+    kind: Cluster
+    name: single-node-cluster
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: cluster-backups
+    cloud:
+      provider: aws
+      identity:
+        provider: aws
+        autoCreate:
+          annotations:
+            # Annotate the ServiceAccount with your IAM role ARN for IRSA
+            eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
+  options:
+    compress: true
+    backupType: FULL
+    tempPath: /tmp/neo4j-backup-temp
+  retention:
+    maxAge: "30d"
+    maxCount: 30

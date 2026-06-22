@@ -1,0 +1,45 @@
+# Example Neo4jPlugin for Neo4jEnterpriseStandalone
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+metadata:
+  name: standalone-gds-plugin
+  namespace: default
+spec:
+  # References a Neo4jEnterpriseStandalone deployment
+  clusterRef: my-standalone
+
+  # Plugin configuration
+  name: graph-data-science
+  version: "2.10.0"
+  enabled: true
+
+  # Plugin source - community repository
+  source:
+    type: community
+
+  # Plugin dependencies
+  dependencies:
+    - name: apoc
+      versionConstraint: ">=5.26.0"
+      optional: false
+
+  # Plugin configuration. Mount the license file at /licenses/gds.license
+  # via the standalone CR's spec.extraVolumes + spec.extraVolumeMounts
+  # (e.g. from a Secret named gds-license-secret) — Neo4jPlugin no longer
+  # has a typed license block.
+  config:
+    "gds.enterprise.license_file": "/licenses/gds.license"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "gds.*"
+      - "apoc.load.*"
+    securityPolicy: "restricted"
+    sandbox: true
+
+  # Resource requirements for the plugin
+  resources:
+    memoryLimit: "1Gi"
+    cpuLimit: "500m"
+    threadPoolSize: 4

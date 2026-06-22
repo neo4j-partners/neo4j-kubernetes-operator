@@ -1,0 +1,79 @@
+# Multi-server Neo4j Enterprise cluster example
+# This creates a cluster with multiple servers that self-organize into primary and secondary roles
+# Uses server-based architecture with automatic role assignment
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-primary-cluster
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  # Neo4j Enterprise Edition (required for this operator)
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # 5.26 LTS; any CalVer release works too, e.g. "2026.04-enterprise" (operator auto-detects)
+    pullPolicy: IfNotPresent
+
+  # Multi-server topology: 5 servers that self-organize into roles
+  # Odd number of servers recommended for optimal fault tolerance
+  topology:
+    servers: 5        # Five servers will automatically organize into primary/secondary roles
+
+  # Storage configuration
+  storage:
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
+    size: "20Gi"        # Larger storage for production workloads
+
+  # Resource allocation for production
+  resources:
+    requests:
+      memory: "4Gi"     # Initial memory allocation
+      cpu: "1"          # Initial CPU allocation
+    limits:
+      memory: "8Gi"     # Maximum memory
+      cpu: "4"          # Maximum CPU cores
+
+  # TLS enabled for production
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+  # Authentication configuration
+  # The operator manages NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT automatically
+  auth:
+    authenticationProviders: ["native"]
+    adminSecret: neo4j-admin-secret
+
+  # Service configuration
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+  # Query monitoring (the operator auto-tunes heap/pagecache from the
+  # resource limits above, so no manual server.memory.* config is needed)
+  monitoring:
+    enabled: true
+    slowQueryThreshold: "1s"
+    queryLogLevel: "INFO"
+    obfuscateLiterals: false
+
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret

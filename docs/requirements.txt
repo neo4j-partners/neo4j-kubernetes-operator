@@ -1,0 +1,16 @@
+# Pinned dependencies for the docs site build (consumed by .github/workflows/pages-docs.yml).
+# Bump intentionally — mkdocs-material in particular ships breaking nav/theme changes
+# between minor versions, and material 2.0 will drop the plugin system entirely.
+#
+# Local build idiom:
+#   python -m venv .venv && .venv/bin/pip install -r docs/requirements.txt
+#   NO_MKDOCS_2_WARNING=true .venv/bin/mkdocs build --strict
+#
+# NO_MKDOCS_2_WARNING silences mkdocs-material's MkDocs 2.0 deprecation
+# banner (squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0).
+# Set in CI via .github/workflows/pages-docs.yml.
+
+mkdocs==1.6.1
+mkdocs-material==9.7.6
+mike==2.2.0
+pymdown-extensions==10.21.3

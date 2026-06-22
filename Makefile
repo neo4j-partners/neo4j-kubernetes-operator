@@ -1,0 +1,1120 @@
+# VERSION defines the project version for the bundle.
+# Update this value when you upgrade the version of your project.
+# To re-generate a bundle for another specific version without changing the standard setup, you can:
+# - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
+# - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
+VERSION ?= 0.0.1
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+VCS_REF ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+# CHANNELS define the bundle channels used in the bundle.
+# Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
+# To re-generate a bundle for other specific channels without changing the standard setup, you can:
+# - use the CHANNELS as arg of the bundle target (e.g make bundle CHANNELS=candidate,fast,stable)
+# - use environment variables to overwrite this value (e.g export CHANNELS="candidate,fast,stable")
+ifneq ($(origin CHANNELS), undefined)
+BUNDLE_CHANNELS := --channels=$(CHANNELS)
+endif
+
+# DEFAULT_CHANNEL defines the default channel used in the bundle.
+# Add a new line here if you would like to change its default config. (E.g DEFAULT_CHANNEL = "stable")
+# To re-generate a bundle for any other default channel without changing the default setup, you can:
+# - use the DEFAULT_CHANNEL as arg of the bundle target (e.g make bundle DEFAULT_CHANNEL=stable)
+# - use environment variables to overwrite this value (e.g export DEFAULT_CHANNEL="stable")
+ifneq ($(origin DEFAULT_CHANNEL), undefined)
+BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
+endif
+BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
+
+# IMAGE_TAG_BASE defines the container registry and image name for remote images.
+# This variable is used to construct full image tags for bundle and catalog images.
+#
+# For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
+# ghcr.io/priyolahiri/neo4j-kubernetes-operator-bundle:$VERSION and ghcr.io/priyolahiri/neo4j-kubernetes-operator-catalog:$VERSION.
+IMAGE_TAG_BASE ?= ghcr.io/priyolahiri/neo4j-kubernetes-operator
+
+# BUNDLE_IMG defines the image:tag used for the bundle.
+# You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
+
+# BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
+BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+
+# USE_IMAGE_DIGESTS defines if images are resolved via tags or digests
+# You can enable this value if you would like to use SHA Based Digests
+# To enable set flag to true
+USE_IMAGE_DIGESTS ?= false
+ifeq ($(USE_IMAGE_DIGESTS), true)
+	BUNDLE_GEN_FLAGS += --use-image-digests
+endif
+
+# Set the Operator SDK version to use. By default, what is installed on the system is used.
+# This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
+OPERATOR_SDK_VERSION ?= v1.39.1
+# Image URL to use all building/pushing image targets
+IMG ?= ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest
+# MCP: use the official Docker Hub image (mcp/neo4j-cypher).
+# No custom image build is required.
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.34.0
+
+# KIND_NODE_IMAGE pins the Kubernetes version used by dev and test clusters.
+# Kept in sync with ENVTEST_K8S_VERSION so unit-test envtest, dev cluster,
+# and CI integration cluster all run against the same K8s version. The
+# user-facing minimum is currently 1.32 (see README + Helm Chart.yaml);
+# tests run one minor ahead at the upstream N-2 floor.
+KIND_NODE_IMAGE ?= kindest/node:v1.34.0
+
+# CERT_MANAGER_VERSION pins the cert-manager release applied to dev and
+# test clusters. The user-facing minimum per docs/README is v1.18+; we
+# install a known-good v1.20.x for tests. Single source of truth —
+# scripts/test-env.sh and hack/deploy-dev.sh both read this via env so
+# bumping here propagates to every cluster path.
+CERT_MANAGER_VERSION ?= v1.20.0
+
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
+# CONTAINER_TOOL defines the container tool to be used for building images.
+# Be aware that the target commands are only tested with Docker which is
+# scaffolded by default. However, you might want to replace it to use other
+# tools. (i.e. podman)
+CONTAINER_TOOL ?= docker
+
+# Setting SHELL to bash allows bash commands to be executed by recipes.
+# Options are set to exit when a recipe line exits non-zero or a piped command fails.
+SHELL = /usr/bin/env bash -o pipefail
+.SHELLFLAGS = -ec
+
+.PHONY: all
+all: build
+
+##@ General
+
+# The help target prints out all targets with their descriptions organized
+# beneath their categories. The categories are represented by '##@' and the
+# target descriptions by '##'. The awk command is responsible for reading the
+# entire set of makefiles included in this invocation, looking for lines of the
+# file as xyz: ## something, and then pretty-format the target and help. Then,
+# if there's a line with ##@ something, that gets pretty-printed as a category.
+# More info on the usage of ANSI control characters for terminal formatting:
+# https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_parameters
+# More info on the awk command:
+# http://linuxcommand.org/lc3_adv_awk.php
+
+.PHONY: help
+help: ## Display getting-started targets (use 'make help-all' for everything).
+	@printf "\n\033[1mGetting Started\033[0m\n"
+	@printf "  \033[36m%-20s\033[0m %s\n" "dev-up" "Bootstrap complete dev environment (cluster + operator)"
+	@printf "  \033[36m%-20s\033[0m %s\n" "dev-down" "Tear down dev environment"
+	@printf "  \033[36m%-20s\033[0m %s\n" "deploy-dev-local" "Build and deploy operator to Kind"
+	@printf "  \033[36m%-20s\033[0m %s\n" "test-unit" "Run unit tests (no cluster needed)"
+	@printf "  \033[36m%-20s\033[0m %s\n" "test-one" "Run a single test: make test-one TEST=\"my test name\""
+	@printf "  \033[36m%-20s\033[0m %s\n" "smoke-test" "Deploy standalone instance and verify it reaches Ready"
+	@printf "  \033[36m%-20s\033[0m %s\n" "dev-watch" "File-watch mode: auto-rebuild on code changes"
+	@printf "  \033[36m%-20s\033[0m %s\n" "operator-logs" "Follow operator logs"
+	@printf "\n  Run \033[36mmake help-all\033[0m for all targets.\n\n"
+
+.PHONY: help-all
+help-all: ## Display all available targets.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Code Generation
+
+.PHONY: manifests
+manifests: controller-gen ## Generate ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=config/crd/bases
+
+.PHONY: generate
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+.PHONY: fmt
+fmt: ## Run go fmt against code.
+	go fmt ./...
+
+.PHONY: vet
+vet: ## Run go vet against code.
+	go vet ./...
+
+.PHONY: lint
+lint: golangci-lint ## Run golangci-lint linter
+	$(GOLANGCI_LINT) run
+
+.PHONY: lint-lenient
+lint-lenient: golangci-lint ## Run lenient static analysis with higher thresholds
+	@echo "🔍 Running lenient static analysis..."
+	@echo "📋 Running golangci-lint with lenient settings..."
+	$(GOLANGCI_LINT) run --config .golangci.yml
+	@echo "✅ Lenient static analysis completed successfully!"
+
+##@ Testing
+
+# Test Environment Management
+.PHONY: test-setup
+test-setup: ## Setup test environment
+	@echo "🔧 Setting up test environment..."
+	@./scripts/test-env.sh setup
+
+.PHONY: test-cleanup
+test-cleanup: ## Clean up test environment
+	@echo "🧹 Cleaning up test environment..."
+	@./scripts/test-env.sh cleanup
+	@rm -rf test-results coverage logs tmp
+	@rm -f test-output.log coverage-*.out coverage-*.html
+
+# Unit Tests
+# GO_TEST_CMD is the test runner. Defaults to plain `go test` (local dev). CI
+# overrides it with gotestsum to get a JUnit report + a failed-test/slowest-test
+# summary, e.g.:
+#   make test-unit GO_TEST_CMD="./bin/gotestsum --format=testname \
+#     --junitfile=unit-junit.xml --jsonfile=unit-tests.json --"
+# The trailing `--` is required so the packages/flags below go to `go test`.
+GO_TEST_CMD ?= go test
+.PHONY: test-unit
+test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster required)
+	@echo "🧪 Running unit tests..."
+	@mkdir -p coverage
+	@./scripts/run-tests-clean.sh env KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GO_TEST_CMD) $$(go list ./... | grep -v /e2e | grep -v /integration | grep -v "/test/webhooks" | grep -v "/test/utils" | grep -v "/test/testutil" | grep -v "/cmd") -coverprofile coverage/coverage-unit.out -race -v
+
+# Webhook tests removed - webhooks migrated to client-side validation
+
+
+# Integration Tests
+.PHONY: test-integration
+test-integration: manifests generate test-cluster ginkgo kustomize ## Run integration tests (production mode, neo4j-operator-system)
+	@echo "🔗 Running integration tests..."
+	@kind export kubeconfig --name neo4j-operator-test
+	@echo "📦 Building and loading operator image..."
+	@$(MAKE) docker-build IMG=neo4j-operator:integration-test
+	@kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
+	@echo "📦 Deploying operator in production mode to neo4j-operator-system..."
+	@$(KUSTOMIZE) build config/overlays/integration-test | kubectl apply -f -
+	@kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=120s
+	@echo "✅ Operator deployed in production mode (neo4j-operator-system)!"
+	@echo "🔗 Running integration tests..."
+	@$(GINKGO) run --timeout=60m --procs=1 -v ./test/integration/...
+
+.PHONY: test-integration-ci
+test-integration-ci: ginkgo ## Run integration tests in CI (assumes cluster already exists)
+	@echo "🔗 Running integration tests in CI with Ginkgo..."
+	@if [ -z "$$KUBECONFIG" ]; then \
+		echo "KUBECONFIG not set, trying to export from kind cluster..."; \
+		export KUBECONFIG="$(HOME)/.kube/config"; \
+		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
+	fi
+	@echo "Using KUBECONFIG: $$KUBECONFIG"
+	@echo "📊 Running essential tests only in CI to prevent resource exhaustion..."
+	@echo "⚠️  Skipping resource-intensive tests (plugins, clusters, split-brain)"
+	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=30m --procs=1 --fail-on-pending \
+		--focus="(standalone|backup.*api|restore.*api|database.*api|version detection|rbac)" \
+		--skip="(plugin|split-brain|cluster|enterprise features|seed.*uri)" \
+		-v ./test/integration/...
+
+.PHONY: test-integration-ci-full
+test-integration-ci-full: ginkgo ## Run ALL integration tests in CI (use with caution)
+	@echo "🔗 Running FULL integration test suite in CI with Ginkgo..."
+	@if [ -z "$$KUBECONFIG" ]; then \
+		echo "KUBECONFIG not set, trying to export from kind cluster..."; \
+		export KUBECONFIG="$(HOME)/.kube/config"; \
+		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
+	fi
+	@echo "Using KUBECONFIG: $$KUBECONFIG"
+	@echo "⚠️  WARNING: Running full test suite - may cause resource exhaustion in CI"
+	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=60m --procs=1 --fail-on-pending --keep-going=false -v ./test/integration/...
+
+# E2E Tests - Removed to simplify test structure
+
+# Test Suites
+# Removed: test-no-cluster target - redundant alias for test-unit
+
+.PHONY: test
+test: test-unit test-integration ## Run all tests
+	@echo "✅ All tests completed"
+
+.PHONY: test-coverage
+test-coverage: manifests generate fmt vet envtest ## Generate coverage report
+	@echo "📊 Generating coverage report..."
+	@mkdir -p coverage
+	@# Coverage runs `go test ./...` which includes the controller suite (envtest).
+	@# We MUST set KUBEBUILDER_ASSETS the same way test-unit does — without it the
+	@# controller suite can't find the envtest API server binaries and fails to
+	@# start. Pre-fix: suite_test.go had a hardcoded BinaryAssetsDirectory that
+	@# silently masked this gap, but only because stale prior-version binaries
+	@# happened to exist under bin/k8s/.
+	@./scripts/run-tests-clean.sh env KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
+	@go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+	@go tool cover -func=coverage/coverage.out | tail -1
+
+.PHONY: test-ci-local
+test-ci-local: ## Emulate CI workflow locally with debug logging (for troubleshooting)
+	@echo "🔄 Emulating CI workflow locally with debug logging..."
+	@echo "📁 Creating logs directory..."
+	@mkdir -p logs
+	@echo "🧹 Cleaning up previous test environment..."
+	@$(MAKE) test-destroy || true
+	@echo ""
+	@echo "🧪 === PHASE 1: UNIT TESTS ==="
+	@echo "⏰ Started at: $$(date)"
+	@echo "Running unit tests with debug logging..." | tee logs/ci-local-unit.log
+	@{ \
+		echo "Environment variables:"; \
+		echo "CI=true"; \
+		echo "GITHUB_ACTIONS=true"; \
+		echo "GO_VERSION=$$(go version)"; \
+		echo "KUBECTL_VERSION=$$(kubectl version --client --short 2>/dev/null || echo 'kubectl not available')"; \
+		echo ""; \
+		CI=true GITHUB_ACTIONS=true $(MAKE) test-unit 2>&1; \
+	} | tee -a logs/ci-local-unit.log
+	@if [ $$? -ne 0 ]; then \
+		echo "❌ Unit tests failed! Check logs/ci-local-unit.log for details"; \
+		exit 1; \
+	fi
+	@echo "✅ Unit tests passed!"
+	@echo ""
+	@echo "🔗 === PHASE 2: INTEGRATION TESTS ==="
+	@echo "⏰ Started at: $$(date)"
+	@echo "Setting up test cluster..." | tee logs/ci-local-integration.log
+	@{ \
+		echo "Creating test cluster with CI-appropriate resources..."; \
+		echo "Memory constraints: CI=true enables 512Mi memory limits"; \
+		echo ""; \
+		$(MAKE) test-cluster 2>&1; \
+	} | tee -a logs/ci-local-integration.log
+	@if [ $$? -ne 0 ]; then \
+		echo "❌ Test cluster creation failed! Check logs/ci-local-integration.log for details"; \
+		exit 1; \
+	fi
+	@echo "📦 Deploying operator to test cluster..." | tee -a logs/ci-local-integration.log
+	@{ \
+		echo "Deploying Neo4j operator..."; \
+		$(MAKE) operator-setup 2>&1; \
+	} | tee -a logs/ci-local-integration.log
+	@if [ $$? -ne 0 ]; then \
+		echo "❌ Operator deployment failed! Check logs/ci-local-integration.log for details"; \
+		exit 1; \
+	fi
+	@echo "🧪 Running integration tests with CI environment variables..." | tee -a logs/ci-local-integration.log
+	@{ \
+		echo "Environment: CI=true GITHUB_ACTIONS=true"; \
+		echo "Resource requirements: Using getCIAppropriateResourceRequirements()"; \
+		echo "Memory limits: 512Mi (CI) vs 1.5Gi (local)"; \
+		echo "Timeout: 60 minutes"; \
+		echo ""; \
+		CI=true GITHUB_ACTIONS=true kind export kubeconfig --name neo4j-operator-test 2>&1; \
+		CI=true GITHUB_ACTIONS=true go test ./test/integration/... -v -timeout=60m 2>&1; \
+	} | tee -a logs/ci-local-integration.log
+	@if [ $$? -ne 0 ]; then \
+		echo "❌ Integration tests failed! Check logs/ci-local-integration.log for details"; \
+		echo "💡 Troubleshooting:"; \
+		echo "   - Check operator logs: kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager"; \
+		echo "   - Check pod status: kubectl get pods --all-namespaces"; \
+		echo "   - Check events: kubectl get events --all-namespaces --sort-by='.lastTimestamp'"; \
+		exit 1; \
+	fi
+	@echo "✅ Integration tests passed!"
+	@echo ""
+	@echo "🧹 === CLEANUP ==="
+	@echo "⏰ Started at: $$(date)"
+	@$(MAKE) test-destroy 2>&1 | tee logs/ci-local-cleanup.log
+	@echo ""
+	@echo "🎉 === CI WORKFLOW COMPLETE ==="
+	@echo "⏰ Finished at: $$(date)"
+	@echo "📋 Summary:"
+	@echo "   ✅ Unit tests: PASSED"
+	@echo "   ✅ Integration tests: PASSED"
+	@echo "   ✅ Environment cleanup: COMPLETED"
+	@echo ""
+	@echo "📁 Debug logs available:"
+	@echo "   - logs/ci-local-unit.log       - Unit test output"
+	@echo "   - logs/ci-local-integration.log - Integration test output"
+	@echo "   - logs/ci-local-cleanup.log    - Cleanup output"
+	@echo ""
+	@echo "💡 Use this target to reproduce CI issues locally with identical resource constraints"
+
+##@ Build
+
+.PHONY: build
+build: manifests generate fmt vet ## Build manager binary.
+	go build -o bin/manager cmd/main.go
+
+# Removed: run target - operator must run in-cluster for proper DNS resolution
+
+# If you wish to build the manager image targeting other platforms you can use the --platform flag.
+# (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
+# More info: https://docs.docker.com/develop/develop-images/build_enhancements/
+.PHONY: docker-build
+docker-build: ## Build docker image with the manager.
+	$(CONTAINER_TOOL) build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		--build-arg VCS_REF=$(VCS_REF) \
+		-t ${IMG} .
+
+.PHONY: docker-push
+docker-push: ## Push docker image with the manager.
+	$(CONTAINER_TOOL) push ${IMG}
+
+
+##@ Helm Chart (Recommended Installation Method)
+
+.PHONY: helm-sync-crds
+helm-sync-crds: manifests ## Sync generated CRDs into Helm chart crds/ directory
+	@echo "Syncing CRDs to Helm chart..."
+	@# rm-then-copy so DELETING a CRD from config/crd/bases also removes the
+	@# stale chart copy — a bare cp left removed CRDs installing forever (no
+	@# diff, gate green).
+	rm -f charts/neo4j-operator/crds/*.yaml
+	cp config/crd/bases/*.yaml charts/neo4j-operator/crds/
+	@echo "Helm chart CRDs synced."
+
+.PHONY: helm-sync-rbac
+helm-sync-rbac: manifests yq ## Regenerate the Helm chart's ClusterRole template from config/rbac/role.yaml.
+	@YQ=$(YQ) ./scripts/helm-sync-rbac.sh
+
+.PHONY: helm-sync-artifacthub-crds
+helm-sync-artifacthub-crds: yq ## Refresh artifacthub.io/crds annotation in Chart.yaml from config/crd/bases/.
+	@YQ=$(YQ) ./scripts/helm-sync-artifacthub-crds.sh
+
+.PHONY: sync-kustomize
+sync-kustomize: yq ## Regenerate config/crd/kustomization.yaml + config/samples/kustomization.yaml from disk.
+	@YQ=$(YQ) ./scripts/sync-kustomize.sh
+
+.PHONY: sync-editor-viewer-roles
+sync-editor-viewer-roles: yq ## Generate per-CRD editor + viewer ClusterRoles into config/rbac/.
+	@YQ=$(YQ) ./scripts/sync-editor-viewer-roles.sh
+
+.PHONY: check-csv-coverage
+check-csv-coverage: yq ## Fail if any CRD is missing from the OperatorHub CSV.
+	@YQ=$(YQ) ./scripts/check-csv-coverage.sh
+
+.PHONY: sync-all
+sync-all: manifests generate sync-kustomize sync-editor-viewer-roles helm-sync-crds helm-sync-rbac helm-sync-artifacthub-crds ## Run every generator + sync step (does not run bundle).
+	@echo "All sync targets completed."
+
+.PHONY: ship-prep
+ship-prep: sync-all bundle helm-lint check-csv-coverage ## One-stop pre-release: regenerate everything, build the bundle, validate.
+	@echo ""
+	@echo "Ship-prep complete. Review 'git status' and commit any changes before tagging a release."
+
+.PHONY: install-confidence
+install-confidence: kustomize ## Pre-release gate: helm install/upgrade/uninstall + kubectl-apply matrix on a throwaway Kind cluster (~10-15 min).
+	@./scripts/install-confidence.sh
+
+.PHONY: check-drift
+check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anything is out of date.
+	@echo "Verifying generated files are committed..."
+	@# createdAt: is pinned via PINNED_CREATED_AT in the bundle target, so it
+	@# no longer drifts on every regen. The -I filter below is kept as
+	@# belt-and-braces — if someone bypasses `make bundle` and calls
+	@# operator-sdk directly (which restamps with time.Now()), we still
+	@# tolerate the resulting createdAt: diff rather than failing CI.
+	@# `api` is in the pathspec so a stale committed zz_generated.deepcopy.go
+	@# fails the gate — unit tests run against REGENERATED code (test-unit
+	@# depends on generate) while docker-build compiles the committed file,
+	@# so without this a wrong DeepCopyInto could ship in a release image.
+	@if ! git diff --exit-code --quiet -I'^    createdAt:' -- \
+	    api config/crd config/rbac config/samples config/manifests \
+	    charts/neo4j-operator bundle; then \
+	    echo ""; \
+	    echo "ERROR: generated files are out of date." >&2; \
+	    echo "Run 'make sync-all bundle' locally and commit the result." >&2; \
+	    git --no-pager diff --stat -I'^    createdAt:' -- \
+	        api config/crd config/rbac config/samples config/manifests \
+	        charts/neo4j-operator bundle >&2; \
+	    exit 1; \
+	fi
+	@# git diff never sees UNTRACKED files — a brand-new generated file (new
+	@# CRD base, new chart crd, new bundle manifest) must also fail the gate.
+	@UNTRACKED=$$(git status --porcelain -- \
+	    api config/crd config/rbac config/samples config/manifests \
+	    charts/neo4j-operator bundle | grep '^??' || true); \
+	if [ -n "$$UNTRACKED" ]; then \
+	    echo ""; \
+	    echo "ERROR: regeneration produced untracked files — commit them:" >&2; \
+	    echo "$$UNTRACKED" >&2; \
+	    exit 1; \
+	fi
+	@echo "All generated artifacts are in sync."
+
+.PHONY: check-invariants
+check-invariants: ## Verify the 5 hard architectural invariants hold (grep guard; runtime image check lives in image_validator.go).
+	@./scripts/check-invariants.sh
+
+.PHONY: check-knowledge-drift
+check-knowledge-drift: ## Verify every 'pinned-by:'/file reference in docs/knowledge/ still resolves to a real path.
+	@./scripts/check-knowledge-drift.sh
+
+.PHONY: check-knowledge
+check-knowledge: check-invariants check-knowledge-drift ## Run both LLM-readiness guards (invariants + knowledge-base drift). Advisory; run by the agent skills and a non-blocking CI job.
+	@echo "Knowledge guards passed: invariants hold and docs/knowledge/ references resolve."
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart
+	helm lint charts/neo4j-operator
+
+.PHONY: install-hooks
+install-hooks: ## Install git pre-commit hooks (drift gate, fmt, lint, gitleaks).
+	@command -v pre-commit >/dev/null 2>&1 || { \
+	    echo "ERROR: pre-commit is not installed. Install with: pip install pre-commit  (or  brew install pre-commit)" >&2; \
+	    exit 1; \
+	}
+	pre-commit install
+	pre-commit install --hook-type commit-msg
+	@echo ""
+	@echo "Pre-commit hooks installed. The drift gate will run 'make check-drift'"
+	@echo "whenever you stage files under api/, internal/controller/, scripts/,"
+	@echo "config/, charts/, or bundle/ — same gate CI runs."
+
+.PHONY: helm-template
+helm-template: ## Generate Kubernetes manifests from Helm chart
+	helm template neo4j-operator charts/neo4j-operator \
+		--namespace neo4j-operator-system
+
+.PHONY: helm-install-test
+helm-install-test: ## Validate Helm chart installation in Kind test cluster
+	./scripts/helm-install-test.sh
+
+.PHONY: helm-install
+helm-install: ## Install the operator using Helm chart
+	helm install neo4j-operator charts/neo4j-operator \
+		--namespace neo4j-operator-system \
+		--create-namespace
+
+.PHONY: helm-upgrade
+helm-upgrade: ## Upgrade the operator using Helm chart
+	helm upgrade neo4j-operator charts/neo4j-operator \
+		--namespace neo4j-operator-system
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the operator using Helm chart
+	helm uninstall neo4j-operator --namespace neo4j-operator-system
+
+.PHONY: helm-package
+helm-package: helm-sync-crds helm-sync-rbac helm-sync-artifacthub-crds ## Package the Helm chart (regenerates CRDs, ClusterRole, and ArtifactHub annotation first)
+	helm package charts/neo4j-operator
+
+.PHONY: helm-docs
+helm-docs: ## Generate Helm chart documentation
+	@if command -v helm-docs > /dev/null; then \
+		helm-docs -c charts/neo4j-operator; \
+	else \
+		echo "helm-docs not installed. Install with: go install github.com/norwoodj/helm-docs/cmd/helm-docs@latest"; \
+	fi
+
+##@ Deployment
+
+ifndef ignore-not-found
+  ignore-not-found = false
+endif
+
+.PHONY: install
+install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
+
+.PHONY: uninstall
+uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=true -f -
+
+# Removed: deploy/undeploy targets - use explicit deploy-prod or deploy-dev instead
+
+.PHONY: deploy-dev
+deploy-dev: deploy-dev-local ## Deploy controller with development configuration (uses local image by default).
+
+.PHONY: deploy-prod
+deploy-prod: deploy-prod-local ## Deploy controller with production configuration (uses local image by default).
+
+.PHONY: deploy-dev-local
+deploy-dev-local: manifests kustomize docker-build ## Build and deploy controller with local dev image to Kind cluster.
+	@echo "Building local dev image..."
+	$(CONTAINER_TOOL) build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		--build-arg VCS_REF=$(VCS_REF) \
+		-t neo4j-operator:dev .
+	@echo "Loading image into Kind cluster..."
+	@if kind get clusters | grep -q neo4j-operator-dev; then \
+		kind load docker-image neo4j-operator:dev --name neo4j-operator-dev; \
+	elif kind get clusters | grep -q neo4j-operator-test; then \
+		kind load docker-image neo4j-operator:dev --name neo4j-operator-test; \
+	else \
+		echo "No Kind cluster found. Please run 'make dev-cluster' or 'make test-cluster' first."; \
+		exit 1; \
+	fi
+	@echo "Deploying to dev namespace with local image..."
+	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
+
+.PHONY: deploy-prod-local
+deploy-prod-local: manifests kustomize ## Build and deploy controller with local prod image to Kind cluster.
+	@echo "Building local prod image..."
+	$(CONTAINER_TOOL) build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		--build-arg VCS_REF=$(VCS_REF) \
+		-t neo4j-operator:latest .
+	@echo "Loading image into Kind cluster..."
+	@if kind get clusters | grep -q neo4j-operator-dev; then \
+		kind load docker-image neo4j-operator:latest --name neo4j-operator-dev; \
+	elif kind get clusters | grep -q neo4j-operator-test; then \
+		kind load docker-image neo4j-operator:latest --name neo4j-operator-test; \
+	else \
+		echo "No Kind cluster found. Please run 'make dev-cluster' or 'make test-cluster' first."; \
+		exit 1; \
+	fi
+	@echo "Deploying to prod namespace with local image..."
+	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
+
+.PHONY: deploy-dev-registry
+deploy-dev-registry: manifests kustomize check-rbac ## Deploy controller with development configuration using registry image.
+	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
+
+.PHONY: deploy-prod-registry
+deploy-prod-registry: manifests kustomize check-rbac ## Deploy controller with production configuration using registry image.
+	$(KUSTOMIZE) build config/overlays/prod-registry | $(KUBECTL) apply -f -
+
+.PHONY: check-rbac
+check-rbac: ## Check and setup RBAC permissions if needed
+	@./scripts/setup-rbac.sh
+
+.PHONY: deploy-namespace-scoped
+deploy-namespace-scoped: manifests kustomize ## Deploy controller with namespace-scoped permissions only (no ClusterRole required)
+	@echo "Deploying namespace-scoped operator (limited functionality)..."
+	@echo "Note: This deployment only manages resources within the neo4j-operator-dev namespace"
+	$(KUSTOMIZE) build config/overlays/namespace-scoped | $(KUBECTL) apply -f -
+
+.PHONY: undeploy-namespace-scoped
+undeploy-namespace-scoped: kustomize ## Undeploy namespace-scoped controller
+	$(KUSTOMIZE) build config/overlays/namespace-scoped | $(KUBECTL) delete --ignore-not-found=true -f -
+
+# undeploy-* remove the operator DEPLOYMENT + RBAC only. CRDs and the
+# namespace are explicitly EXCLUDED: deleting CRDs cascades to every Neo4j CR,
+# and with the operator gone in the same delete no controller can strip the
+# CR finalizers — CRDs and namespaces wedge in Terminating forever. Remove
+# CRDs separately via `make uninstall` AFTER all Neo4j CRs are deleted.
+.PHONY: undeploy-dev
+undeploy-dev: kustomize ## Undeploy development controller (keeps CRDs + namespace).
+	$(KUSTOMIZE) build config/overlays/dev | \
+	    $(KUBECTL) delete -f - --dry-run=client -o name 2>/dev/null | \
+	    grep -vE '^customresourcedefinition|^namespace/' | \
+	    xargs -r $(KUBECTL) delete --ignore-not-found=true
+
+.PHONY: undeploy-prod
+undeploy-prod: kustomize ## Undeploy production controller (keeps CRDs + namespace).
+	$(KUSTOMIZE) build config/overlays/prod | \
+	    $(KUBECTL) delete -f - --dry-run=client -o name 2>/dev/null | \
+	    grep -vE '^customresourcedefinition|^namespace/' | \
+	    xargs -r $(KUBECTL) delete --ignore-not-found=true
+
+##@ Dependencies
+
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+## Tool Binaries
+KUBECTL ?= kubectl
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+ENVTEST ?= $(LOCALBIN)/setup-envtest
+GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GINKGO = $(LOCALBIN)/ginkgo
+YQ ?= $(LOCALBIN)/yq
+GOTESTSUM ?= $(LOCALBIN)/gotestsum
+
+## Tool Versions
+KUSTOMIZE_VERSION ?= v5.4.3
+CONTROLLER_TOOLS_VERSION ?= v0.19.0
+ENVTEST_VERSION ?= release-0.19
+GOLANGCI_LINT_VERSION ?= v1.64.8
+GINKGO_VERSION ?= v2.29.0
+YQ_VERSION ?= v4.45.1
+GOTESTSUM_VERSION ?= v1.13.0
+
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+$(KUSTOMIZE): $(LOCALBIN)
+	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
+
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+$(CONTROLLER_GEN): $(LOCALBIN)
+	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
+$(ENVTEST): $(LOCALBIN)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
+
+.PHONY: golangci-lint
+golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
+$(GOLANGCI_LINT): $(LOCALBIN)
+	@# golangci-lint embeds the Go version it was built with and refuses to lint a
+	@# module targeting a newer Go ("built with go1.X is lower than targeted go1.Y").
+	@# The version-only install sentinel below never rebuilds on a Go upgrade, so
+	@# force a rebuild when the existing binary's build-Go differs from the active
+	@# toolchain. Without this, bumping Go silently breaks `make lint` until the
+	@# stale binary is removed by hand.
+	@if [ -x "$(GOLANGCI_LINT)" ] && ! "$(GOLANGCI_LINT)" version 2>/dev/null | grep -q "built with $$(go env GOVERSION)"; then \
+		echo "golangci-lint was built with a stale Go toolchain; rebuilding for $$(go env GOVERSION)"; \
+		rm -f "$(GOLANGCI_LINT)" "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)"; \
+	fi
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: gotestsum
+gotestsum: $(GOTESTSUM) ## Download gotestsum locally if necessary (CI unit-test reporter).
+$(GOTESTSUM): $(LOCALBIN)
+	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,$(GOTESTSUM_VERSION))
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
+$(GINKGO): $(LOCALBIN)
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,$(GINKGO_VERSION))
+
+.PHONY: yq
+yq: $(YQ) ## Download yq locally if necessary (used by sync targets).
+$(YQ): $(LOCALBIN)
+	$(call go-install-tool,$(YQ),github.com/mikefarah/yq/v4,$(YQ_VERSION))
+
+# go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
+# $1 - target path with name of binary
+# $2 - package url which can be installed
+# $3 - specific version of package
+define go-install-tool
+@[ -f "$(1)-$(3)" ] || { \
+set -e; \
+package=$(2)@$(3) ;\
+echo "Downloading $${package}" ;\
+rm -f $(1) || true ;\
+GOBIN=$(LOCALBIN) go install $${package} ;\
+mv $(1) $(1)-$(3) ;\
+} ;\
+ln -sf $(1)-$(3) $(1)
+endef
+
+.PHONY: operator-sdk
+# Version-suffixed binary + symlink, NO PATH fallback: bundle metadata embeds
+# the operator-sdk version (bundle/metadata/annotations.yaml, bundle.Dockerfile),
+# so "whatever is on PATH" produced tool-version drift between machines — a
+# brew-installed v1.42 regenerated different bytes than the pinned v1.39.1.
+# The sentinel also makes OPERATOR_SDK_VERSION bumps actually re-download.
+OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk-$(OPERATOR_SDK_VERSION)
+operator-sdk: $(OPERATOR_SDK) ## Download operator-sdk locally if necessary.
+$(OPERATOR_SDK): $(LOCALBIN)
+	@{ \
+	set -e ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} ;\
+	chmod +x $(OPERATOR_SDK) ;\
+	ln -sf $(notdir $(OPERATOR_SDK)) $(LOCALBIN)/operator-sdk ;\
+	}
+
+# SKIP_MANIFESTS=true lets CI reuse pre-generated CRD manifests from a prior job
+# instead of re-running controller-gen, ensuring the released artifacts are byte-for-byte
+# identical to what was validated.
+SKIP_MANIFESTS ?= false
+
+# PINNED_CREATED_AT is the placeholder value the dev/CI bundle target
+# writes into the CSV's createdAt: annotation. The real release timestamp
+# is stamped by `make bundle-release` (called from the release workflow,
+# not from local dev or check-drift).
+#
+# Rationale: operator-sdk re-stamps createdAt: with time.Now() on every
+# `generate bundle` invocation. Without pinning, every PR that touches a
+# generated artifact (CRD, RBAC, sample) gets a unique timestamp value,
+# producing spurious merge conflicts across concurrent PRs. Pinning kills
+# the conflict class entirely. See chore/pin-csv-created-at PR for the
+# full rationale and the failure modes considered.
+#
+# 2020-01-01 is old enough to be obviously a placeholder, recent enough
+# that operator-sdk bundle validate accepts it. Don't change the value
+# casually — anything stricter (1970, etc.) risks tripping validators.
+PINNED_CREATED_AT ?= 2020-01-01T00:00:00Z
+
+ifeq ($(SKIP_MANIFESTS),true)
+.PHONY: bundle
+bundle: kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
+else
+.PHONY: bundle
+bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
+endif
+	$(OPERATOR_SDK) generate kustomize manifests -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	go run ./scripts/update-alm-examples config/manifests/bases/neo4j-kubernetes-operator.clusterserviceversion.yaml
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	# `sed -i'' -e ...` is parsed by macOS BSD sed as `-i -e` (writing a backup file
+	# named "<file>-e"). Use the portable form: pass the in-place flag without the
+	# backup extension and clean up any straggler from older runs.
+	sed -i.bak 's|containerImage: .*|containerImage: $(IMG)|' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
+	# Pin createdAt: to a stable value so concurrent PRs don't conflict on the
+	# timestamp. Release stamps the real time via `make bundle-release`. We use
+	# sed (not yq) because `yq -i` reformats the entire YAML — collapsing
+	# folded scalars, reordering keys — and turns a 1-line timestamp diff into
+	# a thousand-line whole-file rewrite.
+	sed -i.bak 's|createdAt: ".*"|createdAt: "$(PINNED_CREATED_AT)"|' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
+	rm -f bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml.bak bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml-e
+	go run ./scripts/update-alm-examples bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
+	$(OPERATOR_SDK) bundle validate ./bundle
+
+.PHONY: bundle-release
+bundle-release: bundle ## Pre-release: regenerate the bundle and stamp createdAt: with the real current timestamp. Use this in the release workflow before publishing to OperatorHub.
+	@now=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	echo "Stamping createdAt: $$now"; \
+	sed -i.bak "s|createdAt: \".*\"|createdAt: \"$$now\"|" bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml; \
+	rm -f bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml.bak bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml-e; \
+	$(OPERATOR_SDK) bundle validate ./bundle
+	@echo ""
+	@echo "Release bundle ready. Commit the bundle/ change as part of the release tag."
+
+.PHONY: bundle-build
+bundle-build: ## Build the bundle image.
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+.PHONY: bundle-push
+bundle-push: ## Push the bundle image.
+	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+
+.PHONY: opm
+OPM_VERSION ?= v1.23.0
+# Version-suffixed sentinel, no PATH fallback — same reproducibility rationale
+# as operator-sdk above.
+OPM = $(LOCALBIN)/opm-$(OPM_VERSION)
+opm: $(OPM) ## Download opm locally if necessary.
+$(OPM): $(LOCALBIN)
+	@{ \
+	set -e ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm ;\
+	chmod +x $(OPM) ;\
+	}
+
+# A comma-separated list of bundle images (e.g. make catalog-build BUNDLE_IMGS=example.com/operator-bundle:v0.1.0,example.com/operator-bundle:v0.2.0).
+# These images MUST exist in a registry and be pull-able.
+BUNDLE_IMGS ?= $(BUNDLE_IMG)
+
+# The image tag given to the resulting catalog image (e.g. make catalog-build CATALOG_IMG=example.com/operator-catalog:v0.2.0).
+CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(VERSION)
+
+# Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
+ifneq ($(origin CATALOG_BASE_IMG), undefined)
+FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
+endif
+
+# Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
+# This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
+# https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
+.PHONY: catalog-build
+catalog-build: opm ## Build a catalog image.
+	$(OPM) index add --container-tool docker --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
+
+# Push the catalog image.
+.PHONY: catalog-push
+catalog-push: ## Push a catalog image.
+	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+.PHONY: scorecard
+scorecard: ## Run operator-sdk scorecard checks against the generated bundle.
+	operator-sdk scorecard --config config/scorecard/scorecard.yaml bundle
+
+# Removed: catalog-build-test and catalog-push-test targets - duplicates of catalog-build and catalog-push
+
+##@ Developer Experience
+
+.PHONY: check-prereqs
+check-prereqs: ## Verify all required tools are installed.
+	@echo "Checking prerequisites..."
+	@MISSING=0; \
+	command -v go >/dev/null 2>&1 || { echo "  [MISSING] go - install from https://golang.org/doc/install"; MISSING=1; }; \
+	command -v docker >/dev/null 2>&1 || { echo "  [MISSING] docker - install from https://docs.docker.com/get-docker/"; MISSING=1; }; \
+	docker info >/dev/null 2>&1 || { echo "  [NOT RUNNING] Docker daemon is not running. Start Docker Desktop and retry."; MISSING=1; }; \
+	command -v kubectl >/dev/null 2>&1 || { echo "  [MISSING] kubectl - install from https://kubernetes.io/docs/tasks/tools/"; MISSING=1; }; \
+	command -v kind >/dev/null 2>&1 || { echo "  [MISSING] kind - install with: brew install kind"; MISSING=1; }; \
+	command -v make >/dev/null 2>&1 || { echo "  [MISSING] make - install with: xcode-select --install (macOS)"; MISSING=1; }; \
+	if [ $$MISSING -eq 1 ]; then echo ""; echo "Install missing tools and retry."; exit 1; fi; \
+	echo "All prerequisites satisfied."
+
+.PHONY: dev-up
+dev-up: check-prereqs ## Bootstrap complete dev environment (cluster + operator) in one command.
+	@echo "=== Setting up complete development environment ==="
+	@echo ""
+	@echo "Step 1/4: Creating Kind cluster..."
+	@$(MAKE) dev-cluster
+	@echo ""
+	@echo "Step 2/4: Installing CRDs..."
+	@$(MAKE) install
+	@echo ""
+	@echo "Step 3/4: Building and deploying operator..."
+	@$(MAKE) deploy-dev-local
+	@echo ""
+	@echo "Step 4/4: Waiting for operator to be ready..."
+	@kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-dev --timeout=120s 2>/dev/null || \
+		kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=120s 2>/dev/null || \
+		echo "Operator deployment rolling out (check 'make operator-status' for details)"
+	@echo ""
+	@echo "============================================"
+	@echo "  Dev environment ready!"
+	@echo ""
+	@echo "  Next steps:"
+	@echo "    make operator-logs          # Watch operator logs"
+	@echo "    make smoke-test             # Verify with a standalone deploy"
+	@echo "    make dev-watch              # Auto-rebuild on file changes"
+	@echo "    tilt up                     # Live-reload dev loop (if Tilt installed)"
+	@echo "============================================"
+
+.PHONY: dev-down
+dev-down: ## Tear down the complete dev environment.
+	@echo "Tearing down dev environment..."
+	@$(MAKE) dev-destroy
+	@echo "Dev environment removed."
+
+.PHONY: test-one
+test-one: ginkgo ## Run a single integration test by name. Usage: make test-one TEST="should create standalone"
+	@if [ -z "$(TEST)" ]; then \
+		echo "Usage: make test-one TEST=\"test description substring\""; \
+		echo "Example: make test-one TEST=\"should create standalone\""; \
+		exit 1; \
+	fi
+	@echo "Running test matching: $(TEST)"
+	@kind export kubeconfig --name neo4j-operator-test 2>/dev/null || kind export kubeconfig --name neo4j-operator-dev 2>/dev/null || true
+	@$(GINKGO) run --focus "$(TEST)" --timeout=300s --procs=1 -v ./test/integration/...
+
+.PHONY: smoke-test
+smoke-test: ## Deploy a standalone Neo4j instance and verify it reaches Ready state.
+	@echo "Running smoke test..."
+	@echo "Creating admin secret..."
+	@kubectl create secret generic neo4j-smoke-secret \
+		--from-literal=username=neo4j --from-literal=password=smoke-test-pass123 \
+		--dry-run=client -o yaml | kubectl apply -f -
+	@echo "Deploying minimal standalone instance..."
+	@kubectl apply -f hack/smoke-test-standalone.yaml
+	@echo "Waiting for standalone to reach Ready (up to 5 minutes)..."
+	@kubectl wait neo4jenterprisestandalone/smoke-test --for=condition=Ready --timeout=300s && \
+		echo "Smoke test PASSED - standalone reached Ready state" || \
+		{ echo "Smoke test FAILED - standalone did not reach Ready in time"; \
+		  echo "Debug: kubectl describe neo4jenterprisestandalone smoke-test"; \
+		  echo "Debug: kubectl get pods -l app.kubernetes.io/instance=smoke-test"; }
+	@echo "Cleaning up smoke test resources..."
+	@kubectl delete neo4jenterprisestandalone smoke-test --ignore-not-found=true --timeout=60s
+	@kubectl delete secret neo4j-smoke-secret --ignore-not-found=true
+
+.PHONY: dev-watch
+dev-watch: ## Auto-rebuild and redeploy on code changes (requires watchexec or fswatch).
+	@if command -v watchexec >/dev/null 2>&1; then \
+		echo "Watching for changes (Ctrl+C to stop)..."; \
+		echo "Tip: For a richer experience, use 'tilt up' instead."; \
+		watchexec -w api/ -w internal/ -w cmd/ \
+			--exts go,yaml \
+			--debounce 2000 \
+			-- make manifests generate build deploy-dev-local; \
+	elif command -v fswatch >/dev/null 2>&1; then \
+		echo "Watching for changes with fswatch (Ctrl+C to stop)..."; \
+		echo "Tip: For a richer experience, use 'tilt up' instead."; \
+		fswatch -o api/ internal/ cmd/ -e ".*_test.go" | while read; do \
+			make manifests generate build deploy-dev-local; \
+		done; \
+	else \
+		echo "Neither watchexec nor fswatch found."; \
+		echo "Install one of:"; \
+		echo "  brew install watchexec    # recommended"; \
+		echo "  brew install fswatch"; \
+		echo ""; \
+		echo "Or use Tilt for a richer dev experience:"; \
+		echo "  brew install tilt"; \
+		echo "  tilt up"; \
+		exit 1; \
+	fi
+
+##@ Development Environment
+
+.PHONY: demo
+demo: ## Run interactive demo of the operator capabilities (includes setup)
+	@./scripts/demo-setup.sh
+	@echo "Starting Neo4j Kubernetes Operator demo..."
+	@./scripts/demo.sh
+
+.PHONY: demo-fast
+demo-fast: demo-setup ## Run fast automated demo (no confirmations)
+	@echo "Starting fast automated demo..."
+	@./scripts/demo.sh --skip-confirmations --speed fast
+
+.PHONY: demo-release
+demo-release: ## Fast demo against the PUBLISHED operator chart (no build); pin with DEMO_VERSION=1.12.1
+	@$(MAKE) demo-fast DEMO_OPERATOR=release$(if $(DEMO_VERSION),:$(DEMO_VERSION),)
+
+.PHONY: demo-only
+demo-only: ## Run fast demo without environment setup (assumes cluster exists)
+	@echo "Running fast demo on existing environment..."
+	@./scripts/demo.sh --skip-confirmations --speed fast
+
+.PHONY: demo-interactive
+demo-interactive: ## Run interactive demo without environment setup (assumes cluster exists)
+	@echo "Running interactive demo on existing environment..."
+	@./scripts/demo.sh
+
+.PHONY: demo-cleanup
+demo-cleanup: ## Clean up all demo resources (standalone, cluster, databases, secrets)
+	@echo "Cleaning up demo resources..."
+	@./scripts/demo.sh --cleanup-only
+
+.PHONY: demo-setup
+demo-setup: ## Setup complete demo environment (cluster + operator)
+	@SKIP_SETUP_CONFIRMATION=true ./scripts/demo-setup.sh
+
+.PHONY: operator-setup
+operator-setup: ## Deploy operator to available Kind cluster
+	@echo "🔧 Setting up Neo4j operator..."
+	@SKIP_OPERATOR_CONFIRMATION=true ./scripts/setup-operator.sh setup
+
+.PHONY: dev-cluster
+dev-cluster: ## Create a Kind cluster for development
+	@echo "Creating development cluster (image: $(KIND_NODE_IMAGE))..."
+	@./scripts/setup-kind-dirs.sh
+	@if ! kind get clusters | grep -q "neo4j-operator-dev"; then \
+		kind create cluster --name neo4j-operator-dev --image $(KIND_NODE_IMAGE) --config hack/kind-config.yaml; \
+		echo "Waiting for cluster to be ready..."; \
+		kubectl wait --for=condition=ready node --all --timeout=300s; \
+		echo "Installing cert-manager $(CERT_MANAGER_VERSION)..."; \
+		kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml; \
+		kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s; \
+		echo "Creating self-signed ClusterIssuer for development..."; \
+		kubectl apply -f config/dev/self-signed-issuer.yaml || echo "Self-signed issuer creation skipped (file may not exist)"; \
+		echo "Development cluster ready!"; \
+	else \
+		echo "Development cluster already exists"; \
+	fi
+
+.PHONY: test-cluster
+test-cluster: ## Create a Kind cluster for testing
+	@echo "Creating test cluster (image: $(KIND_NODE_IMAGE), cert-manager: $(CERT_MANAGER_VERSION))..."
+	@KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) CERT_MANAGER_VERSION=$(CERT_MANAGER_VERSION) ./scripts/test-env.sh cluster
+
+.PHONY: test-cluster-clean
+test-cluster-clean: ## Clean operator resources from test cluster
+	@echo "Cleaning operator resources from test cluster..."
+	@if kind get clusters | grep -q "neo4j-operator-test"; then \
+		echo "Switching to test cluster context..."; \
+		kind export kubeconfig --name neo4j-operator-test; \
+		echo "Removing operator deployment..."; \
+		kubectl delete namespace neo4j-operator-system --ignore-not-found=true --timeout=60s; \
+		echo "Removing test resources..."; \
+		kubectl delete namespace neo4j --ignore-not-found=true --timeout=60s; \
+		echo "Removing CRDs..."; \
+		kubectl delete crd --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Removing cluster roles and bindings..."; \
+		kubectl delete clusterrole --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		kubectl delete clusterrolebinding --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Test cluster cleaned!"; \
+	else \
+		echo "Test cluster not found, skipping cleanup."; \
+	fi
+
+.PHONY: test-cluster-delete
+test-cluster-delete: ## Delete the test cluster
+	@echo "Deleting test cluster..."
+	@kind delete cluster --name neo4j-operator-test 2>/dev/null || true
+
+.PHONY: test-cluster-reset
+test-cluster-reset: test-cluster-delete test-cluster ## Reset test cluster (delete and recreate)
+	@echo "Test cluster reset complete!"
+
+.PHONY: test-destroy
+test-destroy: ## Completely destroy test environment
+	@echo "Destroying test environment..."
+	@./scripts/test-env.sh cleanup
+	@echo "Test environment destroyed!"
+
+.PHONY: operator-setup-interactive
+operator-setup-interactive: ## Set up the Neo4j operator interactively
+	@echo "🔧 Setting up Neo4j operator (interactive mode)..."
+	@./scripts/setup-operator.sh setup
+
+.PHONY: operator-status
+operator-status: ## Show operator status
+	@echo "📊 Checking operator status..."
+	@./scripts/setup-operator.sh status
+
+.PHONY: operator-logs
+operator-logs: ## Follow operator logs
+	@echo "📋 Following operator logs..."
+	@./scripts/setup-operator.sh logs
+
+.PHONY: dev-cluster-clean
+dev-cluster-clean: ## Clean operator resources from dev cluster
+	@echo "Cleaning operator resources from development cluster..."
+	@if kind get clusters | grep -q "neo4j-operator-dev"; then \
+		echo "Switching to dev cluster context..."; \
+		kind export kubeconfig --name neo4j-operator-dev; \
+		echo "Removing operator deployment..."; \
+		kubectl delete namespace neo4j-operator-system --ignore-not-found=true --timeout=120s; \
+		echo "Removing CRDs..."; \
+		kubectl delete crd --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Removing cluster roles and bindings..."; \
+		kubectl delete clusterrole --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		kubectl delete clusterrolebinding --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Development cluster cleaned!"; \
+	else \
+		echo "Development cluster not found, skipping cleanup."; \
+	fi
+
+.PHONY: dev-cluster-delete
+dev-cluster-delete: ## Delete the Kind development cluster
+	@echo "Deleting development cluster..."
+	@kind delete cluster --name neo4j-operator-dev || true
+
+.PHONY: dev-cluster-reset
+dev-cluster-reset: dev-cluster-delete dev-cluster ## Reset development cluster (delete and recreate)
+	@echo "Development cluster reset complete!"
+
+# Removed: dev-run target - operator must run in-cluster for proper DNS resolution
+
+.PHONY: dev-cleanup
+dev-cleanup: ## Clean up development environment completely
+	@echo "Cleaning up development environment..."
+	@hack/cleanup-dev.sh
+	@if kind get clusters | grep -q "neo4j-operator-dev"; then \
+		echo "Development cluster still exists. Use 'make dev-cluster-delete' to remove it."; \
+	fi
+
+.PHONY: dev-destroy
+dev-destroy: ## Completely destroy development environment
+	@echo "Destroying development environment..."
+	@hack/cleanup-dev.sh || true
+	@kind delete cluster --name neo4j-operator-dev || true
+	@echo "Development environment destroyed!"
+
+##@ Code Quality
+
+.PHONY: security
+security: ## Run security scans.
+	@echo "Running security scans..."
+	@if command -v gosec >/dev/null 2>&1; then \
+		gosec ./...; \
+	else \
+		echo "Installing gosec..."; \
+		go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest; \
+		gosec ./...; \
+	fi
+
+.PHONY: tidy
+tidy: ## Tidy go modules.
+	@echo "Tidying go modules..."
+	@go mod tidy
+	@go mod verify
+
+.PHONY: clean
+clean: ## Clean build artifacts and temporary files.
+	@echo "Cleaning build artifacts..."
+	@chmod -R +w bin/ 2>/dev/null || true
+	@rm -rf bin/
+	@rm -rf tmp/
+	@rm -rf dist/
+	@rm -f cover.out
+	@rm -f coverage.html
+	@rm -f results.sarif
+	@rm -f build-errors.log
+	@rm -f .air.toml
+	@$(MAKE) test-cleanup

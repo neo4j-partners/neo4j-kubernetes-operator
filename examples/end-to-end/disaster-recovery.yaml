@@ -1,0 +1,81 @@
+# Disaster Recovery Example
+#
+# DR has two phases. This file applies the PROACTIVE phase — a scheduled,
+# compressed, off-site (S3) backup of the production cluster. The RECOVERY phase
+# (restores) is shown as commented snippets below: you apply those only when you
+# are actually recovering, one at a time — never all at once (multiple concurrent
+# restores against the same cluster conflict).
+#
+# Prerequisites (create BEFORE applying):
+#   - A running cluster "production-cluster" in namespace "neo4j-production".
+#   - S3 credentials Secret:
+#       kubectl create secret generic s3-dr-credentials --namespace neo4j-production \
+#         --from-literal=AWS_ACCESS_KEY_ID=... --from-literal=AWS_SECRET_ACCESS_KEY=... \
+#         --from-literal=AWS_REGION=us-east-1
+#
+# For single-purpose backup/restore examples (PVC, S3, GCS, Azure, PITR), see
+# ../backup-restore/.
+---
+# PROACTIVE: scheduled cross-region (off-site) backup to S3, every 4 hours.
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: cross-region-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+  schedule: "0 */4 * * *"   # every 4 hours
+  storage:
+    type: s3
+    bucket: neo4j-dr-backups
+    path: "us-east-1/production"
+    cloud:
+      credentialsSecretRef: s3-dr-credentials
+  options:
+    backupType: AUTO        # FULL when no prior backup exists, else DIFF
+    compress: true
+
+# ── RECOVERY (apply ONE of these only when recovering — not preemptively) ─────
+#
+# A) Full restore of a database from a backup CR (overwrites the live database):
+#   apiVersion: neo4j.neo4j.com/v1beta1
+#   kind: Neo4jRestore
+#   metadata: { name: restore-neo4j-db, namespace: neo4j-production }
+#   spec:
+#     clusterRef: production-cluster
+#     databaseName: neo4j
+#     source: { type: backup, backupRef: cross-region-backup }
+#     force: true
+#
+# B) Cross-region restore into a DR cluster (different region), from the S3 object:
+#   apiVersion: neo4j.neo4j.com/v1beta1
+#   kind: Neo4jRestore
+#   metadata: { name: cross-region-restore, namespace: neo4j-dr }
+#   spec:
+#     clusterRef: dr-cluster
+#     databaseName: neo4j
+#     source:
+#       type: storage
+#       backupPath: "production/neo4j-2025-01-20-0800.backup"   # exact .backup object key
+#       storage:
+#         type: s3
+#         bucket: neo4j-dr-backups
+#         path: "us-east-1"
+#         cloud: { credentialsSecretRef: s3-dr-credentials }
+#     force: true
+#
+# C) Point-in-time recovery into a NEW database (Neo4j 2025.x+, cluster-native):
+#   apiVersion: neo4j.neo4j.com/v1beta1
+#   kind: Neo4jDatabase
+#   metadata: { name: maindb-pitr-recovery, namespace: neo4j-production }
+#   spec:
+#     clusterRef: production-cluster
+#     name: maindb_pitr_recovery     # recover into a new DB for comparison
+#     seedURI: "s3://neo4j-dr-backups/us-east-1/production/maindb-2025-01-19.backup"
+#     seedConfig: { restoreUntil: "2025-01-19T14:30:00Z" }
+#     seedCredentials: { secretRef: s3-dr-credentials }
+#     topology: { primaries: 3 }
+#     wait: true
