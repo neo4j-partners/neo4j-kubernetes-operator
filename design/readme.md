@@ -243,4 +243,5 @@ These are documented in depth in the root [`readme.md`](../readme.md) §5–§8 
 - **`Neo4jDatabase` CRD** for logical databases inside a deployment (`neo4jRef`).
 - **No CRDs for infra sub-domains** — connectivity, persistence, trust, and server config are `spec` sections + shared `internal/domain/*` packages.
 - **One reconciler per CRD**, domain modules shared; only `workload` branches on `topology.mode`.
+- **Single-namespace operator scope in V1** — watches only its install namespace; multi-namespace and cluster-wide deferred — see [BDR-003](adr/business/003-operator-install-scope.md).
 - **Three internal layers**: `render/` (pure) → `domain/` (apply) → `controller/` (pipeline).

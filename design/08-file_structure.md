@@ -62,7 +62,7 @@ neo4j-operator/
 │   │   └── cluster.go
 │   │
 │   ├── controller/                  # 1 reconciler PER CRD
-│   │   ├── neo4j/                   # ← UNIQUE infra controller
+│   │   ├── neo4j/                   # Unique infra controller
 │   │   │   ├── reconciler.go        # pipeline
 │   │   │   ├── rbac.go
 │   │   │   └── watches.go
@@ -89,7 +89,6 @@ neo4j-operator/
 │
 ├── config/crd/bases/
 │   └── neo4j.neo4j.com_neo4js.yaml  # new
-│   # deprecated: neo4jenterpriseclusters, neo4jenterprisestandalones (storage:false)
 │
 ├── test/
 │   ├── integration/
