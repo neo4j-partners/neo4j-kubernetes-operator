@@ -133,9 +133,13 @@ spec:
 
 ---
 
-### Option D — `mode` + role composition (`cores` + `readReplicas`) — **proposed**
+### Option D — `mode` + role composition (`cores` + `readReplicas` + `readGDSReplicas`) — **proposed**
 
 Domain-aligned model: deployment mode **and** Neo4j role counts. Helm mapped **into** this shape via `11-helm-mapping.md`, not as CR field names.
+
+- **`cores`** — causal cluster core members (writers / quorum).
+- **`readReplicas`** — Enterprise read replicas attached to the core cluster (read scaling).
+- **`readGDSReplicas`** — analytics / GDS secondaries (Helm `analytics.type: secondary`); distinct from causal-cluster read scaling.
 
 ```yaml
 apiVersion: neo4j.com/v1beta1
@@ -148,12 +152,12 @@ spec:
     mode: Cluster
     cores:
       members: 1
-    readReplicas:
-      members: 1              # analytics / read scaling
+    readGDSReplicas:
+      members: 1              # analytics / GDS secondary — Helm analytics secondary
     minimumMembers: 1         # Helm minimumClusterSize — formation gate
 ```
 
-**Standalone** shorthand:
+**Standalone** — mode only; **no `members` fields**:
 
 ```yaml
 spec:
@@ -171,25 +175,29 @@ spec:
       members: 3
     readReplicas:
       members: 0
+    readGDSReplicas:
+      members: 0
     minimumMembers: 3
 ```
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| **Primary + analytics explicit** — `cores: 1`, `readReplicas: 1` | More fields than Options A and B |
-| **`mode` + roles** — answers both “cluster formation?” and “primary vs secondary?” | Users must learn cores vs read replicas (support runbook) |
-| Validates Neo4j rules (odd cores, Enterprise for read replicas) | `Standalone` vs `Cluster` with `cores: 1` — need clear validation rules |
-| HA warnings without blocking dev (`cores < 3` → status warning) | New vocabulary for Helm-only users (migration guide required) |
-| Matches Neo4j causal cluster model | `neo4j/spec.md` + validation are the hardest part of V1 |
-| Single coherent model for one CR + one StatefulSet | Differs from “one Helm release per member” mental model |
+| **Primary + analytics explicit** — `cores: 1`, `readGDSReplicas: 1` | More fields than Options A and B |
+| **`readReplicas` vs `readGDSReplicas`** — separates read scaling from analytics/GDS | Users must learn three role counters (support runbook) |
+| **`mode` + roles** — answers both “cluster formation?” and “primary vs secondary?” | `neo4j/spec.md` + validation are the hardest part of V1 |
+| Validates Neo4j rules (odd cores, Enterprise for read replicas) | New vocabulary for Helm-only users (migration guide required) |
+| HA warnings without blocking dev (`cores < 3` → status warning) | Differs from “one Helm release per member” mental model |
+| Matches Neo4j causal cluster + analytics deployment models | |
+| Single coherent model for one CR + one StatefulSet | |
 
 **Helm mapping** (translation table in `11-helm-mapping.md`):
 
 | Helm | Operator `spec.topology` |
 |------|--------------------------|
-| `minimumClusterSize: 1`, no analytics | `mode: Standalone` |
-| analytics primary + N secondaries (N Helm releases → 1 CR) | `mode: Cluster`, `cores: 1`, `readReplicas: N` |
-| `minimumClusterSize: 3` | `mode: Cluster`, `cores: 3`, `minimumMembers: 3` |
+| `minimumClusterSize: 1`, no analytics | `mode: Standalone` (no `members` fields) |
+| analytics primary + N secondaries (N Helm releases → 1 CR) | `mode: Cluster`, `cores.members: 1`, `readGDSReplicas.members: N` |
+| `minimumClusterSize: 3` | `mode: Cluster`, `cores.members: 3`, `minimumMembers: 3` |
+| Read replica scaling on HA cluster | `mode: Cluster`, `cores.members: 3`, `readReplicas.members: N` |
 | SS replicas > minimumClusterSize | scale / `enableServer` flow (`NEO-011`) |
 | `operations.enableServer: true` | Operator enable-server job |
 
@@ -212,8 +220,8 @@ spec:
 |--------|---------------------------|
 | `standalone-dev` | 1 server, no cluster |
 | `production-ha` | 3 cores, 0 read replicas |
-| `primary-plus-analytics` | 1 core, 1 read replica |
-| `ha-with-read-replicas` | 3 cores, N read replicas (N in sub-field?) |
+| `primary-plus-analytics` | 1 core, 1 readGDS replica |
+| `ha-with-read-replicas` | 3 cores, N read replicas (N in `readReplicas.members`) |
 
 | Advantages | Disadvantages |
 |------------|---------------|
@@ -251,22 +259,25 @@ What do you need?
 │
 ├─ Single server (dev, test, CI)
 │    spec.topology.mode: Standalone
+│    (no cores / readReplicas / readGDSReplicas / minimumMembers)
 │
 ├─ Production fault tolerance (writes)
 │    spec.topology.mode: Cluster
 │    spec.topology.cores.members: 3        # odd, ≥ 3
 │    spec.topology.readReplicas.members: 0
+│    spec.topology.readGDSReplicas.members: 0
 │
-├─ Primary + analytics / read secondary (NOT production HA for writes)
+├─ Primary + analytics / GDS secondary (NOT production HA for writes)
 │    spec.topology.mode: Cluster
 │    spec.topology.cores.members: 1
-│    spec.topology.readReplicas.members: 1
+│    spec.topology.readGDSReplicas.members: 1
 │    ⚠ status warns: NonHA — cores < 3
 │
 └─ HA writes + read scaling
      spec.topology.mode: Cluster
      spec.topology.cores.members: 3
      spec.topology.readReplicas.members: N
+     spec.topology.readGDSReplicas.members: 0   # optional; GDS secondaries are separate
 ```
 
 Optional **documentation profiles** (samples / `00-vision.md`) may mirror Option E presets; CRD `profile` field deferred to V1.1+.
@@ -275,7 +286,10 @@ Optional **documentation profiles** (samples / `00-vision.md`) may mirror Option
 
 ## Decision
 
-**We will adopt Option D** — `mode: Standalone | Cluster` plus **`cores.members`** and **`readReplicas.members`** in cluster mode.
+**We will adopt Option D** — `mode: Standalone | Cluster` plus, in cluster mode only, **`cores.members`**, optional **`readReplicas.members`**, and optional **`readGDSReplicas.members`**.
+
+- **`Standalone`**: `mode` only — **no `members` fields** (`cores`, `readReplicas`, `readGDSReplicas`, `minimumMembers` are forbidden).
+- **`Cluster`**: `cores.members` is **required**; `readReplicas.members` and/or `readGDSReplicas.members` are **optional** (default `0`). Use `readReplicas` for causal-cluster read scaling; use `readGDSReplicas` for analytics / GDS secondaries (Helm `analytics`).
 
 - **Option C** informs **`11-helm-mapping.md`** (translation table), not CR field names.
 - **Option E** may appear later as **optional shortcuts** that expand to Option D counts — not a replacement for explicit GitOps specs in V1.
@@ -286,10 +300,15 @@ Options **A** and **B** are **rejected** — ambiguous for primary + secondary (
 
 | Rule | Severity | Message (example) |
 |------|----------|-------------------|
-| `mode: Standalone` → no `readReplicas` | Error | Read replicas require `mode: Cluster` |
+| `mode: Standalone` + any `cores` / `readReplicas` / `readGDSReplicas` / `minimumMembers` | Error | `members` fields are not allowed when `mode` is `Standalone` |
+| `mode: Cluster` without `cores.members` | Error | `cores.members` is required when `mode` is `Cluster` |
+| `mode: Cluster` + `readReplicas` or `readGDSReplicas` without `cores` | Error | `cores.members` must be set before read replicas |
+| `readReplicas.members > 0` or `readGDSReplicas.members > 0` when `mode: Standalone` | Error | Read replicas require `mode: Cluster` |
 | `cores.members` even and > 0 | Error | Core count must be odd for quorum |
-| `cores.members: 1` + `readReplicas ≥ 1` | Warning | Non-HA topology — not for production writes |
+| `cores.members: 1` + (`readReplicas ≥ 1` or `readGDSReplicas ≥ 1`) | Warning | Non-HA topology — not for production writes |
 | `cores.members < 3` (no production label) | Warning | For HA production use `cores.members ≥ 3` |
+| `readReplicas.members > 0` on Community edition | Error | Read replicas require Enterprise edition |
+| `readGDSReplicas.members > 0` without analytics-capable config | Error | GDS/analytics secondaries require Enterprise + analytics settings |
 | Scale-in below formed cluster | Error | Unsupported scale-in — explicit procedure required |
 
 Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
@@ -298,11 +317,13 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 
 | In V1 | Deferred |
 |-------|----------|
-| `mode: Standalone` | **Option E** — `topology.profile` CRD enum (docs-only presets in samples first) |
-| `mode: Cluster`, `cores.members` (1 or 3+) | Separate `analytics` **role** distinct from `readReplica` |
-| `readReplicas.members: 0` in P0 tests | Multi-zone `multiCluster` networking variant |
-| Validation errors + HA warnings | Auto-correction from guessed user intent |
-| Spec design for `cores: 1` + `readReplicas: 1` | Full E2E for analytics topology (prioritise in `13-v1-scope-lock.md`) |
+| `mode: Standalone` — no `members` fields | **Option E** — `topology.profile` CRD enum (docs-only presets in samples first) |
+| `mode: Cluster`, `cores.members` (1 or 3+) | Multi-zone `multiCluster` networking variant |
+| `readReplicas.members` (read scaling) | Auto-correction from guessed user intent |
+| `readGDSReplicas.members` (analytics / GDS — Helm `analytics`) | |
+| Validation errors + HA warnings | |
+| Spec design for `cores: 1` + `readGDSReplicas: 1` | Full E2E for analytics topology (prioritise in `13-v1-scope-lock.md`) |
+| Spec design for `cores: 3` + `readReplicas: N` | |
 
 ---
 
@@ -310,7 +331,8 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 
 ### Positive
 
-- **Primary + analytics** is explicit — not a misuse of `members: 2`.
+- **Primary + analytics** is explicit — `cores: 1` + `readGDSReplicas: 1`, not a misuse of `members: 2`.
+- **Read scaling** (`readReplicas`) and **analytics/GDS** (`readGDSReplicas`) are distinct in the API — matches Helm and Neo4j deployment models.
 - Actionable guidance via validation and status warnings.
 - Helm `minimumClusterSize`, `analytics`, and `enableServer` map through one translation table.
 - BDR-001 unchanged — one CRD, one `neo4jRef`.
@@ -318,10 +340,10 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 ### Negative
 
 - Topology is the most sensitive section of `neo4j/spec.md` and `neo4j/validation.md`.
-- Support must understand cores vs read replicas (runbook + decision tree).
+- Support must understand cores vs read replicas vs GDS secondaries (runbook + decision tree).
 - Migration docs must explain unified CR vs multi-release Helm.
 
 ### Neutral
 
-- `03-variant_matrix.csv` — add variants: read replica, primary + analytics, core sizes 1/3/N.
+- `03-variant_matrix.csv` — add variants: read replica, primary + analytics (readGDSReplicas), core sizes 1/3/N.
 - `domain/workload` branches on `mode`; `domain/formation` handles core vs replica paths.
