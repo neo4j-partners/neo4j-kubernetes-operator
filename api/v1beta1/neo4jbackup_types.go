@@ -36,19 +36,36 @@ type Neo4jBackupSpec struct {
 	// +optional
 	InstanceRef string `json:"instanceRef,omitempty"`
 
-	// Database selects single-database scope: back up exactly this database.
-	// Mutually exclusive with AllDatabases; requires InstanceRef. (Sharded
-	// databases currently use the legacy Target block — see AllDatabases/Target.)
+	// Database selects single-database scope: back up exactly this (standard)
+	// database. Mutually exclusive with AllDatabases and ShardedDatabase;
+	// requires InstanceRef. For a property-sharded database use ShardedDatabase.
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9.\-]*$`
 	// +kubebuilder:validation:MaxLength=65
 	// +optional
 	Database string `json:"database,omitempty"`
 
 	// AllDatabases selects instance-wide scope: back up every user database
-	// (the system database is excluded). Mutually exclusive with Database;
-	// requires InstanceRef.
+	// (the system database is excluded). Mutually exclusive with Database and
+	// ShardedDatabase; requires InstanceRef.
+	//
+	// NOTE: instance-wide backup captures standard databases. A property-sharded
+	// database is a composite of shard physical databases and is NOT reconstructed
+	// by an all-databases restore — back it up as a unit via ShardedDatabase and
+	// restore it through its Neo4jShardedDatabase CR. See the Backup & Restore guide.
 	// +optional
 	AllDatabases bool `json:"allDatabases,omitempty"`
+
+	// ShardedDatabase selects a single property-sharded database to back up, by
+	// the NAME OF ITS Neo4jShardedDatabase CR (the operator resolves the logical
+	// database name from that CR's spec.name — the two often differ). All shards
+	// — the graph shard and every property shard — are captured in one
+	// neo4j-admin run. Mutually exclusive with Database and AllDatabases;
+	// requires InstanceRef. Restore via the Neo4jShardedDatabase CR
+	// (spec.seedBackupRef), not Neo4jRestore.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	ShardedDatabase string `json:"shardedDatabase,omitempty"`
 
 	// Target defines what to back up.
 	//
@@ -130,8 +147,9 @@ func (s *Neo4jBackupSpec) UsesLegacyTarget() bool {
 // model the controller consumes, so existing target-driven logic is unchanged.
 // When InstanceRef is unset the legacy Target is returned as-is. Otherwise a
 // target is synthesized:
-//   - AllDatabases      -> {Kind: Cluster,  Name: InstanceRef}
-//   - Database (single) -> {Kind: Database, Name: Database, ClusterRef: InstanceRef}
+//   - AllDatabases       -> {Kind: Cluster,         Name: InstanceRef}
+//   - ShardedDatabase    -> {Kind: ShardedDatabase, Name: ShardedDatabase, ClusterRef: InstanceRef}
+//   - Database (single)  -> {Kind: Database,        Name: Database,        ClusterRef: InstanceRef}
 func (s *Neo4jBackupSpec) ResolvedTarget() BackupTarget {
 	if s.InstanceRef == "" {
 		return s.Target
@@ -140,6 +158,12 @@ func (s *Neo4jBackupSpec) ResolvedTarget() BackupTarget {
 	if s.AllDatabases {
 		t.Kind = BackupTargetKindCluster
 		t.Name = s.InstanceRef
+		return t
+	}
+	if s.ShardedDatabase != "" {
+		t.Kind = BackupTargetKindShardedDatabase
+		t.Name = s.ShardedDatabase
+		t.ClusterRef = s.InstanceRef
 		return t
 	}
 	t.Kind = BackupTargetKindDatabase
@@ -432,6 +456,18 @@ type BackupRun struct {
 	// seed each database. Empty for single-database and sharded runs.
 	// +optional
 	DatabaseArtifacts []DatabaseArtifact `json:"databaseArtifacts,omitempty"`
+
+	// ShardedDatabasesExcluded lists the logical property-sharded databases
+	// (e.g. "products") whose shard physical databases (…-g000/…-pNNN) this
+	// all-databases run wrote to disk but deliberately did NOT catalogue in
+	// DatabaseArtifacts — so an all-databases restore does not (and cannot)
+	// recreate them. Each must be backed up with a ShardedDatabase-scoped
+	// Neo4jBackup and restored through its Neo4jShardedDatabase CR
+	// (spec.seedBackupRef). Populated for all-databases runs whose log shows
+	// shard-shaped databases; empty otherwise. This makes the otherwise-silent
+	// sharded-exclusion explicit on the backup and travels to the restore.
+	// +optional
+	ShardedDatabasesExcluded []string `json:"shardedDatabasesExcluded,omitempty"`
 
 	// Validation captures the per-shard outcome of an optional
 	// `neo4j-admin backup validate` step run after the backup completes.

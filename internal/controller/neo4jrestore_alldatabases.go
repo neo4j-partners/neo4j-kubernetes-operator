@@ -70,6 +70,17 @@ func (r *Neo4jRestoreReconciler) startAllDatabasesRestore(
 		return ctrl.Result{}, fmt.Errorf("%s", msg)
 	}
 
+	// Surface (once) any property-sharded databases the source backup did not
+	// cover — an all-databases restore recreates standard databases only.
+	// Emitted on the first pass (before any per-database result is recorded) so
+	// it doesn't repeat each reconcile.
+	if len(snap.ShardedDatabasesExcluded) > 0 && len(restore.Status.DatabaseResults) == 0 {
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreShardedNotCovered,
+			fmt.Sprintf("all-databases restore does not recreate property-sharded database(s) %s — restore each via its Neo4jShardedDatabase CR (spec.seedBackupRef)", strings.Join(snap.ShardedDatabasesExcluded, ", ")))
+		logger.Info("all-databases restore: sharded databases not covered; restore them via their Neo4jShardedDatabase CRs",
+			"shardedDatabases", snap.ShardedDatabasesExcluded)
+	}
+
 	// Bounded scope for this release.
 	if !isTrueCluster {
 		msg := "all-databases restore currently supports cluster targets only; for a standalone, restore each database individually with spec.database"

@@ -1582,6 +1582,7 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 	// it — those paths surface their own error later if the filename is needed.
 	artifact := ""
 	var dbArtifacts []neo4jv1beta1.DatabaseArtifact
+	var shardedExcluded []string
 	backup := &neo4jv1beta1.Neo4jBackup{}
 	if gerr := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); gerr == nil {
 		for i := range backup.Status.History {
@@ -1589,6 +1590,10 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 				artifact = backup.Status.History[i].ArtifactFilename
 				// Pin the per-database map too, for an all-databases restore (#222).
 				dbArtifacts = backup.Status.History[i].DatabaseArtifacts
+				// Carry forward the sharded families this backup did not cover so
+				// an all-databases restore can surface them (they restore via the
+				// Neo4jShardedDatabase CR, not here).
+				shardedExcluded = backup.Status.History[i].ShardedDatabasesExcluded
 				break
 			}
 		}
@@ -1596,12 +1601,13 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 
 	now := metav1.Now()
 	snapshot := &neo4jv1beta1.ResolvedRestoreSource{
-		BackupRef:         restore.Spec.Source.BackupRef,
-		Storage:           &storage,
-		BackupPath:        backupPath,
-		ArtifactFilename:  artifact,
-		DatabaseArtifacts: dbArtifacts,
-		ResolvedAt:        &now,
+		BackupRef:                restore.Spec.Source.BackupRef,
+		Storage:                  &storage,
+		BackupPath:               backupPath,
+		ArtifactFilename:         artifact,
+		DatabaseArtifacts:        dbArtifacts,
+		ShardedDatabasesExcluded: shardedExcluded,
+		ResolvedAt:               &now,
 	}
 	if err := r.persistResolvedSource(ctx, restore, snapshot); err != nil {
 		// Persisting failed; retry on a later reconcile rather than proceeding

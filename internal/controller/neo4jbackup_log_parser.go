@@ -151,6 +151,37 @@ func parseAllDatabaseArtifactsFromLog(logContent string) []neo4jv1beta1.Database
 	return out
 }
 
+// parseShardedFamiliesExcludedFromLog scans the same all-databases backup log
+// and returns the DISTINCT logical sharded databases (e.g. "products") whose
+// shard physical databases (…-g000 / …-pNNN) appear in it. These are the
+// families parseAllDatabaseArtifactsFromLog deliberately omits from
+// DatabaseArtifacts — recording them makes the exclusion explicit, since an
+// all-databases restore cannot recreate them (they restore via the sharded
+// path). Order-preserving, deduplicated; empty when the log has no shard-shaped
+// databases.
+func parseShardedFamiliesExcludedFromLog(logContent string) []string {
+	seen := map[string]bool{}
+	var out []string
+	scanner := bufio.NewScanner(strings.NewReader(logContent))
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		for _, m := range standardArtifactFilenameRegex.FindAllStringSubmatch(scanner.Text(), -1) {
+			db := m[2]
+			suffix := shardSuffixRegex.FindString(db)
+			if suffix == "" {
+				continue
+			}
+			family := strings.TrimSuffix(db, suffix)
+			if family == "" || seen[family] {
+				continue
+			}
+			seen[family] = true
+			out = append(out, family)
+		}
+	}
+	return out
+}
+
 // parseShardArtifactsFromLog scans neo4j-admin stdout and returns a map
 // keyed by shard name (e.g. "products-g000") with Filename + Size set.
 // Filenames are deduplicated by shard name — if a shard appears multiple

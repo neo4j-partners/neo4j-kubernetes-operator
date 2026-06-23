@@ -60,6 +60,14 @@ func TestBackupValidator_ScopeAPI(t *testing.T) {
 			},
 		},
 		{
+			name: "instanceRef + shardedDatabase is valid",
+			spec: neo4jv1beta1.Neo4jBackupSpec{
+				InstanceRef:     "my-neo4j",
+				ShardedDatabase: "products-sharded",
+				Storage:         s3,
+			},
+		},
+		{
 			name: "legacy target block still valid (deprecated)",
 			spec: neo4jv1beta1.Neo4jBackupSpec{
 				Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "my-neo4j"},
@@ -73,6 +81,17 @@ func TestBackupValidator_ScopeAPI(t *testing.T) {
 				Database:     "customers",
 				AllDatabases: true,
 				Storage:      s3,
+			},
+			expectError:  true,
+			errSubstring: "mutually exclusive",
+		},
+		{
+			name: "shardedDatabase and allDatabases are mutually exclusive",
+			spec: neo4jv1beta1.Neo4jBackupSpec{
+				InstanceRef:     "my-neo4j",
+				ShardedDatabase: "products-sharded",
+				AllDatabases:    true,
+				Storage:         s3,
 			},
 			expectError:  true,
 			errSubstring: "mutually exclusive",
@@ -134,6 +153,11 @@ func TestNeo4jBackupSpec_ResolvedTarget(t *testing.T) {
 			name: "all databases -> Cluster kind",
 			spec: neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-neo4j", AllDatabases: true},
 			want: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "my-neo4j"},
+		},
+		{
+			name: "sharded database -> ShardedDatabase kind",
+			spec: neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-cluster", ShardedDatabase: "products-sharded"},
+			want: neo4jv1beta1.BackupTarget{Kind: "ShardedDatabase", Name: "products-sharded", ClusterRef: "my-cluster"},
 		},
 		{
 			name: "legacy target passes through unchanged",

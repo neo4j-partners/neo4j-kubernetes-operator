@@ -232,6 +232,11 @@ func (in *BackupRun) DeepCopyInto(out *BackupRun) {
 		*out = make([]DatabaseArtifact, len(*in))
 		copy(*out, *in)
 	}
+	if in.ShardedDatabasesExcluded != nil {
+		in, out := &in.ShardedDatabasesExcluded, &out.ShardedDatabasesExcluded
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Validation != nil {
 		in, out := &in.Validation, &out.Validation
 		*out = new(BackupValidationResult)
@@ -3166,6 +3171,11 @@ func (in *ResolvedRestoreSource) DeepCopyInto(out *ResolvedRestoreSource) {
 	if in.DatabaseArtifacts != nil {
 		in, out := &in.DatabaseArtifacts, &out.DatabaseArtifacts
 		*out = make([]DatabaseArtifact, len(*in))
+		copy(*out, *in)
+	}
+	if in.ShardedDatabasesExcluded != nil {
+		in, out := &in.ShardedDatabasesExcluded, &out.ShardedDatabasesExcluded
+		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 }

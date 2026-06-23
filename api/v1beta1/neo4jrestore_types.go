@@ -330,6 +330,14 @@ type ResolvedRestoreSource struct {
 	// Neo4jBackup CR. Nil for single-database restores.
 	// +optional
 	DatabaseArtifacts []DatabaseArtifact `json:"databaseArtifacts,omitempty"`
+
+	// ShardedDatabasesExcluded carries forward the logical sharded databases the
+	// resolved backup recorded as NOT covered by all-databases scope (see
+	// Neo4jBackup BackupRun.ShardedDatabasesExcluded). An all-databases restore
+	// surfaces this so the user knows those databases are not recreated here and
+	// must be restored via their Neo4jShardedDatabase CR. Empty otherwise.
+	// +optional
+	ShardedDatabasesExcluded []string `json:"shardedDatabasesExcluded,omitempty"`
 }
 
 // DatabaseRestoreResult reports the outcome of restoring one database within an

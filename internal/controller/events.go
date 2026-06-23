@@ -42,6 +42,12 @@ const (
 	// EventReasonBackupRetentionCaveat — retention pruning configured on a CR
 	// whose chain may contain differential artifacts (#217).
 	EventReasonBackupRetentionCaveat = "BackupRetentionCaveat"
+	// EventReasonBackupShardedExcluded — an all-databases backup wrote a
+	// property-sharded family's shard databases to disk but did not catalogue
+	// them, so an all-databases restore cannot recreate them; each must be
+	// backed up with a ShardedDatabase-scoped Neo4jBackup and restored via its
+	// Neo4jShardedDatabase CR. Makes the otherwise-silent exclusion explicit.
+	EventReasonBackupShardedExcluded = "BackupShardedDatabasesExcluded"
 	// EventReasonServiceAccountAnnotationConflict — a backup/restore CR
 	// overwrote DIFFERENT workload-identity annotations on the shared
 	// namespace ServiceAccount; last writer wins and the others' cloud
@@ -60,6 +66,10 @@ const (
 	EventReasonRestoreFailed            = "RestoreFailed"
 	EventReasonRestoreFromChainParent   = "RestoreFromChainParent"
 	EventReasonDatabaseCreateFailed     = "DatabaseCreateFailed"
+	// EventReasonRestoreShardedNotCovered — an all-databases restore's source
+	// backup recorded property-sharded databases it did not cover; they are not
+	// recreated here and must be restored via their Neo4jShardedDatabase CR.
+	EventReasonRestoreShardedNotCovered = "RestoreShardedDatabasesNotCovered"
 	// EventReasonBackupAPIDeprecated — the CR uses the deprecated spec.target
 	// block instead of spec.instanceRef + spec.database/allDatabases (removed
 	// in v1.14).

@@ -1200,6 +1200,16 @@ spec:
                     description: ResolvedAt is when the backupRef was first dereferenced.
                     format: date-time
                     type: string
+                  shardedDatabasesExcluded:
+                    description: |-
+                      ShardedDatabasesExcluded carries forward the logical sharded databases the
+                      resolved backup recorded as NOT covered by all-databases scope (see
+                      Neo4jBackup BackupRun.ShardedDatabasesExcluded). An all-databases restore
+                      surfaces this so the user knows those databases are not recreated here and
+                      must be restored via their Neo4jShardedDatabase CR. Empty otherwise.
+                    items:
+                      type: string
+                    type: array
                   storage:
                     description: |-
                       Storage is the concrete storage location (PVC or cloud, with creds

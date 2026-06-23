@@ -226,8 +226,7 @@ func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget
 		))
 	}
 
-	// Database-scoped kinds (Database, ShardedDatabase) require ClusterRef
-	// and only support same-namespace references in v1.
+	// Database-scoped kinds (Database, ShardedDatabase) require ClusterRef.
 	if neo4jv1beta1.IsDatabaseScopedBackupKind(target.Kind) {
 		if target.ClusterRef == "" {
 			allErrs = append(allErrs, field.Required(
@@ -235,13 +234,19 @@ func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget
 				fmt.Sprintf("clusterRef is required when target.kind=%s", target.Kind),
 			))
 		}
-		if target.Namespace != "" && target.Namespace != backupNamespace {
-			allErrs = append(allErrs, field.Invalid(
-				targetPath.Child("namespace"),
-				target.Namespace,
-				fmt.Sprintf("cross-namespace target references are not supported (backup namespace: %s)", backupNamespace),
-			))
-		}
+	}
+
+	// Cross-namespace target references are not supported for ANY kind — v1
+	// keeps the blast radius inside one namespace (the same boundary enforced
+	// for user/role clusterRefs; see docs/knowledge/operations.md). This check
+	// was previously scoped to database-scoped kinds only, which silently let a
+	// kind:Cluster backup target a cluster in another namespace.
+	if target.Namespace != "" && target.Namespace != backupNamespace {
+		allErrs = append(allErrs, field.Invalid(
+			targetPath.Child("namespace"),
+			target.Namespace,
+			fmt.Sprintf("cross-namespace target references are not supported (backup namespace: %s)", backupNamespace),
+		))
 	}
 
 	return allErrs
@@ -256,16 +261,25 @@ func (v *BackupValidator) validateScopeSelection(spec *neo4jv1beta1.Neo4jBackupS
 	specPath := field.NewPath("spec")
 
 	if spec.InstanceRef != "" {
-		hasDB := spec.Database != ""
-		if hasDB && spec.AllDatabases {
-			allErrs = append(allErrs, field.Invalid(
-				specPath.Child("allDatabases"), spec.AllDatabases,
-				"spec.database and spec.allDatabases are mutually exclusive — set exactly one"))
+		scopes := 0
+		if spec.Database != "" {
+			scopes++
 		}
-		if !hasDB && !spec.AllDatabases {
+		if spec.AllDatabases {
+			scopes++
+		}
+		if spec.ShardedDatabase != "" {
+			scopes++
+		}
+		switch {
+		case scopes == 0:
 			allErrs = append(allErrs, field.Required(
 				specPath.Child("database"),
-				"set spec.database (single database) or spec.allDatabases (instance-wide) when spec.instanceRef is used"))
+				"set exactly one scope when spec.instanceRef is used: spec.database (single database), spec.allDatabases (instance-wide), or spec.shardedDatabase (a Neo4jShardedDatabase)"))
+		case scopes > 1:
+			allErrs = append(allErrs, field.Invalid(
+				specPath.Child("allDatabases"), spec.AllDatabases,
+				"spec.database, spec.allDatabases, and spec.shardedDatabase are mutually exclusive — set exactly one"))
 		}
 		return allErrs
 	}

@@ -382,6 +382,26 @@ func TestBackupValidator_Validate(t *testing.T) {
 			expectedErrorContains: []string{"cross-namespace target references are not supported"},
 		},
 		{
+			name: "Cluster with cross-namespace target.namespace is rejected",
+			backup: &neo4jv1beta1.Neo4jBackup{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jBackupSpec{
+					Target: neo4jv1beta1.BackupTarget{
+						Kind:      "Cluster",
+						Name:      "my-cluster",
+						Namespace: "other-ns",
+					},
+					Storage: neo4jv1beta1.StorageLocation{
+						Type: "pvc",
+						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
+					},
+				},
+			},
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: []string{"cross-namespace target references are not supported"},
+		},
+		{
 			name: "ShardedDatabase with matching target.namespace allowed",
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},

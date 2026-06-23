@@ -64,8 +64,13 @@ spec:
               allDatabases:
                 description: |-
                   AllDatabases selects instance-wide scope: back up every user database
-                  (the system database is excluded). Mutually exclusive with Database;
-                  requires InstanceRef.
+                  (the system database is excluded). Mutually exclusive with Database and
+                  ShardedDatabase; requires InstanceRef.
+
+                  NOTE: instance-wide backup captures standard databases. A property-sharded
+                  database is a composite of shard physical databases and is NOT reconstructed
+                  by an all-databases restore — back it up as a unit via ShardedDatabase and
+                  restore it through its Neo4jShardedDatabase CR. See the Backup & Restore guide.
                 type: boolean
               chainFromBackup:
                 description: |-
@@ -166,9 +171,9 @@ spec:
                 type: object
               database:
                 description: |-
-                  Database selects single-database scope: back up exactly this database.
-                  Mutually exclusive with AllDatabases; requires InstanceRef. (Sharded
-                  databases currently use the legacy Target block — see AllDatabases/Target.)
+                  Database selects single-database scope: back up exactly this (standard)
+                  database. Mutually exclusive with AllDatabases and ShardedDatabase;
+                  requires InstanceRef. For a property-sharded database use ShardedDatabase.
                 maxLength: 65
                 pattern: ^[a-zA-Z][a-zA-Z0-9.\-]*$
                 type: string
@@ -394,6 +399,18 @@ spec:
                 type: object
               schedule:
                 description: Schedule for automated backups (cron format)
+                type: string
+              shardedDatabase:
+                description: |-
+                  ShardedDatabase selects a single property-sharded database to back up, by
+                  the NAME OF ITS Neo4jShardedDatabase CR (the operator resolves the logical
+                  database name from that CR's spec.name — the two often differ). All shards
+                  — the graph shard and every property shard — are captured in one
+                  neo4j-admin run. Mutually exclusive with Database and AllDatabases;
+                  requires InstanceRef. Restore via the Neo4jShardedDatabase CR
+                  (spec.seedBackupRef), not Neo4jRestore.
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
                 type: string
               storage:
                 description: Storage defines where to store the backup
@@ -704,6 +721,20 @@ spec:
                         required:
                         - shardName
                         type: object
+                      type: array
+                    shardedDatabasesExcluded:
+                      description: |-
+                        ShardedDatabasesExcluded lists the logical property-sharded databases
+                        (e.g. "products") whose shard physical databases (…-g000/…-pNNN) this
+                        all-databases run wrote to disk but deliberately did NOT catalogue in
+                        DatabaseArtifacts — so an all-databases restore does not (and cannot)
+                        recreate them. Each must be backed up with a ShardedDatabase-scoped
+                        Neo4jBackup and restored through its Neo4jShardedDatabase CR
+                        (spec.seedBackupRef). Populated for all-databases runs whose log shows
+                        shard-shaped databases; empty otherwise. This makes the otherwise-silent
+                        sharded-exclusion explicit on the backup and travels to the restore.
+                      items:
+                        type: string
                       type: array
                     startTime:
                       description: Start time of the backup run

@@ -359,6 +359,7 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 			}
 			if isAllDatabases && jobLog != "" {
 				run.DatabaseArtifacts = parseAllDatabaseArtifactsFromLog(jobLog)
+				r.recordShardedExclusion(latest, &run, jobLog)
 			}
 			if jobLog != "" {
 				if validation := parseValidationFromLog(jobLog); validation != nil {
@@ -2079,6 +2080,23 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 // without this the one-shot path was missing failure entries (recheck gap
 // 2). The shared underlying builder jobToBackupRun handles the status
 // string and BackupsPath consistently across both code paths.
+// recordShardedExclusion records, on an all-databases run, the logical
+// property-sharded databases whose shard physical databases the backup wrote to
+// disk but did NOT catalogue in DatabaseArtifacts, and emits a Warning so the
+// exclusion is not silent — an all-databases restore cannot recreate them. No-op
+// when the run's log shows no shard-shaped databases. Callers invoke this only
+// for newly-recorded runs (and Kubernetes aggregates the event), so it does not
+// spam. See Neo4jBackup BackupRun.ShardedDatabasesExcluded.
+func (r *Neo4jBackupReconciler) recordShardedExclusion(backup *neo4jv1beta1.Neo4jBackup, run *neo4jv1beta1.BackupRun, jobLog string) {
+	families := parseShardedFamiliesExcludedFromLog(jobLog)
+	if len(families) == 0 {
+		return
+	}
+	run.ShardedDatabasesExcluded = families
+	r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupShardedExcluded,
+		fmt.Sprintf("all-databases backup does not capture a restorable backup for property-sharded database(s) %s — back each up with a shardedDatabase-scoped Neo4jBackup and restore via its Neo4jShardedDatabase CR (spec.seedBackupRef)", strings.Join(families, ", ")))
+}
+
 func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) {
 	logger := log.FromContext(ctx)
 
