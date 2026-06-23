@@ -1,7 +1,7 @@
 # `Neo4j` — validation rules
 
 **API**: `neo4j.com/v1beta1`  
-**Sources**: [BDR-002](../../adr/business/002-neo4j-crd-topology.md) (overrides proposal on topology) · [BDR-004](../../adr/business/004-neo4j-plugin-topology.md) Option E · [`spec.md`](spec.md) · `01` / `03` variant matrix
+**Sources**: [BDR-002](../../adr/business/002-neo4j-crd-topology.md) (overrides proposal on topology) · [BDR-004](../../adr/business/004-neo4j-plugin-topology.md) Option E · [ADR-001](../../adr/architecture/001-crd-validation-process.md) (CEL vs webhook ownership) · [`spec.md`](spec.md) · `01` / `03` variant matrix
 
 **Mechanisms**:
 
@@ -261,6 +261,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 
 | Source | Rules |
 |--------|-------|
+| ADR-001 | Mechanism choice (CEL / webhook / reconciler) |
 | BDR-004 Option E | TOPO-001…013, PLG-001…013 |
 | `03-variant_matrix` Edition | EDT-001…006 |
 | `NEO-2-005` TLS | TLS-001…003 |
