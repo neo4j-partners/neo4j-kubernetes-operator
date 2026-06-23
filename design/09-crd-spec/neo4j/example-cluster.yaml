@@ -1,4 +1,4 @@
-# HA cluster + read scaling + GDS/Bloom analytics pool (BDR-002 + BDR-004 Option E)
+# HA cluster + read scaling + GDS/Bloom analytics (BDR-002 + BDR-004 Option E)
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
@@ -11,17 +11,15 @@ spec:
     accept: "yes"
   topology:
     mode: Cluster
-    cores:
+    primaries:
       members: 3
       plugins: [apoc]
-    replicaPools:
+    secondaries:
       - name: read-scale
         members: 2
-        serverRole: ReadReplica
         plugins: [apoc]
       - name: analytics
         members: 1
-        serverRole: ReadReplica
         plugins: [gds, bloom]
     minimumMembers: 3
   pluginDefinitions:

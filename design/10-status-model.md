@@ -24,7 +24,7 @@ Per-CRD status design lives in **`09-crd-spec/<crd>/status.md`**. This file inde
 
 | CRD | Document | Phase model | Notes |
 |-----|----------|-------------|-------|
-| **`Neo4j`** | [`09-crd-spec/neo4j/status.md`](09-crd-spec/neo4j/status.md) | `Pending` → `Running` / `Failed` | `upgrade` sub-status; `replicas` summary; `diagnostics`; `TopologyWarning` (BDR-002); Neo4j 5.26+ `SHOW SERVERS` fields |
+| **`Neo4j`** | [`09-crd-spec/neo4j/status.md`](09-crd-spec/neo4j/status.md) | `Pending` → `Running` / `Failed` | `upgrade` sub-status; `serverSummary`; `diagnostics`; `TopologyWarning` (BDR-002); Neo4j 5.26+ `SHOW SERVERS` fields |
 | `Neo4jDatabase` | *(pending)* | `Creating` → `Online` | Logical DB inside `neo4jRef` |
 | `Neo4jBackup` / `Neo4jBackupSchedule` | *(pending)* | Job-driven | `lastBackup`, schedule timestamps |
 | `Neo4jRestore` | *(pending)* | Job-driven | Restore progress |

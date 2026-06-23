@@ -47,7 +47,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | ID | Title | Status |
 |----|-------|--------|
 | [BDR-001](business/001-single-neo4j-crd.md) | Single `Neo4j` CRD instead of `Neo4jStandalone` + `Neo4jCluster` | accepted |
-| [BDR-002](business/002-neo4j-crd-topology.md) | `Neo4j` CRD topology — modes, cores / readReplicas / readGDSReplicas, user guidance | proposed |
+| [BDR-002](business/002-neo4j-crd-topology.md) | `Neo4j` CRD topology — modes, primaries / secondaries[], user guidance | proposed |
 | [BDR-003](business/003-operator-install-scope.md) | Operator install scope — single namespace for V1; multi / cluster-wide deferred | proposed |
 | [BDR-004](business/004-neo4j-plugin-topology.md) | Plugin model — Option E (`pluginDefinitions` + pool refs) | proposed |
 

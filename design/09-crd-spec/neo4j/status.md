@@ -1,7 +1,7 @@
 # `Neo4j` — status model
 
 **API**: `neo4j.com/v1beta1` · **Subresource**: `status`  
-**Sources**: [BDR-002](../../adr/business/002-neo4j-crd-topology.md) · [ADR-001](../../adr/architecture/001-crd-validation-process.md) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1 · `OP-1-003` / `AC-OP-STATUS-*`
+**Sources**: [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1 · `OP-1-003` / `AC-OP-STATUS-*`
 
 ---
 
@@ -29,7 +29,7 @@
 | `observedGeneration` | int64 | Always | Last `metadata.generation` fully reconciled. |
 | `version` | string | When known | **Effective** Neo4j version on the workload (image / DBMS). During upgrade: reflects version **already running** on members; see `upgrade.targetVersion` for intent. |
 | `lastUpgradeTime` | `metav1.Time` | After successful upgrade | Timestamp when `upgrade.phase` last reached `Completed`. Audit / SRE. |
-| `replicas` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). |
+| `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). Not `spec.topology.secondaries[]`. |
 | `upgrade` | `UpgradeStatus` | During / after `spec.version` change | Rolling upgrade state machine (see below). |
 | `members` | `[]MemberStatus` | Cluster + detail path; Standalone optional | Per-server summary (pool, plugins, K8s + Neo4j server state). |
 | `diagnostics` | `DiagnosticsStatus` | When `spec.monitoring` enables deep collection and workload ready | Deep observability — separate from `members[]` summary. |
@@ -109,13 +109,13 @@ upgrade:
 
 ---
 
-## `status.replicas`
+## `status.serverSummary`
 
-Always updated from StatefulSet / pod list — **no Bolt required**.
+Always updated from StatefulSet / pod list — **no Bolt required**. Distinct from `spec.topology.secondaries[]` (secondary pools).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `servers` | int32 | Desired server count (`1` Standalone; `cores.members + sum(replicaPools[].members)` Cluster). |
+| `servers` | int32 | Desired server count (`1` Standalone; `primaries.members + sum(secondaries[].members)` Cluster). |
 | `ready` | int32 | Pods passing readiness (K8s + operator gates). |
 
 Use for `kubectl` columns, simple waits (`ready == servers`), HPA-style automation. Prefer over scanning `members[]` for counts.
@@ -156,8 +156,8 @@ Future (day-2 / V2): conditions for restore in progress, sharding migration, etc
 
 | Reason | Trigger | Example message |
 |--------|---------|-----------------|
-| `NonHA` | `mode: Cluster`, `cores.members < 3`, `sum(replicaPools[].members) ≥ 1` | `cores.members < 3 — not suitable for production HA writes` |
-| `LowCoreCount` | `mode: Cluster`, `cores.members: 1`, no replica pools | Dev/single-writer — informational |
+| `NonHA` | `mode: Cluster`, `primaries.members < 3`, `sum(secondaries[].members) ≥ 1` | `primaries.members < 3 — not suitable for production HA writes` |
+| `LowPrimaryCount` | `mode: Cluster`, `primaries.members: 1`, no secondary pools | Dev/single-writer — informational |
 
 `TopologyWarning=True` does **not** set `Ready=False` unless members are actually unhealthy.
 
@@ -171,10 +171,10 @@ Future (day-2 / V2): conditions for restore in progress, sharding migration, etc
 
 | Mode | Default | Full Neo4j fields |
 |------|---------|-------------------|
-| `Standalone` | `replicas` only | Optional single `members[0]` with `pod` block |
-| `Cluster` | `replicas` always | `members[]` when monitoring on or UI/detail requested |
+| `Standalone` | `serverSummary` only | Optional single `members[0]` with `pod` block |
+| `Cluster` | `serverSummary` always | `members[]` when monitoring on or UI/detail requested |
 
-Avoid mandatory Bolt on every reconcile — use `replicas` for counts.
+Avoid mandatory Bolt on every reconcile — use `serverSummary` for counts.
 
 ### Member fields (Neo4j 5.26+ server model)
 
@@ -183,7 +183,7 @@ Prefer vocabulary from `SHOW SERVERS` over legacy causal roles (`LEADER` / `FOLL
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Pod / server name (`<metadata.name>-<ordinal>`). |
-| `pool` | string | `core` or `replicaPools[].name` from spec. |
+| `pool` | string | `primary` or `secondaries[].name` from spec. |
 | `address` | string | Bolt address for admin operations. |
 | `plugins` | []string | Resolved catalog ids (pool refs + `pluginDefinitions`). |
 | `neo4jState` | string | Server state from `SHOW SERVERS` — e.g. `Enabled`, `Cordoned`, `Deallocating`. |
@@ -318,7 +318,7 @@ Pattern: `status.<feature>Ready` for opt-in capabilities — avoid overloading `
 1. `observedGeneration == metadata.generation`
 2. `Error=False`, `Reconciling=False`
 3. `Installed=True`
-4. `replicas.ready == replicas.servers` (or equivalent pod gate)
+4. `serverSummary.ready == serverSummary.servers` (or equivalent pod gate)
 5. `ClusterFormed=True` when `mode: Cluster`
 6. `TLSReady=True` when `trust.enabled: true`
 7. `LicenseValid=True`
@@ -340,7 +340,7 @@ Each key status signal should have a Prometheus equivalent for SRE dashboards an
 | Status signal | Metric (illustrative) | Labels |
 |---------------|----------------------|--------|
 | `phase` | `neo4j_operator_neo4j_phase` (gauge enum) | `namespace`, `name` |
-| `replicas` | `neo4j_operator_neo4j_replicas_desired`, `_ready` | |
+| `replicas` | `neo4j_operator_neo4j_replicas_desired`, `_ready` | Counts from `serverSummary` |
 | `upgrade.phase` | `neo4j_operator_neo4j_upgrade_phase` | `target_version` |
 | `conditions.Ready` | `neo4j_operator_neo4j_ready` | |
 | `members[].neo4jHealth` | `neo4j_operator_server_health` | `server`, `pool` |
@@ -358,7 +358,7 @@ status:
   observedGeneration: 7
   version: "2026.05.0"
   lastUpgradeTime: "2026-06-22T15:00:00Z"
-  replicas:
+  serverSummary:
     servers: 3
     ready: 3
   upgrade:
@@ -386,7 +386,7 @@ status:
       status: "False"
   members:
     - name: my-graph-0
-      pool: core
+      pool: primary
       address: my-graph-0.my-graph.graph-prod.svc:7687
       neo4jState: Enabled
       neo4jHealth: Available
@@ -416,6 +416,6 @@ status:
 | `OP-1-003` | conditions + phase + upgrade |
 | `OP-2-003-STATUS-01` | `Ready`, `Reconciling`, `Error`, `Installed` |
 | `OP-2-003-STATUS-02` | `upgrade` sub-status (not deferred); domain conditions |
-| `AC-NEO-CLUSTER` | `ClusterFormed`, `members[]`, `replicas` |
-| `AC-NEO-STANDALONE` | `Ready`, `replicas`, optional single `members[]` |
+| `AC-NEO-CLUSTER` | `ClusterFormed`, `members[]`, `serverSummary` |
+| `AC-NEO-STANDALONE` | `Ready`, `serverSummary`, optional single `members[]` |
 | BDR-002 | `TopologyWarning` / `NonHA` |

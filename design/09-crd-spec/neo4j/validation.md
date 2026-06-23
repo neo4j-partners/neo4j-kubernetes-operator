@@ -1,7 +1,7 @@
 # `Neo4j` — validation rules
 
 **API**: `neo4j.com/v1beta1`  
-**Sources**: [BDR-002](../../adr/business/002-neo4j-crd-topology.md) (overrides proposal on topology) · [BDR-004](../../adr/business/004-neo4j-plugin-topology.md) Option E · [ADR-001](../../adr/architecture/001-crd-validation-process.md) (CEL vs webhook ownership) · [`spec.md`](spec.md) · `01` / `03` variant matrix
+**Sources**: [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) (overrides proposal on topology) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) (CEL vs webhook ownership) · [`spec.md`](spec.md) · `01` / `03` variant matrix
 
 **Mechanisms**:
 
@@ -17,18 +17,18 @@
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| TOPO-001 | `mode: Standalone` → `cores`, `replicaPools`, `minimumMembers` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
-| TOPO-002 | `mode: Cluster` → `cores.members` required | Error | CEL | `cores.members` is required when `mode` is `Cluster` |
-| TOPO-003 | `replicaPools` without `cores` | Error | CEL | `cores.members` must be set before replica pools |
-| TOPO-004 | `replicaPools` when `mode: Standalone` | Error | CEL | Replica pools require `mode: Cluster` |
-| TOPO-005 | `replicaPools[].name` not unique | Error | CEL | duplicate replica pool name |
-| TOPO-006 | `cores.members` even and > 0 | Error | CEL | Core count must be odd for quorum |
-| TOPO-007 | `replicaPools[].members < 1` | Error | CEL | pool must have at least one member |
+| TOPO-001 | `mode: Standalone` → `primaries`, `secondaries`, `minimumMembers` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
+| TOPO-002 | `mode: Cluster` → `primaries.members` required | Error | CEL | `primaries.members` is required when `mode` is `Cluster` |
+| TOPO-003 | `secondaries` without `primaries` | Error | CEL | `primaries.members` must be set before secondaries |
+| TOPO-004 | `secondaries` when `mode: Standalone` | Error | CEL | Secondaries require `mode: Cluster` |
+| TOPO-005 | `secondaries[].name` not unique | Error | CEL | duplicate secondary pool name |
+| TOPO-006 | `primaries.members` even and > 0 | Error | CEL | Primary count must be odd for quorum |
+| TOPO-007 | `secondaries[].members < 1` | Error | CEL | pool must have at least one member |
 | TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
 | TOPO-009 | `minimumMembers > total members` | Error | Webhook | `minimumMembers` cannot exceed total member count |
 | TOPO-010 | Scale-in below formed cluster | Error | Webhook | Unsupported scale-in |
-| TOPO-011 | `cores.members: 1` + any replica pool | Warning | Reconciler | Non-HA topology |
-| TOPO-012 | `cores.members < 3` | Warning | Reconciler | For HA production use `cores.members ≥ 3` |
+| TOPO-011 | `primaries.members: 1` + any secondary pool | Warning | Reconciler | Non-HA topology |
+| TOPO-012 | `primaries.members < 3` | Warning | Reconciler | For HA production use `primaries.members ≥ 3` |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
 
 ### CEL sketches (topology)
@@ -37,58 +37,58 @@
 # TOPO-001 — Standalone forbids member blocks
 - rule: |
     !(self.topology.mode == 'Standalone') ||
-    !has(self.topology.cores) && !has(self.topology.replicaPools) &&
+    !has(self.topology.primaries) && !has(self.topology.secondaries) &&
     !has(self.topology.minimumMembers)
   message: members fields are not allowed when mode is Standalone
 
-# TOPO-002 — Cluster requires cores.members
+# TOPO-002 — Cluster requires primaries.members
 - rule: |
     self.topology.mode != 'Cluster' || (
-      has(self.topology.cores) && has(self.topology.cores.members) &&
-      self.topology.cores.members >= 1
+      has(self.topology.primaries) && has(self.topology.primaries.members) &&
+      self.topology.primaries.members >= 1
     )
-  message: cores.members is required when mode is Cluster
+  message: primaries.members is required when mode is Cluster
 
-# TOPO-005 — odd core count
+# TOPO-005 — odd primary count
 - rule: |
-    !has(self.topology.cores) || self.topology.cores.members == 0 ||
-    self.topology.cores.members % 2 == 1
-  message: core count must be odd for quorum
+    !has(self.topology.primaries) || self.topology.primaries.members == 0 ||
+    self.topology.primaries.members % 2 == 1
+  message: primary count must be odd for quorum
 ```
 
 ---
 
 ## Plugins (BDR-004 Option E)
 
-**Placement rule:** Standalone → all plugins on `spec.plugins`. Cluster → all plugins on `replicaPools`; `gds` / `bloom` forbidden on `topology.cores.plugins` only.
+**Placement rule:** Standalone → all plugins on `spec.plugins`. Cluster → all plugins on `secondaries[]`; `gds` / `bloom` forbidden on `topology.primaries.plugins` only.
 
-Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), `topology.cores.plugins`, or `topology.replicaPools[].plugins`. **Configuration** is `spec.pluginDefinitions.<id>`.
+Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), `topology.primaries.plugins`, or `topology.secondaries[].plugins`. **Configuration** is `spec.pluginDefinitions.<id>`.
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| PLG-001 | `gds` or `bloom` in `topology.cores.plugins` when `mode: Cluster` | Error | CEL | GDS/Bloom cannot be installed on core members (allowed on Standalone via spec.plugins) |
-| PLG-002 | `spec.plugins` when `mode: Cluster` | Error | CEL | use topology.cores.plugins and replicaPools[].plugins in cluster mode |
-| PLG-003 | `topology.cores.plugins` or `replicaPools[].plugins` when `mode: Standalone` | Error | CEL | use spec.plugins in standalone mode |
+| PLG-001 | `gds` or `bloom` in `topology.primaries.plugins` when `mode: Cluster` | Error | CEL | GDS/Bloom cannot be installed on primary members (allowed on Standalone via spec.plugins) |
+| PLG-002 | `spec.plugins` when `mode: Cluster` | Error | CEL | use topology.primaries.plugins and topology.secondaries[].plugins in cluster mode |
+| PLG-003 | `topology.primaries.plugins` or `secondaries[].plugins` when `mode: Standalone` | Error | CEL | use spec.plugins in standalone mode |
 | PLG-004 | `gds` or `bloom` referenced but missing `pluginDefinitions.<id>.licenseSecretRef` | Error | CEL | licensed plugin requires licenseSecretRef in pluginDefinitions |
 | PLG-005 | duplicate id in same `plugins[]` list | Error | CEL | duplicate plugin id |
 | PLG-006 | `pluginDefinitions.<id>.version` major.minor ≠ `spec.version` | Error | Webhook | plugin version must match Neo4j |
 | PLG-007 | unknown catalog id in any `plugins[]` list | Error | CEL | V1 catalog: apoc, gds |
-| PLG-008 | `serverRole: Secondary` + pool references `gds` without analytics config | Error | Webhook | Secondary + GDS requires analytics server configuration |
+| PLG-008 | `secondaries[]` pool references `gds` without analytics config | Error | Webhook | GDS on secondary pool requires analytics server configuration |
 | PLG-009 | `pluginDefinitions` key not in catalog | Error | CEL | unknown pluginDefinitions key |
 | PLG-010 | `licenseSecretRef` on licensed plugin must reference existing Secret | Error | Webhook | license secret not found |
 | PLG-011 | unused `pluginDefinitions` key (not referenced anywhere) | Warning | Reconciler | pluginDefinitions entry is unused |
 | PLG-012 | GDS license Secret changed | — | Reconciler | rolling restart required on pods running gds |
-| PLG-013 | homogeneous `topology.cores.plugins` across all core ordinals | Error | Reconciler | core plugin set must be identical on every core member |
+| PLG-013 | homogeneous `topology.primaries.plugins` across all primary ordinals | Error | Reconciler | primary plugin set must be identical on every primary member |
 
 ### CEL sketches (plugins)
 
 ```yaml
-# PLG-001 — no GDS/Bloom on cores (Cluster only; Standalone uses spec.plugins)
+# PLG-001 — no GDS/Bloom on primaries (Cluster only; Standalone uses spec.plugins)
 - rule: |
     self.topology.mode != 'Cluster' ||
-    !has(self.topology.cores) || !has(self.topology.cores.plugins) ||
-    self.topology.cores.plugins.all(p, p != 'gds' && p != 'bloom')
-  message: GDS and Bloom cannot be installed on core members in Cluster mode
+    !has(self.topology.primaries) || !has(self.topology.primaries.plugins) ||
+    self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')
+  message: GDS and Bloom cannot be installed on primary members in Cluster mode
 
 # PLG-002 — no spec.plugins in Cluster mode
 - rule: |
@@ -98,10 +98,10 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 # PLG-004 — gds referenced ⇒ licenseSecretRef in pluginDefinitions
 - rule: |
     !(
-      (has(self.topology.cores) && has(self.topology.cores.plugins) &&
-       self.topology.cores.plugins.exists(p, p == 'gds')) ||
-      (has(self.topology.replicaPools) &&
-       self.topology.replicaPools.exists(pool,
+      (has(self.topology.primaries) && has(self.topology.primaries.plugins) &&
+       self.topology.primaries.plugins.exists(p, p == 'gds')) ||
+      (has(self.topology.secondaries) &&
+       self.topology.secondaries.exists(pool,
          has(pool.plugins) && pool.plugins.exists(p, p == 'gds'))) ||
       (has(self.plugins) && self.plugins.exists(p, p == 'gds'))
     ) || (
@@ -120,9 +120,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 |----|------|----------|-----------|---------|
 | EDT-001 | `edition` must be `enterprise` in V1 | Error | CEL | V1 supports Enterprise edition only |
 | EDT-002 | `license.accept` must be `yes` or `eval` | Error | CEL | Enterprise license must be explicitly accepted |
-| EDT-003 | any `replicaPools` with `members > 0` requires `edition: enterprise` | Error | CEL | replica pools require Enterprise edition |
+| EDT-003 | any `secondaries` with `members > 0` requires `edition: enterprise` | Error | CEL | secondary pools require Enterprise edition |
 | EDT-004 | any pool references `gds` in `plugins` requires `edition: enterprise` | Error | CEL | GDS requires Enterprise edition |
-| EDT-005 | pool with `serverRole: Secondary` and `gds` in `plugins` requires analytics-capable server config | Error | Webhook | GDS on Secondary requires analytics server configuration |
+| EDT-005 | `secondaries[]` pool with `gds` in `plugins` requires analytics-capable server config | Error | Webhook | GDS on secondary pool requires analytics server configuration |
 | EDT-006 | `mode: Cluster` requires `edition: enterprise` | Error | CEL | Cluster mode requires Enterprise edition |
 
 ---
@@ -219,10 +219,10 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | Field | Default when omitted |
 |-------|---------------------|
 | `topology.mode` | — (required) |
-| `topology.cores.plugins` | `[]` (Cluster) |
-| `replicaPools[].plugins` | `[]` |
+| `topology.primaries.plugins` | `[]` (Cluster) |
+| `secondaries[].plugins` | `[]` |
 | `spec.plugins` | `[]` (Standalone) |
-| `topology.minimumMembers` | `cores.members` (Cluster) |
+| `topology.minimumMembers` | `primaries.members` (Cluster) |
 | `image.pullPolicy` | `IfNotPresent` |
 | `auth.generatePassword` | `true` if no `passwordSecretRef` |
 | `trust.enabled` | `false` |
@@ -233,7 +233,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | `podDisruptionBudget.enabled` | `true` when Cluster and total members ≥ 3 |
 | `maintenance.offlineMode` | `false` |
 
-**Standalone**: mutating webhook must **not** inject `cores` / `replicaPools` / `minimumMembers`.
+**Standalone**: mutating webhook must **not** inject `primaries` / `secondaries` / `minimumMembers`.
 
 **Cluster**: mutating webhook may inject empty `pluginDefinitions` entries for referenced `apoc` ids only when `pluginDefinitions` is present but key missing (optional convenience — prefer explicit `{}`).
 

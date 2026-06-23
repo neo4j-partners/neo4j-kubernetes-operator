@@ -69,23 +69,23 @@ Cross-field and mode-dependent rules on the **same object**:
 # Standalone forbids topology member blocks (TOPO-001)
 - rule: |
     !(self.topology.mode == 'Standalone') ||
-    !has(self.topology.cores) && !has(self.topology.replicaPools) &&
+    !has(self.topology.primaries) && !has(self.topology.secondaries) &&
     !has(self.topology.minimumMembers)
   message: members fields are not allowed when mode is Standalone
 
-# Cluster: no GDS on cores (PLG-001)
+# Cluster: no GDS on primaries (PLG-001)
 - rule: |
     self.topology.mode != 'Cluster' ||
-    !has(self.topology.cores) || !has(self.topology.cores.plugins) ||
-    self.topology.cores.plugins.all(p, p != 'gds' && p != 'bloom')
-  message: GDS and Bloom cannot be installed on core members in Cluster mode
+    !has(self.topology.primaries) || !has(self.topology.primaries.plugins) ||
+    self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')
+  message: GDS and Bloom cannot be installed on primary members in Cluster mode
 
 # Immutability (TOPO-013)
 - rule: self.topology.mode == oldSelf.topology.mode
   message: topology.mode cannot change
 ```
 
-CEL supports: `has()`, `all()`, `exists()`, list/map operations, arithmetic (`% 2 == 1` for odd core count), string equality, `oldSelf` for updates.
+CEL supports: `has()`, `all()`, `exists()`, list/map operations, arithmetic (`% 2 == 1` for odd primary count), string equality, `oldSelf` for updates.
 
 ### What CEL cannot express (webhook or reconciler)
 
@@ -97,7 +97,7 @@ CEL supports: `has()`, `all()`, `exists()`, list/map operations, arithmetic (`% 
 | Version downgrade blocked | **Webhook** | VER-002 |
 | PVC shrink blocked (needs live PVC) | **Webhook** | STO-004 |
 | Scale-in below formed cluster | **Webhook** | TOPO-010 |
-| GDS on Secondary needs analytics config | **Webhook** | PLG-008, EDT-005 |
+| GDS on secondary pool needs analytics config | **Webhook** | PLG-008, EDT-005 |
 | Non-HA topology guidance | **Reconciler** → `TopologyWarning` | TOPO-011, TOPO-012 |
 | Unused `pluginDefinitions` key | **Reconciler** → warning | PLG-011 |
 | License Secret rotation → rolling restart | **Reconciler** | PLG-012 |
@@ -119,8 +119,8 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 
 - **Required fields** conditional on `topology.mode`
 - **Forbidden fields** per mode (Standalone vs Cluster)
-- **Topology** — odd `cores.members`, unique pool names, `minimumMembers` bounds *when expressible from spec alone*
-- **Plugin placement** — GDS/Bloom forbidden on `cores.plugins` in Cluster; `licenseSecretRef` required when `gds` referenced
+- **Topology** — odd `primaries.members`, unique pool names, `minimumMembers` bounds *when expressible from spec alone*
+- **Plugin placement** — GDS/Bloom forbidden on `primaries.plugins` in Cluster; `licenseSecretRef` required when `gds` referenced
 - **Edition / enum** guards — V1 `enterprise` only, `license.accept` values
 - **TLS structure** — `trust.enabled` + Cluster ⇒ `cluster` cert ref; HTTPS port ⇒ `trust.enabled`
 - **Immutability** — `topology.mode` cannot change after create
@@ -132,7 +132,7 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 **Mutating webhook** (defaults only — no rejection except parse errors):
 
 - Apply defaults from `validation.md` § Defaults (e.g. `minimumMembers`, `auth.generatePassword`, empty plugin lists).
-- **Must not** inject `cores` / `replicaPools` when `mode: Standalone`.
+- **Must not** inject `primaries` / `secondaries` when `mode: Standalone`.
 
 **Validating webhook** (reject):
 
@@ -211,7 +211,7 @@ Full per-rule assignment: [`09-crd-spec/neo4j/validation.md`](../../09-crd-spec/
 
 - Two authoring surfaces (CEL markers + Go webhook) — new rules need an explicit mechanism choice.
 - CEL debugging can be opaque — messages must be clear; keep expressions short.
-- `TOPO-009` (`minimumMembers > total`) may need CEL with `replicaPools.map(p, p.members).sum()` — verify against target K8s version CEL library.
+- `TOPO-009` (`minimumMembers > total`) may need CEL with `secondaries.map(p, p.members).sum()` — verify against target K8s version CEL library.
 
 ### Neutral
 
