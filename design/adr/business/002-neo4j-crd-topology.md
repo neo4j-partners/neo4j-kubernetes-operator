@@ -286,29 +286,63 @@ Optional **documentation profiles** (samples / `00-vision.md`) may mirror Option
 
 ## Decision
 
-**We will adopt Option D** — `mode: Standalone | Cluster` plus, in cluster mode only, **`cores.members`**, optional **`readReplicas.members`**, and optional **`readGDSReplicas.members`**.
+**We will adopt Option D** — `mode: Standalone | Cluster` plus, in cluster mode, **`cores.members`** and optional **`replicaPools[]`**.
 
-- **`Standalone`**: `mode` only — **no `members` fields** (`cores`, `readReplicas`, `readGDSReplicas`, `minimumMembers` are forbidden).
-- **`Cluster`**: `cores.members` is **required**; `readReplicas.members` and/or `readGDSReplicas.members` are **optional** (default `0`). Use `readReplicas` for causal-cluster read scaling; use `readGDSReplicas` for analytics / GDS secondaries (Helm `analytics`).
+> **Amendment 2026-06-22** — `readReplicas` / `readGDSReplicas` replaced by **`replicaPools[]`**. Plugin model → [BDR-004](004-neo4j-plugin-topology.md) (**not decided**).
+
+- **`Standalone`**: `mode` only — no `cores`, `replicaPools`, or `minimumMembers`. Plugins: flat `spec.plugins[]`.
+- **`Cluster`**: `cores.members` **required**; optional `replicaPools[]`. Each pool: `name`, `members`, `serverRole`, optional `plugins[]`.
+
+```yaml
+topology:
+  mode: Cluster
+  cores:
+    members: 3
+  replicaPools:
+    - name: read-scale
+      members: 2
+      serverRole: ReadReplica
+    - name: gds-bloom
+      members: 1
+      serverRole: ReadReplica
+  minimumMembers: 3
+# plugins: see BDR-004 (Option E example)
+#   pluginDefinitions: { gds: { licenseSecretRef: ... }, bloom: { ... } }
+#   cores.plugins: [apoc]
+#   replicaPools[].plugins: [apoc] | [gds, bloom]
+```
+
+**StatefulSet ordinals** (declaration order):
+
+```
+[0 .. cores-1]                              → core
+[pool₀ start .. pool₀ start + members - 1]  → replicaPools[0]
+[pool₁ start ..]                            → replicaPools[1]
+…
+```
 
 - **Option C** informs **`11-helm-mapping.md`** (translation table), not CR field names.
 - **Option E** may appear later as **optional shortcuts** that expand to Option D counts — not a replacement for explicit GitOps specs in V1.
 
 Options **A** and **B** are **rejected** — ambiguous for primary + secondary (`servers: 2` / `members: 2`). Option **E alone** is **rejected** for V1 — too opaque for production GitOps.
 
+**Rejected (superseded by amendment):** fixed fields `readReplicas.members` / `readGDSReplicas.members` — conflate topology with plugin intent (GDS implied by field name).
+
 ### Validation and guidance rules
 
 | Rule | Severity | Message (example) |
 |------|----------|-------------------|
-| `mode: Standalone` + any `cores` / `readReplicas` / `readGDSReplicas` / `minimumMembers` | Error | `members` fields are not allowed when `mode` is `Standalone` |
+| `mode: Standalone` + any `cores` / `replicaPools` / `minimumMembers` | Error | `members` fields are not allowed when `mode` is `Standalone` |
 | `mode: Cluster` without `cores.members` | Error | `cores.members` is required when `mode` is `Cluster` |
-| `mode: Cluster` + `readReplicas` or `readGDSReplicas` without `cores` | Error | `cores.members` must be set before read replicas |
-| `readReplicas.members > 0` or `readGDSReplicas.members > 0` when `mode: Standalone` | Error | Read replicas require `mode: Cluster` |
+| `replicaPools` without `cores` | Error | `cores.members` must be set before replica pools |
+| `replicaPools[].members > 0` when `mode: Standalone` | Error | Replica pools require `mode: Cluster` |
+| `replicaPools[].name` not unique | Error | duplicate replica pool name |
+| `gds` / `bloom` in `cores.plugins` | Error | GDS/Bloom forbidden on cores |
 | `cores.members` even and > 0 | Error | Core count must be odd for quorum |
-| `cores.members: 1` + (`readReplicas ≥ 1` or `readGDSReplicas ≥ 1`) | Warning | Non-HA topology — not for production writes |
+| `cores.members: 1` + any replica pool | Warning | Non-HA topology — not for production writes |
 | `cores.members < 3` (no production label) | Warning | For HA production use `cores.members ≥ 3` |
-| `readReplicas.members > 0` on Community edition | Error | Read replicas require Enterprise edition |
-| `readGDSReplicas.members > 0` without analytics-capable config | Error | GDS/analytics secondaries require Enterprise + analytics settings |
+| `replicaPools` on Community edition | Error | Replica pools require Enterprise edition |
+| `serverRole: Secondary` without analytics-capable config when pool has `gds` plugin | Error | Secondary role requires analytics server configuration |
 | Scale-in below formed cluster | Error | Unsupported scale-in — explicit procedure required |
 
 Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
@@ -317,13 +351,11 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 
 | In V1 | Deferred |
 |-------|----------|
-| `mode: Standalone` — no `members` fields | **Option E** — `topology.profile` CRD enum (docs-only presets in samples first) |
+| `mode: Standalone` — no member fields | **Option E** — `topology.profile` presets |
 | `mode: Cluster`, `cores.members` (1 or 3+) | Multi-zone `multiCluster` networking variant |
-| `readReplicas.members` (read scaling) | Auto-correction from guessed user intent |
-| `readGDSReplicas.members` (analytics / GDS — Helm `analytics`) | |
+| `replicaPools[]` with `ReadReplica` / `Secondary` | Auto-correction from guessed user intent |
 | Validation errors + HA warnings | |
-| Spec design for `cores: 1` + `readGDSReplicas: 1` | Full E2E for analytics topology (prioritise in `13-v1-scope-lock.md`) |
-| Spec design for `cores: 3` + `readReplicas: N` | |
+| Named pools + per-pool plugins (BDR-004) | Full E2E for all pool × plugin combos |
 
 ---
 
@@ -331,8 +363,8 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 
 ### Positive
 
-- **Primary + analytics** is explicit — `cores: 1` + `readGDSReplicas: 1`, not a misuse of `members: 2`.
-- **Read scaling** (`readReplicas`) and **analytics/GDS** (`readGDSReplicas`) are distinct in the API — matches Helm and Neo4j deployment models.
+- **Primary + analytics** — explicit pool (e.g. `gds-bloom`) with inline `plugins: [gds, bloom]`.
+- **Named pools** — topology sizing and plugins colocated; no separate plugin map.
 - Actionable guidance via validation and status warnings.
 - Helm `minimumClusterSize`, `analytics`, and `enableServer` map through one translation table.
 - BDR-001 unchanged — one CRD, one `neo4jRef`.

@@ -242,7 +242,7 @@ Add before GA commitment: release engineering (5–8 d), security review (5–10
 These are documented in depth in the root [`readme.md`](../readme.md) §5–§8 and will be captured as ADRs in `adr/`:
 
 - **Single `Neo4j` CRD** with `spec.topology.mode: Standalone | Cluster` — see [BDR-001](adr/business/001-single-neo4j-crd.md).
-- **Topology roles** — `cores` + `readReplicas` (read scaling) + `readGDSReplicas` (analytics/GDS) — see [BDR-002](adr/business/002-neo4j-crd-topology.md).
+- **Topology roles** — `cores` + named `replicaPools[]`; plugins per pool — see [BDR-002](adr/business/002-neo4j-crd-topology.md) · [BDR-004](adr/business/004-neo4j-plugin-topology.md).
 - **`Neo4jDatabase` CRD** for logical databases inside a deployment (`neo4jRef`).
 - **No CRDs for infra sub-domains** — connectivity, persistence, trust, and server config are `spec` sections + shared `internal/domain/*` packages.
 - **One reconciler per CRD**, domain modules shared; only `workload` branches on `topology.mode`.

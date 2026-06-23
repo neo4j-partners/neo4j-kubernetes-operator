@@ -1,0 +1,19 @@
+# Minimal valid V1 manifest — Standalone (BDR-002 + BDR-004 Option E)
+# Copy to config/samples/ during implementation.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev
+  namespace: graph-dev
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  persistence:
+    data:
+      size: 10Gi
+  auth:
+    generatePassword: true

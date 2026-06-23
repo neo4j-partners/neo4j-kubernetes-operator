@@ -2,7 +2,7 @@
 
 OpenAPI / CRD design for the Neo4j Kubernetes Operator. **One folder per V1 CRD.** Each folder is self-contained: spec, example manifest(s), and validation rules.
 
-**Status**: `[ ]` to do · **Priority**: P0 — blocks implementation
+**Status**: `[~]` in progress · **Priority**: P0 — blocks implementation
 
 ---
 
@@ -14,6 +14,7 @@ OpenAPI / CRD design for the Neo4j Kubernetes Operator. **One folder per V1 CRD.
 ├── neo4j/                    ← workload CRD (largest spec)
 │   ├── spec.md               ← topology, persistence, connectivity, trust,
 │   │                           config, scheduling (embedded sections)
+│   ├── status.md             ← conditions, phases, Ready semantics
 │   ├── example.yaml
 │   └── validation.md
 ├── neo4jdatabase/
@@ -36,6 +37,7 @@ OpenAPI / CRD design for the Neo4j Kubernetes Operator. **One folder per V1 CRD.
 | File | Purpose |
 |------|---------|
 | **`spec.md`** | OpenAPI field definitions, defaults, immutability. For `neo4j/`, documents the full `spec` including embedded infra sections (not separate CRDs). |
+| **`status.md`** | `status` subresource for this CRD — phases, conditions, Ready semantics (`neo4j/` only for now). |
 | **`example.yaml`** | Minimal valid manifest for review and copy-paste into `config/samples/` during implementation |
 | **`validation.md`** | CEL rules and admission webhook logic for this CRD — rule, mechanism (CEL / webhook), error message |
 
@@ -49,7 +51,7 @@ Full V1 scenario manifests (multi-resource, edge cases) → [`../samples/`](../s
 
 | Folder | `kind`(s) | FR | Reconciler |
 |--------|-----------|-----|------------|
-| [`neo4j/`](neo4j/) | `Neo4j` | NEO-1-001…NEO-2-016, NEO-2-018 | `Neo4jReconciler` |
+| [`neo4j/`](neo4j/) | `Neo4j` | NEO-1-001…NEO-2-016, NEO-2-018 | `Neo4jReconciler` | `[x]` spec · status · validation · example |
 | [`neo4jdatabase/`](neo4jdatabase/) | `Neo4jDatabase` | *(logical DB — TBD in FR)* | `Neo4jDatabaseReconciler` |
 | [`neo4jbackup/`](neo4jbackup/) | `Neo4jBackup`, `Neo4jBackupSchedule` | NEO-013 | `Neo4jBackupReconciler` |
 | [`neo4jrestore/`](neo4jrestore/) | `Neo4jRestore` | NEO-014 | `Neo4jRestoreReconciler` |
