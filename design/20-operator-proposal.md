@@ -53,7 +53,7 @@ Comprehensive operator design derived from analysis of the [Neo4j Helm charts](h
 This proposal aligns with decisions already captured in the design package:
 
 - **[BDR-001](adr/business/001-single-neo4j-crd.md)** — single `Neo4j` CRD with `spec.topology.mode: Standalone | Cluster` (not separate `Neo4jStandalone` / `Neo4jCluster` kinds).
-- **[BDR-002](adr/business/002-neo4j-crd-topology.md)** — topology expressed as `mode` + `cores.members` + `readReplicas.members` (not flat member count).
+- **[BDR-002](adr/business/002-neo4j-crd-topology.md)** — topology expressed as `mode` + `cores.members` + `secondaries.members` (not flat member count).
 - **[`09-crd-spec/readme.md`](09-crd-spec/readme.md)** — infra concerns (persistence, connectivity, trust, config) are embedded `spec` sections on `Neo4j`, not separate CRDs.
 
 ---
@@ -196,7 +196,7 @@ spec:
     mode: Cluster              # Standalone | Cluster
     cores:
       members: 3               # 1 for standalone path; odd ≥3 for production HA
-    readReplicas:
+    secondaries:
       members: 0               # analytics / read scaling (Enterprise)
     minimumMembers: 3          # initial formation gate (maps to Helm minimumClusterSize)
 
@@ -395,7 +395,7 @@ status:
 3. **Ensure TLS**: create cert-manager Certificates or validate referenced secrets.
 4. **Ensure ConfigMaps**: layered config (defaults → user config → K8s-specific cluster discovery).
 5. **Ensure headless Service** for StatefulSet DNS and cluster discovery.
-6. **Ensure StatefulSet**: single StatefulSet with `replicas = cores.members + readReplicas.members`.
+6. **Ensure StatefulSet**: single StatefulSet with `replicas = cores.members + secondaries.members`.
 7. **Wait for pods** to become schedulable and pass startup probes.
 8. **Cluster formation**: monitor Neo4j cluster state; run `ENABLE SERVER` for scale-up; handle decommission on scale-down.
 9. **Ensure Services**: internal ClusterIP, admin, optional LoadBalancer (operator-owned, no cleanup hook hack).
@@ -772,7 +772,7 @@ spec:
 | **Resource autoscaling** | VPA recommendations (not horizontal — Neo4j is stateful) |
 | **External Secrets integration** | `auth.passwordSecretRef` via ESO `ExternalSecret` |
 | **Multi-tenancy** | Namespace-scoped operator with resource quotas |
-| **Topology profiles** | Optional `topology.profile` enum expanding to cores/readReplicas counts (Option E from BDR-002) |
+| **Topology profiles** | Optional `topology.profile` enum expanding to cores/secondaries counts (Option E from BDR-002) |
 
 ---
 
@@ -895,7 +895,7 @@ spec:
     mode: Cluster
     cores:
       members: 3
-    readReplicas:
+    secondaries:
       members: 0
     minimumMembers: 3
   persistence:
@@ -955,7 +955,7 @@ spec:
     mode: Cluster
     cores:
       members: 1
-    readReplicas:
+    secondaries:
       members: 1              # analytics secondary
     minimumMembers: 1
   # status will warn: TopologyWarning / NonHA — cores < 3
@@ -1068,7 +1068,7 @@ kubectl neo4j upgrade prod --version 2026.06.0
 | Area | Included |
 |---|---|
 | **CRDs** | `Neo4j`, `Neo4jDatabase`, `Neo4jBackup`, `Neo4jBackupSchedule`, `Neo4jRestore` (basic) |
-| **Topologies** | Standalone, Causal Cluster (Enterprise, 3+ cores), primary + analytics via readReplicas |
+| **Topologies** | Standalone, Causal Cluster (Enterprise, 3+ cores), primary + analytics via secondaries |
 | **Editions** | Community, Enterprise (with license acceptance) |
 | **Storage** | Dynamic provisioning (storageClass + size) |
 | **Auth** | Generated or referenced password Secret |
@@ -1310,7 +1310,7 @@ Provide a **`helm-to-operator` migration tool** (V1 doc + V2 automation):
 |---|---|
 | `neo4j.minimumClusterSize: 1`, no analytics | `topology.mode: Standalone` |
 | `minimumClusterSize: 3` | `topology.mode: Cluster`, `cores.members: 3`, `minimumMembers: 3` |
-| `analytics.enabled` + `analytics.type: secondary` | `topology.mode: Cluster`, `cores.members: 1`, `readReplicas.members: N` |
+| `analytics.enabled` + `analytics.type: secondary` | `topology.mode: Cluster`, `cores.members: 1`, `secondaries.members: N` |
 | `volumes.data.*` | `persistence.data.*` |
 | `services.neo4j.*` | `connectivity.external.*` |
 | `ssl.*` | `trust.*` |

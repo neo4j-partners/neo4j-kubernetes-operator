@@ -1,4 +1,4 @@
-# HA cluster + read scaling + GDS/Bloom analytics (BDR-002 + BDR-004 Option E)
+# Production HA cluster with secondaries (BDR-002 + BDR-004)
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
@@ -13,21 +13,14 @@ spec:
     mode: Cluster
     primaries:
       members: 3
-      plugins: [apoc]
     secondaries:
-      - name: read-scale
-        members: 2
-        plugins: [apoc]
-      - name: analytics
-        members: 1
-        plugins: [gds, bloom]
+      members: 2
     minimumMembers: 3
+  plugins:
+    primaries: [apoc]
+    secondaries: [apoc]
   pluginDefinitions:
     apoc: {}
-    gds:
-      licenseSecretRef: gds-license
-    bloom:
-      licenseSecretRef: bloom-license
   persistence:
     data:
       size: 100Gi

@@ -73,7 +73,7 @@ This folder documents **what we are building now**. Deferred CRDs get a folder h
 
 ## Principles (locked)
 
-- **Single `Neo4j` CRD** — `spec.topology.mode: Standalone | Cluster`; not separate CRDs per topology.
+- **Single `Neo4j` CRD** — `spec.topology.mode: Standalone | Cluster`; Cluster composes `primaries`, `secondaries`, `analytics` ([BDR-002](../decision-records/business/002-neo4j-crd-topology.md)).
 - **No infra sub-domain CRDs** — persistence, connectivity, trust, and config are `spec` sections on `Neo4j`.
 - **One reconciler per CRD** — folder boundaries follow controller boundaries.
 - **Validation co-located** — all rules for a CRD live in that CRD's `validation.md`.
@@ -102,7 +102,7 @@ Conversion webhook design → `neo4j/validation.md` + variant *CRD conversion we
 |--------|---------|
 | `01-functional_requirements.csv` | FR scope per folder |
 | `03-variant_matrix.csv` | `spec` fields and enum values in each `spec.md` |
-| `11-helm-mapping.md` | Helm `values.yaml` → `neo4j/spec.md` |
+| `11-helm-mapping.md` | Superseded by [ADR-002](../decision-records/architecture/002-helm-values-mapping.md) |
 | `10-status-model.md` | `status` subresources per CRD |
 
 ---

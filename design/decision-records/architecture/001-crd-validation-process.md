@@ -4,6 +4,7 @@
 |---|---|
 | **Status** | accepted |
 | **Date** | 2026-06-22 |
+| **Reviewers** | Charles Boudry, Marouane Gazanayi |
 | **Depends on** | [BDR-001](../business/001-single-neo4j-crd.md) — single `Neo4j` CRD with mode-dependent `spec` |
 | **Constraints** | Kubebuilder scaffold; `EST-DEV-002` (API types & validation); week-1 gate G3 |
 
@@ -70,17 +71,18 @@ Cross-field and mode-dependent rules on the **same object**:
 - rule: |
     !(self.topology.mode == 'Standalone') ||
     !has(self.topology.primaries) && !has(self.topology.secondaries) &&
-    !has(self.topology.minimumMembers)
+    !has(self.topology.analytics) && !has(self.topology.minimumMembers)
   message: members fields are not allowed when mode is Standalone
 
-# Cluster: no GDS on primaries (PLG-001)
+# GDS on analytics role requires analytics members (PLG-007)
 - rule: |
     self.topology.mode != 'Cluster' ||
-    !has(self.topology.primaries) || !has(self.topology.primaries.plugins) ||
-    self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')
-  message: GDS and Bloom cannot be installed on primary members in Cluster mode
+    !has(self.plugins) || !has(self.plugins.analytics) ||
+    !self.plugins.analytics.exists(p, p == 'gds') ||
+    (has(self.topology.analytics) && self.topology.analytics.members >= 1)
+  message: GDS on plugins.analytics requires analytics.members >= 1
 
-# Immutability (TOPO-013)
+# Immutability (TOPO-010)
 - rule: self.topology.mode == oldSelf.topology.mode
   message: topology.mode cannot change
 ```
@@ -119,8 +121,8 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 
 - **Required fields** conditional on `topology.mode`
 - **Forbidden fields** per mode (Standalone vs Cluster)
-- **Topology** — odd `primaries.members`, unique pool names, `minimumMembers` bounds *when expressible from spec alone*
-- **Plugin placement** — GDS/Bloom forbidden on `primaries.plugins` in Cluster; `licenseSecretRef` required when `gds` referenced
+- **Topology** — odd `primaries.members`, role member consistency
+- **Plugin placement** — role/member consistency; `licenseSecretRef` required when `gds` referenced
 - **Edition / enum** guards — V1 `enterprise` only, `license.accept` values
 - **TLS structure** — `trust.enabled` + Cluster ⇒ `cluster` cert ref; HTTPS port ⇒ `trust.enabled`
 - **Immutability** — `topology.mode` cannot change after create

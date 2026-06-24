@@ -1,0 +1,33 @@
+# 1 primary + 1 analytics server with GDS (one licensed instance)
+# BDR-002 + BDR-004: analytics role = dedicated GDS-bearing server; GDS may also run on primaries
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: graph-analytics
+  namespace: graph-prod
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 1
+    analytics:
+      members: 1
+    minimumMembers: 1
+  plugins:
+    primaries: [apoc]
+    analytics: [gds]
+  pluginDefinitions:
+    apoc: {}
+    gds:
+      licenseSecretRef: gds-license
+  persistence:
+    data:
+      size: 100Gi
+    licenses:
+      size: 1Gi
+  auth:
+    generatePassword: true

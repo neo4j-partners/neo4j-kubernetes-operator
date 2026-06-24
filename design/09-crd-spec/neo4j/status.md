@@ -29,9 +29,9 @@
 | `observedGeneration` | int64 | Always | Last `metadata.generation` fully reconciled. |
 | `version` | string | When known | **Effective** Neo4j version on the workload (image / DBMS). During upgrade: reflects version **already running** on members; see `upgrade.targetVersion` for intent. |
 | `lastUpgradeTime` | `metav1.Time` | After successful upgrade | Timestamp when `upgrade.phase` last reached `Completed`. Audit / SRE. |
-| `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). Not `spec.topology.secondaries[]`. |
+| `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). |
 | `upgrade` | `UpgradeStatus` | During / after `spec.version` change | Rolling upgrade state machine (see below). |
-| `members` | `[]MemberStatus` | Cluster + detail path; Standalone optional | Per-server summary (pool, plugins, K8s + Neo4j server state). |
+| `members` | `[]MemberStatus` | Cluster + detail path; Standalone optional | Per-server summary (role, plugins, K8s + Neo4j server state). |
 | `diagnostics` | `DiagnosticsStatus` | When `spec.monitoring` enables deep collection and workload ready | Deep observability — separate from `members[]` summary. |
 | `endpoints` | `EndpointsStatus` | When Services exist | Client URIs + connection examples. |
 | `credentials` | `CredentialsStatus` | When auth Secret exists | Reference to auth Secret — never the password itself. |
@@ -111,11 +111,14 @@ upgrade:
 
 ## `status.serverSummary`
 
-Always updated from StatefulSet / pod list — **no Bolt required**. Distinct from `spec.topology.secondaries[]` (secondary pools).
+Always updated from StatefulSet / pod list — **no Bolt required**.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `servers` | int32 | Desired server count (`1` Standalone; `primaries.members + sum(secondaries[].members)` Cluster). |
+| `servers` | int32 | `primaries + secondaries + analytics` (Cluster); `1` (Standalone). |
+| `primaries` | int32 | Ready primary count |
+| `secondaries` | int32 | Ready secondary count |
+| `analytics` | int32 | Ready analytics server count |
 | `ready` | int32 | Pods passing readiness (K8s + operator gates). |
 
 Use for `kubectl` columns, simple waits (`ready == servers`), HPA-style automation. Prefer over scanning `members[]` for counts.
@@ -156,8 +159,7 @@ Future (day-2 / V2): conditions for restore in progress, sharding migration, etc
 
 | Reason | Trigger | Example message |
 |--------|---------|-----------------|
-| `NonHA` | `mode: Cluster`, `primaries.members < 3`, `sum(secondaries[].members) ≥ 1` | `primaries.members < 3 — not suitable for production HA writes` |
-| `LowPrimaryCount` | `mode: Cluster`, `primaries.members: 1`, no secondary pools | Dev/single-writer — informational |
+| `NonHA` | `mode: Cluster`, `primaries.members < 3` | not suitable for production HA writes |
 
 `TopologyWarning=True` does **not** set `Ready=False` unless members are actually unhealthy.
 
@@ -183,9 +185,9 @@ Prefer vocabulary from `SHOW SERVERS` over legacy causal roles (`LEADER` / `FOLL
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Pod / server name (`<metadata.name>-<ordinal>`). |
-| `pool` | string | `primary` or `secondaries[].name` from spec. |
+| `role` | string | `standalone`, `primary`, `secondary`, or `analytics` from topology mode + ordinal. |
 | `address` | string | Bolt address for admin operations. |
-| `plugins` | []string | Resolved catalog ids (pool refs + `pluginDefinitions`). |
+| `plugins` | []string | Resolved catalog ids (role plugin list + `pluginDefinitions`). |
 | `neo4jState` | string | Server state from `SHOW SERVERS` — e.g. `Enabled`, `Cordoned`, `Deallocating`. |
 | `neo4jHealth` | string | `Available`, `Unavailable`, … |
 | `hostingDatabases` | int32 | Count of databases hosted on this server. |
@@ -211,7 +213,7 @@ Standalone example — one member, no invented cluster role:
 ```yaml
 members:
   - name: dev-server-0
-    pool: server
+    role: standalone
     address: dev-0.dev.graph-dev.svc:7687
     neo4jState: Enabled
     neo4jHealth: Available
@@ -343,7 +345,7 @@ Each key status signal should have a Prometheus equivalent for SRE dashboards an
 | `replicas` | `neo4j_operator_neo4j_replicas_desired`, `_ready` | Counts from `serverSummary` |
 | `upgrade.phase` | `neo4j_operator_neo4j_upgrade_phase` | `target_version` |
 | `conditions.Ready` | `neo4j_operator_neo4j_ready` | |
-| `members[].neo4jHealth` | `neo4j_operator_server_health` | `server`, `pool` |
+| `members[].neo4jHealth` | `neo4j_operator_server_health` | `server`, `role` |
 | Upgrade progress | `neo4j_operator_upgrade_members_upgraded` | |
 
 Phase / condition transitions should increment event counters or structured log fields for audit.
@@ -386,7 +388,7 @@ status:
       status: "False"
   members:
     - name: my-graph-0
-      pool: primary
+      role: primary
       address: my-graph-0.my-graph.graph-prod.svc:7687
       neo4jState: Enabled
       neo4jHealth: Available

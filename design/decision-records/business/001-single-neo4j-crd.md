@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | proposed |
-| **Reviewers** | Charles Boudry |
+| **Reviewers** | Charles Boudry, Marouane Gazanayi |
 | **Date** | 2026-06-18 |
 | **Deciders** | Operator design team |
 | **Constraints** | `01-functional_requirements.csv` (NEO-001, NEO-002), Helm chart parity |
@@ -250,7 +250,7 @@ We will **not** ship `Neo4jStandalone` or `Neo4jCluster` as separate API kinds.
 
 Infra concerns (persistence, connectivity, trust, server config) remain **`spec` sections** on `Neo4j`, not separate CRDs.
 
-> **Topology detail** (cores, read replicas, primary + analytics, user guidance) → [BDR-002](002-neo4j-crd-topology.md).
+> **Topology detail** (primaries, secondaries, analytics, user guidance) → [BDR-002](002-neo4j-crd-topology.md).
 
 ---
 
