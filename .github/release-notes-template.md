@@ -14,7 +14,7 @@ kubectl apply --server-side -f https://github.com/priyolahiri/neo4j-kubernetes-o
 
 ## Helm
 
-### Helm chart repository (recommended, available from v1.8.0 onwards)
+### Helm chart repository (recommended)
 
 ```bash
 helm repo add neo4j-operator https://priyolahiri.github.io/neo4j-kubernetes-operator/charts
@@ -26,7 +26,7 @@ helm install neo4j-operator neo4j-operator/neo4j-operator \
   --create-namespace
 ```
 
-### OCI registry (all releases)
+### OCI registry
 
 ```bash
 helm install neo4j-operator oci://ghcr.io/priyolahiri/charts/neo4j-operator \
@@ -34,12 +34,6 @@ helm install neo4j-operator oci://ghcr.io/priyolahiri/charts/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace
 ```
-
-## Upgrading
-
-Breaking changes are documented in the [Migration Guide](https://priyolahiri.github.io/neo4j-kubernetes-operator/user_guide/migration_guide/),
-grouped by release. Before deploying this version, check the guide for any
-manifest updates required since the release you're currently running.
 
 ## Requirements
 
@@ -68,8 +62,8 @@ Every release must pass, mechanically — a failure in any gate blocks publicati
 
 - **Unit suite + generated-artifact drift gate** — CRDs, RBAC, Helm chart, and the OLM bundle are regenerated and diffed on every PR; a release cannot ship manifests that don't match the code.
 - **Core integration suite on both supported Neo4j lines** — Neo4j 5.26 LTS *and* the pinned CalVer release, on every runtime-affecting PR.
-- **Extended integration suite on the release commit** — the full matrix (clustering, scaling, split-brain recovery, the complete backup/restore matrix, sharding) runs against the exact commit being tagged.
-- **Install-confidence gate (blocking, inside the release pipeline)** — a five-leg matrix on a fresh Kubernetes cluster: Helm install (cluster and namespace-scoped RBAC modes), Helm upgrade **from the previous published release** including the CRD refresh, documented-order uninstall with live resources, and the kubectl server-side-apply path. A release that cannot cleanly install, upgrade, or uninstall cannot be published.
+- **Extended integration suite on the release commit** — the full matrix (clustering, scaling, split-brain recovery, the complete backup/restore matrix, sharding) is run on demand against the exact commit being tagged, ahead of cutting the release.
+- **Install-confidence gate (blocking, inside the release pipeline)** — a matrix on a fresh Kubernetes cluster: Helm install (cluster and namespace-scoped RBAC modes), Helm upgrade with the CRD refresh (from a prior published chart once one exists), documented-order uninstall with live resources, and the kubectl server-side-apply path. A release that cannot cleanly install, upgrade, or uninstall cannot be published.
 - **Signed supply chain** — multi-arch images signed with Sigstore Cosign (verification command above); OLM bundle validated with operator-sdk.
 
 See [Supported Neo4j Versions](https://priyolahiri.github.io/neo4j-kubernetes-operator/user_guide/version_support/) for what "validated" means per Neo4j line, and [CI/CD & Workflows](https://priyolahiri.github.io/neo4j-kubernetes-operator/developer_guide/ci_and_workflows/) for the gate machinery.
@@ -89,7 +83,6 @@ See [Supported Neo4j Versions](https://priyolahiri.github.io/neo4j-kubernetes-op
 
 - [Getting Started Guide](https://priyolahiri.github.io/neo4j-kubernetes-operator/main/user_guide/getting_started/)
 - [API Reference](https://priyolahiri.github.io/neo4j-kubernetes-operator/main/api_reference/neo4jenterprisecluster/)
-- [Migration Guide](https://priyolahiri.github.io/neo4j-kubernetes-operator/main/user_guide/migration_guide/)
 
 ## Bug Reports
 
