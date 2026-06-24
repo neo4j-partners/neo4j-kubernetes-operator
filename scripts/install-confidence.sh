@@ -161,8 +161,14 @@ helm uninstall op -n "$NS" --wait >/dev/null
 
 # ---------------------------------------------------------------- 3. helm upgrade from previous release
 step "=== [3] helm upgrade from previous released chart (+ CRD refresh)"
+# Debut-safe: on the FIRST release the classic Helm repo (gh-pages /charts) has
+# no index.yaml yet, so both `repo add` and `repo update` fail. `|| true` on BOTH
+# (set -euo pipefail would otherwise abort here, before the protective `if`).
+# The `if helm install` below then fails to find the chart and the whole
+# upgrade-from-previous leg SKIPs gracefully — there is no prior release to
+# upgrade FROM on a debut.
 helm repo add neo4j-operator-rel "$HELM_REPO_URL" >/dev/null 2>&1 || true
-helm repo update >/dev/null 2>&1
+helm repo update >/dev/null 2>&1 || true
 step "installing previous released chart ${PREV_CHART_VERSION:-(latest)} — pulls the RELEASED operator image from ghcr, can take a few minutes (helm --wait, timeout 300s)"
 if helm install op neo4j-operator-rel/neo4j-operator -n "$NS" \
      ${PREV_CHART_VERSION:+--version "$PREV_CHART_VERSION"} \
