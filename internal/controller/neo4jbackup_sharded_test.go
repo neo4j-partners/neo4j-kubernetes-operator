@@ -66,11 +66,12 @@ func TestEffectiveRemoteAddressResolution(t *testing.T) {
 	v526, _ := neo4j.ParseVersion("5.26.0-enterprise")
 
 	cases := []struct {
-		name    string
-		kind    string
-		options *neo4jv1beta1.BackupOptions
-		version *neo4j.Version
-		want    bool
+		name               string
+		kind               string
+		options            *neo4jv1beta1.BackupOptions
+		version            *neo4j.Version
+		clusterHasSharding bool
+		want               bool
 	}{
 		{
 			name:    "ShardedDatabase + 2025.09 + nil opts → defaults true",
@@ -115,11 +116,35 @@ func TestEffectiveRemoteAddressResolution(t *testing.T) {
 			want:    true,
 		},
 		{
-			name:    "Cluster kind + nil opts → false (no defaulting for non-sharded)",
+			name:    "Cluster kind + nil opts + non-sharding cluster → false",
 			kind:    neo4jv1beta1.BackupTargetKindCluster,
 			options: nil,
 			version: v202509,
 			want:    false,
+		},
+		{
+			name:               "Cluster kind (all-DB) + nil opts + SHARDING cluster → true (glob hits shards)",
+			kind:               neo4jv1beta1.BackupTargetKindCluster,
+			options:            nil,
+			version:            v202509,
+			clusterHasSharding: true,
+			want:               true,
+		},
+		{
+			name:               "Cluster kind (all-DB) + SHARDING cluster + explicit false → false (user wins)",
+			kind:               neo4jv1beta1.BackupTargetKindCluster,
+			options:            &neo4jv1beta1.BackupOptions{RemoteAddressResolution: ptrBool(false)},
+			version:            v202509,
+			clusterHasSharding: true,
+			want:               false,
+		},
+		{
+			name:               "Cluster kind (all-DB) + SHARDING cluster + version too old → false",
+			kind:               neo4jv1beta1.BackupTargetKindCluster,
+			options:            nil,
+			version:            v202508,
+			clusterHasSharding: true,
+			want:               false,
 		},
 		{
 			name:    "Cluster kind + explicit true → true (user opt-in honored)",
@@ -145,7 +170,7 @@ func TestEffectiveRemoteAddressResolution(t *testing.T) {
 					Options: tc.options,
 				},
 			}
-			got := effectiveRemoteAddressResolution(backup, tc.version)
+			got := effectiveRemoteAddressResolution(backup, tc.version, tc.clusterHasSharding)
 			if got != tc.want {
 				t.Errorf("effectiveRemoteAddressResolution() = %v, want %v", got, tc.want)
 			}

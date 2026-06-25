@@ -1298,15 +1298,35 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 
 // effectiveRemoteAddressResolution resolves Spec.Options.RemoteAddressResolution
 // to its effective bool value with defaulting applied. Explicit user values
-// (true or false) always win. When the field is unset (nil) AND target.Kind is
-// ShardedDatabase AND the Neo4j version supports the flag (2025.09+), default
-// to true — matches the canonical upstream sharded-backup invocation.
-func effectiveRemoteAddressResolution(backup *neo4jv1beta1.Neo4jBackup, version *neo4j.Version) bool {
+// (true or false) always win. When the field is unset (nil) AND the Neo4j
+// version supports the flag (2025.09+), default to true for any backup that will
+// touch a property shard:
+//   - a ShardedDatabase-scoped backup (the canonical upstream sharded
+//     invocation), and
+//   - an all-databases backup against a sharding-enabled cluster — its `"*"`
+//     glob includes the shard physical DBs (`-g000`/`-pNNN`), and neo4j-admin
+//     hard-fails ("Please specify --remote-address-resolution when taking a
+//     backup of a shard") once it reaches the first shard if the flag is absent.
+//
+// clusterHasSharding is the target cluster's `spec.propertySharding.enabled`
+// (false for standalones / non-sharding clusters, where the default stays off).
+func effectiveRemoteAddressResolution(backup *neo4jv1beta1.Neo4jBackup, version *neo4j.Version, clusterHasSharding bool) bool {
 	if backup.Spec.Options != nil && backup.Spec.Options.RemoteAddressResolution != nil {
 		return *backup.Spec.Options.RemoteAddressResolution
 	}
-	return backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindShardedDatabase &&
-		version != nil && version.SupportsRemoteAddressResolution()
+	if version == nil || !version.SupportsRemoteAddressResolution() {
+		return false
+	}
+	switch backup.Spec.Target.Kind {
+	case neo4jv1beta1.BackupTargetKindShardedDatabase:
+		return true
+	case neo4jv1beta1.BackupTargetKindCluster:
+		// all-databases scope (synthesized from spec.allDatabases / legacy
+		// kind: Cluster) — only needs it when the cluster actually hosts shards.
+		return clusterHasSharding
+	default:
+		return false
+	}
 }
 
 func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
@@ -1330,7 +1350,8 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	// invocation includes this flag; the operator defaults it to true when
 	// the user hasn't set the field explicitly. Explicit values (true/false)
 	// always win.
-	remoteAddrRes := effectiveRemoteAddressResolution(backup, version)
+	clusterHasSharding := cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled
+	remoteAddrRes := effectiveRemoteAddressResolution(backup, version, clusterHasSharding)
 
 	// Validate version-gated flags individually.
 	if backup.Spec.Options != nil {
