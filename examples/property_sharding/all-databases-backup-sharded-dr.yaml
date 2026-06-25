@@ -1,0 +1,168 @@
+# All-Databases Backup as a Disaster-Recovery Source for Property-Sharded Databases
+# ────────────────────────────────────────────────────────────────────────────────
+# Demonstrates the v1.13 capability: ONE all-databases Neo4jBackup is a complete
+# DR source for a cluster that mixes standard and property-sharded databases.
+#
+# An all-databases backup (`spec.allDatabases: true`) backs up every standard
+# database AND **catalogues each property-sharded family** in
+# `status.history[].shardedFamilies` (the family names also appear in
+# `shardedDatabasesExcluded`, with a BackupShardedDatabasesExcluded event).
+#
+# Recovery has two halves, both seeding from the SAME backup:
+#   • Standard databases  → a Neo4jRestore with `spec.allDatabases: true`.
+#   • Sharded families    → re-apply each Neo4jShardedDatabase CR with
+#                           `spec.seedBackupRef` pointing at the all-databases
+#                           backup. (Sharded DBs need the SET GRAPH/PROPERTY
+#                           SHARDS CREATE clauses, so they are NOT recreated by
+#                           the all-databases restore loop — they restore through
+#                           their own CR.)
+#
+# This file is laid out as two phases. Apply Phase 1, let the backup reach a
+# Succeeded run, THEN apply Phase 2 (the DR step). In a real disaster you would
+# apply Phase 2 against a freshly rebuilt cluster, reusing the ORIGINAL database
+# name; this demo restores into `products-restored` (via `seedSourceDatabase`) so
+# the source and the recovered copy can sit side by side.
+#
+# See: docs/user_guide/guides/backup_restore.md and docs/user_guide/property_sharding.md
+
+# ═══════════════════════════ PHASE 1 — normal operations ═══════════════════════
+---
+# Property-sharding cluster (CalVer ≥ 2025.12 required for property sharding).
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: dr-sharding-cluster
+  namespace: default
+spec:
+  acceptLicenseAgreement: "eval"
+  image:
+    repo: neo4j
+    tag: "2026.04-enterprise"   # property sharding needs CalVer ≥ 2025.12
+
+  auth:
+    adminSecret: neo4j-admin-secret   # create out-of-band (see bottom of file)
+
+  topology:
+    servers: 3
+
+  storage:
+    size: 20Gi
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+
+  resources:
+    requests:
+      memory: 4Gi    # property sharding's documented floor is 4Gi + 1 core per server
+      cpu: 2000m
+    limits:
+      memory: 8Gi
+      cpu: 2000m
+
+  propertySharding:
+    enabled: true
+
+---
+# The source sharded database. (A standard `neo4j` database also exists by
+# default — the all-databases backup below captures both.)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jShardedDatabase
+metadata:
+  name: products
+  namespace: default
+spec:
+  clusterRef: dr-sharding-cluster
+  name: products
+  defaultCypherLanguage: "25"
+  propertySharding:
+    propertyShards: 4
+    graphShard:
+      primaries: 3
+      secondaries: 0
+    propertyShardTopology:
+      replicas: 1
+
+---
+# Daily ALL-DATABASES backup. Captures every standard database AND catalogues the
+# 'products' sharded family (status.history[].shardedFamilies) — making this one
+# backup a complete DR source.
+#
+# Note: the operator automatically adds `--remote-address-resolution` to an
+# all-databases backup on a sharding cluster (neo4j-admin requires it to back up
+# shards); you do NOT set it yourself.
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: daily-all-databases
+  namespace: default
+spec:
+  instanceRef: dr-sharding-cluster   # the cluster (auto-detected)
+  allDatabases: true                 # instance-wide scope
+
+  schedule: "0 2 * * *"   # daily at 02:00
+
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: dr-all-databases
+    cloud:
+      provider: aws        # required for s3 (the validator rejects s3 without it)
+      credentialsSecretRef: backup-credentials   # create out-of-band
+
+  options:
+    backupType: AUTO       # full first, differentials after
+    compress: true
+
+  retention:
+    maxCount: 7
+    deletePolicy: Delete
+
+# ═══════════════════════════ PHASE 2 — disaster recovery ═══════════════════════
+# Apply the resource below ONLY AFTER `daily-all-databases` has a Succeeded run
+# (kubectl get neo4jbackup daily-all-databases -o jsonpath='{.status.history[0].status}').
+#
+# It recreates the 'products' family by seeding from the all-databases backup. The
+# operator finds the family in the backup's status.shardedFamilies, builds an
+# explicit per-shard cloud seedURI map (a directory-scan URI can't isolate one
+# family from the all-databases backup), and projects the backup credentials onto
+# the cluster pods.
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jShardedDatabase
+metadata:
+  name: products-restored
+  namespace: default
+spec:
+  clusterRef: dr-sharding-cluster
+  name: products-restored            # in a REAL DR you'd reuse "products"
+  defaultCypherLanguage: "25"
+
+  # Topology must match the source family's shard layout.
+  propertySharding:
+    propertyShards: 4
+    graphShard:
+      primaries: 3
+      secondaries: 0
+    propertyShardTopology:
+      replicas: 1
+
+  # Seed from the all-databases backup. seedSourceDatabase names the SOURCE family
+  # to pull out of it — required here because the target name differs from the
+  # source. Omit it when restoring in place (target name == source family).
+  seedBackupRef: daily-all-databases
+  seedSourceDatabase: products
+
+  wait: true
+  ifNotExists: true
+
+# ── Admin credentials Secret (create BEFORE applying Phase 1) ──────────────────
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# ── Backup credentials Secret (create BEFORE applying Phase 1) ─────────────────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with placeholders. Create it out-of-band:
+#   kubectl create secret generic backup-credentials \
+#     --namespace default \
+#     --from-literal=access-key-id='<your-access-key>' \
+#     --from-literal=secret-access-key='<your-secret-key>'

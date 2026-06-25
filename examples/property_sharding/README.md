@@ -96,6 +96,26 @@ Note: `backupConfig` on `Neo4jShardedDatabase` is not orchestrated yet; use expl
 kubectl apply -f property-sharding-with-backup.yaml
 ```
 
+### 5. All-Databases Backup as a DR Source (`all-databases-backup-sharded-dr.yaml`)
+
+**Use Case**: Recovering a mixed (standard + sharded) cluster from a single
+instance-wide backup.
+
+**Features**:
+- One `allDatabases` `Neo4jBackup` is a complete DR source — it backs up standard
+  databases AND catalogues each property-sharded family (`status.shardedFamilies`)
+- Recovery re-applies the `Neo4jShardedDatabase` with `spec.seedBackupRef` pointing
+  at that backup (per-shard cloud seedURIs built automatically)
+- `seedSourceDatabase` to restore a family under a different name
+
+**Deploy** (two phases — see the file header):
+```bash
+# Phase 1 (normal ops): cluster + sharded DB + the all-databases backup
+kubectl apply -f all-databases-backup-sharded-dr.yaml   # apply the Phase 1 docs
+# …wait for a Succeeded backup run, then apply the Phase 2 (DR) Neo4jShardedDatabase
+kubectl get neo4jbackup daily-all-databases -o jsonpath='{.status.history[0].status}'
+```
+
 ## Configuration Guide
 
 ### Choosing Property Shard Count
