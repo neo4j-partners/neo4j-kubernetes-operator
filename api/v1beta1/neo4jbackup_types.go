@@ -460,14 +460,28 @@ type BackupRun struct {
 	// ShardedDatabasesExcluded lists the logical property-sharded databases
 	// (e.g. "products") whose shard physical databases (…-g000/…-pNNN) this
 	// all-databases run wrote to disk but deliberately did NOT catalogue in
-	// DatabaseArtifacts — so an all-databases restore does not (and cannot)
-	// recreate them. Each must be backed up with a ShardedDatabase-scoped
-	// Neo4jBackup and restored through its Neo4jShardedDatabase CR
+	// DatabaseArtifacts — so an all-databases *restore* does not recreate them
+	// in its per-database loop (sharded DBs need the SET GRAPH/PROPERTY SHARDS
+	// CREATE clauses only Neo4jShardedDatabase emits). They are NOT lost: when
+	// ShardedFamilies (below) catalogues their per-shard artifacts, each is
+	// restorable from THIS backup via its Neo4jShardedDatabase CR
 	// (spec.seedBackupRef). Populated for all-databases runs whose log shows
-	// shard-shaped databases; empty otherwise. This makes the otherwise-silent
-	// sharded-exclusion explicit on the backup and travels to the restore.
+	// shard-shaped databases; empty otherwise. This makes the sharded handling
+	// explicit on the backup and travels to the restore.
 	// +optional
 	ShardedDatabasesExcluded []string `json:"shardedDatabasesExcluded,omitempty"`
+
+	// ShardedFamilies catalogues, for an all-databases backup, the per-shard
+	// `.backup` artifacts of each property-sharded family the run captured —
+	// turning one all-databases backup into a complete DR source. Each family
+	// here is also listed in ShardedDatabasesExcluded (it isn't recreated by
+	// the all-databases restore loop), but because its shard files are
+	// recorded, the family can be restored from THIS backup by pointing its
+	// Neo4jShardedDatabase CR's spec.seedBackupRef at this Neo4jBackup. Empty
+	// for single-database runs and for single-family ShardedDatabase-scoped
+	// runs (those use ShardArtifacts).
+	// +optional
+	ShardedFamilies []ShardedFamilyArtifacts `json:"shardedFamilies,omitempty"`
 
 	// Validation captures the per-shard outcome of an optional
 	// `neo4j-admin backup validate` step run after the backup completes.
@@ -493,6 +507,23 @@ type ShardArtifact struct {
 	// not parseable. Use `humanize.IBytes` or equivalent on the consumer
 	// side for display.
 	Size int64 `json:"size,omitempty"`
+}
+
+// ShardedFamilyArtifacts records the per-shard `.backup` files for one
+// property-sharded family captured by an all-databases backup run. An
+// all-databases backup ("*") writes every family's shard physical databases to
+// storage; this catalogues them per logical family so each can be restored from
+// that single backup via its Neo4jShardedDatabase CR (spec.seedBackupRef).
+type ShardedFamilyArtifacts struct {
+	// Family is the logical sharded-database name (e.g. "products") — i.e.
+	// Neo4jShardedDatabase.spec.name, the prefix shared by every shard in
+	// ShardArtifacts below.
+	Family string `json:"family"`
+
+	// ShardArtifacts are the per-shard `.backup` files for this family (the
+	// graph shard `{family}-g000` plus property shards `{family}-pNNN`), same
+	// shape as the single-family BackupRun.ShardArtifacts.
+	ShardArtifacts []ShardArtifact `json:"shardArtifacts"`
 }
 
 // DatabaseArtifact identifies one `.backup` file produced by an all-databases
