@@ -1,0 +1,38 @@
+---
+description: Format and quality gates for Helm field analysis artifacts
+globs: design/analysis/helm-fields/**
+alwaysApply: false
+---
+
+# Helm analysis output format
+
+## Field document path
+
+`design/analysis/helm-fields/fields/<helm-path-with-dots>.md`
+
+Example: `neo4j.operations.enableServer` → `fields/neo4j.operations.enableServer.md`
+
+For map roots (`config`, `apoc_config`): single file at `fields/config.md`.
+
+## Required sections (every field doc)
+
+1. **Client need** — one paragraph, user-facing
+2. **Neo4j documentation** — bullet URLs with section names
+3. **Helm implementation** — templates, Go struct, K8s resources, Neo4j mechanism
+4. **Category** — one of: topology | storage | network | config | security | scheduling | health | observability | plugins | lifecycle | packaging
+5. **Semantic concerns** — `CONCERN-*` ids; list co-paths even if distant in values.yaml (required for topology/plugin fields)
+6. **CRD mapping (draft)** — `Neo4j.spec.*` or separate CRD or `N/A`
+7. **Aggregation** — `AGG-*` group id or `none`
+8. **Versioning** — `breaking` | `safe` | `deferred` + rationale
+9. **FR / AC** — IDs from `01-functional_requirements.csv` / `02-acceptance_criteria_library.csv`
+10. **Open questions** — PS input needed; BDR exemplar challenges
+
+## CSV sync
+
+After writing a field doc, update `_index.csv` row: fill columns, set `status` to `draft`.
+
+## Quality gates
+
+- No empty `client_need` unless `UNKNOWN — PS input required`
+- `helm_code_refs` must cite at least one template or `release_values.go` field
+- Breaking fields must link `aggregation_group` when part of a group

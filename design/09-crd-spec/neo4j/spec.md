@@ -76,9 +76,11 @@ Deployment mode and Neo4j role composition.
 | `Standalone` | Single Neo4j instance — no causal cluster formation. |
 | `Cluster` | Multi-member cluster — requires `primaries.members`. |
 
-**Neo4j terminology (V1 API):** **Primary** = quorum / writer members (`topology.primaries`). **Secondary** = non-primary servers (`topology.secondaries[]`).
+**Neo4j terminology (V1 API):** **Primary** = quorum / writer members (`topology.primaries`). **Secondary** = non-primary servers (`topology.secondaries`).
 
-**No `serverRole` field.** Every entry in `secondaries[]` is a Neo4j Secondary. Intent (read scaling vs analytics / GDS) is expressed by **pool `name`**, **`plugins`**, and operator-generated config — not by an extra enum.
+**Fixed secondary pools (V1):** `topology.secondaries` is an object with optional keys **`analytics`** (GDS/Bloom / OLAP) and **`read`** (read scaling). No arbitrary pool names — intent is encoded by the key, not a free-form `name` field.
+
+**No `serverRole` field.** Operator configures every secondary pool member as a Neo4j Secondary; pool-specific Neo4j config is derived from the fixed key (`analytics` vs `read`) and `plugins`.
 
 **Immutable** after create (mode change requires replace).
 
@@ -102,12 +104,12 @@ topology:
     members: 3
     plugins: [apoc]
   secondaries:
-    - name: read-scale
-      members: 2
-      plugins: [apoc]
-    - name: analytics
+    analytics:
       members: 1
       plugins: [gds, bloom]
+    read:
+      members: 2
+      plugins: [apoc]
   minimumMembers: 3
 pluginDefinitions:
   apoc: {}
@@ -121,24 +123,27 @@ pluginDefinitions:
 |-------|------|----------|---------|-------------|
 | `primaries.members` | int32 | **yes** (Cluster) | — | Primary members (writers / quorum). Odd when > 0. |
 | `primaries.plugins` | []string | no | `[]` | Plugin ids for every primary pod. **Cluster only** — field absent in Standalone. |
-| `secondaries[].name` | string | **yes** | — | Unique secondary pool id (DNS label). |
-| `secondaries[].members` | int32 | **yes** | — | Secondary pods in this pool (≥ 1). |
-| `secondaries[].plugins` | []string | no | `[]` | Plugin ids for every pod in this pool. All catalog plugins allowed. |
+| `secondaries.analytics` | SecondaryPool | no | — | Analytics / GDS secondary pool. Omit or `members: 0` to disable. |
+| `secondaries.read` | SecondaryPool | no | — | Read-scaling secondary pool. Omit or `members: 0` to disable. |
+| `secondaries.<pool>.members` | int32 | conditional | — | Required ≥ 1 when pool block is present and non-zero. |
+| `secondaries.<pool>.plugins` | []string | no | `[]` | Plugin ids for every pod in that pool. |
 
-**Removed (do not implement):** `secondaries[].serverRole` — redundant with `secondaries[]`; operator configures every pool member as a Neo4j Secondary.
+**SecondaryPool** (`analytics` | `read` only): `{ members, plugins? }`.
+
+**Removed (do not implement):** `secondaries[]` list with `name` field; `secondaries[].serverRole`.
 
 | `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). |
 
-Plugin ids in `primaries.plugins` / `secondaries[].plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
+Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
 
 **StatefulSet replica count**:
 
 | Mode | Replicas |
 |------|----------|
 | `Standalone` | `1` |
-| `Cluster` | `primaries.members + sum(secondaries[].members)` |
+| `Cluster` | `primaries.members + analytics.members + read.members` (missing pool or `members: 0` → 0) |
 
-**Ordinal → pool** (declaration order): primaries first, then each `secondaries[]` entry in array order.
+**Ordinal → pool** (fixed order): primaries first, then **`analytics`**, then **`read`**.
 
 ### Topology decision guide
 
@@ -146,10 +151,10 @@ Plugin ids in `primaries.plugins` / `secondaries[].plugins` are **references onl
 |----------|------|
 | Dev / CI single server | `mode: Standalone` |
 | Standalone + GDS | `mode: Standalone`, `spec.plugins: [apoc, gds]` + `pluginDefinitions` |
-| Production HA writes | `mode: Cluster`, `primaries.members: 3`, no secondaries |
-| Primary + analytics / GDS | `mode: Cluster`, `primaries.members: 1`, `secondaries: [{name: analytics, members: 1, plugins: [gds]}]` |
-| HA + read scaling | `mode: Cluster`, `primaries.members: 3`, `secondaries: [{name: read-scale, members: N, plugins: [apoc]}]` |
-| GDS + Bloom on secondary | `secondaries[].plugins: [gds, bloom]` + `pluginDefinitions` |
+| Production HA writes | `mode: Cluster`, `primaries.members: 3`, omit `secondaries` or zero members |
+| Primary + analytics / GDS | `mode: Cluster`, `primaries.members: 1`, `secondaries.analytics: { members: 1, plugins: [gds] }` |
+| HA + read scaling | `mode: Cluster`, `primaries.members: 3`, `secondaries.read: { members: N, plugins: [apoc] }` |
+| GDS + Bloom on analytics | `secondaries.analytics.plugins: [gds, bloom]` + `pluginDefinitions` |
 
 ### Helm mapping
 
@@ -157,8 +162,8 @@ Plugin ids in `primaries.plugins` / `secondaries[].plugins` are **references onl
 |------|-----------------|
 | `minimumClusterSize: 1`, no analytics | `mode: Standalone` |
 | `minimumClusterSize: 3` | `mode: Cluster`, `primaries.members: 3`, `minimumMembers: 3` |
-| analytics primary + N secondaries | `primaries.members: 1`, `secondaries: [{name: analytics, members: N}]` |
-| Secondary scaling | `primaries.members: 3`, `secondaries: [{name: read-scale, members: N}]` |
+| analytics primary + N secondaries | `primaries.members: 1`, `secondaries.analytics.members: N` |
+| Read replica scaling | `primaries.members: 3`, `secondaries.read.members: N` |
 | `operations.enableServer: true` | scale / enable-server flow (`NEO-2-011`) |
 
 ---
@@ -248,15 +253,15 @@ Pools and Standalone declare **which** plugins run (catalog id strings). **How**
 | `topology.mode` | Where to declare plugins | Which plugins are allowed |
 |-------------------|--------------------------|---------------------------|
 | **Standalone** | `spec.plugins` | **All** catalog plugins (`apoc`, `gds`, `bloom`, …) |
-| **Cluster** | `topology.primaries.plugins`, `topology.secondaries[].plugins` | **All** plugins on `secondaries[]` · on **primaries only**: `gds` and `bloom` are **forbidden** |
+| **Cluster** | `topology.primaries.plugins`, `topology.secondaries.analytics.plugins`, `topology.secondaries.read.plugins` | **`gds` / `bloom` only on `secondaries.analytics`** · forbidden on `primaries` and `secondaries.read` |
 
-Neo4j does not support GDS on **Primary** members. That restriction applies only in Cluster mode on `primaries.plugins` — not on Standalone, not on `secondaries[]`.
+Neo4j does not support GDS on **Primary** members. In Cluster mode, `gds` / `bloom` belong on **`secondaries.analytics`** only.
 
 ### Assignment vs configuration
 
 | Mode | Assignment (where) | Configuration |
 |------|-------------------|---------------|
-| `Cluster` | `topology.primaries.plugins[]`, `topology.secondaries[].plugins[]` | `spec.pluginDefinitions` |
+| `Cluster` | `topology.primaries.plugins[]`, `secondaries.analytics.plugins[]`, `secondaries.read.plugins[]` | `spec.pluginDefinitions` |
 | `Standalone` | `spec.plugins[]` | `spec.pluginDefinitions` |
 
 **Operator resolution:** for each plugin id in a pool’s `plugins[]` (or `spec.plugins[]` in Standalone), look up `pluginDefinitions[id]`, merge with built-in catalog defaults, install on all pods in that pool.
@@ -313,7 +318,7 @@ Placement constraints are defined by **mode** in [Plugin placement by mode](#plu
 ### Invariants ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md))
 
 1. **Standalone** — any catalog plugin may appear in `spec.plugins`.
-2. **Cluster** — `gds` / `bloom` must not appear in `topology.primaries.plugins`; they may appear on `secondaries[].plugins`.
+2. **Cluster** — `gds` / `bloom` must not appear in `topology.primaries.plugins` or `secondaries.read.plugins`; they may appear on `secondaries.analytics.plugins`.
 3. **Shared license Secret** — one `licenseSecretRef` per plugin id in `pluginDefinitions`; operator mounts it on every pod that runs that plugin.
 4. **License renewal** — update Secret content or `licenseSecretRef`, then rolling restart GDS pods (Neo4j validates license at startup only).
 
@@ -513,7 +518,7 @@ spec:
       members: 1
       plugins: [apoc]
     secondaries:
-      - name: analytics
+      analytics:
         members: 1
         plugins: [gds]
     minimumMembers: 1

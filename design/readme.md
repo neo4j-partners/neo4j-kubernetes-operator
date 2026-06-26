@@ -40,6 +40,8 @@ design/
 ├── 19-delivery-estimate.csv           [x]  delivery cost by phase / workstream (data)
 ├── 19-delivery-estimate.md            [x]  delivery cost — human-readable view
 ├── 20-operator-proposal.md            [x]  full operator proposal — CRDs, security, workflows, V1/V2 scope
+├── analysis/
+│   └── helm-fields/                   [~]  Helm → CRD pipeline — `_index.csv`, skills in `.cursor/skills/` — see `LAUNCH.md`
 ├── adr/                               [ ]  architecture decision records
 ├── samples/                           [ ]  YAML manifests per V1 scenario
 └── diagrams/                          [ ]  sequence and dependency diagrams

@@ -47,9 +47,14 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | ID | Title | Status |
 |----|-------|--------|
 | [BDR-001](business/001-single-neo4j-crd.md) | Single `Neo4j` CRD instead of `Neo4jStandalone` + `Neo4jCluster` | accepted |
-| [BDR-002](business/002-neo4j-crd-topology.md) | `Neo4j` CRD topology — modes, primaries / secondaries[], user guidance | proposed |
+| [BDR-002](business/002-neo4j-crd-topology.md) | `Neo4j` CRD topology — modes, primaries / secondaries (`analytics`, `read`) | proposed |
 | [BDR-003](business/003-operator-install-scope.md) | Operator install scope — single namespace for V1; multi / cluster-wide deferred | proposed |
 | [BDR-004](business/004-neo4j-plugin-topology.md) | Plugin model — Option E (`pluginDefinitions` + pool refs) | proposed |
+| [BDR-005](business/005-storage-volume-mode.md) | Storage volume mode model — `spec.persistence.data` (Dynamic / Existing / VolumeClaimTemplate) | proposed |
+| [BDR-006](business/006-tls-trust-model.md) | TLS trust model — `spec.trust` BYO Secrets + cert-manager + reload (AGG-TLS-TRUST) | proposed |
+| [BDR-007](business/007-service-exposure-connectivity.md) | Service exposure & connectivity — intent-based `connectivity.internal` / `external` (AGG-EXPOSURE) | proposed |
+| [BDR-008](business/008-neo4j-config-surface.md) | Neo4j config surface — `spec.config` passthrough vs allowlist vs hybrid | proposed |
+| [BDR-009](business/009-scale-pool-ordinal-semantics.md) | Scale, enable-server & pool ordinal semantics (single STS vs per-pool) | proposed |
 
 ### Architecture (`architecture/`)
 

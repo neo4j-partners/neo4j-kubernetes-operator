@@ -21,9 +21,9 @@
 | TOPO-002 | `mode: Cluster` → `primaries.members` required | Error | CEL | `primaries.members` is required when `mode` is `Cluster` |
 | TOPO-003 | `secondaries` without `primaries` | Error | CEL | `primaries.members` must be set before secondaries |
 | TOPO-004 | `secondaries` when `mode: Standalone` | Error | CEL | Secondaries require `mode: Cluster` |
-| TOPO-005 | `secondaries[].name` not unique | Error | CEL | duplicate secondary pool name |
+| TOPO-005 | `gds` or `bloom` in `secondaries.read.plugins` | Error | CEL | GDS/Bloom must use secondaries.analytics pool |
 | TOPO-006 | `primaries.members` even and > 0 | Error | CEL | Primary count must be odd for quorum |
-| TOPO-007 | `secondaries[].members < 1` | Error | CEL | pool must have at least one member |
+| TOPO-007 | `secondaries.analytics` or `secondaries.read` present with `members < 1` | Error | CEL | pool members must be at least 1 when pool is configured |
 | TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
 | TOPO-009 | `minimumMembers > total members` | Error | Webhook | `minimumMembers` cannot exceed total member count |
 | TOPO-010 | Scale-in below formed cluster | Error | Webhook | Unsupported scale-in |
@@ -49,7 +49,14 @@
     )
   message: primaries.members is required when mode is Cluster
 
-# TOPO-005 — odd primary count
+# TOPO-005 — GDS/Bloom only on analytics pool
+- rule: |
+    !has(self.topology.secondaries) || !has(self.topology.secondaries.read) ||
+    !has(self.topology.secondaries.read.plugins) ||
+    self.topology.secondaries.read.plugins.all(p, p != 'gds' && p != 'bloom')
+  message: GDS and Bloom must be declared on secondaries.analytics, not secondaries.read
+
+# TOPO-006 — odd primary count
 - rule: |
     !has(self.topology.primaries) || self.topology.primaries.members == 0 ||
     self.topology.primaries.members % 2 == 1
@@ -60,20 +67,20 @@
 
 ## Plugins (BDR-004 Option E)
 
-**Placement rule:** Standalone → all plugins on `spec.plugins`. Cluster → all plugins on `secondaries[]`; `gds` / `bloom` forbidden on `topology.primaries.plugins` only.
+**Placement rule:** Standalone → all plugins on `spec.plugins`. Cluster → plugins on `primaries`, `secondaries.analytics`, `secondaries.read`; `gds` / `bloom` only on `secondaries.analytics`.
 
-Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), `topology.primaries.plugins`, or `topology.secondaries[].plugins`. **Configuration** is `spec.pluginDefinitions.<id>`.
+Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), `topology.primaries.plugins`, `topology.secondaries.analytics.plugins`, or `topology.secondaries.read.plugins`. **Configuration** is `spec.pluginDefinitions.<id>`.
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
 | PLG-001 | `gds` or `bloom` in `topology.primaries.plugins` when `mode: Cluster` | Error | CEL | GDS/Bloom cannot be installed on primary members (allowed on Standalone via spec.plugins) |
-| PLG-002 | `spec.plugins` when `mode: Cluster` | Error | CEL | use topology.primaries.plugins and topology.secondaries[].plugins in cluster mode |
-| PLG-003 | `topology.primaries.plugins` or `secondaries[].plugins` when `mode: Standalone` | Error | CEL | use spec.plugins in standalone mode |
+| PLG-002 | `spec.plugins` when `mode: Cluster` | Error | CEL | use topology.primaries.plugins and secondaries.<pool>.plugins in cluster mode |
+| PLG-003 | `topology.primaries.plugins` or `secondaries.*.plugins` when `mode: Standalone` | Error | CEL | use spec.plugins in standalone mode |
 | PLG-004 | `gds` or `bloom` referenced but missing `pluginDefinitions.<id>.licenseSecretRef` | Error | CEL | licensed plugin requires licenseSecretRef in pluginDefinitions |
 | PLG-005 | duplicate id in same `plugins[]` list | Error | CEL | duplicate plugin id |
 | PLG-006 | `pluginDefinitions.<id>.version` major.minor ≠ `spec.version` | Error | Webhook | plugin version must match Neo4j |
 | PLG-007 | unknown catalog id in any `plugins[]` list | Error | CEL | V1 catalog: apoc, gds |
-| PLG-008 | `secondaries[]` pool references `gds` without analytics config | Error | Webhook | GDS on secondary pool requires analytics server configuration |
+| PLG-008 | `secondaries.analytics` references `gds` without analytics config | Error | Webhook | GDS on analytics pool requires analytics server configuration |
 | PLG-009 | `pluginDefinitions` key not in catalog | Error | CEL | unknown pluginDefinitions key |
 | PLG-010 | `licenseSecretRef` on licensed plugin must reference existing Secret | Error | Webhook | license secret not found |
 | PLG-011 | unused `pluginDefinitions` key (not referenced anywhere) | Warning | Reconciler | pluginDefinitions entry is unused |
@@ -100,9 +107,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
     !(
       (has(self.topology.primaries) && has(self.topology.primaries.plugins) &&
        self.topology.primaries.plugins.exists(p, p == 'gds')) ||
-      (has(self.topology.secondaries) &&
-       self.topology.secondaries.exists(pool,
-         has(pool.plugins) && pool.plugins.exists(p, p == 'gds'))) ||
+      (has(self.topology.secondaries) && has(self.topology.secondaries.analytics) &&
+       has(self.topology.secondaries.analytics.plugins) &&
+       self.topology.secondaries.analytics.plugins.exists(p, p == 'gds')) ||
       (has(self.plugins) && self.plugins.exists(p, p == 'gds'))
     ) || (
       has(self.pluginDefinitions) && has(self.pluginDefinitions.gds) &&
@@ -122,7 +129,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | EDT-002 | `license.accept` must be `yes` or `eval` | Error | CEL | Enterprise license must be explicitly accepted |
 | EDT-003 | any `secondaries` with `members > 0` requires `edition: enterprise` | Error | CEL | secondary pools require Enterprise edition |
 | EDT-004 | any pool references `gds` in `plugins` requires `edition: enterprise` | Error | CEL | GDS requires Enterprise edition |
-| EDT-005 | `secondaries[]` pool with `gds` in `plugins` requires analytics-capable server config | Error | Webhook | GDS on secondary pool requires analytics server configuration |
+| EDT-005 | `secondaries.analytics` with `gds` in `plugins` requires analytics-capable server config | Error | Webhook | GDS on analytics pool requires analytics server configuration |
 | EDT-006 | `mode: Cluster` requires `edition: enterprise` | Error | CEL | Cluster mode requires Enterprise edition |
 
 ---
@@ -220,7 +227,8 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 |-------|---------------------|
 | `topology.mode` | — (required) |
 | `topology.primaries.plugins` | `[]` (Cluster) |
-| `secondaries[].plugins` | `[]` |
+| `secondaries.analytics.plugins` | `[]` |
+| `secondaries.read.plugins` | `[]` |
 | `spec.plugins` | `[]` (Standalone) |
 | `topology.minimumMembers` | `primaries.members` (Cluster) |
 | `image.pullPolicy` | `IfNotPresent` |

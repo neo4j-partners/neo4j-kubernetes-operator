@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | proposed — **no decision yet** |
 | **Date** | 2026-06-22 |
-| **Depends on** | [BDR-002](002-neo4j-crd-topology.md) — `primaries` + `secondaries[]` |
+| **Depends on** | [BDR-002](002-neo4j-crd-topology.md) — `primaries` + fixed `secondaries.analytics` / `secondaries.read` |
 | **Constraints** | Neo4j GDS deployment docs; `NEO-2-003`; Helm `NEO4J_PLUGINS` |
 
 ---
@@ -26,7 +26,7 @@ In a cluster:
 - **Non-primary pools** may differ — e.g. read scaling with APOC only, another pool with **GDS + Bloom**.
 - A **per-pod** plugin matrix (every replica × every combination) is unmaintainable.
 
-[BDR-002](002-neo4j-crd-topology.md) already chose **`secondaries[]`** (named secondary pools) for topology sizing. **This BDR decides how plugins attach to those pools** — and whether plugin **configuration** (license Secret, JAR version, `apoc.conf`) is colocated with assignment or factored out.
+[BDR-002](002-neo4j-crd-topology.md) chose **fixed secondary pools** (`analytics`, `read`) for topology sizing. **This BDR decides how plugins attach to those pools** — and whether plugin **configuration** (license Secret, JAR version, `apoc.conf`) is colocated with assignment or factored out.
 
 **Open design tension** (raised in review):
 
@@ -43,7 +43,7 @@ These rules apply **regardless of which structural option is chosen** (C, D, E, 
 
 In **Cluster** mode, a cluster **cannot** have GDS installed on its **primary** members. The operator MUST reject or refuse to reconcile any spec that assigns `gds` (or equivalent analytics-only plugins governed by the same Neo4j constraint) to `topology.primaries`.
 
-- GDS runs only on **`secondaries[]`** secondary pools ([Neo4j GDS cluster deployment](https://neo4j.com/docs/graph-data-science/current/production-deployment/neo4j-cluster/)).
+- GDS runs only on **`secondaries.analytics`** ([Neo4j GDS cluster deployment](https://neo4j.com/docs/graph-data-science/current/production-deployment/neo4j-cluster/)).
 - Primary pods may run plugins allowed on transactional members (e.g. APOC Core) but **not** GDS.
 
 ### 2. Licensed plugins use one shared Secret per plugin
@@ -198,31 +198,30 @@ spec:
 
 ---
 
-### Option E — `secondaries[]` with plugin **refs** + central plugin definitions
+### Option E — fixed `secondaries` pools with plugin **refs** + central plugin definitions
 
-**Proposer direction:** pools declare **which** plugins (by catalog id); **how** to install them (license Secret, version, JAR, config) lives in a shared `spec.pluginDefinitions` (name TBD).
+**Proposer direction:** pools declare **which** plugins (by catalog id); **how** to install them (license Secret, version, JAR, config) lives in `spec.pluginDefinitions`.
 
 ```yaml
 spec:
   topology:
     mode: Cluster
     primaries:
-      members: 3
+      members: 1
       plugins: [apoc]
     secondaries:
-      - name: read-scale
-        members: 2
-        plugins: [apoc]
-      - name: gds-bloom
+      analytics:
         members: 1
         plugins: [gds, bloom]
+      read:
+        members: 1
+        plugins: [apoc]
   pluginDefinitions:
-    apoc: {}                                    # catalog defaults — version = spec.version
+    apoc: {}
     gds:
       licenseSecretRef: gds-license
     bloom:
       licenseSecretRef: bloom-license
-      # jar: optional override — V2
 ```
 
 **Standalone:**
@@ -253,7 +252,7 @@ spec:
 
 ### Option F — `spec.plugins` map with `enabledOn` targets
 
-**Plugin-centric model:** one entry per plugin id; each entry holds **configuration** (license, version, JAR) and an **`enabledOn`** list declaring **where** that plugin is installed. Targets are the literal `primaries` and `secondaries[].name` values.
+**Plugin-centric model:** one entry per plugin id; each entry holds **configuration** and an **`enabledOn`** list. Targets: `primaries`, `analytics`, `read` (fixed pool keys per BDR-002).
 
 ```yaml
 spec:
@@ -336,13 +335,13 @@ spec:
 | `gds` / `bloom` not on primary pods (same as above for other analytics-only plugins) | Plugin invariants §1 |
 | Licensed plugins (`gds`, `bloom`, …) require `licenseSecretRef`; **same Secret** for all pods using that plugin id | Plugin invariants §2 — shared license, mounted per instance |
 | Plugin version compatible with `spec.version` | Neo4j plugin compatibility |
-| `secondaries[]` pool with `gds` → analytics server config | Neo4j 5.x GDS on secondary |
+| `secondaries.analytics` with `gds` → analytics server config | Neo4j 5.x GDS on secondary |
 
 ---
 
 ## Decision
 
-**Not decided.** Options C, D, E, and F remain viable given [BDR-002](002-neo4j-crd-topology.md) `secondaries[]`.
+**Not decided.** Options C, D, E, and F remain viable given [BDR-002](002-neo4j-crd-topology.md) fixed pools `analytics` / `read`.
 
 **Leaning from review discussion:** **Option E** addresses the feedback that inline license/JAR config in pools (Option D) is noisy, while keeping plugin **assignment** visible on each pool. **Option F** offers the same DRY license model with a **plugin-centric** `enabledOn` list — preferable when operators think per-plugin rather than per-pool.
 
@@ -362,7 +361,7 @@ spec:
 
 ## References
 
-- [BDR-002](002-neo4j-crd-topology.md) — `secondaries[]`
+- [BDR-002](002-neo4j-crd-topology.md) — `secondaries.analytics` / `secondaries.read`
 - [Neo4j GDS — cluster deployment](https://neo4j.com/docs/graph-data-science/current/production-deployment/neo4j-cluster/)
 - [Neo4j — Configure plugins](https://neo4j.com/docs/operations-manual/current/configuration/plugins/)
 - [`20-operator-proposal.md`](../../20-operator-proposal.md) §V2 auto plugin management

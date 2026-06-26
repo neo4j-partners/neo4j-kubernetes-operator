@@ -211,7 +211,7 @@ Full per-rule assignment: [`09-crd-spec/neo4j/validation.md`](../../09-crd-spec/
 
 - Two authoring surfaces (CEL markers + Go webhook) — new rules need an explicit mechanism choice.
 - CEL debugging can be opaque — messages must be clear; keep expressions short.
-- `TOPO-009` (`minimumMembers > total`) may need CEL with `secondaries.map(p, p.members).sum()` — verify against target K8s version CEL library.
+- `TOPO-009` (`minimumMembers > total`) — sum `primaries.members + secondaries.analytics.members + secondaries.read.members` in webhook.
 
 ### Neutral
 

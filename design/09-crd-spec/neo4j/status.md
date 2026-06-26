@@ -29,7 +29,7 @@
 | `observedGeneration` | int64 | Always | Last `metadata.generation` fully reconciled. |
 | `version` | string | When known | **Effective** Neo4j version on the workload (image / DBMS). During upgrade: reflects version **already running** on members; see `upgrade.targetVersion` for intent. |
 | `lastUpgradeTime` | `metav1.Time` | After successful upgrade | Timestamp when `upgrade.phase` last reached `Completed`. Audit / SRE. |
-| `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). Not `spec.topology.secondaries[]`. |
+| `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). Not `spec.topology.secondaries`. |
 | `upgrade` | `UpgradeStatus` | During / after `spec.version` change | Rolling upgrade state machine (see below). |
 | `members` | `[]MemberStatus` | Cluster + detail path; Standalone optional | Per-server summary (pool, plugins, K8s + Neo4j server state). |
 | `diagnostics` | `DiagnosticsStatus` | When `spec.monitoring` enables deep collection and workload ready | Deep observability — separate from `members[]` summary. |
@@ -111,11 +111,11 @@ upgrade:
 
 ## `status.serverSummary`
 
-Always updated from StatefulSet / pod list — **no Bolt required**. Distinct from `spec.topology.secondaries[]` (secondary pools).
+Always updated from StatefulSet / pod list — **no Bolt required**. Distinct from `spec.topology.secondaries` (fixed pools `analytics`, `read`).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `servers` | int32 | Desired server count (`1` Standalone; `primaries.members + sum(secondaries[].members)` Cluster). |
+| `servers` | int32 | Desired server count (`1` Standalone; `primaries.members + analytics.members + read.members` Cluster). |
 | `ready` | int32 | Pods passing readiness (K8s + operator gates). |
 
 Use for `kubectl` columns, simple waits (`ready == servers`), HPA-style automation. Prefer over scanning `members[]` for counts.
@@ -156,7 +156,7 @@ Future (day-2 / V2): conditions for restore in progress, sharding migration, etc
 
 | Reason | Trigger | Example message |
 |--------|---------|-----------------|
-| `NonHA` | `mode: Cluster`, `primaries.members < 3`, `sum(secondaries[].members) ≥ 1` | `primaries.members < 3 — not suitable for production HA writes` |
+| `NonHA` | `mode: Cluster`, `primaries.members < 3`, any secondary pool with `members ≥ 1` | `primaries.members < 3 — not suitable for production HA writes` |
 | `LowPrimaryCount` | `mode: Cluster`, `primaries.members: 1`, no secondary pools | Dev/single-writer — informational |
 
 `TopologyWarning=True` does **not** set `Ready=False` unless members are actually unhealthy.
@@ -183,7 +183,7 @@ Prefer vocabulary from `SHOW SERVERS` over legacy causal roles (`LEADER` / `FOLL
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Pod / server name (`<metadata.name>-<ordinal>`). |
-| `pool` | string | `primary` or `secondaries[].name` from spec. |
+| `pool` | string | `primary`, `analytics`, or `read` from spec. |
 | `address` | string | Bolt address for admin operations. |
 | `plugins` | []string | Resolved catalog ids (pool refs + `pluginDefinitions`). |
 | `neo4jState` | string | Server state from `SHOW SERVERS` — e.g. `Enabled`, `Cordoned`, `Deallocating`. |

@@ -284,47 +284,42 @@ Optional **documentation profiles** (samples / `00-vision.md`) may mirror Option
 
 ## Decision
 
-**We will adopt Option D** — `mode: Standalone | Cluster` plus, in cluster mode, **`primaries.members`** and optional **`secondaries[]`**.
+**We will adopt Option D** — `mode: Standalone | Cluster` plus, in cluster mode, **`primaries.members`** and optional **`secondaries`** (fixed pools).
 
 > **Amendment 2026-06-22** — fixed counters `secondaries.members` / `analyticsSecondaries.members` replaced by named **`secondaries[]`**. Plugin model → [BDR-004](004-neo4j-plugin-topology.md) (Option E).
 >
-> **Amendment 2026-06-22 (terminology)** — `cores` → **`primaries`**; `replicaPools[]` → **`secondaries[]`**; removed **`serverRole`**; field name **`secondaries[]`** aligns with Neo4j Primary/Secondary vocabulary.
+> **Amendment 2026-06-22 (terminology)** — `cores` → **`primaries`**; `replicaPools[]` → **`secondaries[]`**; removed **`serverRole`**.
+>
+> **Amendment 2026-06-22 (pool shape)** — `secondaries[]` list with free `name` replaced by **fixed object keys** **`analytics`** and **`read`**. Removes duplicate-name validation; encodes read vs analytics intent in the schema. Ordinal order: primaries → `analytics` → `read`.
 
 - **`Standalone`**: `mode` only — no `primaries`, `secondaries`, or `minimumMembers`. Plugins: flat `spec.plugins[]`.
-- **`Cluster`**: `primaries.members` **required**; optional `secondaries[]`. Each secondary pool: `name`, `members`, optional `plugins[]`.
+- **`Cluster`**: `primaries.members` **required**; optional `secondaries.analytics` and/or `secondaries.read`. Each pool: `members`, optional `plugins[]`.
 
 ```yaml
 topology:
   mode: Cluster
   primaries:
-    members: 3
+    members: 1
+    plugins: [apoc]
   secondaries:
-    - name: read-scale
-      members: 2
-    - name: analytics
+    analytics:
       members: 1
-  minimumMembers: 3
-# plugins: see BDR-004 (Option E)
-#   pluginDefinitions: { gds: { licenseSecretRef: ... }, bloom: { ... } }
-#   primaries.plugins: [apoc]
-#   secondaries[].plugins: [apoc] | [gds, bloom]
+      plugins: [gds, bloom]
+    read:
+      members: 1
+      plugins: [apoc]
+  minimumMembers: 1
 ```
 
-**StatefulSet ordinals** (declaration order):
+**StatefulSet ordinals** (fixed order):
 
 ```
-[0 .. primaries-1]                              → primary
-[pool₀ start .. pool₀ start + members - 1]      → secondaries[0]
-[pool₁ start ..]                                → secondaries[1]
-…
+[0 .. primaries-1]                    → primary
+[analytics start .. + members - 1]    → secondaries.analytics (if members > 0)
+[read start .. + members - 1]         → secondaries.read (if members > 0)
 ```
 
-- **Option C** informs **`11-helm-mapping.md`** (translation table), not CR field names.
-- **Option E** may appear later as **optional shortcuts** that expand to Option D counts — not a replacement for explicit GitOps specs in V1.
-
-Options **A** and **B** are **rejected** — ambiguous for primary + secondary (`servers: 2` / `members: 2`). Option **E alone** is **rejected** for V1 — too opaque for production GitOps.
-
-**Rejected (superseded by amendment):** fixed fields `secondaries.members` / `analyticsSecondaries.members` — conflate topology with plugin intent (GDS implied by field name).
+**Rejected (superseded):** `secondaries[]` with arbitrary `name` — replaced by fixed keys `analytics` | `read`.
 
 ### Validation and guidance rules
 
@@ -333,14 +328,14 @@ Options **A** and **B** are **rejected** — ambiguous for primary + secondary (
 | `mode: Standalone` + `primaries` / `secondaries` / `minimumMembers` | Error | `members` fields are not allowed when `mode` is `Standalone` |
 | `mode: Cluster` without `primaries.members` | Error | `primaries.members` is required when `mode` is `Cluster` |
 | `secondaries` without `primaries` | Error | `primaries.members` must be set before secondary pools |
-| `secondaries[].members > 0` when `mode: Standalone` | Error | Replica pools require `mode: Cluster` |
-| `secondaries[].name` not unique | Error | duplicate secondary pool name |
+| `secondaries` with any pool `members > 0` when `mode: Standalone` | Error | Replica pools require `mode: Cluster` |
+| `gds` / `bloom` in `secondaries.read.plugins` | Error | GDS/Bloom must use `secondaries.analytics` |
 | `gds` / `bloom` in `primaries.plugins` | Error | GDS/Bloom forbidden on primaries |
 | `primaries.members` even and > 0 | Error | Primary count must be odd for quorum |
 | `primaries.members: 1` + any secondary pool | Warning | Non-HA topology — not for production writes |
 | `primaries.members < 3` (no production label) | Warning | For HA production use `primaries.members ≥ 3` |
 | `secondaries` on Community edition | Error | Secondary pools require Enterprise edition |
-| `secondaries[]` with `gds` in `plugins` without analytics-capable config | Error | GDS on secondary pool requires analytics server configuration |
+| `secondaries.analytics` with `gds` in `plugins` without analytics-capable config | Error | GDS on analytics pool requires analytics server configuration |
 | Scale-in below formed cluster | Error | Unsupported scale-in — explicit procedure required |
 
 Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
@@ -351,7 +346,7 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 |-------|----------|
 | `mode: Standalone` — no member fields | **Option E** — `topology.profile` presets |
 | `mode: Cluster`, `primaries.members` (1 or 3+) | Multi-zone `multiCluster` networking variant |
-| `secondaries[]` — named secondary pools + per-pool plugins (BDR-004) | Auto-correction from guessed user intent |
+| `secondaries` — fixed pools `analytics` / `read` + per-pool plugins (BDR-004) | Auto-correction from guessed user intent |
 | Validation errors + HA warnings | |
 | Named pools + per-pool plugins (BDR-004) | Full E2E for all pool × plugin combos |
 
@@ -361,8 +356,8 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 
 ### Positive
 
-- **Primary + analytics** — explicit pool (e.g. `gds-bloom`) with inline `plugins: [gds, bloom]`.
-- **Named pools** — topology sizing and plugins colocated; no separate plugin map.
+- **Primary + analytics** — `secondaries.analytics` with `plugins: [gds, bloom]`.
+- **Read scaling** — `secondaries.read` with transactional plugins (e.g. APOC).
 - Actionable guidance via validation and status warnings.
 - Helm `minimumClusterSize`, `analytics`, and `enableServer` map through one translation table.
 - BDR-001 unchanged — one CRD, one `neo4jRef`.
