@@ -2,7 +2,7 @@
 
 ## Client need
 
-Mount additionalVolumes into the Neo4j container at custom paths.
+Mount `additionalVolumes` into the Neo4j container at custom paths (config snippets, sidecar-less file injection, integration mounts).
 
 ## Neo4j documentation
 
@@ -10,10 +10,12 @@ Mount additionalVolumes into the Neo4j container at custom paths.
 
 ## Helm implementation
 
-- **Templates**: _volumeTemplate.tpl (neo4j.additionalVolumeMounts); neo4j-statefulset.yaml
-- **Go model**: release_values.go (via AdditionalVolumes sibling; mounts not separate struct field in index)
-- **K8s resources**: StatefulSet volumeMounts
-- **Neo4j mechanism**: Raw mount YAML passthrough.
+- **Templates**: `_volumeTemplate.tpl` (`neo4j.additionalVolumeMounts`); `neo4j-statefulset.yaml` — appended to Neo4j container `volumeMounts`
+- **Go model**: sibling list on release values (not a separate top-level struct in all versions)
+- **K8s resources**: StatefulSet `volumeMounts[]` passthrough
+- **Neo4j mechanism**: Files visible under `mountPath`; Neo4j only uses them if referenced via `config` or admin tooling.
+
+**Coupling**: Must reference `name` matching an entry in `additionalVolumes` **or** a chart-managed volume (`data`, `logs`, …). Chart does not validate referential integrity.
 
 ## Category
 
@@ -23,22 +25,22 @@ storage
 
 | concern_id | role in this concern | co-paths (scattered) |
 |------------|----------------------|----------------------|
-| CONCERN-STORAGE | escape hatch mounts | additionalVolumes |
+| CONCERN-STORAGE-ESCAPE | raw container mounts | `additionalVolumes` |
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.additionalVolumeMounts`
-- **Notes**: Draft mapping from Helm analysis.
+- **Target**: `Neo4j.spec.additionalMounts[].mountPath` (Option E) **or** `Neo4j.spec.volumes.additionalVolumeMounts` (Option F)
+- **Notes**: Paired model preferred — avoids orphan mounts.
 
 ## Aggregation
 
-- **Group**: none
-- **Must decide with**: standalone field
+- **Group**: AGG-STORAGE-ESCAPE
+- **Must decide with**: `additionalVolumes`
 
 ## Versioning
 
 - **Classification**: safe
-- **Rationale**: Passthrough mount spec.
+- **Rationale**: Additive mount paths.
 
 ## FR / AC
 
@@ -47,4 +49,4 @@ storage
 
 ## Open questions
 
-- None identified.
+- Reject mounts under operator-reserved paths (`/data`, `/var/lib/neo4j/certificates/*`)?

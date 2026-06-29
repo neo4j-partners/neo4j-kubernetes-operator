@@ -26,13 +26,13 @@ Helm fields or client needs **without** a matching FR, or **spec / CEL** not yet
 
 | gap_id | subject | helm_path / concern | blocked by | suggested rule |
 |--------|---------|---------------------|------------|----------------|
-| VAL-001 | Storage mode immutability | `volumes.data.mode` | BDR-005 proposed | CEL: `data.mode` immutable after create |
+| VAL-001 | Storage mode immutability | `volumes.data.mode` | BDR-005 proposed | CEL: `data.mode` + binding immutable after create |
 | VAL-002 | GDS/Bloom pool restriction | `analytics` + plugins | BDR-004 proposed | TOPO-005 — only on `secondaries.analytics` |
 | VAL-003 | Config reserved keys | `config` map | BDR-008 proposed | Denylist: `initial.dbms.default_primaries_count`, … |
 | VAL-004 | External exposure default | `services.neo4j.enabled` | BDR-007 proposed | `connectivity.external` off by default |
 | VAL-005 | Tail-only scale / ordinal | `neo4j.operations` | BDR-009 proposed | Webhook warning or reject mid-pool resize |
 | VAL-006 | TLS secret contract | `ssl.*` | BDR-006 proposed | `spec.trust` shape + TLS-001..003 |
-| VAL-007 | `secondaries.read` members sum | topology | BDR-002 | TOPO-009 — `minimumMembers` vs pool sum |
+| VAL-008 | Escape hatch reserved paths | `additionalVolumeMounts`, `secretMounts` | BDR-005 Option E | STO-009, STO-010 |
 
 ---
 

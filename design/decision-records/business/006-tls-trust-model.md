@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | accepted |
 | **Date** | 2026-06-22 |
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD (accepted) |
@@ -15,29 +15,64 @@
 
 Neo4j exposes three independent **SSL policies** — `bolt`, `https`, and `cluster` — each backed by certificate material under `/var/lib/neo4j/certificates/{policy}/`. In the Helm chart, the top-level `ssl` map mirrors Neo4j's `dbms.ssl.policy.*` naming (`values.yaml` L448–483).
 
-### Helm mechanism
+### Helm mechanism (`values.yaml`)
+
+```yaml
+ssl:
+  bolt:
+    privateKey:
+      secretName: neo4j-bolt-key      # Secret holding the key
+      subPath: private.key            # optional — default private.key
+    publicCertificate:
+      secretName: neo4j-bolt-cert     # Secret holding the cert (may differ from key Secret)
+      subPath: public.crt             # optional — default public.crt
+  https: { ... }
+  cluster: { ... }
+```
 
 | Helm path | Trigger | Operator / Neo4j effect |
 |-----------|---------|-------------------------|
-| `ssl.{policy}.privateKey.secretName` | Secret present | Mount key at `…/{policy}/private.key`; enable `dbms.ssl.policy.{policy}.enabled` |
-| `ssl.{policy}.publicCertificate.secretName` | Paired with privateKey | Mount cert at `…/{policy}/public.crt` |
+| `ssl.{policy}.privateKey.secretName` | set | Mount at `…/{policy}/private.key` (or `subPath`); enable policy |
+| `ssl.{policy}.publicCertificate.secretName` | paired with privateKey | Mount at `…/{policy}/public.crt` (or `subPath`) |
 | `ssl.bolt.privateKey` set | — | `server.bolt.tls_level: REQUIRED` |
 | `ssl.https.privateKey` set | — | `server.https.enabled: true` |
-| `ssl.{policy}.trustedCerts.sources` | Optional projected volume | Mount at `…/{policy}/trusted/` |
-| `ssl.{policy}.revokedCerts.sources` | Optional projected volume | Mount at `…/{policy}/revoked/` |
-| `config.dbms.security.tls_reload_enabled` | Default `"true"` in chart values | Hot reload on cert rotation |
+| `ssl.{policy}.trustedCerts.sources` | optional | Projected volume → `…/{policy}/trusted/` (client / peer CA certs) |
+| `ssl.{policy}.revokedCerts.sources` | optional | **Deferred V1.1** |
+| `config.dbms.security.tls_reload_enabled` | default `"true"` in chart | → `trust.reload.enabled` |
 
-Templates: `_ssl.tpl` (volumes + mounts), `neo4j-config.yaml` L174–191 (policy enablement). Go model `Ssl` struct has `Bolt` and `HTTPS` only — **`cluster` exists in values.yaml but not in `release_values.go`** (schema drift).
+Templates: `_ssl.tpl`, `neo4j-config.yaml` L174–191.
+
+### mTLS (mutual TLS / client authentication)
+
+Neo4j controls mutual authentication per policy via `dbms.ssl.policy.{policy}.client_auth`:
+
+| Neo4j value | Meaning |
+|-------------|---------|
+| `NONE` | Server TLS only — clients are not authenticated by certificate |
+| `OPTIONAL` | Clients may present a certificate |
+| `REQUIRE` | Mutual TLS — clients must present a valid certificate |
+
+**Trusted material:** client (or cluster peer) CAs are mounted under `/var/lib/neo4j/certificates/{policy}/trusted/` via Helm `trustedCerts.sources` (projected volume — same shape as Kubernetes `projected.sources`).
+
+**Helm chart defaults** (`neo4j-config.yaml` injected keys):
+
+| Policy | `client_auth` injected | mTLS |
+|--------|------------------------|------|
+| `bolt` | `NONE` | Off — TLS server-only |
+| `https` | `NONE` | Off |
+| `cluster` | `REQUIRE` | **On** — inter-member mutual auth |
+
+Helm does **not** expose `client_auth` in `values.yaml`; bolt/https mTLS today requires ad-hoc `config.dbms.ssl.policy.bolt.client_auth: "REQUIRE"` plus `ssl.bolt.trustedCerts.sources`. Cluster mTLS is always on when the cluster SSL policy is enabled.
+
+**Operator V1:** model `clientAuth` and `trustedCerts` in `spec.trust.certificates.{policy}` so bolt/https mTLS is first-class (not a `config` escape hatch). Cluster policy keeps operator-injected `REQUIRE` (not user-disableable in `mode: Cluster`).
 
 ### Forces
 
-- **Security-critical, breaking contract.** Which connectors require TLS, which Secrets are mounted, and whether cluster inter-member traffic is encrypted are **migration-sensitive** — clients and cluster formation break if changed casually. All four `ssl.*` index rows are **breaking** (BC-006, priority 12).
-- **Helm parity vs API clarity.** Helm uses **two Secret references per policy** (private key + public cert) with optional `subPath` overrides, plus projected volumes for trust/revocation lists. That is flexible but verbose and error-prone (Helm `required` guards enforce pairing).
-- **cert-manager is a first-class operator path.** `spec.md` and `20-operator-proposal.md` already sketch `trust.certManager` + simplified `certificates.*.secretRef` — cert-manager writes standard `tls.crt` / `tls.key` Secrets that the operator normalizes to Neo4j's on-disk layout.
-- **Cross-cutting with config and connectivity.** `dbms.security.tls_reload_enabled` is a config key ([BDR-008](008-neo4j-config-surface.md) promotes it to a typed field under `trust.reload`); publishing `connectivity.external.ports.https` requires HTTPS TLS ([BDR-007](007-service-exposure-connectivity.md), validation NET-003).
-- **Field-doc drift.** Helm analysis drafts target `Neo4j.spec.tls.*`; **`spec.md` uses `spec.trust`** — this BDR standardizes on **`spec.trust`**.
-
-This BDR does **not** decide LDAP/mTLS client authentication (`client_auth`) — Helm hard-codes `NONE` for bolt/https in K8s; remains operator-injected default unless overridden via `spec.config` (BDR-008 denylist review).
+- **Security-critical, breaking contract** — BC-006.
+- **Helm parity on field names** — use `secretName` + `subPath`, not `secretRef` (Kubernetes Secret reference type name is misleading here; Helm uses `secretName`).
+- **cert-manager is optional** — `certManager.enabled` defaults **`false`**; BYO Secrets is the V1 default path (corporate PKI, air-gapped).
+- **Cross-cutting** — `reload.enabled` ↔ BDR-008; HTTPS external port ↔ BDR-007 NET-003.
+- **CRD section** — `spec.trust` (not `spec.tls`, not Helm key `ssl`).
 
 ---
 
@@ -45,192 +80,356 @@ This BDR does **not** decide LDAP/mTLS client authentication (`client_auth`) —
 
 | Rule | Rationale |
 |------|-----------|
-| Operator owns `dbms.ssl.policy.*.enabled` and connector TLS level | Derived from `spec.trust` — users must not set via `spec.config` (reserved key) |
-| `trust.enabled: false` is the secure-by-default starting point | Matches `spec.md`; explicit opt-in to TLS |
-| `mode: Cluster` + `trust.enabled: true` → cluster policy material required | Validation TLS-003; inter-member encryption |
-| cert-manager and BYO `secretRef` are **mutually exclusive per policy** | Avoid dual sources of truth for the same mount path |
-| Secret key contract is stable and documented | Admission webhook validates Secret shape when BYO |
-| `reload.enabled` injects `dbms.security.tls_reload_enabled` | BDR-008 reserved-key set; not user-supplied via `spec.config` when typed field set |
+| Operator owns `dbms.ssl.policy.*.enabled`, `*.client_auth`, and connector TLS level | Reserved in BDR-008 denylist — users set `clientAuth` on `spec.trust`, not raw `config` |
+| `trust.enabled` defaults **`false`** | Explicit opt-in to TLS |
+| `certManager.enabled` defaults **`false`** | BYO is default; cert-manager is opt-in |
+| BYO: `privateKey.secretName` + `publicCertificate.secretName` both required per enabled policy | Mirrors Helm pairing (`_ssl.tpl` `required` guards) |
+| `subPath` optional — defaults `private.key` / `public.crt` | Same as Helm `_ssl.tpl` |
+| cert-manager: one `secretName` per policy — operator creates `Certificate` → Secret | cert-manager writes `tls.crt` + `tls.key`; operator maps to Neo4j paths |
+| cert-manager and BYO shapes **mutually exclusive per policy** | CEL `oneOf` on policy block |
+| `mode: Cluster` + `trust.enabled` → cluster policy material required | TLS-003 |
+| `clientAuth: Optional` or `Require` on bolt/https → `trustedCerts.sources` non-empty | TLS-004 |
+| Cluster policy enabled → operator injects `client_auth: REQUIRE`; `clientAuth: None` rejected | TLS-005 |
+| `clientAuth` omitted → bolt/https default `None`; cluster default `Require` | Helm parity |
 
 ---
 
-## Helm → operator mapping (target)
+## Helm → operator mapping (Option B)
 
-| Helm | `Neo4j.spec.trust` (Option B) |
-|------|------------------------------|
-| `ssl.bolt.privateKey` + `publicCertificate` | `certificates.bolt.secretRef` **or** cert-manager Certificate → Secret |
-| `ssl.https.*` | `certificates.https.secretRef` |
-| `ssl.cluster.*` | `certificates.cluster.secretRef` |
-| `trustedCerts` / `revokedCerts` | **Deferred V1.1** — `additionalVolumes` escape or future `trust.certificates.*.trusted` |
+| Helm `ssl.{policy}` | `Neo4j.spec.trust.certificates.{policy}` |
+|---------------------|------------------------------------------|
+| `privateKey.secretName` | `privateKey.secretName` |
+| `privateKey.subPath` | `privateKey.subPath` |
+| `publicCertificate.secretName` | `publicCertificate.secretName` |
+| `publicCertificate.subPath` | `publicCertificate.subPath` |
+| `trustedCerts.sources` | `trustedCerts.sources` (projected volume; required for bolt/https mTLS) |
+| `revokedCerts.sources` | **Deferred V1.1** |
+| — (injected in `neo4j-config.yaml`) | `clientAuth`: `None` \| `Optional` \| `Require` |
 | `config.dbms.security.tls_reload_enabled` | `reload.enabled` |
-| (no Helm equivalent) | `certManager.enabled` + `issuerRef` |
-| (no Helm equivalent) | `enabled` master toggle |
+| — | `enabled` (master toggle) |
+| — | `certManager.*` (operator-only; default off) |
 
 ---
 
 ## Options under review
 
-### Option A — Full Helm parity: per-policy nested `privateKey` / `publicCertificate` / `trustedCerts`
+### Option A — Full Helm parity including `revokedCerts` in V1
 
-Mirror the Helm `ssl` map structure under `spec.trust.policies` (or retain `ssl` naming).
-
-```yaml
-spec:
-  trust:
-    enabled: true
-    policies:
-      bolt:
-        privateKey:
-          secretRef:
-            name: neo4j-bolt-key
-            key: private.key      # optional subPath; default private.key
-        publicCertificate:
-          secretRef:
-            name: neo4j-bolt-cert
-            key: public.crt
-        trustedCerts:
-          secretRefs:           # projected volume sources
-            - name: corp-ca
-              key: ca.crt
-      https: { ... }
-      cluster: { ... }
-    reload:
-      enabled: true
-```
+Same shape as Option B but also projects `revokedCerts.sources` in V1.
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| **Highest Helm parity** — 1:1 field names and dual-secret pattern | Verbose API; users must pair key + cert Secrets correctly (Helm pain preserved) |
-| Supports `trustedCerts` / `revokedCerts` in V1 | Large OpenAPI surface; heavy CEL `oneOf` per policy |
-| No cert-manager opinion — BYO only | No first-class cert-manager path without a second parallel shape |
-| | Duplicates `spec.md` baseline — requires spec rewrite |
+| Complete Helm surface incl. CRL | Largest API + operator surface |
+| | `revokedCerts` rarely used in practice |
 
 ---
 
-### Option B — Curated BYO `secretRef` + cert-manager + `reload` (current `spec.md` baseline)
+### Option B — Helm-shaped BYO (`secretName` + `subPath`) + optional cert-manager — **accepted**
 
-Intent-based `spec.trust`: one Secret name per policy (BYO), optional cert-manager provisioning, master toggle.
+#### API shape
 
 ```yaml
 spec:
   trust:
-    enabled: true
+    enabled: true                    # default: false
     reload:
-      enabled: true              # → dbms.security.tls_reload_enabled
+      enabled: false                 # default: false; set true for cert rotation (NEO-3-005-TLS-04)
     certManager:
-      enabled: false
+      enabled: false                 # default: false
       issuerRef:
         name: letsencrypt-prod
-        kind: ClusterIssuer       # Issuer | ClusterIssuer
+        kind: ClusterIssuer            # Issuer | ClusterIssuer
     certificates:
       bolt:
-        secretRef: neo4j-bolt-tls    # BYO when certManager.enabled=false
+        privateKey:
+          secretName: neo4j-bolt-key
+          subPath: private.key         # optional
+        publicCertificate:
+          secretName: neo4j-bolt-cert
+          subPath: public.crt          # optional
+        clientAuth: None                 # default — None | Optional | Require
+        trustedCerts:                    # required when clientAuth is Optional or Require
+          sources: []
       https:
-        secretRef: neo4j-https-tls
+        privateKey: { secretName: ..., subPath: ... }
+        publicCertificate: { secretName: ..., subPath: ... }
       cluster:
-        secretRef: neo4j-cluster-tls
+        privateKey: { secretName: ..., subPath: ... }
+        publicCertificate: { secretName: ..., subPath: ... }
+        clientAuth: Require              # default when cluster policy enabled; cannot be None in Cluster mode
+        trustedCerts:
+          sources: []                    # peer CA / member certs for inter-node mTLS
 ```
 
-**BYO Secret contract** (operator normalizes to Neo4j paths):
+**Per-policy `oneOf` (when policy is used):**
 
-| Secret key (accepted) | Maps to |
-|-----------------------|---------|
-| `private.key` **or** `tls.key` | `…/{policy}/private.key` |
-| `public.crt` **or** `tls.crt` | `…/{policy}/public.crt` |
+| Mode | Shape | When |
+|------|-------|------|
+| **BYO** | `privateKey` + `publicCertificate` (each with `secretName`, optional `subPath`) | `certManager.enabled: false` |
+| **cert-manager** | `secretName` only (target Secret for issued cert) | `certManager.enabled: true` |
 
-Webhook TLS-002 validates existence + required keys when `trust.enabled` and BYO mode.
+```yaml
+# cert-manager shape (per policy) — no privateKey/publicCertificate blocks
+certificates:
+  bolt:
+    secretName: neo4j-bolt-tls    # operator creates Certificate with secretName: neo4j-bolt-tls
+```
 
-**cert-manager path** (when `certManager.enabled: true`):
+#### Operator behaviour (mount paths)
 
-1. Operator creates `cert-manager.io/v1` `Certificate` per enabled policy (dnsNames from `connectivity` + cluster internal DNS).
-2. cert-manager writes `tls.crt` / `tls.key` Secret (same name as `certificates.{policy}.secretRef` or operator-owned name in status).
-3. Operator mounts and injects policy enablement — same as BYO.
-4. `reload.enabled: true` (default when cert-manager on) enables hot rotation.
+Identical to Helm `_ssl.tpl`:
 
-| Advantages | Disadvantages |
-|------------|---------------|
-| Matches **existing `spec.md`** and `20-operator-proposal.md` | Loses Helm dual-secret + `subPath` flexibility in V1 |
-| **cert-manager first-class** — aligns with operator value-add | `trustedCerts` / `revokedCerts` not in V1 — enterprise PKI edge cases need escape hatch |
-| One `secretRef` per policy — simpler UX than Helm | Users with split key/cert Secrets must merge or use cert-manager |
-| Clear mutual exclusion: cert-manager **or** BYO per policy | Custom key names beyond the contract need V1.1 `keys` override |
-| Typed `reload.enabled` — clean BDR-008 boundary | |
+| Pod path | Source |
+|----------|--------|
+| `/var/lib/neo4j/certificates/{policy}/private.key` | `privateKey.secretName` key `subPath` (default `private.key`) **or** cert-manager `tls.key` |
+| `/var/lib/neo4j/certificates/{policy}/public.crt` | `publicCertificate.secretName` key `subPath` (default `public.crt`) **or** cert-manager `tls.crt` |
+| `/var/lib/neo4j/certificates/{policy}/trusted/*` | `trustedCerts.sources` projected volume (Helm `_ssl.tpl` trusted mount) |
+
+Neo4j config injected when `privateKey` material present (BYO) or policy `secretName` populated (cert-manager):
+
+- `dbms.ssl.policy.{policy}.enabled`
+- `dbms.ssl.policy.{policy}.client_auth` ← from `clientAuth` (`None` → `NONE`, `Optional` → `OPTIONAL`, `Require` → `REQUIRE`)
+- bolt `tls_level` / https `enabled` per Helm
+- cluster: always `REQUIRE` when `mode: Cluster` (TLS-005), even if `clientAuth` omitted
 
 ---
 
-### Option C — Single unified TLS Secret for all policies
+### Example 1 — BYO without cert-manager (corporate PKI)
 
-One Secret (or cert-manager Certificate) shared across bolt, https, and cluster when SANs allow.
+Typical production: Secrets created out-of-band (Vault, cert tooling), split key/cert Secrets, custom key names via `subPath`.
 
 ```yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod
 spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
   trust:
     enabled: true
-    secretRef: neo4j-unified-tls    # single Secret for all policies
-    policies: [bolt, https, cluster] # which policies use the unified material
     reload:
+      enabled: true                    # hot reload when Secrets rotated in-place
+    certManager:
+      enabled: false                   # default — BYO
+    certificates:
+      bolt:
+        privateKey:
+          secretName: prod-neo4j-bolt-key
+          subPath: server.key            # non-default key name in Secret
+        publicCertificate:
+          secretName: prod-neo4j-bolt-cert
+          subPath: server.crt
+      https:
+        privateKey:
+          secretName: prod-neo4j-https-key
+        publicCertificate:
+          secretName: prod-neo4j-https-cert
+      cluster:
+        privateKey:
+          secretName: prod-neo4j-cluster-key
+        publicCertificate:
+          secretName: prod-neo4j-cluster-cert
+  connectivity:
+    external:
       enabled: true
+      ports:
+        bolt: true
+        https: true
 ```
 
-| Advantages | Disadvantages |
-|------------|---------------|
-| Minimal API — one Secret to manage | Cluster certs often need different SANs / CAs than client-facing bolt/https |
-| Good for dev/single-host wildcard certs | Breaks Helm model (separate secrets per policy) |
-| | Forces all-or-nothing TLS — cannot enable bolt-only |
-| | Conflicts with FR variants `NEO-3-005-TLS-01/02/03` tested independently |
+**Prerequisites (user-managed):**
+
+```yaml
+# Secret prod-neo4j-bolt-key — data.server.key: <PEM private key>
+# Secret prod-neo4j-bolt-cert — data.server.crt: <PEM cert>
+```
+
+**Operator:** validates both Secrets exist (TLS-002), mounts with `subPath`, enables SSL policies. No `Certificate` CR created.
+
+**Helm migration:** copy `ssl.bolt.privateKey.secretName` → `trust.certificates.bolt.privateKey.secretName` (rename root `ssl` → `trust` only).
 
 ---
 
-### Option D — cert-manager only in V1; BYO deferred
+### Example 2 — cert-manager enabled
+
+Operator owns `cert-manager.io/v1` `Certificate` per configured policy; user supplies Issuer + target `secretName`.
 
 ```yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod
 spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+  trust:
+    enabled: true
+    reload:
+      enabled: true                    # recommended with cert-manager rotation
+    certManager:
+      enabled: true
+      issuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer
+    certificates:
+      bolt:
+        secretName: prod-neo4j-bolt-tls
+      https:
+        secretName: prod-neo4j-https-tls
+      cluster:
+        secretName: prod-neo4j-cluster-tls
+  connectivity:
+    external:
+      enabled: true
+      type: LoadBalancer
+      ports:
+        bolt: true
+        https: true
+```
+
+**Operator creates (per policy):**
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prod-neo4j-bolt-tls
+  ownerReferences: [ Neo4j CR ]
+spec:
+  secretName: prod-neo4j-bolt-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - prod.neo4j.svc.cluster.local
+    - bolt.prod.example.com          # derived from connectivity + cluster DNS
+  privateKey:
+    algorithm: RSA
+    size: 2048
+```
+
+**Flow:**
+
+1. cert-manager issues cert → Secret `prod-neo4j-bolt-tls` with `tls.crt` + `tls.key`.
+2. Operator mounts `tls.key` → `…/bolt/private.key`, `tls.crt` → `…/bolt/public.crt`.
+3. Neo4j config: policy enabled, `reload.enabled` → `dbms.security.tls_reload_enabled`.
+4. On renewal, cert-manager updates Secret; reload picks up new material.
+
+**Defaults:** `certManager.enabled: false` — this example requires explicit `enabled: true`.
+
+---
+
+### Example 3 — BYO Bolt mTLS (client certificate authentication)
+
+Corporate PKI: server TLS + clients must present a certificate signed by a corporate CA. Mirrors [Neo4j Kubernetes SSL doc](https://neo4j.com/docs/operations-manual/current/kubernetes/security/) pattern (`client_auth` + `trustedCerts`).
+
+```yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-mtls
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
   trust:
     enabled: true
     certManager:
-      enabled: true               # required in V1
-      issuerRef: { name: ..., kind: ClusterIssuer }
-    reload:
+      enabled: false
+    certificates:
+      bolt:
+        privateKey:
+          secretName: prod-bolt-key
+        publicCertificate:
+          secretName: prod-bolt-cert
+        clientAuth: Require
+        trustedCerts:
+          sources:
+            - secret:
+                name: corp-client-ca
+                items:
+                  - key: ca.crt
+                    path: corp-client-ca.crt
+  connectivity:
+    external:
       enabled: true
+      ports:
+        bolt: true
 ```
 
-| Advantages | Disadvantages |
-|------------|---------------|
-| Smallest implementation — no BYO webhook validation | **Blocks** air-gapped / corporate PKI BYO Secrets (common in production) |
-| Forces GitOps-friendly cert rotation | No Helm migration path for existing `ssl.*.secretName` users |
-| | Fails FR `NEO-3-005-TLS-01..03` BYO scenarios in test catalog |
+**Prerequisites:**
+
+```yaml
+# Secret corp-client-ca — data.ca.crt: <PEM CA used to sign client certificates>
+```
+
+**Operator injects:**
+
+- `dbms.ssl.policy.bolt.enabled: "true"`
+- `server.bolt.tls_level: REQUIRED`
+- `dbms.ssl.policy.bolt.client_auth: REQUIRE`
+- Projected volume: `corp-client-ca.crt` → `/var/lib/neo4j/certificates/bolt/trusted/`
+
+**Helm migration:** set `config.dbms.ssl.policy.bolt.client_auth: "REQUIRE"` → `trust.certificates.bolt.clientAuth: Require`; copy `ssl.bolt.trustedCerts.sources` → `trust.certificates.bolt.trustedCerts.sources`.
+
+**Cluster note:** inter-member mTLS does not use bolt/https `clientAuth` — the **cluster** policy defaults to `Require` with `trustedCerts` mounting peer/member CAs (see Example 1 `certificates.cluster`).
+
+---
+
+### Option C — Single unified Secret for all policies
+
+One `secretName` shared when SANs allow. Deferred — conflicts with independent FR variants TLS-01/02/03.
+
+### Option D — cert-manager only; BYO deferred
+
+Rejected — blocks corporate PKI and Helm migration.
 
 ---
 
 ## Comparison
 
-| Criterion | A — Helm mirror | B — secretRef + cert-manager | C — unified | D — cert-manager only |
-|-----------|-----------------|------------------------------|-------------|----------------------|
-| Helm parity | ✅ highest | ⚠️ mapping table | ❌ | ❌ |
-| Matches current `spec.md` | ❌ | ✅ | ❌ | ⚠️ partial |
-| API minimalism | ❌ | ✅ | ✅ best | ✅ |
-| cert-manager support | ⚠️ bolt-on | ✅ first-class | ✅ | ✅ only path |
-| BYO corporate PKI | ✅ | ✅ | ✅ | ❌ |
-| trustedCerts / revokedCerts V1 | ✅ | ❌ deferred | ❌ | ❌ |
-| Operator complexity | High | Medium | Low | Low–Medium |
-| Breaking risk | Medium | **Low** (locked early) | Medium | High (BYO users blocked) |
-| FR / test catalog fit | ✅ | ✅ | ⚠️ | ❌ |
+| Criterion | A — full + revokedCerts | B — BYO + mTLS + cert-manager | C — unified |
+|-----------|-------------------------|--------------------------------|-------------|
+| Helm field names | ✅ | ✅ (`secretName`, `subPath`, `trustedCerts`) | ❌ |
+| BYO split Secrets | ✅ | ✅ | ⚠️ |
+| bolt/https mTLS | ✅ | ✅ (`clientAuth` + `trustedCerts`) | ⚠️ |
+| cluster mTLS | ✅ | ✅ (default `Require`) | ⚠️ |
+| cert-manager | ✅ | ✅ opt-in (`enabled: false` default) | ✅ |
+| API size | ❌ large | ⚠️ medium | ✅ small |
+| FR TLS-01/02/03 | ✅ | ✅ | ⚠️ |
 
 ---
 
 ## Decision
 
-**Not decided.** Pending reviewer sign-off.
+**We will implement Option B** — `spec.trust.certificates.{bolt,https,cluster}` mirrors Helm `ssl.{policy}` with `privateKey` / `publicCertificate` (`secretName`, `subPath`), plus **`clientAuth`** and **`trustedCerts.sources`** for mTLS. When `certManager.enabled: true`, per-policy `secretName` only (operator provisions `Certificate`). **`certManager.enabled` defaults `false`.**
 
-**Proposer direction:** Adopt **Option B** — keep the `spec.trust` shape already in [`spec.md`](../../09-crd-spec/neo4j/spec.md): `enabled`, `certManager`, `certificates.{bolt,https,cluster}.secretRef`, and `reload.enabled`. The operator normalizes Secret keys, injects `dbms.ssl.policy.*` and connector settings (mirroring `neo4j-config.yaml`), and optionally owns cert-manager `Certificate` resources.
+Options A, C, and D are rejected or deferred. Option A residual (`revokedCerts`) → V1.1.
 
-**Recommendation:**
+**V1 implementation scope:**
 
-1. **V1 = Option B.** Document the BYO Secret key contract (`private.key`/`tls.key`, `public.crt`/`tls.crt`). Webhook TLS-002 validates Secrets; CEL TLS-001/003 as in `validation.md`.
-2. **Default `trust.enabled: false`** — secure starting point; enabling HTTPS external port (NET-003) requires `trust.enabled` + https material.
-3. **`reload.enabled` defaults `true` when `certManager.enabled: true`**, else `false` — matches Helm's default `tls_reload_enabled: "true"` for cert-manager flows; explicit for BYO.
-4. **Defer `trustedCerts` / `revokedCerts` / per-key `subPath` overrides to V1.1** — document `podTemplate` / `additionalVolumes` escape for enterprise PKI until promoted.
-5. **Reserve** `dbms.ssl.policy.*`, `server.bolt.tls_level`, `server.https.enabled`, `dbms.security.tls_reload_enabled` in BDR-008 denylist when `spec.trust` fields are set.
-6. **Do not** rename `spec.trust` to `spec.tls` — `trust` matches operator proposal and separates user intent from Helm's `ssl` values key.
+1. Webhook TLS-002 validates Secret existence; pairing enforced (both key + cert Secrets in BYO mode).
+2. **Defaults:** `trust.enabled: false`, `certManager.enabled: false`, `reload.enabled: false`; per-policy `clientAuth` omitted → `None` (bolt/https), `Require` (cluster when enabled).
+3. **Suggest `reload.enabled: true`** when using cert-manager or rotating BYO Secrets in-place.
+4. **Do not use `secretRef`** — use `secretName` to match Helm and avoid confusion with `corev1.SecretReference`.
+5. **mTLS in V1:** `clientAuth` + `trustedCerts` (Helm projected-volume shape); **`revokedCerts` deferred V1.1**.
+6. Reserve TLS-related `neo4j.conf` keys (`dbms.ssl.policy.*`, `server.bolt.tls_level`, …) in BDR-008 denylist — including `*.client_auth`.
 
 ---
 
@@ -238,36 +437,27 @@ spec:
 
 ### Positive
 
-- Stable, documented BYO Secret contract — admission catches misconfiguration before pod start.
-- cert-manager integration is the operator's differentiated path (proposal §6.9).
-- Aligns with connectivity (NET-003) and config (BDR-008) boundaries.
-- Simpler migration narrative than Helm's dual-secret-per-policy.
+- Near drop-in migration from Helm `ssl.*` — rename section to `trust`, keep `secretName`/`subPath`/`trustedCerts`.
+- Split key/cert Secrets and custom `subPath` supported in V1 (corporate PKI).
+- bolt/https mTLS first-class — no `config.dbms.ssl.policy.*.client_auth` escape hatch.
+- cert-manager opt-in without forcing it as default.
 
 ### Negative
 
-- Helm users with **split** key/cert Secrets must consolidate or switch to cert-manager — migration guide entry required.
-- Enterprise trust stores (`trustedCerts.sources`) not in V1 API — workaround via volumes until V1.1.
-- Operator must implement Secret key normalization and cert-manager `Certificate` lifecycle (owner references, renewal).
+- Two shapes per policy (BYO vs cert-manager) — CEL `oneOf` required.
+- Operator must implement cert-manager `Certificate` lifecycle when enabled.
+- `trustedCerts.sources` projected-volume shape is verbose (Helm parity).
 
 ### Neutral
 
-- `neo4j.operations.ssl` (Job skip-verify flags) is operator-internal — not part of `spec.trust`.
-- mTLS / `client_auth` remains `NONE` by default (Helm parity); advanced auth is config escape or V2.
-- Field docs and `_index.csv` `crd_target` should use `Neo4j.spec.trust.*` not `spec.tls.*`.
+- `revokedCerts` still V1.1 — rare CRL use cases via `additionalMounts` until then.
 
 ---
 
 ## References
 
-- `design/analysis/helm-fields/_index.csv` — rows `ssl`, `ssl.bolt`, `ssl.https`, `ssl.cluster`
-- `design/analysis/helm-fields/aggregation-matrix.md` — `AGG-TLS-TRUST`
-- `design/analysis/helm-fields/breaking-change-register.md` — BC-006
-- `design/analysis/helm-fields/fields/ssl*.md`, `config.md` (CONCERN-TLS)
-- `helm-charts/neo4j/templates/_ssl.tpl`, `neo4j-config.yaml`
-- `helm-charts/neo4j/values.yaml` — `ssl` block L448–483
+- `design/analysis/helm-fields/_index.csv` — `ssl.*` rows
+- `helm-charts/neo4j/values.yaml` L448–483, `templates/_ssl.tpl`
 - [`spec.md`](../../09-crd-spec/neo4j/spec.md) — `spec.trust`
-- [`validation.md`](../../09-crd-spec/neo4j/validation.md) — TLS-001..003, NET-003
-- [BDR-001](001-single-neo4j-crd.md) — embedded trust section
-- [BDR-007](007-service-exposure-connectivity.md) — port ↔ TLS coherence
-- [BDR-008](008-neo4j-config-surface.md) — `reload` vs config denylist
-- [ADR-001](../architecture/001-crd-validation-process.md) — CEL + webhook split
+- [`validation.md`](../../09-crd-spec/neo4j/validation.md) — TLS-001…006
+- [BDR-007](007-service-exposure-connectivity.md), [BDR-008](008-neo4j-config-surface.md)

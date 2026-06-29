@@ -27,7 +27,7 @@ storage
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.data.disableSubPathExpr`
+- **Target**: `Neo4j.spec.volumes.data.disableSubPathExpr`
 - **Notes**: Draft mapping from Helm analysis.
 
 ## Aggregation

@@ -27,7 +27,7 @@ storage
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.data.dynamic`
+- **Target**: `Neo4j.spec.volumes.data.dynamic`
 - **Notes**: Draft mapping from Helm analysis.
 
 ## Aggregation

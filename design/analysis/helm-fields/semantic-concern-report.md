@@ -72,6 +72,24 @@
 
 ---
 
+## CONCERN-STORAGE-ESCAPE
+
+### Scattered helm paths
+
+| helm_path | role | template driver |
+|-----------|------|-----------------|
+| `additionalVolumes` | raw StatefulSet `volumes[]` | `_volumeTemplate.tpl` |
+| `additionalVolumeMounts` | Neo4j container `volumeMounts[]` | `_volumeTemplate.tpl` |
+| `secretMounts` | map → Secret volume + mount | `_secretMounts.tpl` |
+
+### BDR-005 verdict: **Option E (paired mounts + secretMounts map)**
+
+- Merge Helm split lists → `spec.additionalMounts[]`
+- `secretMounts` → `spec.secretMounts` (not `trust`, not `persistence`)
+- Overlap with `Neo4jRestore.spec.source.credentials` documented — Job vs pod lifecycle
+
+---
+
 ## Gates
 
 | Gate | Status |
@@ -80,3 +98,4 @@
 | G-SC-2 | PASS — template_evidence documented |
 | G-SC-3 | PASS — `analytics.*` linked to topology |
 | G-SC-4 | PASS — BDR-002/004 verdict documented |
+| G-SC-5 | PASS — CONCERN-STORAGE-ESCAPE documented |

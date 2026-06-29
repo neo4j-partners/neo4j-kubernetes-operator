@@ -1,7 +1,7 @@
 # `Neo4j` — validation rules
 
 **API**: `neo4j.com/v1beta1`  
-**Sources**: [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) (overrides proposal on topology) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) (CEL vs webhook ownership) · [`spec.md`](spec.md) · `01` / `03` variant matrix
+**Sources**: [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) (overrides proposal on topology) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) (CEL vs webhook ownership) · [`spec.md`](spec.md) · `01` / `03` variant matrix
 
 **Mechanisms**:
 
@@ -65,7 +65,7 @@
 
 ---
 
-## Plugins (BDR-004 Option E)
+## Plugins (BDR-004 Option E — accepted)
 
 **Placement rule:** Standalone → all plugins on `spec.plugins`. Cluster → plugins on `primaries`, `secondaries.analytics`, `secondaries.read`; `gds` / `bloom` only on `secondaries.analytics`.
 
@@ -148,10 +148,16 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| STO-001 | `persistence.data.size` required | Error | CEL | data volume size is required |
-| STO-002 | `persistence.data.size` must be valid quantity | Error | CEL | invalid storage size |
-| STO-003 | `storageClassName` must exist when set | Error | Webhook | StorageClass not found |
-| STO-004 | Shrink `persistence.data.size` blocked | Error | Webhook | PVC expansion only — shrinking not supported |
+| STO-001 | `volumes.data.dynamic.size` required when `mode: Dynamic` | Error | CEL | data volume size is required |
+| STO-002 | `volumes.data.dynamic.size` must be valid quantity | Error | CEL | invalid storage size |
+| STO-003 | `dynamic.storageClassName` must exist when set | Error | Webhook | StorageClass not found |
+| STO-004 | Shrink `volumes.data.dynamic.size` blocked | Error | Webhook | PVC expansion only — shrinking not supported |
+| STO-005 | `volumes.data.mode` must not be `Share` | Error | CEL | data volume cannot use Share mode |
+| STO-006 | `Existing` requires exactly one of `claimName`, `volume`, `volumeClaimTemplate` | Error | CEL | invalid existing volume binding |
+| STO-007 | `mode: Share` on aux requires `shareFrom: data` (V1) | Error | CEL | invalid shareFrom |
+| STO-008 | `additionalMounts[].name` unique in pod | Error | CEL | duplicate additional mount name |
+| STO-009 | `mountPath` must not overlap reserved paths (`/data`, `/var/lib/neo4j/certificates/`) | Error | Webhook | reserved mount path |
+| STO-010 | `secretMounts.*.secretName` must exist | Error | Webhook | secretMounts secret not found |
 | STO-005 | `accessMode` must be `ReadWriteOnce` for data (V1) | Error | CEL | V1 data volume supports ReadWriteOnce only |
 
 ---
@@ -171,8 +177,14 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
 | TLS-001 | `trust.certManager.enabled: true` requires `issuerRef` | Error | CEL | cert-manager issuerRef is required |
-| TLS-002 | Referenced TLS secrets must exist when `trust.enabled` and not using cert-manager | Error | Webhook | TLS secret not found |
+| TLS-002 | BYO: `privateKey.secretName` + `publicCertificate.secretName` must exist when policy enabled | Error | Webhook | TLS secret not found |
+| TLS-002b | BYO: both key and cert `secretName` required per enabled policy | Error | CEL | missing TLS certificate pairing |
+| TLS-002c | cert-manager: `certificates.{policy}.secretName` required when `certManager.enabled` | Error | CEL | cert-manager target secretName required |
+| TLS-002d | Per policy: BYO shape XOR cert-manager `secretName` (not both) | Error | CEL | invalid trust certificate shape |
 | TLS-003 | `mode: Cluster` + `trust.enabled` → cluster TLS material required | Error | CEL | cluster TLS is required for clustered deployments |
+| TLS-004 | bolt/https: `clientAuth` `Optional` or `Require` → `trustedCerts.sources` non-empty | Error | CEL | mTLS requires trustedCerts sources |
+| TLS-005 | `mode: Cluster` + cluster policy enabled → `clientAuth` cannot be `None` | Error | CEL | cluster mTLS requires clientAuth Require |
+| TLS-006 | `clientAuth` set on a policy requires that policy's TLS material (key/cert or cert-manager secretName) | Error | CEL | clientAuth requires enabled TLS policy |
 
 ---
 
@@ -272,6 +284,6 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | ADR-001 | Mechanism choice (CEL / webhook / reconciler) |
 | BDR-004 Option E | TOPO-001…013, PLG-001…013 |
 | `03-variant_matrix` Edition | EDT-001…006 |
-| `NEO-2-005` TLS | TLS-001…003 |
+| `NEO-2-005` TLS | TLS-001…006 |
 | `NEO-2-006` Storage | STO-001…005 |
 | `NEO-2-011` Scale | TOPO-009, TOPO-010 |

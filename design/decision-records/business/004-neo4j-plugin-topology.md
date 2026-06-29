@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | proposed — **no decision yet** |
+| **Status** | accepted |
 | **Date** | 2026-06-22 |
 | **Depends on** | [BDR-002](002-neo4j-crd-topology.md) — `primaries` + fixed `secondaries.analytics` / `secondaries.read` |
 | **Constraints** | Neo4j GDS deployment docs; `NEO-2-003`; Helm `NEO4J_PLUGINS` |
@@ -198,9 +198,9 @@ spec:
 
 ---
 
-### Option E — fixed `secondaries` pools with plugin **refs** + central plugin definitions
+### Option E — fixed `secondaries` pools with plugin **refs** + central plugin definitions — **accepted**
 
-**Proposer direction:** pools declare **which** plugins (by catalog id); **how** to install them (license Secret, version, JAR, config) lives in `spec.pluginDefinitions`.
+Pools declare **which** plugins (by catalog id); **how** to install them (license Secret, version, JAR, config) lives in `spec.pluginDefinitions`.
 
 ```yaml
 spec:
@@ -341,21 +341,41 @@ spec:
 
 ## Decision
 
-**Not decided.** Options C, D, E, and F remain viable given [BDR-002](002-neo4j-crd-topology.md) fixed pools `analytics` / `read`.
+**We will implement Option E** — pools declare plugin **refs** (`plugins: [apoc, gds]`); configuration (`licenseSecretRef`, version, JAR, `apoc.conf`, credentials) lives in `spec.pluginDefinitions`.
 
-**Leaning from review discussion:** **Option E** addresses the feedback that inline license/JAR config in pools (Option D) is noisy, while keeping plugin **assignment** visible on each pool. **Option F** offers the same DRY license model with a **plugin-centric** `enabledOn` list — preferable when operators think per-plugin rather than per-pool.
+Options A and B are rejected. Options C, D, and F are rejected (split maps, inline repetition, or plugin-centric `enabledOn`).
 
-**Next steps before locking:**
+**V1 implementation scope:**
 
-1. Confirm field names: `pluginDefinitions` (E) vs unified `plugins.<id>.enabledOn` (F) vs split `PluginDefinition` CRD (out of scope V1).
-2. Validate Options E and F with 2–3 real PS deployment YAMLs (HA + analytics, GDS + Bloom).
-3. Update `09-crd-spec/neo4j/spec.md` **after** decision — current spec is **draft** and may not match final BDR-004.
+1. **Cluster:** `topology.primaries.plugins[]` and `topology.secondaries.{analytics,read}.plugins[]` are catalog id refs only.
+2. **Standalone:** `spec.plugins[]` + `spec.pluginDefinitions` (flat list + central defs).
+3. **Operator resolution:** for each plugin id in a pool's `plugins[]`, merge `pluginDefinitions[id]` with catalog defaults → per-pod JAR set and config.
+4. **Invariants:** GDS not on primaries (§1); one `licenseSecretRef` per licensed plugin id (§2).
+5. **Validation:** PLG-001…013, TOPO-005 (GDS only on `secondaries.analytics`).
+6. **Field names:** `pluginDefinitions` (not split `PluginDefinition` CRD in V1).
+7. `neo4j/spec.md` and `validation.md` aligned to Option E.
 
 ---
 
 ## Consequences
 
-*(To be completed when an option is chosen.)*
+### Positive
+
+- **DRY licensing** — one `pluginDefinitions.gds.licenseSecretRef` for all GDS pods.
+- Pool blocks stay readable: `plugins: [gds, bloom]` next to `members`.
+- Aligns with [BDR-002](002-neo4j-crd-topology.md) fixed pools `analytics` / `read`.
+- License rotation updates a single definition entry.
+
+### Negative
+
+- Two sections to read for the full plugin picture (assignment + definitions).
+- Ref validation required — orphan refs and unused definitions (warn or reject).
+- Standalone uses a slightly different assignment shape (`spec.plugins[]` vs pool refs).
+
+### Neutral
+
+- Helm `NEO4J_PLUGINS` migrates to pool refs + `pluginDefinitions`, not a 1:1 env var.
+- Unused catalog keys in `pluginDefinitions` may be allowed with a warning.
 
 ---
 

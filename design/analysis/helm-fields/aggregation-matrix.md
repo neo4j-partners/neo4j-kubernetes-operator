@@ -18,6 +18,7 @@ and template evidence (`neo4j-config.yaml` for topology).
 | `AGG-TOPO-PLUGINS` | 3 (+2 dual-tagged) | breaking / safe | BDR-004 | proposed |
 | `AGG-STORAGE-DATA` | 9 | breaking | BDR-005 | proposed |
 | `AGG-STORAGE-AUX` | 5 | safe | BDR-005 | proposed (shared mode pattern) |
+| `AGG-STORAGE-ESCAPE` | 3 | safe | BDR-005 | proposed |
 | `AGG-EXPOSURE` | 11 | breaking / deferred | BDR-007 | proposed |
 | `AGG-CONFIG-SURFACE` | 4 | breaking | BDR-008 | proposed |
 | `AGG-TLS-TRUST` | 4 | breaking | BDR-006 | proposed |
@@ -69,15 +70,24 @@ Dual-tagged with `AGG-TOPO-ROLES`: `analytics`, `analytics.type.name`.
 
 ### `AGG-STORAGE-DATA` + `AGG-STORAGE-AUX` → BDR-005
 
-**Coupling**: `volumes.data.mode` is **immutable** after create; aux volumes (`backups`, `logs`, …) share the same mode vocabulary.
+**Coupling**: `volumes.data.mode` is **immutable** after create; aux volumes use **`Share` | `Dynamic` | `Existing`** ([BDR-005](../../../decision-records/business/005-storage-volume-mode.md) Option D).
 
-**Data (9)**:
-`volumes.data`, `.mode`, `.labels`, `.disableSubPathExpr`, `.selector`, `.defaultStorageClass`, `.dynamic`, `.volume`, `.volumeClaimTemplate`
+**Data (9)** → `spec.volumes.data.mode`: **`Dynamic` | `Existing`** (`Existing` oneOf: `claimName` \| `volume` \| `volumeClaimTemplate`)
 
-**Aux (5)**:
-`volumes.backups`, `volumes.logs`, `volumes.metrics`, `volumes.import`, `volumes.licenses`
+**Aux (5)** → `spec.volumes.{backups,logs,…}.mode`: **`Share`** (default, `shareFrom: data`) \| `Dynamic` \| `Existing`
 
-**Related (ungrouped)**: `additionalVolumes`, `additionalVolumeMounts`, `secretMounts` → `spec.persistence` escape hatches (safe).
+**Related**: `additionalVolumes`, `additionalVolumeMounts`, `secretMounts` → **AGG-STORAGE-ESCAPE** (Option E: `spec.additionalMounts` + `spec.secretMounts` at root)
+
+---
+
+### `AGG-STORAGE-ESCAPE` → BDR-005
+
+**Coupling**: arbitrary pod volumes + secret file mounts; must not conflate with `spec.trust` (TLS) or `spec.auth`.
+
+| helm_path | Operator (Option E) |
+|-----------|---------------------|
+| `additionalVolumes` + `additionalVolumeMounts` | `spec.additionalMounts[]` (paired by `name` + `mountPath`) |
+| `secretMounts` | `spec.secretMounts` (map, Helm-shaped) |
 
 ---
 

@@ -28,7 +28,7 @@ storage
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.licenses`
+- **Target**: `Neo4j.spec.volumes.licenses`
 - **Notes**: Draft mapping from Helm analysis.
 
 ## Aggregation

@@ -103,7 +103,42 @@ concerns:
     label: Persistence & auxiliary volumes
     helm_paths: [volumes.data, volumes.backups, volumes.logs, volumes.metrics, volumes.import, volumes.licenses]
     aggregation_groups: [AGG-STORAGE-DATA, AGG-STORAGE-AUX]
-    bdr_exemplar: null
+    bdr_exemplar: BDR-005
+
+  - id: CONCERN-STORAGE-ESCAPE
+    label: Pod volume / secret escape hatches
+    description: >
+      Arbitrary extra volumes, mounts, and secret file mounts not modelled as first-class
+      persistence roles. Helm splits volumes and mounts into two lists; secretMounts is a
+      separate map with structured Secret projection.
+    client_outcomes:
+      - Mount custom config files (emptyDir / configMap)
+      - Inject cloud credentials for seedURI / restore (S3 keys at mountPath)
+      - Enterprise integrations (CSI, extra PVCs) without new CRD fields
+    helm_paths:
+      - additionalVolumes
+      - additionalVolumeMounts
+      - secretMounts
+    template_evidence:
+      - file: helm-charts/neo4j/templates/_volumeTemplate.tpl
+        symbols: [neo4j.additionalVolumes, neo4j.additionalVolumeMounts]
+        note: raw YAML passthrough to StatefulSet volumes / volumeMounts
+      - file: helm-charts/neo4j/templates/_secretMounts.tpl
+        note: map key → volume name; secretName, mountPath, items, defaultMode
+      - file: helm-charts/neo4j/templates/neo4j-statefulset.yaml
+        note: includes both tpl outputs on Neo4j container
+    neo4j_doc_themes:
+      - Restore from seed URI (credentials on filesystem)
+      - Kubernetes deployment customisation
+    operator_vs_helm_gap: >
+      Neo4jRestore CRD carries Job-scoped credentials for V1 restore; Helm secretMounts
+      mounts into the long-running Neo4j pod — both may be required depending on workflow.
+    bdr_exemplar: BDR-005
+    aggregation_groups: [AGG-STORAGE-ESCAPE]
+    must_not_conflate_with:
+      - spec.trust (TLS certificates)
+      - spec.auth (password secrets)
+      - spec.pluginDefinitions (APOC credentials)
 
   - id: CONCERN-EXPOSURE
     label: Client & cluster networking

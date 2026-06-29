@@ -28,7 +28,7 @@ network
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.trust.certificates.https.secretRef`
+- **Target**: `Neo4j.spec.trust.certificates.https` (`privateKey` / `publicCertificate` + `subPath`)
 - **Notes**: Draft mapping from Helm analysis.
 
 ## Aggregation

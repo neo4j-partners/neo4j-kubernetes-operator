@@ -27,7 +27,7 @@ storage
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.data.volumeClaimTemplate`
+- **Target**: `Neo4j.spec.volumes.data.volumeClaimTemplate`
 - **Notes**: Draft mapping from Helm analysis.
 
 ## Aggregation

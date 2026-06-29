@@ -4,10 +4,10 @@
 **Scope**: Namespaced · **Short name**: `n4j`  
 **Subresources**: `status`, `scale` (optional — maps to total cluster member count)
 
-**Sources**: [BDR-001](../../decision-records/business/001-single-neo4j-crd.md) · [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) (Option E) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1  
+**Sources**: [BDR-001](../../decision-records/business/001-single-neo4j-crd.md) · [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1  
 **Related**: [`validation.md`](validation.md) · [`status.md`](status.md) · [`example.yaml`](example.yaml)
 
-> **Conflict rule**: where this document disagrees with `20-operator-proposal.md`, **[BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) wins** for topology and **[BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E** wins for plugins.
+> **Conflict rule**: where this document disagrees with `20-operator-proposal.md`, **[BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) wins** for topology, **[BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E — accepted** wins for plugins, and **[BDR-005](../../decision-records/business/005-storage-volume-mode.md) wins** for storage naming (`spec.volumes`, not `persistence`).
 
 **FR coverage**: `NEO-1-001`, `NEO-1-002`, `NEO-2-003`…`NEO-2-016`, `NEO-2-018`
 
@@ -21,11 +21,13 @@ Primary workload CRD. One `Neo4j` resource → one StatefulSet → N pods. Infra
 spec
 ├── edition, version, license          # identity
 ├── topology                           # BDR-002 — mode + role counts + plugin refs (Cluster)
-├── pluginDefinitions                  # BDR-004 Option E — license, version, config per plugin id
+├── pluginDefinitions                  # BDR-004 Option E — accepted — license, version, config per plugin id
 ├── plugins[]                          # Standalone only — catalog id refs at spec root
 ├── image
 ├── auth
-├── persistence
+├── volumes                            # BDR-005 — mirrors helm values.yaml `volumes:` block
+├── additionalMounts[]                 # BDR-005 — paired helm additionalVolumes + additionalVolumeMounts
+├── secretMounts                       # BDR-005 — top-level like helm values.yaml
 ├── resources, jvm
 ├── config
 ├── trust
@@ -34,7 +36,7 @@ spec
 ├── security
 ├── monitoring
 ├── maintenance
-└── podTemplate                        # escape hatch
+└── podTemplate                        # escape hatch (containers only)
 ```
 
 ---
@@ -65,7 +67,7 @@ spec
 
 ## `spec.topology` (BDR-002)
 
-> **Plugin attachment** follows [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) **Option E**: pools declare **catalog id refs** (`plugins: [apoc, gds]`); configuration lives in `spec.pluginDefinitions`.
+> **Plugin attachment** follows [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) **Option E — accepted**: pools declare **catalog id refs** (`plugins: [apoc, gds]`); configuration lives in `spec.pluginDefinitions`.
 
 Deployment mode and Neo4j role composition.
 
@@ -134,7 +136,7 @@ pluginDefinitions:
 
 | `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). |
 
-Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
+Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md), **Option E — accepted**). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
 
 **StatefulSet replica count**:
 
@@ -193,24 +195,71 @@ Effective image: `{repository}:{spec.version}`.
 
 ---
 
-## `spec.persistence`
+## `spec.volumes`
 
-Embedded persistence — not a separate CRD.
+Mirrors Helm `values.yaml` → **`volumes:`** ([BDR-005](../../decision-records/business/005-storage-volume-mode.md), **Option D — accepted**). Not named `persistence` — that label came from the early operator proposal but does not match the chart surface operators migrate from.
 
-### `spec.persistence.data` (required)
+### `spec.volumes.data` (required)
 
 | Field | Type | Required | Default | Immutable | Description |
 |-------|------|----------|---------|-----------|-------------|
-| `size` | string | **yes** | — | no† | PVC size (e.g. `100Gi`). |
-| `storageClassName` | string | no | cluster default | no | StorageClass (`NEO-3-006-PVC-01/02`). |
-| `accessMode` | string | no | `ReadWriteOnce` | yes | V1: `ReadWriteOnce` only. |
-| `existingClaim` | string | no | — | yes | Bind existing PVC (`NEO-3-006-PVC-03`, V1=No). |
+| `mode` | string | **yes** | `Dynamic` | yes | `Dynamic` \| `Existing`. |
+| `dynamic.size` | string | when `Dynamic` | — | no† | PVC size (e.g. `100Gi`). |
+| `dynamic.storageClassName` | string | no | cluster default | yes | StorageClass (`NEO-3-006-PVC-01/02`). |
+| `dynamic.accessMode` | string | no | `ReadWriteOnce` | yes | V1: `ReadWriteOnce` only. |
+| `dynamic.labels` | map | no | `{}` | no | PVC metadata labels. |
+| `existing.claimName` | string | oneOf | — | yes | Bind named PVC (`NEO-3-006-PVC-03`). |
+| `existing.volume` | object | oneOf | — | yes | Inline StatefulSet `volume` source (incl. Helm `share`). |
+| `existing.volumeClaimTemplate` | object | oneOf | — | yes | Raw K8s VCT — incl. `selector` (`NEO-3-006-PVC-04/05`). |
+| `disableSubPathExpr` | bool | no | `false` | yes | Mount `subPathExpr` control for `/data`. |
 
-†Expansion allowed; shrink blocked.
+†`dynamic.size` expansion allowed; shrink blocked.
 
-### Auxiliary volumes (V1)
+**`Existing`:** exactly one of `claimName`, `volume`, or `volumeClaimTemplate` (CEL `oneOf`).
 
-V1: logs, metrics, import, backups, licenses share data volume (Helm default). Per-volume roles deferred (`NEO-3-006-VOL-02`…`06` partial V1).
+### Auxiliary volumes
+
+Roles: `backups`, `logs`, `metrics`, `import`, `licenses`. Each supports:
+
+| Field | Values | Default |
+|-------|--------|---------|
+| `mode` | `Share` \| `Dynamic` \| `Existing` | `Share` |
+| `shareFrom` | `data` (V1 only) | `data` when `mode: Share` |
+| `dynamic` | same shape as `data.dynamic` | — |
+| `existing` | same oneOf as `data.existing` | — |
+
+V1 Helm default: aux volumes **share** the data volume. `volumes.data.mode: Share` is **forbidden**.
+
+---
+
+## `spec.additionalMounts`
+
+Top-level like Helm `additionalVolumes` + `additionalVolumeMounts` — **paired** in one list ([BDR-005](../../decision-records/business/005-storage-volume-mode.md), **Option E — accepted**).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Volume name (unique in pod). |
+| `volume` | object | Kubernetes `volume` source (`emptyDir`, `configMap`, `persistentVolumeClaim`, `csi`, …). |
+| `mountPath` | string | Container mount path. |
+| `subPath` | string | Optional subPath. |
+| `readOnly` | bool | Default `false`. |
+
+---
+
+## `spec.secretMounts`
+
+Top-level like Helm `secretMounts:` — map of mount id → Secret projection.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `<id>.secretName` | string | Secret name. |
+| `<id>.mountPath` | string | Mount directory in Neo4j container. |
+| `<id>.items` | []KeyToPath | Optional key subset. |
+| `<id>.defaultMode` | int | File mode (default `0644`). |
+
+**Reserved paths:** `/data`, `/var/lib/neo4j/certificates/*` — webhook rejects user mounts (operator-owned).
+
+**vs other secrets:** TLS → `spec.trust`; auth password → `spec.auth`; restore Job creds → `Neo4jRestore.spec.source.credentials`.
 
 ---
 
@@ -244,7 +293,7 @@ Operator merges: defaults → user `config` → K8s-specific cluster discovery s
 
 ---
 
-## Plugin model (BDR-004 Option E)
+## Plugin model (BDR-004 Option E — accepted)
 
 Pools and Standalone declare **which** plugins run (catalog id strings). **How** to install them — license Secret, version, plugin config — lives in `spec.pluginDefinitions`.
 
@@ -332,18 +381,56 @@ Deprecated: inline `PluginSpec` on pools (Option D); `spec.plugins.<poolName>` m
 
 ## `spec.trust`
 
-TLS / certificate management — embedded, not a separate CRD (`NEO-2-005`).
+TLS / certificate management — embedded, not a separate CRD ([BDR-006](../../decision-records/business/006-tls-trust-model.md), **Option B — accepted**).
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `false` | Master TLS toggle. |
-| `certManager.enabled` | bool | `false` | Provision certs via cert-manager. |
-| `certManager.issuerRef.name` | string | — | Issuer name. |
-| `certManager.issuerRef.kind` | string | `ClusterIssuer` | `Issuer` or `ClusterIssuer`. |
-| `certificates.bolt.secretRef` | string | — | Bolt TLS Secret (`NEO-3-005-TLS-01`). |
-| `certificates.https.secretRef` | string | — | HTTPS TLS Secret (`NEO-3-005-TLS-02`). |
-| `certificates.cluster.secretRef` | string | — | Inter-cluster TLS (`NEO-3-005-TLS-03`). |
-| `reload.enabled` | bool | `false` | Auto-reload on cert rotation (`NEO-3-005-TLS-04`). |
+Mirrors Helm `ssl.{policy}.privateKey` / `publicCertificate` field names (`secretName`, `subPath`). CRD section is **`trust`** (not Helm's `ssl` key).
+
+### Defaults
+
+| Field | Default |
+|-------|---------|
+| `enabled` | `false` |
+| `certManager.enabled` | `false` |
+| `reload.enabled` | `false` |
+
+### `spec.trust` (top-level)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | bool | Master TLS toggle. |
+| `reload.enabled` | bool | Injects `dbms.security.tls_reload_enabled` (`NEO-3-005-TLS-04`). |
+| `certManager.enabled` | bool | Provision certs via cert-manager (opt-in). |
+| `certManager.issuerRef.name` | string | Issuer name (required when cert-manager on). |
+| `certManager.issuerRef.kind` | string | `Issuer` or `ClusterIssuer` (default `ClusterIssuer`). |
+
+### `spec.trust.certificates.{bolt,https,cluster}`
+
+**BYO mode** (`certManager.enabled: false`) — same shape as Helm `values.yaml`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `privateKey.secretName` | string | Secret holding the private key (`NEO-3-005-TLS-0x`). |
+| `privateKey.subPath` | string | Key within Secret (default `private.key`). |
+| `publicCertificate.secretName` | string | Secret holding the certificate. |
+| `publicCertificate.subPath` | string | Key within Secret (default `public.crt`). |
+| `clientAuth` | string | `None` \| `Optional` \| `Require` — maps to `dbms.ssl.policy.{policy}.client_auth`. Default: `None` (bolt/https); `Require` (cluster when policy enabled). |
+| `trustedCerts.sources` | []ProjectedVolumeSource | Projected volume sources (Helm shape) — client/peer CA certs mounted under `…/{policy}/trusted/`. Required when `clientAuth` is `Optional` or `Require` on bolt/https (TLS-004). |
+
+Both `privateKey.secretName` and `publicCertificate.secretName` required when a policy is enabled (BYO).
+
+**cert-manager mode** (`certManager.enabled: true`) — per policy:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `secretName` | string | Target Secret for issued `tls.crt` / `tls.key` (operator creates `Certificate`). |
+
+Mutually exclusive per policy: BYO (`privateKey` + `publicCertificate`) **or** cert-manager (`secretName` only).
+
+`clientAuth` and `trustedCerts` apply in **both** BYO and cert-manager modes.
+
+Mount paths (operator): `/var/lib/neo4j/certificates/{policy}/private.key`, `public.crt`, and `trusted/*` — same as Helm `_ssl.tpl`.
+
+`revokedCerts` — deferred V1.1 ([BDR-006](../../decision-records/business/006-tls-trust-model.md)).
 
 ---
 
@@ -457,8 +544,9 @@ Escape hatch for advanced customization.
 |-------|-------------|
 | `initContainers` | Additional init containers. |
 | `sidecars` | Sidecar containers. |
-| `additionalVolumes` | Extra volumes. |
 | `env` | Additional environment variables (merged, not replaced). |
+
+Prefer `spec.additionalMounts` and `spec.secretMounts` for volumes — see [BDR-005](../../decision-records/business/005-storage-volume-mode.md). Raw `podTemplate` patches deferred V1 unless needed for container overrides.
 
 Operator-owned keys cannot be overridden.
 
@@ -484,17 +572,28 @@ spec:
     primaries:
       members: 3
     minimumMembers: 3
-  persistence:
+  volumes:
     data:
-      size: 100Gi
-      storageClassName: gp3
+      mode: Dynamic
+      dynamic:
+        size: 100Gi
+        storageClassName: gp3
   trust:
     enabled: true
+    reload:
+      enabled: true
     certManager:
       enabled: true
       issuerRef:
         name: letsencrypt-prod
         kind: ClusterIssuer
+    certificates:
+      bolt:
+        secretName: prod-neo4j-bolt-tls
+      https:
+        secretName: prod-neo4j-https-tls
+      cluster:
+        secretName: prod-neo4j-cluster-tls
   connectivity:
     external:
       enabled: true

@@ -1,39 +1,52 @@
-# BDR-005 — Storage volume mode model for `Neo4j.spec.persistence.data`
+# BDR-005 — Storage volume mode model for `Neo4j.spec.volumes`
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | accepted |
 | **Date** | 2026-06-26 |
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD (accepted) |
-| **Helm scope** | `volumes.data.*` rows (`mode`, `dynamic`, `defaultStorageClass`, `selector`, `volume`, `volumeClaimTemplate`, `share`, `labels`, `disableSubPathExpr`); group **AGG-STORAGE-DATA** |
-| **Constraints** | `NEO-2-006`, `NEO-3-006-PVC-01..05`, `NEO-3-006-VOL-01`; AC `AC-NEO-STORAGE*`; Neo4j [Kubernetes storage](https://neo4j.com/docs/operations-manual/current/kubernetes/) |
+| **Helm scope** | `volumes.data.*`, `volumes.{backups,logs,metrics,import,licenses}`, `additionalVolumes`, `additionalVolumeMounts`, `secretMounts`; groups **AGG-STORAGE-DATA**, **AGG-STORAGE-AUX**, **AGG-STORAGE-ESCAPE** |
+| **Constraints** | `NEO-2-006`, `NEO-3-006-PVC-01..05`, `NEO-3-006-VOL-01..06`; AC `AC-NEO-STORAGE*`; Neo4j [Kubernetes storage](https://neo4j.com/docs/operations-manual/current/kubernetes/) |
 
 ---
 
 ## Context
 
-The Neo4j database store lives at `/data` and must survive pod restart and reschedule. In the Helm chart, **how** that volume is provisioned or bound is selected through `volumes.data.mode`, which dispatches in `_volumeTemplate.tpl` to one of **six** mutually exclusive shapes:
+The Neo4j database store lives at `/data` and must survive pod restart and reschedule. Auxiliary paths (`/logs`, `/backups`, `/metrics`, `/import`, `/licenses`) may use dedicated PVCs or **share** the data volume — Helm's default for most aux roles.
 
-| Helm mode | Mechanism | K8s result |
-|-----------|-----------|------------|
-| `defaultStorageClass` | dynamic provisioning, no `storageClassName` (cluster default) | per-pod PVC via `volumeClaimTemplates` |
-| `dynamic` | dynamic provisioning on a **named** StorageClass + size + accessModes | per-pod PVC via `volumeClaimTemplates` |
-| `selector` | PVC with a label `selector` (+ class) binding to **pre-provisioned** PVs; `selectorTemplate` rendered via Helm `tpl` | PVC with `selector` |
-| `volume` | inline reference to an **existing** volume (PVC or other) directly in StatefulSet `volumes`; optional chown/chmod init container | inline `volumes` entry |
+In the Helm chart, provisioning is selected through `volumes.<role>.mode` (for `data`, six modes; for aux volumes, typically `share` or `dynamic`):
+
+| Helm `volumes.data.mode` | Mechanism | K8s result |
+|--------------------------|-----------|------------|
+| `defaultStorageClass` | dynamic provisioning, no `storageClassName` | per-pod PVC via `volumeClaimTemplates` |
+| `dynamic` | dynamic provisioning on a named StorageClass + size | per-pod PVC via `volumeClaimTemplates` |
+| `selector` | PVC with label `selector` binding to pre-provisioned PVs | PVC with `selector` in VCT |
+| `volume` | inline reference to an existing volume in StatefulSet `volumes` | inline `volumes` entry |
 | `volumeClaimTemplate` | raw `volumeClaimTemplate` YAML passthrough | `volumeClaimTemplates` (verbatim) |
 | `share` | reuse another volume's claim for `/data` | shared `volumes` entry |
 
-Adjacent knobs: `volumes.data.labels` (PVC metadata, **safe**), `volumes.data.disableSubPathExpr` (mount `subPathExpr` control, **breaking**).
+Adjacent knobs on **data**: `volumes.data.labels` (**safe**), `volumes.data.disableSubPathExpr` (**breaking**).
+
+### CRD layout mirrors Helm `values.yaml`
+
+| Helm `values.yaml` (top-level) | `Neo4j.spec` |
+|-------------------------------|--------------|
+| `volumes.data` / `volumes.logs` / … | `volumes.data` / `volumes.logs` / … |
+| `additionalVolumes` + `additionalVolumeMounts` | `additionalMounts[]` (paired — Option E) |
+| `secretMounts` | `secretMounts` |
+
+`persistence` was used in early operator drafts (`20-operator-proposal.md`) as a generic infra label. **Rejected** for the public API — operators migrating from Helm expect **`volumes:`**.
+
+---
 
 ### Forces
 
-- **Migration sensitivity.** StorageClass, size class, selector binding, and mount sub-path are effectively **locked at PVC create**. Changing them after install means data migration, not an in-place edit — every `volumes.data.*` row except `labels` is classified **breaking** in `_index.csv`.
-- **Helm parity vs API minimalism.** Six modes is a large, partly overlapping surface (`defaultStorageClass` is just `dynamic` without a class; `volumeClaimTemplate` is a raw escape hatch). A CRD that copies all six inherits Helm's "which mode do I pick?" ambiguity and its `tpl`-based selector indirection, which has no operator equivalent.
-- **Current `neo4j/spec.md` baseline.** The spec already sketches a **flat** `spec.persistence.data` (`size`, `storageClassName`, `accessMode`, `existingClaim`) with `existingClaim` marked **V1=No**. This BDR decides whether to keep that flat shape, adopt an explicit `mode` enum, or curate a subset.
-- **Field-doc draft drift.** `fields/volumes.data*.md` draft the target as `Neo4j.spec.storage.data.*`, while `neo4j/spec.md` uses `spec.persistence.data`. This BDR standardizes on **`spec.persistence.data`** (the spec.md path) and the field-doc drafts should follow.
-
-This BDR does **not** cover auxiliary volumes (logs, metrics, import, backups, licenses) — that is **AGG-STORAGE-AUX** (BDR-006).
+- **Migration sensitivity.** StorageClass, selector binding, and mount sub-path are locked at PVC create — classified **breaking** in `_index.csv`.
+- **Helm parity vs API minimalism.** Six Helm data modes collapse to two user intents: **provision new PVCs** vs **bring your own binding** (existing claim, inline volume, or raw VCT including `selector`).
+- **`volumeClaimTemplate` is not a third top-level mode.** It is an advanced form of **Existing** — the user supplies the Kubernetes VCT spec (standard API, including `selector`).
+- **`share` must be first-class** for aux volumes (Helm default). Data is the **source** volume; aux volumes default to `Share` from `data`.
+- **Field-doc / spec alignment.** CRD section is **`spec.volumes`** — same key as Helm `values.yaml` `volumes:`. The name `persistence` in early drafts (`20-operator-proposal.md`) is **rejected** for the public API; it does not match what Helm users configure.
 
 ---
 
@@ -41,145 +54,295 @@ This BDR does **not** cover auxiliary volumes (logs, metrics, import, backups, l
 
 | Rule | Rationale |
 |------|-----------|
-| Provisioning shape is fixed at PVC creation | StorageClass / selector / size-class changes require migration, not edit |
-| Capacity may only grow | PVC expansion is supported where the StorageClass allows it; shrink is blocked by Kubernetes |
-| Exactly one provisioning source per `data` volume | dynamic, existing-claim, and raw-template are mutually exclusive — admission must reject combinations |
-| `share` is not meaningful for the **data** root | Sharing applies to aux volumes reusing `data`; the data volume is the source, not a consumer |
+| Provisioning shape is fixed at PVC creation | StorageClass / selector / size-class changes require migration |
+| Capacity may only grow | PVC expansion where StorageClass allows; shrink blocked |
+| `data.mode` is `Dynamic` or `Existing` only | `Share` on `data` is forbidden — data is the anchor volume |
+| `Existing` accepts exactly one binding shape | `claimName`, `volume`, or `volumeClaimTemplate` — CEL `oneOf` |
+| Aux `mode: Share` mounts the same volume source as `shareFrom` | V1: `shareFrom` may only be `data` |
+| `mode`, binding shapes, and `disableSubPathExpr` immutable after create | CEL `x-kubernetes-validations`; `size` may expand only |
 
 ---
 
 ## Options under review
 
-### Option A — Full Helm parity: explicit `mode` enum with all six shapes
+### Option A — Full Helm parity: explicit `mode` enum with all six shapes (data only)
 
-Mirror the Helm dispatch as a discriminated `mode` enum on the CR.
+Mirror the Helm dispatch as a discriminated `mode` enum on `spec.volumes.data`.
 
 ```yaml
 spec:
-  persistence:
+  volumes:
     data:
       mode: dynamic          # defaultStorageClass | dynamic | selector | volume | volumeClaimTemplate | share
       dynamic:
         storageClassName: gp3
         size: 100Gi
         accessModes: [ReadWriteOnce]
-      # selector:  { storageClassName: gp3, selector: {...} }
-      # volume:    { persistentVolumeClaim: { claimName: my-pvc } }
-      # volumeClaimTemplate: { ...raw VCT... }
       disableSubPathExpr: false
       labels: {}
 ```
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| **Highest Helm parity** — every `volumes.data.mode` value has a 1:1 target | Inherits Helm's mode ambiguity (`defaultStorageClass` vs `dynamic` differ only by a class field) |
-| Lowest migration friction for Helm users keeping their current mode | Six mutually exclusive sub-objects → heavy CEL `oneOf` validation surface |
-| Raw `volumeClaimTemplate` escape hatch preserved | `selector` relied on Helm `tpl` rendering — no operator equivalent; semantics must be reimplemented |
-| | `share` is meaningless for the data root — dead enum value |
-| | Largest, most error-prone V1 OpenAPI/CEL block |
-
-**Helm parity**: strongest. **API minimalism**: weakest.
-
-### Option B — Flat fields, no `mode` (current `spec.md` baseline)
-
-Keep the flat shape already drafted in `neo4j/spec.md`; behaviour is inferred from which field is set.
-
-```yaml
-spec:
-  persistence:
-    data:
-      size: 100Gi
-      storageClassName: gp3      # omit → cluster default (= Helm defaultStorageClass)
-      accessMode: ReadWriteOnce  # V1: ReadWriteOnce only
-      existingClaim: ""          # set → bind existing PVC (V1 = deferred)
-```
-
-| Advantages | Disadvantages |
-|------------|---------------|
-| **Smallest API surface** — four well-understood fields | No first-class `selector` or raw `volumeClaimTemplate` escape hatch |
-| Matches the common K8s StatefulSet PVC mental model | Mode is **implicit** — `storageClassName` set/unset overloads dynamic vs default |
-| Already reflected in `neo4j/spec.md`; least churn | `existingClaim` + `storageClassName` combination needs validation to stay mutually exclusive |
-| Cleanest CEL — few cross-field rules | Advanced users (selector binding, custom VCT) have no V1 path → must wait for V1.1 |
-
-**Helm parity**: partial (covers `defaultStorageClass`, `dynamic`, `volume`-as-existing-claim). **API minimalism**: strongest.
-
-### Option C — Curated `mode` enum (`Dynamic` | `Existing`) + raw `volumeClaimTemplate` escape hatch — **proposed**
-
-A small, intent-named enum covering the two mainstream paths, plus a verbatim escape hatch for everything Kubernetes can express. Helm's six modes are **mapped into** this shape via `11-helm-mapping.md`, not copied as field names.
-
-```yaml
-spec:
-  persistence:
-    data:
-      mode: Dynamic                 # Dynamic | Existing | VolumeClaimTemplate
-      # --- mode: Dynamic ---
-      size: 100Gi                   # required for Dynamic
-      storageClassName: gp3         # omit → cluster default (Helm defaultStorageClass)
-      accessMode: ReadWriteOnce     # V1: ReadWriteOnce only
-      # --- mode: Existing ---
-      # existingClaim: my-neo4j-pvc
-      # --- mode: VolumeClaimTemplate (advanced escape hatch) ---
-      # volumeClaimTemplate: { ...raw K8s VCT spec... }
-      disableSubPathExpr: false     # breaking; defaults preserve /data layout
-      labels: {}                    # safe PVC metadata
-```
-
-**Standalone / dev quick-start** — default class:
-
-```yaml
-spec:
-  persistence:
-    data:
-      mode: Dynamic
-      size: 50Gi
-```
-
-| Advantages | Disadvantages |
-|------------|---------------|
-| **Explicit intent** — `Dynamic` vs `Existing` removes Option B's implicit overloading | New vocabulary vs Helm (migration table required) |
-| `defaultStorageClass`/`dynamic` collapse into one `Dynamic` mode (class optional) | One more field than Option B (`mode`) |
-| **Escape hatch** (`VolumeClaimTemplate`) covers `selector` and advanced PVCs without bespoke `selector` reimplementation | `selector` has no dedicated field — power users route through raw VCT |
-| Bounded CEL: 3-way `oneOf`, not 6-way | `mode` enum can grow later (additive, non-breaking) — but must be designed for it |
-| Drops meaningless `share` for the data root | |
-| Keeps `disableSubPathExpr` + `labels` from Helm | |
-
-**Helm parity**: high via mapping table; **API minimalism**: high.
-
-**Helm → operator mapping** (for `11-helm-mapping.md`):
-
-| Helm `volumes.data.mode` | Operator `spec.persistence.data` |
-|--------------------------|----------------------------------|
-| `defaultStorageClass` | `mode: Dynamic`, `storageClassName` omitted |
-| `dynamic` | `mode: Dynamic`, `storageClassName`, `size`, `accessMode` |
-| `volume` | `mode: Existing`, `existingClaim` |
-| `selector` | `mode: VolumeClaimTemplate` (raw VCT with `selector`) |
-| `volumeClaimTemplate` | `mode: VolumeClaimTemplate` (verbatim passthrough) |
-| `share` | not supported for data root (aux volumes only — BDR-006) |
+| Highest Helm parity — 1:1 field names | Six mutually exclusive sub-objects → heavy CEL |
+| Lowest migration friction for Helm users keeping mode names | `selector` needs Helm `tpl` reimplementation or duplicate escape hatch |
+| | Aux `share` still needs a parallel model per volume role |
+| | Largest, most error-prone V1 OpenAPI block |
 
 ---
 
-## Comparison
+### Option D — `Dynamic` + `Existing` (+ `Share` for aux) — **accepted**
 
-| Criterion | A — full Helm enum | B — flat fields | C — curated enum + escape hatch |
-|-----------|--------------------|-----------------|-------------------------------|
-| Helm parity | ✅ all six modes | ⚠️ 3 of 6 implicit | ✅ all six via mapping |
-| API minimalism | ❌ six sub-objects | ✅ four fields | ⚠️ enum + escape hatch |
-| Intent clarity | ⚠️ Helm ambiguity inherited | ⚠️ implicit mode | ✅ explicit `mode` |
-| Validation (CEL) cost | ❌ 6-way `oneOf` + `tpl` gap | ✅ few rules | ⚠️ 3-way `oneOf` |
-| Advanced / selector support | ✅ first-class | ❌ none in V1 | ✅ via raw VCT |
-| Migration safety (breaking fields fixed at create) | ✅ | ✅ | ✅ |
-| Future extensibility | ⚠️ enum already full | ⚠️ add fields later | ✅ additive enum values |
-| Churn vs current `spec.md` | high | none | low |
+Two top-level modes for **data**; aux volumes add **`Share`**. All non-dynamic Helm paths map under **`Existing`**, including raw `volumeClaimTemplate` (with `selector`).
+
+#### `spec.volumes.data`
+
+```yaml
+spec:
+  volumes:
+    data:
+      mode: Dynamic                 # Dynamic | Existing
+      dynamic:
+        size: 100Gi                   # required when mode=Dynamic
+        storageClassName: gp3         # omit → cluster default (Helm defaultStorageClass)
+        accessMode: ReadWriteOnce     # V1: ReadWriteOnce only
+        labels: {}                    # safe PVC metadata
+      existing:                       # required when mode=Existing — exactly one of:
+        claimName: my-neo4j-pvc       # Helm volume — bind named PVC
+        # volume:                      # Helm volume — inline StatefulSet volume source
+        #   persistentVolumeClaim:
+        #     claimName: my-neo4j-pvc
+        # volumeClaimTemplate:         # Helm selector | volumeClaimTemplate — advanced
+        #   metadata:
+        #     name: data
+        #   spec:
+        #     storageClassName: gp3
+        #     accessModes: [ReadWriteOnce]
+        #     resources:
+        #       requests:
+        #         storage: 100Gi
+        #     selector:
+        #       matchLabels:
+        #         neo4j-pv: "true"
+      disableSubPathExpr: false
+```
+
+**Standalone quick-start:**
+
+```yaml
+spec:
+  volumes:
+    data:
+      mode: Dynamic
+      dynamic:
+        size: 50Gi
+```
+
+#### `spec.volumes.<aux>` — `Share` | `Dynamic` | `Existing`
+
+Aux roles: `backups`, `logs`, `metrics`, `import`, `licenses`.
+
+```yaml
+spec:
+  volumes:
+    data:
+      mode: Dynamic
+      dynamic:
+        size: 100Gi
+    logs:
+      mode: Share                     # default — reuses data volume at /logs
+      shareFrom: data                 # V1: only `data` allowed
+    backups:
+      mode: Dynamic                   # dedicated PVC for /backups
+      dynamic:
+        size: 200Gi
+        storageClassName: gp3
+    metrics:
+      mode: Existing
+      existing:
+        claimName: neo4j-metrics-pvc
+```
+
+| `mode` | Operator behaviour |
+|--------|-------------------|
+| **Share** | No separate PVC; mount `data` volume (or sub-path) at aux path (`/logs`, `/backups`, …). Helm `share` default. |
+| **Dynamic** | Per-pod PVC via `volumeClaimTemplates` on the aux role (same shape as `data.dynamic`). |
+| **Existing** | Same `existing` oneOf as `data` (`claimName`, `volume`, `volumeClaimTemplate`). |
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| **Two intents for data** — provision vs bring-your-own | Vocabulary differs from Helm mode names (mapping table required) |
+| **`volumeClaimTemplate` nested under `Existing`** — standard K8s `selector` support | Advanced users must know VCT YAML for selector cases |
+| **`Share` explicit** for aux — matches Helm defaults | `Share` on multi-member cluster: shared RWO may be invalid — webhook must validate access mode + topology |
+| Bounded CEL: 2-way mode on data, 3-way on aux | `data` Helm `share` is a rare edge → maps to `Existing.volume` |
+| Single BDR covers data + aux | |
+
+**Helm → operator mapping** (for `11-helm-mapping.md`):
+
+| Helm | Operator |
+|------|----------|
+| `volumes.data.mode: defaultStorageClass` | `data.mode: Dynamic`, omit `storageClassName` |
+| `volumes.data.mode: dynamic` | `data.mode: Dynamic` + `dynamic.*` |
+| `volumes.data.mode: volume` | `data.mode: Existing` + `existing.claimName` or `existing.volume` |
+| `volumes.data.mode: selector` | `data.mode: Existing` + `existing.volumeClaimTemplate` (with `spec.selector`) |
+| `volumes.data.mode: volumeClaimTemplate` | `data.mode: Existing` + `existing.volumeClaimTemplate` |
+| `volumes.data.mode: share` | `data.mode: Existing` + `existing.volume` (shared claim reference) |
+| `volumes.logs.mode: share` (default) | `logs.mode: Share`, `shareFrom: data` |
+| `volumes.backups.mode: dynamic` | `backups.mode: Dynamic` + `dynamic.*` |
+| `volumes.*.mode: share` | `<role>.mode: Share`, `shareFrom: data` |
+
+---
+
+## Escape hatches — `additionalVolumes`, `additionalVolumeMounts`, `secretMounts`
+
+Helm exposes three **additive** mechanisms outside `volumes.<role>`:
+
+| Helm path | Shape | K8s effect |
+|-----------|-------|------------|
+| `additionalVolumes` | `[]` raw volume sources | StatefulSet `spec.template.spec.volumes` |
+| `additionalVolumeMounts` | `[]` raw mounts | Neo4j container `volumeMounts` |
+| `secretMounts` | `map[id]` → `{ secretName, mountPath, items?, defaultMode? }` | Paired Secret volume + mount |
+
+**Forces:**
+
+- **Split-list fragility (Helm).** `additionalVolumes` and `additionalVolumeMounts` are independent — nothing validates that `name` references exist.
+- **secretMounts ≠ TLS.** Distinct from `ssl.*` (`spec.trust`), `passwordFromSecret` (`spec.auth`), `apoc_credentials` (`pluginDefinitions`). Used for **ad-hoc files** (S3 keys for seedURI, custom integrations).
+- **Restore dual path.** V1 `Neo4jRestore.spec.source.credentials` mounts secrets on the **Job**; Helm `secretMounts` mounts on the **long-running pod** — seedURI workflows may need both or either depending on whether restore is operator-driven.
+- **Safe / additive.** All three are `versioning: safe` — iterable without API break.
+
+### Option E — Paired `additionalMounts` + `secretMounts` at spec root — **accepted** (escape hatches, complements Option D)
+
+Mirrors Helm **top-level** layout (`volumes:` + `additionalVolumes` + `secretMounts` are siblings in `values.yaml`).
+
+```yaml
+spec:
+  volumes:
+    data:
+      mode: Dynamic
+      dynamic:
+        size: 100Gi
+  additionalMounts:
+    - name: neo4j1-conf
+      volume:
+        emptyDir: {}
+      mountPath: /config/neo4j1.conf
+    - name: extra-data
+      volume:
+        persistentVolumeClaim:
+          claimName: shared-config-pvc
+      mountPath: /mnt/extra
+      readOnly: true
+  secretMounts:
+    s3-credentials:
+      secretName: my-s3-secret
+      mountPath: /var/secrets/s3
+      items:
+        - key: access-key
+          path: access-key
+        - key: secret-key
+          path: secret-key
+      defaultMode: 420   # 0644 octal → JSON int
+```
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| **Pairs volume + mount** — fixes Helm split-list footgun | `additionalMounts` is a rename of two Helm lists (mapping table) |
+| **Same top-level layout as Helm** — `volumes`, `additionalMounts`, `secretMounts` siblings | Operator must validate reserved paths |
+| Helm `secretMounts` map shape preserved at root | |
+| Typed `secretMounts` — better than raw Secret in `additionalMounts` | |
+
+**Validation (V1):** webhook rejects `mountPath` prefixes `/data`, `/var/lib/neo4j/certificates/`; optional allowlist on `additionalMounts[].volume` types; Secret existence check for `secretMounts`.
+
+### Option F — Helm split lists at spec root
+
+```yaml
+spec:
+  volumes:
+    data: { ... }
+  additionalVolumes:
+    - name: neo4j1-conf
+      emptyDir: {}
+  additionalVolumeMounts:
+    - name: neo4j1-conf
+      mountPath: /config/neo4j1.conf
+  secretMounts: { ... }
+```
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Highest Helm YAML parity for volumes/mounts | Inherits orphan-mount risk |
+| Drop-in migration from values.yaml | Weaker admission story |
+
+### Option G — Defer to `spec.podTemplate` only
+
+Put raw volume/mount overrides under `podTemplate`; no first-class `additionalMounts` / `secretMounts`.
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Smallest explicit storage API | `podTemplate` under-specified; loses validation |
+| | Breaks Helm migration clarity |
+
+### Option H — `secretMounts` only on `Neo4jRestore` (reject workload mounts)
+
+Workload CRD has no `secretMounts`; credentials only on restore Job CRD.
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Minimal Neo4j spec | **Breaks Helm seedURI on running pod** |
+| Clear lifecycle boundary | Manual / legacy Helm migrations blocked |
+
+**Helm → operator mapping (escape hatches):**
+
+| Helm | Operator (Option E) |
+|------|---------------------|
+| `additionalVolumes` + `additionalVolumeMounts` (paired by `name`) | `spec.additionalMounts[]` |
+| `secretMounts` | `spec.secretMounts` (same map keys) |
+
+---
+
+## Comparison (volume modes + escape hatches)
+
+| Criterion | A — full Helm enum | D — Dynamic + Existing + Share | E — escape (paired + secretMounts) |
+|-----------|-------------------|----------------------------------|-------------------------------------|
+| Data/aux modes | ✅ | ✅ | ✅ (orthogonal) |
+| Escape hatch UX | N/A | ⚠️ deferred to podTemplate | ✅ paired mounts |
+| secretMounts | N/A | needs decision | ✅ structured map |
+| Helm parity (escape) | N/A | ❌ | ⚠️ rename lists → paired |
+| Validation | N/A | N/A | ✅ reserved paths + secret refs |
+
+---
+
+## Comparison (data / aux modes)
+
+| Criterion | A — full Helm enum | D — Dynamic + Existing + Share |
+|-----------|-------------------|--------------------------------|
+| Helm parity | ✅ all mode names | ✅ via mapping table |
+| API minimalism | ❌ six sub-objects on data | ✅ two modes on data |
+| Intent clarity | ⚠️ Helm ambiguity inherited | ✅ explicit intent |
+| `selector` / raw VCT | ✅ (with tpl gap) | ✅ under `Existing.volumeClaimTemplate` |
+| Aux `share` | ⚠️ per-role Helm copy | ✅ `Share` + `shareFrom` |
+| Validation (CEL) cost | ❌ 6-way `oneOf` on data | ✅ 2-way data + 3-way aux |
+| Operator complexity | High | Medium |
 
 ---
 
 ## Decision
 
-**Not decided.** Pending review.
+**We will implement Option D** — `spec.volumes.data` uses `Dynamic` | `Existing`; aux volumes (`backups`, `logs`, `metrics`, `import`, `licenses`) use `Share` | `Dynamic` | `Existing`. Non-dynamic Helm paths map under `Existing` (`claimName`, `volume`, or `volumeClaimTemplate` including `selector`).
 
-**Proposer direction:** Adopt **Option C** — a curated `mode` enum (`Dynamic` | `Existing` | `VolumeClaimTemplate`) on `spec.persistence.data`, with Helm's six modes mapped in through `11-helm-mapping.md`. `Dynamic` is the V1 default path; `Existing` and the raw `VolumeClaimTemplate` escape hatch cover pre-provisioned and advanced cases without reimplementing Helm's `tpl`-based `selector`. Drop `share` for the data root (aux-only, BDR-006). Keep `labels` (safe) and `disableSubPathExpr` (breaking, default preserves `/data`).
+Option A is rejected (too heavy). Escape hatches follow **Option E** (`spec.additionalMounts[]` + `spec.secretMounts`); Options F, G, H rejected.
 
-**Recommendation:** Ship V1 with **`mode: Dynamic` + `Existing`** fully supported and validated; gate **`VolumeClaimTemplate`** behind a clearly-labelled "advanced" path (documented, accepted, but minimal validation). Treat `mode`, `storageClassName`, `accessMode`, `existingClaim`, `volumeClaimTemplate`, and `disableSubPathExpr` as **immutable after create** (CEL `x-kubernetes-validations`), allowing only PVC **expansion** of `size`. This keeps the breaking surface honest while leaving the enum open to additive growth (e.g. a first-class `Selector` mode) in V1.1+ without an API break.
+**V1 implementation scope:**
+
+1. **Default:** `volumes.data.mode: Dynamic`; aux default `mode: Share`, `shareFrom: data`.
+2. **Validate `Existing.volumeClaimTemplate`** minimally — structural schema only.
+3. **Reject `volumes.data.mode: Share`** at admission (CEL STO-005).
+4. **Webhook:** cluster + aux `Share` + RWO data — warn or error when invalid.
+5. Immutable after create: `mode`, binding shapes, `disableSubPathExpr`; only `dynamic.size` may grow.
+6. **Escape hatches (Option E):** STO-008…010.
+7. **API key is `spec.volumes`**, not `persistence` (BDR-005 supersedes `20-operator-proposal.md` naming).
+8. Document `Neo4jRestore` credentials vs `spec.secretMounts` overlap.
+9. Update `neo4j/spec.md`.
 
 ---
 
@@ -187,31 +350,33 @@ spec:
 
 ### Positive
 
-- One intent-named field (`mode`) replaces Helm's overloaded six-way dispatch; the two mainstream paths are unambiguous.
-- Raw `VolumeClaimTemplate` preserves full Kubernetes expressiveness (including `selector`) without bespoke operator logic.
-- Migration-sensitive fields are pinned immutable in CEL, surfacing accidental edits at admission instead of as silent data loss.
-- Enum is additively extensible — future modes do not break the API.
+- One BDR governs **data + aux** storage, including Helm `share`.
+- `volumeClaimTemplate` with `selector` is standard Kubernetes — no bespoke operator selector logic.
+- API surface stays small: two modes on data, three on aux.
+- **Paired `additionalMounts`** removes Helm's orphan-volume footgun.
+- **`secretMounts`** map preserves seedURI / S3 credential pattern with clear separation from TLS.
 
 ### Negative
 
-- Diverges from Helm field names; a migration table in `11-helm-mapping.md` is required.
-- Power users needing `selector` must hand-author a raw VCT in V1 until a first-class mode lands.
-- `neo4j/spec.md` `spec.persistence.data` must be updated from the flat baseline (Option B) to the `mode`-based shape, and `fields/volumes.data*.md` drafts realigned from `spec.storage.data` to `spec.persistence.data`.
+- Helm mode names disappear — `11-helm-mapping.md` required.
+- `Share` + RWO across N cluster members may be invalid — validation and docs must be explicit.
+- `spec.md` must move from flat fields to `mode` + nested objects.
+- Helm users must merge `additionalVolumes` + `additionalVolumeMounts` into `additionalMounts[]` on migration.
 
 ### Neutral
 
-- `volumes.data.labels` remains a safe, additive passthrough.
-- Auxiliary volume modes (`share` and friends) are decided separately in BDR-006 (AGG-STORAGE-AUX).
-- `03-variant_matrix.csv` — add storage variants: dynamic-default, dynamic-named-class, existing-claim, raw-VCT.
+- `labels` on `data.dynamic` remains safe and additive.
+- `Neo4jRestore` Job credentials remain separate — document when to use which.
+- V1 optional allowlist on `additionalMounts[].volume` types — full passthrough if allowlist too restrictive.
 
 ---
 
 ## References
 
-- `design/analysis/helm-fields/_index.csv` — rows `volumes.data.mode`, `volumes.data.dynamic`, `volumes.data.defaultStorageClass`, `volumes.data.selector`, `volumes.data.volume`, `volumes.data.volumeClaimTemplate`, `volumes.data.labels`, `volumes.data.disableSubPathExpr`
-- `design/analysis/helm-fields/aggregation-matrix.md` — **AGG-STORAGE-DATA**
-- `design/09-crd-spec/neo4j/spec.md` — `spec.persistence` section
+- `design/analysis/helm-fields/_index.csv` — `volumes.data.*`, aux volumes, `additionalVolumes`, `additionalVolumeMounts`, `secretMounts`
+- `design/analysis/helm-fields/semantic-concerns.yaml` — **CONCERN-STORAGE-ESCAPE**
+- `design/analysis/helm-fields/aggregation-matrix.md` — **AGG-STORAGE-DATA**, **AGG-STORAGE-AUX**
+- `design/09-crd-spec/neo4j/spec.md` — `spec.volumes`
 - [Neo4j — Kubernetes deployment / storage](https://neo4j.com/docs/operations-manual/current/kubernetes/)
-- [Neo4j — File locations](https://neo4j.com/docs/operations-manual/current/configuration/file-locations/)
+- [Kubernetes — PersistentVolumeClaimSpec.selector](https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#PersistentVolumeClaimSpec)
 - [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD
-- [BDR-002](002-neo4j-crd-topology.md) — topology model (exemplar format)

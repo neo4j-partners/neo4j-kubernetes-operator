@@ -86,4 +86,4 @@ Authoritative columns: `_index.csv` → `crd_target`, `aggregation_group`, `vers
 
 Field narratives: [`fields/`](fields/).
 
-**Naming alignment** (Phase 6): `crd_target` uses `spec.persistence` and `spec.connectivity` per [`spec.md`](../../../09-crd-spec/neo4j/spec.md) — not `storage` / `networking`.
+**Naming alignment** (Phase 6): `crd_target` uses `spec.volumes` and `spec.connectivity` per [`spec.md`](../../../09-crd-spec/neo4j/spec.md) — not `storage` / `networking`.

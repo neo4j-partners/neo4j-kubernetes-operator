@@ -27,7 +27,7 @@ storage
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.data.defaultStorageClass`
+- **Target**: `Neo4j.spec.volumes.data.defaultStorageClass`
 - **Notes**: Draft mapping from Helm analysis.
 
 ## Aggregation

@@ -2,7 +2,7 @@
 
 ## Client need
 
-Inject arbitrary extra pod volumes (escape hatch) for integrations not covered by first-class volume roles.
+Inject arbitrary extra pod volumes (escape hatch) for integrations not covered by first-class volume roles (`data`, `logs`, `backups`, …).
 
 ## Neo4j documentation
 
@@ -10,10 +10,12 @@ Inject arbitrary extra pod volumes (escape hatch) for integrations not covered b
 
 ## Helm implementation
 
-- **Templates**: _volumeTemplate.tpl (neo4j.additionalVolumes); neo4j-statefulset.yaml
-- **Go model**: release_values.go: AdditionalVolumes
-- **K8s resources**: StatefulSet volumes (raw YAML passthrough)
-- **Neo4j mechanism**: No neo4j.conf effect unless paired with mounts/config elsewhere.
+- **Templates**: `_volumeTemplate.tpl` (`neo4j.additionalVolumes`); `neo4j-statefulset.yaml` — appended to StatefulSet `spec.template.spec.volumes`
+- **Go model**: `release_values.go` — `AdditionalVolumes []Volume`
+- **K8s resources**: StatefulSet `volumes[]` (raw YAML passthrough per list item)
+- **Neo4j mechanism**: No `neo4j.conf` effect unless paired with `additionalVolumeMounts` and/or user `config`.
+
+**Coupling**: Helm splits volume definition (`additionalVolumes`) and container mount (`additionalVolumeMounts`) into **two independent lists** linked only by `name`. No chart validation that every mount references a defined volume.
 
 ## Category
 
@@ -23,22 +25,22 @@ storage
 
 | concern_id | role in this concern | co-paths (scattered) |
 |------------|----------------------|----------------------|
-| CONCERN-STORAGE | escape hatch volumes | additionalVolumeMounts |
+| CONCERN-STORAGE-ESCAPE | raw pod volumes | `additionalVolumeMounts`, `secretMounts` |
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.persistence.additionalVolumes`
-- **Notes**: Draft mapping from Helm analysis.
+- **Target**: `Neo4j.spec.additionalMounts[].volume` (Option E — paired) **or** `Neo4j.spec.volumes.additionalVolumes` (Option F — Helm split)
+- **Notes**: See [BDR-005](../../../decision-records/business/005-storage-volume-mode.md) § Escape hatches.
 
 ## Aggregation
 
-- **Group**: none
-- **Must decide with**: standalone field
+- **Group**: AGG-STORAGE-ESCAPE
+- **Must decide with**: `additionalVolumeMounts`, `secretMounts`
 
 ## Versioning
 
 - **Classification**: safe
-- **Rationale**: Passthrough K8s volume spec.
+- **Rationale**: Additive passthrough; does not change data PVC binding.
 
 ## FR / AC
 
@@ -47,4 +49,4 @@ storage
 
 ## Open questions
 
-- Operator may restrict to allowlisted volume types in V1.
+- V1 allowlist on volume types (`emptyDir`, `configMap`, `secret`, `csi`, `persistentVolumeClaim`) vs full passthrough?
