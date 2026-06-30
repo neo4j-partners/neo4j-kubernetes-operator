@@ -1,0 +1,117 @@
+ID,Parent ID,Requires IDs,Domain,Config Group,Requirement,Description,Primary AC Groups,V1,V1 Justification
+NEO-1-001,,NEO-2-001-EDT-01; NEO-2-001-LIC-01; NEO-2-001-LIC-02; NEO-2-001-MODE-01; NEO-2-003; NEO-2-004; NEO-2-005; NEO-2-006; NEO-2-007; NEO-2-008; NEO-2-009,Installation,,Deploy Neo4j standalone,Deliver a single-member Neo4j database ready for client use.,AC-NEO-STANDALONE; AC-NEO-INSTALL,Yes,MVP entry point — single `Neo4j` CR Standalone ([BDR-001]).
+NEO-1-002,,NEO-2-002-CSZ-01; NEO-2-002-MODE-01; NEO-2-003; NEO-2-004; NEO-2-005; NEO-2-006; NEO-2-007; NEO-2-008; NEO-2-009; NEO-2-011,Installation,,Deploy Neo4j cluster,Deliver a clustered Neo4j topology with configured members and cluster readiness.,AC-NEO-CLUSTER; AC-NEO-INSTALL,Yes,MVP cluster — per-pool STS + scale ([BDR-002] [BDR-009]); minimal networking/storage.
+OP-1-001,,OP-2-001-PKG-01; OP-2-001-PKG-02; OP-2-001-SCOPE-01; OP-2-001-SCOPE-02; OP-2-001-SCOPE-03,Installation,,Install the Neo4j Operator,Install the operator and required Kubernetes resources so it can reconcile Neo4j custom resources.,AC-OP-INSTALL; AC-OP-SCOPE-SINGLE,Yes,MVP — YAML install + single-namespace scope only ([BDR-003]).
+OP-1-002,,,Lifecycle,,Reconcile desired state,Continuously reconcile declared custom resources and maintain the expected state.,AC-OP-RECONCILE,Yes,Core operator behavior.
+OP-1-003,,OP-2-003-STATUS-01; OP-2-003-STATUS-02,Lifecycle,,Report operator and reconciliation status,"Expose status, conditions, errors, and readiness on managed resources.",AC-OP-STATUS,Yes,MVP — basic conditions only (OP-2-003-STATUS-01).
+OP-1-004,,OP-2-004-UPG-01; OP-2-004-UPG-02,Lifecycle,,Upgrade the Neo4j Operator,Support safe upgrade of the operator without disrupting managed Neo4j workloads.,AC-OP-UPGRADE,No,Deferred — operator upgrade workflow post-MVP.
+OP-1-005,,OP-2-005-UNINST-01; OP-2-005-UNINST-02,Uninstallation,,Uninstall the Neo4j Operator,Remove operator components while preserving managed data and workloads by default.,AC-OP-UNINSTALL,Yes,MVP — preserve-data uninstall (OP-2-005-UNINST-01).
+OP-1-006,,,Security & RBAC,,Manage operator permissions,Create and manage the RBAC required for the selected operator scope.,AC-OP-RBAC,Yes,MVP — RBAC for single-namespace scope ([BDR-003]).
+OP-1-007,,,Observability,,Expose operator metrics and logs,"Provide logs and metrics for operator health, reconciliation errors, and operational visibility.",AC-OP-OBSERVABILITY,No,Deferred — operator-level metrics/logs post-MVP.
+NEO-2-001-EDT-01,NEO-1-001,,Installation,Edition,Enterprise,Deploy Neo4j Enterprise edition.,AC-NEO-LICENSE,Yes,MVP — Enterprise only (clustering/analytics).
+NEO-2-001-LIC-01,NEO-1-001,,Installation,License Mode,Accepted license,User confirms enterprise license agreement.,AC-NEO-LICENSE,Yes,MVP — explicit license accept.
+NEO-2-001-LIC-02,NEO-1-001,,Installation,License Mode,Evaluation license,User deploys Enterprise in eval mode.,AC-NEO-LICENSE,No,Deferred — eval license path post-MVP.
+NEO-2-001-MODE-01,NEO-1-001,,Installation,Neo4j Deployment Mode,Standalone,Deploy one Neo4j server.,AC-NEO-STANDALONE,Yes,MVP Standalone mode ([BDR-002]).
+NEO-2-002-CSZ-01,NEO-1-002,,Installation,Cluster Size,Minimum cluster size,Configure initial minimum number of members required for cluster formation.,AC-NEO-CLUSTER,Yes,MVP — `minimumMembers` formation gate.
+NEO-2-002-MODE-01,NEO-1-002,,Installation,Neo4j Deployment Mode,Cluster,Deploy a clustered Neo4j topology.,AC-NEO-CLUSTER,Yes,MVP Cluster mode — primaries + optional analytics/read pools ([BDR-002]).
+NEO-2-003,,NEO-3-003-APOC-01; NEO-3-003-APOC-02; NEO-3-003-CFG-01; NEO-3-003-CFG-02; NEO-3-003-CFG-03; NEO-3-003-JVM-01; NEO-3-003-JVM-02,Configuration,,Configure Neo4j runtime settings,"Apply Neo4j configuration, JVM settings, environment variables, and optional APOC configuration.",AC-NEO-CONFIG,Yes,MVP — `spec.config` passthrough + default JVM ([BDR-008]).
+NEO-2-004,,NEO-3-004-CRED-01; NEO-3-004-CRED-02; NEO-3-004-IMG-01; NEO-3-004-IMG-02; NEO-3-004-SEC-01; NEO-3-004-SEC-02,Security,,Configure authentication and secrets,"Manage initial password, existing password secret, secret mounts, image pull secrets, and sensitive configuration.",AC-NEO-SECRETS,Yes,MVP — initial password + optional existing Secret only.
+NEO-2-005,,NEO-3-005-TLS-01; NEO-3-005-TLS-02; NEO-3-005-TLS-03; NEO-3-005-TLS-04,Security,,Configure TLS / SSL,"Configure TLS for Bolt, HTTPS, and cluster communication, including cert mounts and reload behavior.",AC-NEO-TLS,Yes,MVP — cluster TLS only when `mode: Cluster`; Bolt/HTTPS TLS deferred.
+NEO-2-006,,NEO-3-006-CLD-01; NEO-3-006-CLD-02; NEO-3-006-PVC-01; NEO-3-006-PVC-02; NEO-3-006-PVC-03; NEO-3-006-PVC-04; NEO-3-006-PVC-05; NEO-3-006-VOL-01; NEO-3-006-VOL-02; NEO-3-006-VOL-03; NEO-3-006-VOL-04; NEO-3-006-VOL-05; NEO-3-006-VOL-06,Storage,,Configure persistent volumes,Provision PVCs for database data (auxiliary volumes deferred).,AC-NEO-STORAGE,Yes,MVP — `volumes.data.mode: Dynamic` only ([BDR-005]).
+NEO-2-007,,NEO-3-007-MULTI-01; NEO-3-007-MULTI-02; NEO-3-007-PCMB-01; NEO-3-007-PCMB-02; NEO-3-007-PCMB-03; NEO-3-007-PCMB-04; NEO-3-007-PCMB-05; NEO-3-007-PCMB-06; NEO-3-007-PRT-01; NEO-3-007-PRT-02; NEO-3-007-PRT-03; NEO-3-007-PRT-04; NEO-3-007-SVC-01; NEO-3-007-SVC-02; NEO-3-007-SVC-03,Networking,,Expose Neo4j services,"Configure client Service for Bolt and HTTP; operator-derived internals in Cluster mode.",AC-NEO-NETWORKING,Yes,MVP — ClusterIP + bolt/http; backup/admin/metrics/LB deferred ([BDR-007]).
+NEO-2-008,,NEO-3-008-SCH-01; NEO-3-008-SCH-02; NEO-3-008-SCH-03; NEO-3-008-SCH-04; NEO-3-008-SCH-05; NEO-3-008-SCH-06,Scheduling,,Control pod scheduling,"Configure node selectors, affinity, anti-affinity, tolerations, topology spread, priority class, service account, and graceful shutdown.",AC-NEO-SCHEDULING,No,Deferred — Kubernetes default scheduling for MVP; API fields remain in CRD.
+NEO-2-009,,NEO-3-009-PROBE-01; NEO-3-009-PROBE-02,Health Management,,Manage health probes,"Configure startup, readiness, and liveness probes appropriate for Neo4j startup, recovery, and cluster formation.",AC-NEO-PROBES,Yes,MVP — operator default probes only.
+NEO-2-010,,NEO-3-010-RSTR-01; NEO-3-010-RSTR-02,Lifecycle,,Apply configuration changes safely,Detect configuration changes and apply them through controlled restarts or rolling updates.,AC-NEO-CONFIG-CHANGE,Yes,MVP — controlled restart on config change.
+NEO-2-011,,NEO-3-011-CSZ-01; NEO-3-011-SRV-01,Lifecycle,,Scale Neo4j cluster,Add or remove cluster members safely and enable servers when required.,AC-NEO-SCALE,Yes,MVP — per-pool scale + ENABLE SERVER ([BDR-009]).
+NEO-2-012,,NEO-3-012-UPG-01; NEO-3-012-UPG-02,Upgrade,,Upgrade Neo4j version,Upgrade Neo4j image/version safely with validation and rollback considerations.,AC-NEO-UPGRADE,No,Deferred — Neo4j rolling upgrade post-MVP; `spec.version` set at install only.
+NEO-2-013,,NEO-3-013-BKMD-01; NEO-3-013-BKMD-02; NEO-3-013-BKST-01; NEO-3-013-BKST-02; NEO-3-013-BKST-03,Backup,,Run backups,Support on-demand and scheduled backups with configurable backup storage and service exposure.,AC-NEO-BACKUP,No,Out of V1 — backup feature + `features.backup` + neo4j-admin chart deferred.
+NEO-2-014,,NEO-3-014-RSTM-01; NEO-3-014-RSTM-02,Restore,,Restore from backup or seed,"Restore Neo4j from a backup or seed URI, including optional secret mounts for cloud storage.",AC-NEO-RESTORE,No,Out of V1 — tied to backup/restore workflows.
+NEO-2-015,,NEO-3-015-MON-01; NEO-3-015-MON-02,Monitoring,,Expose Neo4j metrics,Enable metrics and ServiceMonitor integration when Prometheus Operator is available.,AC-NEO-MONITORING,No,Deferred — `features.monitoring` / Prometheus post-MVP ([BDR-010]).
+NEO-2-016,,NEO-3-016-LOG-01; NEO-3-016-LOG-02,Logging,,Configure Neo4j logging,"Configure server logs, user logs, query logs, HTTP logs, security logs, and log storage.",AC-NEO-LOGGING,No,Deferred — Neo4j default logging for MVP; custom log XML post-MVP.
+NEO-2-017,,NEO-3-017-JOB-01; NEO-3-017-JOB-02; NEO-3-017-JOB-03; NEO-3-017-MNT-01,Maintenance,,Run maintenance operations,"Support offline maintenance mode and maintenance jobs such as dump/load, consistency checks, and backup verification.",AC-NEO-MAINTENANCE-OFFLINE; AC-NEO-MAINTENANCE-JOBS,No,Deferred — maintenance jobs post-MVP.
+NEO-2-018,,,Uninstallation,,Uninstall Neo4j workload,Delete Neo4j Kubernetes resources while preserving PVCs by default and optionally cleaning up services/jobs/PVCs.,AC-NEO-UNINSTALL,Yes,MVP — CR delete preserves data PVCs by default.
+OP-2-001-PKG-01,OP-1-001,,Installation,Packaging,YAML,"Install, upgrade, and uninstall operator using Kubernetes manifests.",AC-OP-INSTALL,Yes,MVP packaging path.
+OP-2-001-PKG-02,OP-1-001,,Installation,Packaging,Helm,"Install, upgrade, and uninstall operator using Helm chart.",AC-OP-INSTALL; AC-PACKAGING-HELM,No,Deferred — operator Helm chart post-MVP.
+OP-2-001-SCOPE-01,OP-1-001,,Installation,Operator Scope,Single namespace,Operator watches and reconciles resources only in its own namespace.,AC-OP-SCOPE-SINGLE,Yes,MVP only supported scope ([BDR-003]).
+OP-2-001-SCOPE-02,OP-1-001,,Installation,Operator Scope,Multiple namespaces,Operator watches a configured list of namespaces.,AC-OP-SCOPE-MULTI,No,Deferred V1.1+.
+OP-2-001-SCOPE-03,OP-1-001,,Installation,Operator Scope,Cluster-wide,Operator watches resources across all namespaces.,AC-OP-SCOPE-CLUSTER,No,Deferred V1.1+.
+OP-2-003-STATUS-01,OP-1-003,,Lifecycle,Status Model,Basic conditions,"Expose Ready, Reconciling, Error, Installed conditions.",AC-OP-STATUS,Yes,MVP status surface.
+OP-2-003-STATUS-02,OP-1-003,,Lifecycle,Status Model,Detailed phase/status,"Expose detailed phases for install, upgrade, backup, restore, and errors.",AC-OP-STATUS-DETAIL,No,Deferred — detailed phase machine post-MVP.
+OP-2-004-UPG-01,OP-1-004,,Lifecycle,Upgrade Strategy,In-place controller upgrade,Upgrade operator deployment without changing CRD versions.,AC-OP-UPGRADE,No,Deferred with OP-1-004.
+OP-2-004-UPG-02,OP-1-004,,Lifecycle,Upgrade Strategy,CRD conversion webhook,Support API version conversion for CRDs.,AC-OP-CRD-CONVERSION,No,Deferred V1.1+.
+OP-2-005-UNINST-01,OP-1-005,,Uninstallation,Uninstall Policy,Preserve data,Delete control plane/workload resources while preserving PVCs.,AC-NEO-UNINSTALL-PRESERVE,Yes,MVP default uninstall behavior.
+OP-2-005-UNINST-02,OP-1-005,,Uninstallation,Uninstall Policy,Delete data,Delete PVCs and data for ephemeral environments.,AC-NEO-UNINSTALL-DELETE,No,Deferred — explicit data wipe post-MVP.
+NEO-3-003-APOC-01,NEO-2-003,,Configuration,APOC,APOC config,Apply APOC configuration.,AC-NEO-APOC,No,Deferred — use `spec.plugins` + `pluginDefinitions` ([BDR-004]) when APOC needed.
+NEO-3-003-APOC-02,NEO-2-003,,Configuration,APOC,APOC credentials,Mount APOC credentials from secrets.,AC-NEO-APOC-CREDS,No,Deferred with APOC config.
+NEO-3-003-CFG-01,NEO-2-003,,Configuration,Neo4j Config,Core config,Apply server config values.,AC-NEO-CONFIG,Yes,MVP — `spec.config` map passthrough ([BDR-008]).
+NEO-3-003-CFG-02,NEO-2-003,,Configuration,Neo4j Config,Strict validation toggle,Support strict config validation setting.,AC-NEO-CONFIG,No,Deferred — optional strict validation post-MVP.
+NEO-3-003-CFG-03,NEO-2-003,,Configuration,Neo4j Config,SPeeDy feature flag,Support sharded property database feature flag.,AC-NEO-CONFIG,No,Deferred.
+NEO-3-003-JVM-01,NEO-2-003,,Configuration,JVM,Default arguments,Use Neo4j default JVM arguments.,AC-NEO-CONFIG,Yes,MVP — `jvm.useDefaults: true`.
+NEO-3-003-JVM-02,NEO-2-003,,Configuration,JVM,Additional arguments,Append custom JVM arguments.,AC-NEO-CONFIG,No,Deferred — custom JVM flags post-MVP.
+NEO-3-004-CRED-01,NEO-2-004,,Security,Credentials,Generated password,Generate password when not provided.,AC-NEO-SECRETS,Yes,MVP default — operator-generated initial password.
+NEO-3-004-CRED-02,NEO-2-004,,Security,Credentials,Password from Secret,Use existing Kubernetes Secret for initial Neo4j password.,AC-NEO-SECRETS,Yes,MVP — BYO password Secret (simplest production path).
+NEO-3-004-IMG-01,NEO-2-004,,Security,Image Pull Secrets,Existing pull secret,Use existing image pull secret.,AC-NEO-SECRETS,Yes,MVP — reference existing pull Secret.
+NEO-3-004-IMG-02,NEO-2-004,,Security,Image Pull Secrets,Create image credential secret,Create docker-registry secret from provided credentials.,AC-NEO-IMAGE,No,Deferred — operator-created registry Secret post-MVP.
+NEO-3-004-SEC-01,NEO-2-004,,Security,Secrets,Secret mounts,Mount arbitrary Kubernetes Secrets into Neo4j pod.,AC-NEO-SECRETS,No,Deferred — `secretMounts` / `additionalMounts` ([BDR-005] Option E) post-MVP.
+NEO-3-004-SEC-02,NEO-2-004,,Security,Secrets,LDAP password secret,Mount LDAP system account password from Secret.,AC-NEO-LDAP,No,Deferred.
+NEO-3-005-TLS-01,NEO-2-005,,Security,TLS Mode,Bolt TLS,Configure TLS material for Bolt.,AC-NEO-TLS,No,Deferred — Bolt TLS post-MVP ([BDR-006] BYO path).
+NEO-3-005-TLS-02,NEO-2-005,,Security,TLS Mode,HTTPS TLS,Configure TLS material for HTTPS.,AC-NEO-TLS,No,Deferred — HTTPS + ingress post-MVP ([BDR-011]).
+NEO-3-005-TLS-03,NEO-2-005,,Security,TLS Mode,Cluster TLS,Configure TLS material for cluster communication.,AC-NEO-TLS; AC-NEO-CLUSTER,Yes,MVP Cluster — BYO cluster certs via `spec.trust` ([BDR-006]); cert-manager off by default.
+NEO-3-005-TLS-04,NEO-2-005,,Security,TLS Mode,TLS reload,Enable automatic TLS certificate reload.,AC-NEO-TLS-RELOAD,No,Deferred post-MVP.
+NEO-3-006-CLD-01,NEO-2-006,,Storage,Cloud Storage,With Workload Identity,Access cloud object storage using platform workload identity (GKE WI / AKS WI / EKS IRSA).,AC-NEO-CLOUDSTORAGE-MI,No,Deferred — cloud backup/restore out of V1.
+NEO-3-006-CLD-02,NEO-2-006,,Storage,Cloud Storage,Without Workload Identity,Access cloud object storage using mounted credentials or Secrets.,AC-NEO-CLOUDSTORAGE,No,Deferred with cloud storage.
+NEO-3-006-PVC-01,NEO-2-006,,Storage,PVC Provisioning Mode,Default StorageClass,Use Kubernetes default StorageClass to provision PVC.,AC-NEO-STORAGE-DEFAULT,No,Deferred — require explicit `storageClassName` in MVP.
+NEO-3-006-PVC-02,NEO-2-006,,Storage,PVC Provisioning Mode,Existing StorageClass,Use an existing named StorageClass to dynamically provision PVC.,AC-NEO-STORAGE-DYNAMIC,Yes,MVP only storage path — `volumes.data.mode: Dynamic` + `storageClassName` ([BDR-005]).
+NEO-3-006-PVC-03,NEO-2-006,,Storage,PVC Provisioning Mode,Existing PVC,Bind Neo4j to an existing PVC or explicit volume.,AC-NEO-STORAGE-EXISTING,No,CRD field retained — `Existing` mode post-MVP ([BDR-005]).
+NEO-3-006-PVC-04,NEO-2-006,,Storage,PVC Provisioning Mode,Selector,Bind to existing volumes matching selectors.,AC-NEO-STORAGE-SELECTOR,No,CRD field retained — post-MVP under `Existing.volumeClaimTemplate`.
+NEO-3-006-PVC-05,NEO-2-006,,Storage,PVC Provisioning Mode,VolumeClaimTemplate,Use a provided volumeClaimTemplate.,AC-NEO-STORAGE-VCT,No,CRD field retained — post-MVP under `Existing.volumeClaimTemplate`.
+NEO-3-006-VOL-01,NEO-2-006,,Storage,Volume Role,Data,Persistent storage for database data.,AC-NEO-STORAGE,Yes,MVP — data volume only.
+NEO-3-006-VOL-02,NEO-2-006,,Storage,Volume Role,Backups,Volume for backup files.,AC-NEO-BACKUP,No,Out of V1 with backup feature.
+NEO-3-006-VOL-03,NEO-2-006,,Storage,Volume Role,Logs,Volume for logs.,AC-NEO-LOGGING,No,Deferred — default container logs for MVP.
+NEO-3-006-VOL-04,NEO-2-006,,Storage,Volume Role,Metrics,Volume for CSV metrics.,AC-NEO-MONITORING,No,Deferred with monitoring feature.
+NEO-3-006-VOL-05,NEO-2-006,,Storage,Volume Role,Import,Volume mounted to /import.,AC-NEO-STORAGE,No,Deferred post-MVP.
+NEO-3-006-VOL-06,NEO-2-006,,Storage,Volume Role,Licenses,Volume mounted to /licenses.,AC-NEO-LICENSE,No,Deferred — plugin license Secrets via `pluginDefinitions` ([BDR-004]).
+NEO-3-007-MULTI-01,NEO-2-007,,Networking,Multi Cluster,Disabled,Single Kubernetes cluster deployment.,AC-NEO-NETWORKING,Yes,MVP — `connectivity.multiCluster.enabled: false` only ([BDR-007]).
+NEO-3-007-MULTI-02,NEO-2-007,,Networking,Multi Cluster,Enabled,Open internal ports/config required for multi-zone/multi-region cluster scenario.,AC-NEO-MULTICLUSTER,No,Deferred V1.1+.
+NEO-3-007-PCMB-01,NEO-2-007,,Networking,Port Combination,Bolt only,Expose Bolt (7687) only; HTTP and HTTPS disabled.,AC-NEO-NETWORKING-PORTS-BOLT,No,Deferred port-matrix variants post-MVP.
+NEO-3-007-PCMB-02,NEO-2-007,,Networking,Port Combination,HTTPS only,Expose HTTPS (7473) only; Bolt and HTTP disabled.,AC-NEO-NETWORKING-PORTS-HTTPS,No,Deferred.
+NEO-3-007-PCMB-03,NEO-2-007,,Networking,Port Combination,HTTP + Bolt,Expose HTTP and Bolt; HTTPS disabled.,AC-NEO-NETWORKING-PORTS-HTTP-BOLT,Yes,MVP default exposure — simplest client path ([BDR-007]).
+NEO-3-007-PCMB-04,NEO-2-007,,Networking,Port Combination,HTTPS + Bolt,Expose HTTPS and Bolt; HTTP disabled.,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,No,Deferred — requires HTTPS TLS.
+NEO-3-007-PCMB-05,NEO-2-007,,Networking,Port Combination,HTTP + HTTPS + Bolt,Expose all three connectors (default full exposure).,AC-NEO-NETWORKING-PORTS-FULL,No,Deferred post-MVP.
+NEO-3-007-PCMB-06,NEO-2-007,,Networking,Port Combination,HTTP + HTTPS,Expose HTTP and HTTPS; Bolt disabled (browser-only access).,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,No,Deferred.
+NEO-3-007-PRT-01,NEO-2-007,,Networking,Ports,HTTP,Enable HTTP connector (7474).,AC-NEO-NETWORKING-PORTS-HTTP,Yes,MVP — `connectivity.listeners.http` (default 7474).
+NEO-3-007-PRT-02,NEO-2-007,,Networking,Ports,HTTPS,Enable HTTPS connector (7473).,AC-NEO-NETWORKING-PORTS-HTTPS; AC-NEO-TLS,No,Deferred — HTTPS off in MVP.
+NEO-3-007-PRT-03,NEO-2-007,,Networking,Ports,Bolt,Enable Bolt connector (7687).,AC-NEO-NETWORKING-PORTS-BOLT,Yes,MVP — `connectivity.listeners.bolt` (default 7687).
+NEO-3-007-PRT-04,NEO-2-007,,Networking,Ports,Backup,Expose backup port for backup operations.,AC-NEO-BACKUP,No,Out of V1 with backup feature.
+NEO-3-007-SVC-01,NEO-2-007,,Networking,Service Type,ClusterIP,Expose Neo4j via internal ClusterIP service (in-cluster access only).,AC-NEO-NETWORKING; AC-NEO-NETWORKING-CLUSTERIP,Yes,MVP only Service type ([BDR-007]).
+NEO-3-007-SVC-02,NEO-2-007,,Networking,Service Type,NodePort,Expose Neo4j externally via fixed node ports.,AC-NEO-NETWORKING; AC-NEO-NETWORKING-NODEPORT,No,CRD field retained — post-MVP.
+NEO-3-007-SVC-03,NEO-2-007,,Networking,Service Type,LoadBalancer,Expose Neo4j externally via cloud LoadBalancer.,AC-NEO-NETWORKING; AC-NEO-NETWORKING-LB,No,CRD field retained — post-MVP.
+NEO-3-008-SCH-01,NEO-2-008,,Scheduling,Scheduling,Node selector,Constrain pods to selected nodes.,AC-NEO-SCHEDULING,No,Deferred — `spec.scheduling` post-MVP.
+NEO-3-008-SCH-02,NEO-2-008,,Scheduling,Scheduling,Affinity / anti-affinity,Configure node affinity and pod anti-affinity.,AC-NEO-SCHEDULING,No,Deferred post-MVP.
+NEO-3-008-SCH-03,NEO-2-008,,Scheduling,Scheduling,Tolerations,Allow scheduling on tainted nodes.,AC-NEO-SCHEDULING,No,Deferred post-MVP.
+NEO-3-008-SCH-04,NEO-2-008,,Scheduling,Scheduling,Topology spread,Distribute pods across topology domains.,AC-NEO-SCHEDULING,No,Deferred post-MVP.
+NEO-3-008-SCH-05,NEO-2-008,,Scheduling,Scheduling,Priority class,Set pod priority class.,AC-NEO-SCHEDULING,No,Deferred post-MVP.
+NEO-3-008-SCH-06,NEO-2-008,,Scheduling,Scheduling,Service account,Set pod service account for workload identity/cloud access.,AC-NEO-SCHEDULING,No,Deferred post-MVP.
+NEO-3-009-PROBE-01,NEO-2-009,,Health Management,Probe Profile,Default Neo4j probes,Use default startup/readiness/liveness probes.,AC-NEO-PROBES,Yes,MVP — fixed operator defaults.
+NEO-3-009-PROBE-02,NEO-2-009,,Health Management,Probe Profile,Custom probes,Allow users to customize probe thresholds/timeouts.,AC-NEO-PROBES,No,Deferred — `spec.probes` overrides post-MVP.
+NEO-3-010-RSTR-01,NEO-2-010,,Lifecycle,Restart Strategy,Controlled restart,Restart Neo4j workload when config requires it.,AC-NEO-CONFIG-CHANGE,Yes,MVP config-change restart.
+NEO-3-010-RSTR-02,NEO-2-010,,Lifecycle,Restart Strategy,Rolling restart,Restart cluster members safely one by one.,AC-NEO-CONFIG-CHANGE; AC-NEO-CLUSTER,Yes,MVP — rolling restart per pool STS.
+NEO-3-011-CSZ-01,NEO-2-011,,Lifecycle,Cluster Size,Scale out/in,Change cluster size after initial deployment.,AC-NEO-SCALE,Yes,MVP — edit `topology.*.members` / read pool scale ([BDR-009]).
+NEO-3-011-SRV-01,NEO-2-011,,Lifecycle,Server Enablement,Automatic enable server,Enable servers added outside initial cluster size using operations job or operator logic.,AC-NEO-SCALE,Yes,MVP — operator ENABLE SERVER / drain ([BDR-009]).
+NEO-3-012-UPG-01,NEO-2-012,,Upgrade,Upgrade Strategy,Neo4j image upgrade,Change Neo4j image tag/repository/version.,AC-NEO-UPGRADE,No,Deferred — rolling Neo4j version upgrade post-MVP.
+NEO-3-012-UPG-02,NEO-2-012,,Upgrade,Upgrade Strategy,Preflight validation,"Validate health, storage, version, and cluster state before upgrade.",AC-NEO-UPGRADE,No,Deferred with Neo4j upgrade.
+NEO-3-013-BKMD-01,NEO-2-013,,Backup,Backup Mode,On-demand,Create backup by user request.,AC-NEO-BACKUP-ONDEMAND,No,Out of V1.
+NEO-3-013-BKMD-02,NEO-2-013,,Backup,Backup Mode,Scheduled,Create backups on a defined schedule.,AC-NEO-BACKUP-SCHEDULED,No,Out of V1.
+NEO-3-013-BKST-01,NEO-2-013,,Backup,Backup Storage,Shared local volume,Write backups to shared volume.,AC-NEO-BACKUP,No,Out of V1.
+NEO-3-013-BKST-02,NEO-2-013,,Backup,Backup Storage,Dedicated PVC,Write backups to a dedicated PVC.,AC-NEO-BACKUP,No,Out of V1.
+NEO-3-013-BKST-03,NEO-2-013,,Backup,Backup Storage,Cloud object storage,Use S3/GCS/Azure via mounted credentials or workload identity.,AC-NEO-BACKUP-CLOUD; AC-NEO-CLOUDSTORAGE-MI; AC-NEO-CLOUDSTORAGE,No,Out of V1.
+NEO-3-014-RSTM-01,NEO-2-014,,Restore,Restore Mode,Restore from backup volume,Restore from local/PVC backup location.,AC-NEO-RESTORE,No,Out of V1.
+NEO-3-014-RSTM-02,NEO-2-014,,Restore,Restore Mode,Restore from seed URI,"Restore from seed URI, including private bucket credentials.",AC-NEO-RESTORE-SEEDURI,No,Out of V1.
+NEO-3-015-MON-01,NEO-2-015,,Monitoring,Monitoring Mode,Disabled,Deploy without ServiceMonitor.,AC-NEO-MONITORING,No,Deferred — monitoring off by default in MVP.
+NEO-3-015-MON-02,NEO-2-015,,Monitoring,Monitoring Mode,ServiceMonitor,Create ServiceMonitor when CRD exists.,AC-NEO-MONITORING-SERVICEMONITOR,No,Deferred post-MVP ([BDR-010]).
+NEO-3-016-LOG-01,NEO-2-016,,Logging,Logging Mode,Default logs,Use default Neo4j logging configuration.,AC-NEO-LOGGING,No,Implicit in MVP — no `spec.logging` surface required.
+NEO-3-016-LOG-02,NEO-2-016,,Logging,Logging Mode,Custom log config,Apply custom serverLogsXml and userLogsXml.,AC-NEO-LOGGING,No,Deferred post-MVP.
+NEO-3-017-JOB-01,NEO-2-017,,Maintenance,Job Type,Dump/load,Run neo4j-admin dump/load jobs.,AC-NEO-MAINTENANCE-JOBS,No,Deferred post-MVP.
+NEO-3-017-JOB-02,NEO-2-017,,Maintenance,Job Type,Consistency check,Run consistency check jobs.,AC-NEO-MAINTENANCE-JOBS,No,Deferred post-MVP.
+NEO-3-017-JOB-03,NEO-2-017,,Maintenance,Job Type,Backup verification,Verify backup integrity.,AC-NEO-MAINTENANCE-JOBS,No,Out of V1 with backup.
+NEO-3-017-MNT-01,NEO-2-017,,Maintenance,Maintenance Mode,Offline maintenance,Restart StatefulSet without Neo4j process running.,AC-NEO-MAINTENANCE-OFFLINE,No,Deferred post-MVP.

@@ -1,0 +1,51 @@
+# Primary + analytics (GDS/Bloom) + read scaling
+# BDR-002 topology · BDR-004 Option E plugins · BDR-005 volumes · BDR-007 connectivity
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod
+  namespace: graph-prod
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 1
+      plugins: [apoc]
+    secondaries:
+      analytics:
+        members: 1
+        plugins: [gds, bloom]
+      read:
+        members: 1
+        plugins: [apoc]
+    minimumMembers: 1
+  pluginDefinitions:
+    apoc: {}
+    gds:
+      licenseSecretRef: gds-license
+    bloom:
+      licenseSecretRef: bloom-license
+  volumes:
+    data:
+      mode: Dynamic
+      dynamic:
+        size: 100Gi
+        storageClassName: gp3
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+    service:
+      type: ClusterIP
+      expose:
+        - bolt
+        - http
+    ingress:
+      enabled: false
+    clusterDomain: cluster.local
+    multiCluster:
+      enabled: false
