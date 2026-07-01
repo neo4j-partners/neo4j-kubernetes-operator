@@ -1,0 +1,31 @@
+---
+description: Operator benchmark methodology — study reference operators before architecture ADRs
+globs: docs/02-technical-design/architecture/**
+alwaysApply: false
+---
+
+# Operator benchmark
+
+Before accepting **ADR-002+** (internal layout), complete **phase 2a**:
+
+1. Study **≥2 Tier-1** operators from `operator-benchmark/readme.md`
+2. Fill `operator-benchmark/operators/{name}.md` (dimensions D1–D20)
+3. Update `operator-benchmark/synthesis.md` with Adopt/Adapt/Avoid
+4. Draft **ADR-011** (synthesis) citing evidence
+
+Skill: `@operator-benchmark-analyst`
+
+## Mandatory dimensions for RBAC / cloud ADRs
+
+| ADR topic | Study operators | Dimensions |
+|-----------|-----------------|------------|
+| RBAC | ECK, CNPG, MongoDB | D6, D7, D8 |
+| Watch scope | Strimzi, CNPG | D8, BDR-003 |
+| Cloud backup | CNPG, Percona PG | D13, M-02 |
+| Testing | CNPG, Strimzi | D15, D16 |
+
+## Rules
+
+- Cite upstream **file path or doc URL** — no unsupported claims
+- CRD shape findings → **BDR**, not benchmark doc
+- `security.md` and `dependencies.md` are fed by ADR-013/015/016 — not primary sources

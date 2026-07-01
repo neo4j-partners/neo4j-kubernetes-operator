@@ -1,0 +1,41 @@
+---
+description: Classify Neo4j operator design decisions as BDR (business/API) or ADR (architecture)
+globs: docs/02-technical-design/**,.cursor/skills/**
+alwaysApply: false
+---
+
+# BDR vs ADR classification
+
+## One-line rule
+
+- **BDR** = what users declare in YAML and what support/docs explain
+- **ADR** = how the operator implements it in Go (packages, reconcile, tests, deploy)
+
+## Quick checks
+
+| Question | → |
+|----------|---|
+| Appears in `spec` or CRD OpenAPI? | BDR |
+| Helm parity / customer migration impact? | BDR |
+| Go package or reconcile ordering? | ADR |
+| CEL vs webhook vs reconciler **where**? | ADR (semantics → validation.md + BDR cite) |
+| V1 in/out for customers? | BDR + `13-v1-scope-lock.md` |
+
+## When split
+
+Document **contract in BDR**, **implementation in ADR**. Cross-link both ways.
+
+Example: `spec.trust` shape → BDR-006; Secret projection + reload → ADR.
+
+## Skills
+
+- Benchmark: `@operator-benchmark-analyst`
+- Classify: `@decision-classifier-bdr-vs-adr`
+- Write BDR: `@bdr-author-neo4j-operator`
+- Write ADR: `@adr-author-neo4j-operator`
+- Phase 2 pipeline: `@operator-architecture-orchestrator`
+
+## Backlog
+
+- Architecture topics (A–O): `.cursor/skills/operator-architecture-orchestrator/architecture-backlog.md`
+- Operator catalog: `docs/02-technical-design/architecture/operator-benchmark/readme.md`

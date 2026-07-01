@@ -64,6 +64,15 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | ID | Title | Status |
 |----|-------|--------|
 | [ADR-001](architecture/001-crd-validation-process.md) | CRD validation process — CEL first, webhook for external lookups | accepted |
+| [ADR-002](architecture/002-package-layering.md) | Package layering — `render` / `domain` / `controller` | proposed |
+| [ADR-003](architecture/003-neo4j-reconcile-pipeline.md) | `Neo4j` reconcile pipeline order | proposed |
+| [ADR-004](architecture/004-status-and-conditions.md) | Status and conditions writer | proposed |
+| [ADR-005](architecture/005-render-conventions.md) | Render conventions — naming, labels, owner references | proposed |
+| [ADR-006](architecture/006-apply-and-idempotency.md) | Apply strategy and idempotent reconcile | proposed |
+| [ADR-007](architecture/007-formation-and-bolt.md) | Formation and Bolt client usage | proposed |
+| [ADR-008](architecture/008-finalizers-and-deletion.md) | Finalizers and deletion | proposed |
+| [ADR-009](architecture/009-watches-and-predicates.md) | Watches and predicates | proposed |
+| [ADR-010](architecture/010-operator-deployment.md) | Operator deployment and HA | proposed |
 
 ---
 
@@ -73,7 +82,12 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 |----------|--------|
 | What CRDs / fields does the **user** see? | `business/` |
 | What is in / out of **V1** from a customer perspective? | `business/` |
+| Helm parity, defaults, migration impact? | `business/` |
 | How do we **structure Go packages** or the reconcile pipeline? | `architecture/` |
 | CEL vs webhook, envtest vs kind for a gate? | `architecture/` |
+| Naming of K8s child objects, labels, apply strategy? | `architecture/` |
+| Bolt client usage, formation sequence, finalizers? | `architecture/` |
 
-A business decision may trigger one or more architecture ADRs — cross-link them in **References**.
+**Classifier:** `.cursor/skills/decision-classifier-bdr-vs-adr` · **Backlog:** `.cursor/skills/operator-architecture-orchestrator/architecture-backlog.md`
+
+A business decision may trigger one or more architecture ADRs — cross-link them in **References** (`Triggers: ADR-NNN` in BDR; `Depends on: BDR-NNN` in ADR).

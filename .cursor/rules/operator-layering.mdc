@@ -1,0 +1,34 @@
+---
+description: Operator internal layering — render, domain, controller responsibilities
+globs: internal/**,docs/02-technical-design/architecture/**
+alwaysApply: false
+---
+
+# Operator layering (target)
+
+Golden rule: `Reconcile()` is a **pipeline of named steps** (~150 lines max in controller).
+
+## Layers
+
+| Package | Role | Must not |
+|---------|------|----------|
+| `internal/render/*` | Pure K8s object builders from `spec` | Import `client`, I/O, live cluster reads |
+| `internal/domain/*` | Apply, diff, retry, status patches | Import `controller/*` |
+| `internal/controller/*` | Watch, finalizers, step orchestration | StatefulSet field logic, Bolt/Cypher |
+| `internal/neo4j/*` | Bolt driver — used by `domain/` only | Used from `render/` |
+
+## Import direction
+
+`api` ← `render` ← `domain` ← `controller`
+
+## Before changing structure
+
+1. Check accepted **ADR-002** (when published) or draft `architecture/layer.md`
+2. If the change affects **CRD shape** → BDR first, not package-only ADR
+3. New domain module → update reconcile order in **ADR-003**
+
+## Testing default
+
+- `render/` → table-driven golden tests
+- `domain/` → envtest / fake client
+- `controller/` → thin integration tests

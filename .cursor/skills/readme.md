@@ -16,6 +16,15 @@ Cursor Agent Skills for the Helm → CRD design pipeline. Invoke with `@skill-na
 | [design-consistency-reviewer](design-consistency-reviewer/SKILL.md) | Final review gate |
 | [fr-helm-coverage-validator](fr-helm-coverage-validator/SKILL.md) | FR ↔ Helm completeness audit |
 
-**Start here:** [`design/analysis/helm-fields/LAUNCH.md`](../design/analysis/helm-fields/LAUNCH.md)
+### Phase 2 — software architecture
 
-**Rules:** [`.cursor/rules/`](../rules/) — terminology, output format, BDR format
+| Skill | Invoke when |
+|-------|-------------|
+| [operator-benchmark-analyst](operator-benchmark-analyst/SKILL.md) | Study CNPG/Strimzi/ECK/MongoDB — code, RBAC, cloud, quality |
+| [operator-architecture-orchestrator](operator-architecture-orchestrator/SKILL.md) | ADR backlog, reconcile design, package layout |
+| [decision-classifier-bdr-vs-adr](decision-classifier-bdr-vs-adr/SKILL.md) | Unsure BDR vs ADR for a topic |
+| [adr-author-neo4j-operator](adr-author-neo4j-operator/SKILL.md) | Draft ADR-002+ / ADR-011+ |
+
+**Start here:** [`design/analysis/helm-fields/LAUNCH.md`](../design/analysis/helm-fields/LAUNCH.md) (phase 1) · [`docs/02-technical-design/architecture/readme.md`](../docs/02-technical-design/architecture/readme.md) (phase 2)
+
+**Rules:** [`.cursor/rules/`](../rules/) — terminology, BDR/ADR format, layering, classification

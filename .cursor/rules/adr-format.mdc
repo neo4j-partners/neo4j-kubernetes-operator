@@ -1,0 +1,41 @@
+---
+description: ADR document format for Neo4j operator software architecture decisions
+globs: docs/02-technical-design/decision-records/architecture/**
+alwaysApply: false
+---
+
+# ADR format
+
+Follow `docs/02-technical-design/decision-records/readme.md` (Michael Nygard).
+
+## Filename
+
+`architecture/{NNN}-{short-kebab-title}.md` — next ADR: **002+**
+
+## Required sections
+
+1. Title + status + date + **Depends on** (BDRs + ADRs)
+2. **Context** — implementation forces; cite BDR constraints, do not redefine CRD fields
+3. **Analysis** — Options A, B, C… with advantages / disadvantages tables
+4. **Comparison table** (recommended)
+5. **Decision** — "We will…" + package names / pipeline sketch
+6. **Consequences**
+7. **References** — BDRs, architecture drafts, controller-runtime docs
+
+## ADR vs BDR boundary
+
+| ADR | BDR |
+|-----|-----|
+| `internal/render` vs `domain` | `spec.*` field shape |
+| Reconcile step order | Topology / connectivity semantics |
+| CEL vs webhook **placement** | Validation rule **meaning** |
+| envtest vs kind tiers | V1 customer scope |
+
+Use skill **decision-classifier-bdr-vs-adr** when mixed.
+
+## Do not
+
+- Add CRD fields in ADR without BDR + `crd-spec/neo4j/spec.md`
+- Duplicate ADR-001 validation table — extend or amend explicitly
+- Set `accepted` without user review — default `proposed`
+- Skip **Depends on** — every ADR anchors to at least one BDR for V1 topics

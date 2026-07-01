@@ -39,6 +39,14 @@ description: >-
 - [ ] No duplicate decisions between BDRs
 - [ ] Status proposed vs accepted accurate
 
+### ADR hygiene (phase 2)
+
+- [ ] `architecture/readme.md` backlog rows have ADR id or explicit defer
+- [ ] No CRD `spec` fields defined only in ADR — must cite BDR + spec.md
+- [ ] ADR **Depends on** lists relevant BDRs
+- [ ] Reconcile order consistent across ADR-003 (when exists) and `architecture/layer.md`
+- [ ] validation.md mechanism column still matches ADR-001
+
 ### Gaps
 
 - [ ] `validation-gaps.md` populated for orphan helm paths

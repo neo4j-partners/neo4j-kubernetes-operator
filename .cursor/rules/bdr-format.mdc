@@ -1,12 +1,19 @@
 ---
 description: BDR and ADR document format for neo4j operator design
-globs: design/decision-records/**
+globs: docs/02-technical-design/decision-records/**,design/decision-records/**
 alwaysApply: false
 ---
 
 # BDR / ADR format
 
-Follow `design/decision-records/readme.md` (Michael Nygard).
+Follow `docs/02-technical-design/decision-records/readme.md` (Michael Nygard).
+
+## BDR vs ADR
+
+- **BDR** → `business/` — CRD shape, user contract, V1 scope
+- **ADR** → `architecture/` — Go packages, reconcile, tests
+
+See rule `bdr-vs-adr-classification.mdc` and skill `decision-classifier-bdr-vs-adr`.
 
 ## Filename
 

@@ -1,12 +1,12 @@
 ---
 description: Neo4j operator design vocabulary — primaries/secondaries, BDR conventions, single Neo4j CRD
-globs: design/**
+globs: design/**,docs/02-technical-design/**
 alwaysApply: false
 ---
 
 # Neo4j operator design terminology
 
-When editing files under `design/`:
+When editing files under `design/` or `docs/02-technical-design/`:
 
 ## API vocabulary (V1)
 
@@ -22,8 +22,9 @@ When editing files under `design/`:
 
 ## Decision records
 
-- **BDR** = business (`design/decision-records/business/`)
-- **ADR** = architecture (`design/decision-records/architecture/`)
+- **BDR** = business (`docs/02-technical-design/decision-records/business/`)
+- **ADR** = architecture (`docs/02-technical-design/decision-records/architecture/`)
+- Classify with `@decision-classifier-bdr-vs-adr` before drafting
 - BDR-001/002/004 are **exemplars** — validate via `helm-semantic-concern-mapper`; amend/supersede when Helm code + Neo4j docs warrant it
 - Read accepted BDRs before proposing CRD shape changes
 
