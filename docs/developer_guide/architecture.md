@@ -118,7 +118,7 @@ type Neo4jDatabaseSpec struct {
 #### Neo4jBackup (`neo4jbackup_types.go`)
 - **Purpose**: Manages backup operations for both clusters and standalone deployments
 - **Job-per-CR architecture**: Each `Neo4jBackup` (one-shot or scheduled) spawns a Kubernetes Job (or CronJob → child Jobs). No sidecar containers, no persistent backup pod.
-- **Target Support**: Cluster OR standalone (`spec.target.kind` resolves the type; the controller probes the cluster ref and routes to `BuildStandaloneBackupFromAddress` for standalones, `BuildBackupFromAddresses` for clusters)
+- **Target Support**: Cluster OR standalone (the controller probes the `spec.instanceRef` deployment to resolve the type and routes to `BuildStandaloneBackupFromAddress` for standalones, `BuildBackupFromAddresses` for clusters)
 - **Neo4j 5.26+ Support**: Modern backup syntax with `--to-path` parameter
 - **Shared-directory layout**: All runs of a single CR write into `<base>/<cr-name>/` so `neo4j-admin` can chain differential backups off the prior full. Per-run identity is preserved via the ISO-8601 timestamp `neo4j-admin` embeds in each `.backup` filename (also captured into `status.history[].artifactFilename` / `shardArtifacts[].filename` via Pod-log parsing).
 
@@ -294,7 +294,7 @@ before marking the restore `Completed`.
 
 Standalone targets are auto-detected: `getClusterRef` accepts a standalone name and returns a synthetic `Neo4jEnterpriseCluster` via `standaloneAsCluster` (with `Spec.Topology.Servers=1`) so every downstream builder (command, env vars, volumes) works without a separate code path.
 
-**Standalone backup**: `neo4jbackup_controller.go::isStandaloneTarget` detects when `spec.target` references a `Neo4jEnterpriseStandalone`. The `--from` address resolution switches from `BuildBackupFromAddresses` (cluster: comma-separated FQDNs) to `BuildStandaloneBackupFromAddress` (single FQDN). The rest of the backup flow — Job spec, PVC/cloud storage, shared `<base>/<chain-root>/` directory, history population — is identical.
+**Standalone backup**: `neo4jbackup_controller.go::isStandaloneTarget` detects when `spec.instanceRef` references a `Neo4jEnterpriseStandalone`. The `--from` address resolution switches from `BuildBackupFromAddresses` (cluster: comma-separated FQDNs) to `BuildStandaloneBackupFromAddress` (single FQDN). The rest of the backup flow — Job spec, PVC/cloud storage, shared `<base>/<chain-root>/` directory, history population — is identical.
 
 **Integration test coverage caveat**: the `test/integration` suite covers backup and restore of clusters only. Standalone backup/restore is exercised by unit tests in `internal/controller/*_test.go` and manual smoke tests. End-to-end Ginkgo coverage for the standalone path is a known follow-up — the code paths are the same so failures would surface in the cluster specs, but a dedicated standalone round-trip would harden the contract.
 

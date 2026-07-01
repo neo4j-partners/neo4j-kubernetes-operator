@@ -149,7 +149,7 @@ That's a full backup and restore. From here:
   `database: <name>` (as above), or restore via `source.type: storage`. To restore
   them all, use `allDatabases: true`. See [Restore Operations](#restore-operations).
 - **Standalone targets** restore offline via a Job (set `stopCluster: true` and
-  `force: true`). See [Restore Operations](#restore-operations).
+  `options.replaceExisting: true`). See [Restore Operations](#restore-operations).
 - **Cloud storage** (S3/GCS/Azure/MinIO) → [Cloud Storage Authentication](#cloud-storage-authentication).
 - **Scheduled & differential backups** → [Backup Operations](#backup-operations).
 
@@ -157,9 +157,9 @@ That's a full backup and restore. From here:
 
 There is **no `spec.backups` field** (and no centralized `{cluster}-backup-0` StatefulSet or standalone backup sidecar). Use one or more `Neo4jBackup` CRs instead. The Neo4jBackup CRD covers one-shot or scheduled (`spec.schedule`) backups, native CronJob retention/suspend, `status.history`, sharded-DB targets, mixed-cadence FULL+DIFF chains via `spec.chainFromBackup`, and per-Job pod resource control (`spec.options.resources`).
 
-## Backup & Restore API (v1.13) — scope, not topology
+## Backup & Restore API — scope, not topology
 
-As of v1.13 you describe **what** to back up/restore (scope) and **which deployment** (a topology-agnostic reference); the operator resolves cluster-vs-standalone itself.
+You describe **what** to back up/restore (scope) and **which deployment** (a topology-agnostic reference); the operator resolves cluster-vs-standalone itself.
 
 **Back up one database**
 ```yaml
@@ -191,9 +191,9 @@ spec:
 
 **Cross-topology restore.** A backup is database-scoped, not topology-scoped — a database backed up from a **standalone** can be restored into a **cluster** (and vice-versa); the operator picks the engine from the *target*. Caveats: the target Neo4j version must be ≥ the source; the `system` database is never restored across topologies (`allDatabases` excludes it — carry users/roles via `options.includeMetadata` on the backup).
 
-**All-databases restore ([#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222), [#288](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/288)).** `Neo4jRestore.spec.allDatabases: true` restores every user database recorded in the source backup, with per-database progress in `status.databaseResults`. Requires `source.type=backup`. On a **cluster** target the operator restores one database per reconcile pass via the in-place Cypher path (cloud and PVC-backed backups). On a **standalone** target it runs a single offline `neo4j-admin database restore` Job covering all user databases — set `stopCluster: true` (the instance is scaled to 0 for the offline restore) and `force: true` to overwrite existing databases — then brings each database online.
+**All-databases restore ([#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222), [#288](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/288)).** `Neo4jRestore.spec.allDatabases: true` restores every user database recorded in the source backup, with per-database progress in `status.databaseResults`. Requires `source.type=backup`. On a **cluster** target the operator restores one database per reconcile pass via the in-place Cypher path (cloud and PVC-backed backups). On a **standalone** target it runs a single offline `neo4j-admin database restore` Job covering all user databases — set `stopCluster: true` (the instance is scaled to 0 for the offline restore) and `options.replaceExisting: true` to overwrite existing databases — then brings each database online.
 
-**Deprecation.** The legacy `spec.target` (backup) and `spec.clusterRef`/`spec.databaseName` (restore) fields still work in v1.13 behind a deprecation warning event and are **removed in v1.14**. Migrate to `instanceRef` + `database`/`allDatabases`/`shardedDatabase`.
+**Migrating from the pre-v1.14 API.** The legacy `spec.target` (backup) and `spec.clusterRef`/`spec.databaseName`/`spec.force` (restore) fields were deprecated in v1.13 and **removed in v1.14**. Migrate backups to `instanceRef` + `database`/`allDatabases`/`shardedDatabase` (cloud config moves under `storage.cloud`), and restores to `instanceRef` + `database`/`allDatabases` with `options.replaceExisting` in place of `force`.
 
 ## Backup Architecture
 
@@ -219,18 +219,18 @@ spec:
   storage: { type: s3, bucket: backups }
 ```
 
-There is **no `kind: Standalone`** — a standalone is just an instance; back it up with `instanceRef: <standalone-name>` + a scope, exactly like a cluster.
+A standalone is just an instance — back it up with `instanceRef: <standalone-name>` + a scope, exactly like a cluster.
 
 > ℹ️ **`allDatabases` and property-sharded databases — one backup, two restore paths.** An instance-wide backup now **catalogues** each property-sharded family's per-shard `.backup` files in `status.history[].shardedFamilies` (the family names are also listed in `shardedDatabasesExcluded`, with a `BackupShardedDatabasesExcluded` event). So **one `allDatabases` backup is a complete DR source**. What differs is *how* each kind is restored: the all-databases **restore loop recreates standard databases only** (sharded DBs need the shard-topology `CREATE` clauses only `Neo4jShardedDatabase` emits), so to recover a sharded family you re-apply its `Neo4jShardedDatabase` CR with `spec.seedBackupRef` pointing at that **same** backup (add `spec.seedSourceDatabase` if restoring under a different name). The all-databases restore re-warns (`RestoreShardedDatabasesNotCovered`) naming each family and the `seedBackupRef` to use — see [Property Sharding](../property_sharding.md). Recovering a mixed cluster is therefore an all-databases restore **plus** one `Neo4jShardedDatabase` re-apply per family, all seeding from the single backup. (You can still take a dedicated `shardedDatabase:`-scoped backup per family if you prefer per-family lifecycles.)
 
-> **Deprecated `target` block.** The pre-v1.13 `target: {kind: Cluster|Database|ShardedDatabase, name, clusterRef}` form still works (emitting a deprecation warning event) and is **removed in v1.14** — migrate to `instanceRef` + `allDatabases`/`database`/`shardedDatabase`.
+> **Removed `target` block.** The pre-v1.14 `target: {kind: Cluster|Database|ShardedDatabase, name, clusterRef}` form was deprecated in v1.13 and **removed in v1.14** — use `instanceRef` + `allDatabases`/`database`/`shardedDatabase`.
 
-**Restore is single-database** even when the backup was instance-wide (`allDatabases`, or the legacy `kind: Cluster`): the backup leaves one artifact per database in the chain directory. **How you reference it depends on the target:**
+**Restore is single-database** even when the backup was instance-wide (`allDatabases`): the backup leaves one artifact per database in the chain directory. **How you reference it depends on the target:**
 
 - **Standalone target** (Job path): referencing an instance-wide backup works directly — the restore Job's filename glob (`<database>-*.backup | tail -1`) selects the requested database's artifact from the shared directory.
 - **Cluster target** (Cypher/seedURI path): reference a single-`database` backup of the database you're restoring. An instance-wide backup has no single artifact to seed one database from, so the operator rejects it with guidance to use a `database`-scoped backup or `source.type: storage` with `source.backupPath` set to the exact `<database>-<timestamp>.backup` file.
 
-To restore **every** database at once, set `allDatabases: true` on the `Neo4jRestore` (see [the v1.13 scope API](#backup-restore-api-v113-scope-not-topology) above).
+To restore **every** database at once, set `allDatabases: true` on the `Neo4jRestore` (see [the scope API](#backup-restore-api-scope-not-topology) above).
 
 ### Storage Layout
 
@@ -1007,7 +1007,7 @@ The operator picks the right restore method based on the target kind. The Neo4j 
 | `Neo4jEnterpriseStandalone` | Kubernetes Job | `neo4j-admin database restore --from-path=<latest-file-in-chain>` followed by `CREATE/START DATABASE` |
 | `Neo4jShardedDatabase` (sharded) | Rejected with actionable error | Use `Neo4jShardedDatabase.spec.replaceExisting: true` + `force: true` instead — see [Property Sharding](../property_sharding.md) |
 
-> **You cannot restore one database into a cluster from an instance-wide backup** (`allDatabases: true`, or the legacy `target.kind: Cluster`). That backup stores one `.backup` artifact *per database*, so there is no single artifact to seed one database from. The operator rejects it with an actionable error (the message uses the internal `kind:Cluster`/`kind:Database` labels):
+> **You cannot restore one database into a cluster from an instance-wide backup** (`allDatabases: true`). That backup stores one `.backup` artifact *per database*, so there is no single artifact to seed one database from. The operator rejects it with an actionable error (the message uses the internal `kind:Cluster`/`kind:Database` labels):
 > `Neo4jBackup "<name>" is a kind:Cluster (all-databases) backup — … To restore a database to a cluster, either reference a kind:Database backup of that database, or use source.type=storage with source.backupPath set to the exact <database>-<timestamp>.backup file.`
 > Back up the specific database with `database: <name>` (one artifact, as in the [tutorial](#tutorial-your-first-backup-and-restore-10-minutes)), or restore via `source.type: storage` pointing at the exact `.backup` file. (Standalone restores from an instance-wide backup work fine — the Job's filename glob selects the requested database.)
 
@@ -1015,7 +1015,7 @@ The operator picks the right restore method based on the target kind. The Neo4j 
 
 - **Cloud-backed backup** (S3 / GCS / Azure): the operator passes the exact `.backup` **file** URI of the latest successful run (`s3://bucket/<path>/<backup-cr-name>/<dbname>-<timestamp>.backup`) as `seedURI` — `CloudSeedProvider` seeds a single database from one file, not a directory. When that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically. The cluster's pods must have the cloud credentials Secret projected via `spec.extraEnvFrom` — the operator emits an actionable error if they don't, or auto-patches under annotation `neo4j.com/auto-inherit-seed-creds=true`.
 - **PVC-backed backup**: the operator spawns an in-cluster busybox httpd proxy (`backup-seed-proxy-<restore-name>`) mounting the backup PVC RO at `/backup`, then passes the per-run `.backup` file URL as `seedURI` (`http://backup-seed-proxy-<restore-name>:8080/<backup-cr-name>/<filename>`). Neo4j's `URLConnectionSeedProvider` fetches it. The operator also creates a **NetworkPolicy restricting the proxy's ingress to the target cluster's server pods** (effective on enforcing CNIs), and **tears the whole proxy stack down automatically** (Deployment + Service + NetworkPolicy) as soon as the restore reaches `Completed` or `Failed` — it doesn't keep serving the backup PVC for the lifetime of the CR. No credentials required.
-- Restoring over an **existing** database requires the explicit opt-in `spec.force: true` (or `spec.options.replaceExisting: true`) — recreate wipes and replaces the live contents, so the operator refuses without it.
+- Restoring over an **existing** database requires the explicit opt-in `spec.options.replaceExisting: true` — recreate wipes and replaces the live contents, so the operator refuses without it.
 
 > **S3-compatible endpoints (MinIO, on-prem object stores):** the seed
 > download runs inside the Neo4j server JVMs, which need the custom endpoint
@@ -1128,7 +1128,6 @@ spec:
     replaceExisting: true
     tempStorage:
       size: "50Gi"
-  force: true
   stopCluster: true   # ignored on cluster targets (Cypher path); required on standalone
 ```
 
@@ -1138,7 +1137,7 @@ spec:
 >
 > If you create a **new** restore *after* the Backup CR is gone, there's nothing to resolve, so `source.type: backup` fails with an error pointing you here. Restore directly from the artifacts with **`source.type: storage`** (above): set `source.storage` to the backup's location and point `backupPath` at the exact `.backup` file (cluster) or the directory (standalone). You do **not** need to — and should **not** — re-create the Backup CR: re-creating it triggers a fresh backup Job that writes into the same chain directory, which can shadow the artifact you wanted to restore.
 >
-> ⚠️ **Restore is destructive and overwrites in place.** With `replaceExisting`/`force` the target database's current data is replaced by the backup. Re-running a restore — including after re-creating a deleted Backup CR — re-seeds and overwrites again. Treat every restore as a destructive operation against the named database.
+> ⚠️ **Restore is destructive and overwrites in place.** With `options.replaceExisting: true` the target database's current data is replaced by the backup. Re-running a restore — including after re-creating a deleted Backup CR — re-seeds and overwrites again. Treat every restore as a destructive operation against the named database.
 
 > **Which run a restore picks**: a cluster restore seeds from the **latest successful artifact of the referenced `Neo4jBackup` CR** (standalone uses `tail -1` of the timestamped glob in that CR's directory). In a FULL+DIFF chain, reference the **DIFF CR** for the latest state or the **FULL CR** to roll back to the last full snapshot — restoring via the FULL CR does *not* apply the newer diffs (and emits a `RestoreFromChainParent` warning). To pin to an arbitrary earlier run, set `source.type: storage` with `backupPath` pointing at the exact `.backup` file, or keep a point-in-time snapshot of the directory (cloud lifecycle rules / versioning).
 
@@ -1172,13 +1171,13 @@ spec:
   source:
     type: backup
     backupRef: standalone-backup
-  force: true          # confirms overwriting the existing database
+  options:
+    replaceExisting: true   # confirms overwriting the existing database
   stopCluster: true   # required: with false the operator refuses while pods are running
 ```
 
-> On standalone targets, **`spec.force: true`** is the flag that confirms
-> overwriting an existing database. (`options.replaceExisting` applies to
-> cluster targets.)
+> **`spec.options.replaceExisting: true`** is the flag that confirms
+> overwriting an existing database — on **both** cluster and standalone targets.
 
 ---
 
@@ -1214,7 +1213,6 @@ spec:
           credentialsSecretRef: aws-backup-creds
   options:
     replaceExisting: true
-  force: true
   stopCluster: true
   timeout: "2h"
 ```
@@ -1254,7 +1252,6 @@ spec:
           credentialsSecretRef: gcs-backup-creds
   options:
     replaceExisting: true
-  force: true
   stopCluster: true
 ```
 
@@ -1284,8 +1281,8 @@ spec:
   source:
     type: backup
     backupRef: production-backup
-  force: true   # confirms overwriting the existing database (standalone target)
   options:
+    replaceExisting: true   # confirms overwriting the existing database
     preRestore:
       cypherStatements:
         - "CALL db.checkpoint()"

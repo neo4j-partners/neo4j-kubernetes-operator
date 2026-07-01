@@ -458,9 +458,8 @@ with `spec.instanceRef` (the cluster) + `spec.shardedDatabase` set to the
 resolves the logical database name (`spec.name`, e.g. `products`) from that resource.
 A single backup captures every shard consistently in one `neo4j-admin database backup`
 invocation via a `{logical-name}*` glob — you do **not** list the individual shard
-databases (`products-g000`, `products-p000`, …). (The deprecated `spec.target.kind:
-ShardedDatabase` form still works; `instanceRef` + `shardedDatabase` is preferred and
-survives into v1.14.)
+databases (`products-g000`, `products-p000`, …). (The pre-v1.14 `spec.target.kind:
+ShardedDatabase` form was removed in v1.14 — use `instanceRef` + `shardedDatabase`.)
 
 > ℹ️ An **all-databases** backup (`spec.allDatabases`) now **catalogues** each sharded
 > family's per-shard artifacts in `status.history[].shardedFamilies` (family names also

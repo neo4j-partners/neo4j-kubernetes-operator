@@ -22,8 +22,8 @@ Key implementation details:
 - For PVC storage, `--to-path` uses the local path within the mounted PVC.
 - RBAC: Only a `neo4j-backup-sa` ServiceAccount is created. No Role or RoleBinding is created because the backup Job requires no Kubernetes API access.
 - Retention: cloud storage (S3/GCS/Azure) is pruned by **your bucket's lifecycle rules**, not the operator. For PVC storage, the operator runs a cleanup Job **only when the Neo4jBackup CR is deleted** — see [RetentionPolicy](#retentionpolicy).
-- **Scope (v1.13):** set `spec.instanceRef` (the deployment — a cluster **or** a standalone) plus exactly one of `spec.database` (a single database) or `spec.allDatabases: true` (every user database; the `system` database is excluded). The operator resolves cluster-vs-standalone itself — topology is no longer part of the API. `spec.allDatabases` produces one `.backup` artifact per database (recorded in `status.history[].databaseArtifacts`) and is restorable cluster-wide via `Neo4jRestore.spec.allDatabases` (closes [#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)).
-- The legacy `spec.target` block (`kind`/`name`/`clusterRef`) is **deprecated as of v1.13** (emits a `BackupAPIDeprecated` event) and is **removed in v1.14** — see [BackupTarget](#backuptarget).
+- **Scope:** set `spec.instanceRef` (the deployment — a cluster **or** a standalone) plus exactly one scope field: `spec.database` (a single database), `spec.shardedDatabase` (a logical property-sharded database), or `spec.allDatabases: true` (every user database; the `system` database is excluded). The operator resolves cluster-vs-standalone itself — topology is not part of the API. `spec.allDatabases` produces one `.backup` artifact per database (recorded in `status.history[].databaseArtifacts`) and is restorable cluster-wide via `Neo4jRestore.spec.allDatabases` (closes [#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)).
+- The legacy `spec.target` block (`kind`/`name`/`clusterRef`) was deprecated in v1.13 and **removed in v1.14**. Use `spec.instanceRef` + a scope field instead.
 
 ## Spec
 
@@ -31,13 +31,12 @@ The `Neo4jBackupSpec` defines the desired state of a Neo4j backup configuration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `instanceRef` | `string` | ✅ (or `target`) | **(v1.13)** The Neo4j deployment to back up — a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. Topology-agnostic. Pair with exactly one of `database` / `allDatabases`. |
-| `database` | `string` | ❌ | **(v1.13)** Single-database scope: back up exactly this database. Mutually exclusive with `allDatabases`. |
-| `allDatabases` | `bool` | ❌ | **(v1.13)** Instance-wide scope: back up every user database (the `system` database is excluded). Mutually exclusive with `database`. |
-| `target` | [`BackupTarget`](#backuptarget) | ⚠️ deprecated | **DEPRECATED (v1.13, removed v1.14)** — use `instanceRef` + `database`/`allDatabases`. Ignored when `instanceRef` is set. |
-| `storage` | [`StorageLocation`](#storagelocation) | ✅ | Where to store the backup |
+| `instanceRef` | `string` | ✅ | The Neo4j deployment to back up — a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. Topology-agnostic. Pair with exactly one of `database` / `shardedDatabase` / `allDatabases`. |
+| `database` | `string` | ❌ | Single-database scope: back up exactly this database. Mutually exclusive with `shardedDatabase` / `allDatabases`. |
+| `shardedDatabase` | `string` | ❌ | Sharded-database scope: back up all shards of this logical property-sharded database (`<name>-g000`, `<name>-p000`, …) in one `neo4j-admin` invocation. Mutually exclusive with `database` / `allDatabases`. |
+| `allDatabases` | `bool` | ❌ | Instance-wide scope: back up every user database (the `system` database is excluded). Mutually exclusive with `database` / `shardedDatabase`. |
+| `storage` | [`StorageLocation`](#storagelocation) | ✅ | Where to store the backup. Cloud provider configuration (including workload identity) lives under `storage.cloud`. |
 | `schedule` | `string` | ❌ | Cron expression for automated backups (e.g., `"0 2 * * *"`). Plain 5-field UTC syntax only — `TZ=`/`CRON_TZ=` prefixes are **rejected** (Kubernetes refuses timezone-embedded CronJob schedules). Scheduled backup names are limited to **40 characters** (the generated `<name>-backup-cron` CronJob must fit Kubernetes' 52-char CronJob-name limit). Removing `schedule` from an existing CR **deletes the CronJob** (the CR becomes a one-shot backup). |
-| `cloud` | [`*CloudBlock`](#cloudblock) | ❌ | Top-level cloud provider configuration (used for workload identity) |
 | `retention` | [`*RetentionPolicy`](#retentionpolicy) | ❌ | Backup retention policy |
 | `options` | [`*BackupOptions`](#backupoptions) | ❌ | Backup-specific options |
 | `suspend` | `bool` | ❌ | Suspend backups without deleting the resource. For scheduled backups, the operator propagates this to `CronJob.spec.suspend`, so Kubernetes stops firing scheduled Jobs; setting it back to `false` resumes the schedule. `suspend: true` also pauses one-shot backups that haven't run yet. |
@@ -45,35 +44,30 @@ The `Neo4jBackupSpec` defines the desired state of a Neo4j backup configuration.
 
 ## Type Definitions
 
-### BackupTarget
+### Scope fields
 
-> **DEPRECATED (v1.13, removed in v1.14).** Use `spec.instanceRef` + `spec.database`/`spec.allDatabases` instead — the scope (single vs all databases) is what matters; cluster-vs-standalone is an implementation detail the operator resolves. This block is honored for one release behind a `BackupAPIDeprecated` warning event and is ignored when `spec.instanceRef` is set.
+There is no separate `target` type. Set `spec.instanceRef` to the deployment (a `Neo4jEnterpriseCluster` **or** `Neo4jEnterpriseStandalone` — the operator auto-detects which) and pick exactly one scope field:
 
-Defines what to back up. The `kind` field controls how `name` and `clusterRef` are interpreted.
+| Scope field | Type | Meaning |
+|-------------|------|---------|
+| `database` | `string` | Back up a single database (e.g. `"neo4j"`, `"mydb"`). |
+| `shardedDatabase` | `string` | Back up all shards of a logical property-sharded database (e.g. `"products"` → `products-g000`, `products-p000`, …) in one `neo4j-admin` invocation via a glob. |
+| `allDatabases` | `bool` | Back up every user database on the instance (`neo4j-admin` is invoked with the `"*"` glob, producing one artifact per database; the `system` database is excluded). |
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `kind` | `string` | ✅ | Type of resource to back up: `"Cluster"` (every database on the instance — `neo4j-admin` is invoked with the `"*"` glob, producing one artifact per database), `"Database"` (a single database), or `"ShardedDatabase"` |
-| `name` | `string` | ✅ | When `kind=Cluster`: name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. When `kind=Database`: name of the Neo4j database (e.g., `"neo4j"`, `"mydb"`). When `kind=ShardedDatabase`: the logical sharded-database name (e.g. `"products"`); the operator backs up all shards (`products-g000`, `products-p000`, …) in one `neo4j-admin` invocation via a glob. |
-| `clusterRef` | `string` | ✅ when `kind=Database` or `kind=ShardedDatabase` | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` that owns the database. Unused when `kind=Cluster`. |
-| `namespace` | `string` | ❌ | Namespace of the target resource (defaults to the backup namespace) |
+The scope fields are mutually exclusive — set exactly one.
 
-> **Important**: In earlier releases, when `kind=Database` the `name` field was incorrectly used for cluster lookup. This has been corrected: `name` is always the database name and `clusterRef` is the cluster name. Both are required when `kind=Database`.
-
-**Examples:**
+**Example:**
 
 ```yaml
-# Back up an entire cluster (all databases)
-target:
-  kind: Cluster
-  name: production-cluster
+# Back up every database on an instance
+spec:
+  instanceRef: production-cluster
+  allDatabases: true
 
 # Back up a single database
-target:
-  kind: Database
-  name: mydb
-  clusterRef: production-cluster
-  namespace: neo4j
+spec:
+  instanceRef: production-cluster
+  database: mydb
 ```
 
 ### StorageLocation
@@ -90,7 +84,7 @@ Defines where to store backups.
 
 ### CloudBlock
 
-Cloud provider configuration. This type appears both on `StorageLocation` (for per-storage credentials) and as a top-level `spec.cloud` field (for workload identity setup).
+Cloud provider configuration. This type lives on `StorageLocation` as `storage.cloud` — it carries both per-storage credentials and workload-identity setup. (The top-level `spec.cloud` field was removed in v1.14; nest it under `storage.cloud` instead.)
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -231,7 +225,7 @@ Fine-grained backup execution options.
 | `pageCache` | `string` | ❌ | Page cache size hint (e.g., `"4G"`). Must match pattern `^[0-9]+[KMG]?$` |
 | `validate` | `*bool` | ❌ | When `true`, runs `neo4j-admin backup validate` against the artifacts **after** the backup succeeds, recording per-shard recoverability into `status.history[].validation`. Appended with `\|\| true` so validate failures don't fail the Job (the backup already succeeded). Pointer type preserves an explicit `true` or `false` across updates; nil (default) skips validate. Requires a CalVer (2025.x+) Neo4j image — on 5.26 the `neo4j-admin backup validate` subcommand does not exist, so the option has no effect and `validation` stays empty. |
 | `parallelDownload` | `bool` | ❌ | Enable parallel download for remote backups |
-| `remoteAddressResolution` | `*bool` | ❌ | Resolve remote addresses via the cluster discovery service (useful in multi-homed environments). Pointer type: when unset and `target.kind=ShardedDatabase` on Neo4j 2025.09+, the operator defaults this to `true` to match the canonical upstream sharded-backup invocation; otherwise unset. Set explicitly (`true` or `false`) to override in either direction. |
+| `remoteAddressResolution` | `*bool` | ❌ | Resolve remote addresses via the cluster discovery service (useful in multi-homed environments). Pointer type: when unset and the backup is `shardedDatabase`-scoped on Neo4j 2025.09+, the operator defaults this to `true` to match the canonical upstream sharded-backup invocation; otherwise unset. Set explicitly (`true` or `false`) to override in either direction. |
 | `skipRecovery` | `bool` | ❌ | Skip the recovery step after backup |
 | `includeMetadata` | `string` | ❌ | Controls which metadata is included in the backup. Values: `"all"` (default), `"none"`, `"users"`, `"roles"`. Requires Neo4j 5.26+. |
 | `parallelRecovery` | `bool` | ❌ | Enable multi-threaded transaction application during backup |
@@ -305,8 +299,8 @@ Represents a single backup Job execution.
 | `stats` | [`*BackupStats`](#backupstats) | Backup statistics for this run |
 | `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the `chainFromBackup` chain-root name when set). Use the `runID` field (Job name) for per-run identity. |
 | `artifactFilename` | `string` | Filename of the `.backup` artifact produced by this standard-DB run (e.g. `"neo4j-2026-06-08T01-18-06.backup"`). Populated by parsing the Job's Pod log after completion; empty when logs couldn't be fetched or the pattern didn't match. Used by the cluster PVC-restore path to build a per-restore seed URL. |
-| `shardArtifacts` | [`[]ShardArtifact`](#shardartifact) | Per-shard `.backup` files produced by a sharded backup run (`target.kind=ShardedDatabase`). Empty for non-sharded runs. |
-| `databaseArtifacts` | `[]DatabaseArtifact` | Per-database `.backup` files produced by an all-databases backup (`spec.allDatabases` / legacy `target.kind=Cluster`): one entry (`database`, `filename`, `size`) per user database (shard physical databases excluded). Consumed by an all-databases restore (`Neo4jRestore.spec.allDatabases`). Empty for single-database and sharded runs. |
+| `shardArtifacts` | [`[]ShardArtifact`](#shardartifact) | Per-shard `.backup` files produced by a sharded backup run (`spec.shardedDatabase`). Empty for non-sharded runs. |
+| `databaseArtifacts` | `[]DatabaseArtifact` | Per-database `.backup` files produced by an all-databases backup (`spec.allDatabases`): one entry (`database`, `filename`, `size`) per user database (shard physical databases excluded). Consumed by an all-databases restore (`Neo4jRestore.spec.allDatabases`). Empty for single-database and sharded runs. |
 | `shardedDatabasesExcluded` | `[]string` | Logical property-sharded databases (e.g. `products`) captured by this all-databases run that the all-databases **restore loop** does not recreate (they need shard-topology `CREATE` clauses only `Neo4jShardedDatabase` emits). They are **not** lost — their per-shard files are catalogued in `shardedFamilies`, so each is restorable from this backup via its `Neo4jShardedDatabase` CR (`spec.seedBackupRef`). Also raised as a `BackupShardedDatabasesExcluded` event. Empty when the run had no sharded families. |
 | `shardedFamilies` | [`[]ShardedFamilyArtifacts`](#shardedfamilyartifacts) | Per-family shard `.backup` artifacts catalogued by an all-databases backup (one entry per logical family, each with its `shardArtifacts`). Makes one all-databases backup a complete DR source: a `Neo4jShardedDatabase` whose `spec.seedBackupRef` points here is seeded from these. Empty for single-database and single-family `shardedDatabase`-scoped runs (those use `shardArtifacts`). |
 | `validation` | [`*BackupValidationResult`](#backupvalidationresult) | Per-shard outcome of the optional `neo4j-admin backup validate` step (only when `options.validate=true` and the operator could parse the output). |
@@ -360,7 +354,7 @@ A typical setup is a daily `FULL` backup CR plus an hourly `DIFF` backup CR that
 
 - Must reference a CR in the **same namespace**.
 - Cannot self-reference (`chainFromBackup: <this-cr-name>` is rejected).
-- Target (cluster + database) must match the referenced CR.
+- Scope (`instanceRef` + database/sharded/all-databases scope) must match the referenced CR.
 - Storage backend (type + bucket/path) must match.
 
 **Runtime safety**: the operator labels every backup Job with `app.kubernetes.io/part-of: <chain-root-name>` and refuses to submit a new Job while another Job sharing the same `part-of` label is still active — preventing the daily FULL and hourly DIFF from racing against the same artifact directory.
@@ -375,9 +369,8 @@ metadata:
   name: daily-full
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: production-cluster
+  instanceRef: production-cluster
+  allDatabases: true
   storage:
     type: s3
     bucket: neo4j-backups
@@ -395,9 +388,8 @@ metadata:
   name: hourly-diff
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: production-cluster
+  instanceRef: production-cluster
+  allDatabases: true
   storage:
     type: s3
     bucket: neo4j-backups
@@ -423,22 +415,19 @@ metadata:
   name: daily-cluster-backup
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: production-cluster
+  instanceRef: production-cluster
+  allDatabases: true
   storage:
     type: s3
     bucket: neo4j-backups
     path: daily/
     cloud:
       provider: aws
-  cloud:
-    provider: aws
-    identity:
-      provider: aws
-      autoCreate:
-        annotations:
-          eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
+      identity:
+        provider: aws
+        autoCreate:
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
   schedule: "0 2 * * *"   # Daily at 2 AM UTC
   retention:
     maxAge: "30d"
@@ -461,9 +450,8 @@ metadata:
   name: daily-cluster-backup-static-creds
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: production-cluster
+  instanceRef: production-cluster
+  allDatabases: true
   storage:
     type: s3
     bucket: neo4j-backups
@@ -484,7 +472,7 @@ spec:
 
 ### Single-Database Backup to S3
 
-Backs up only one database. Both `name` (database) and `clusterRef` (cluster) are required.
+Backs up only one database. Set `database` (the database name) alongside `instanceRef` (the cluster or standalone that owns it).
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -493,11 +481,8 @@ metadata:
   name: mydb-daily-backup
   namespace: neo4j
 spec:
-  target:
-    kind: Database
-    name: mydb            # The Neo4j database name
-    clusterRef: production-cluster   # The cluster that hosts the database
-    namespace: neo4j
+  instanceRef: production-cluster   # The cluster or standalone that hosts the database
+  database: mydb                     # The Neo4j database name
   storage:
     type: s3
     bucket: neo4j-backups
@@ -522,9 +507,8 @@ metadata:
   name: hourly-diff-backup
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: production-cluster-2025
+  instanceRef: production-cluster-2025
+  allDatabases: true
   storage:
     type: s3
     bucket: neo4j-backups
@@ -550,11 +534,8 @@ metadata:
   name: manual-pvc-backup
   namespace: neo4j
 spec:
-  target:
-    kind: Database
-    name: mydb
-    clusterRef: staging-cluster
-    namespace: neo4j
+  instanceRef: staging-cluster
+  database: mydb
   storage:
     type: pvc
     pvc:
@@ -575,22 +556,19 @@ metadata:
   name: weekly-gcs-backup
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: analytics-cluster
+  instanceRef: analytics-cluster
+  allDatabases: true
   storage:
     type: gcs
     bucket: neo4j-analytics-backups
     path: weekly/
     cloud:
       provider: gcp
-  cloud:
-    provider: gcp
-    identity:
-      provider: gcp
-      autoCreate:
-        annotations:
-          iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
+      identity:
+        provider: gcp
+        autoCreate:
+          annotations:
+            iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
   schedule: "0 3 * * 0"   # Weekly on Sunday at 3 AM
   retention:
     maxCount: 12
@@ -610,9 +588,8 @@ metadata:
   name: weekly-gcs-backup-static
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: analytics-cluster
+  instanceRef: analytics-cluster
+  allDatabases: true
   storage:
     type: gcs
     bucket: neo4j-analytics-backups
@@ -639,22 +616,19 @@ metadata:
   name: daily-azure-backup
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: enterprise-cluster
+  instanceRef: enterprise-cluster
+  allDatabases: true
   storage:
     type: azure
     bucket: neo4j-backups         # Azure storage container name
     path: daily/
     cloud:
       provider: azure
-  cloud:
-    provider: azure
-    identity:
-      provider: azure
-      autoCreate:
-        annotations:
-          azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000
+      identity:
+        provider: azure
+        autoCreate:
+          annotations:
+            azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000
   schedule: "0 1 * * *"
   retention:
     maxAge: "14d"
@@ -674,9 +648,8 @@ metadata:
   name: daily-azure-backup-static
   namespace: neo4j
 spec:
-  target:
-    kind: Cluster
-    name: enterprise-cluster
+  instanceRef: enterprise-cluster
+  allDatabases: true
   storage:
     type: azure
     bucket: neo4j-backups

@@ -117,13 +117,16 @@ kubectl run backup-auth-check --rm -it --image=amazon/aws-cli --serviceaccount=<
    apiVersion: neo4j.neo4j.com/v1beta1
    kind: Neo4jBackup
    spec:
-     cloud:
-       provider: aws
-       identity:
+     storage:
+       type: s3
+       bucket: your-backup-bucket
+       cloud:
          provider: aws
-         autoCreate:
-           annotations:
-             eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
+         identity:
+           provider: aws
+           autoCreate:
+             annotations:
+               eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
    ```
 
 2. **Bucket Policy Problems**:
@@ -178,13 +181,16 @@ kubectl run backup-auth-check --rm -it --image=google/cloud-sdk:slim --serviceac
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
 spec:
-  cloud:
-    provider: gcp
-    identity:
+  storage:
+    type: gcs
+    bucket: your-backup-bucket
+    cloud:
       provider: gcp
-      autoCreate:
-        annotations:
-          iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
+      identity:
+        provider: gcp
+        autoCreate:
+          annotations:
+            iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
 ```
 
 #### Azure Blob Storage Issues
@@ -304,12 +310,10 @@ kubectl logs target-cluster-server-0 | grep -i restore
 
 2. **Database Already Exists**:
    ```yaml
-   # Overwrite the existing same-named database. Use either the
-   # option-level replaceExisting flag or the top-level force flag.
+   # Overwrite the existing same-named database with the replaceExisting flag.
    spec:
-     force: true              # top-level; adds --overwrite-destination=true
      options:
-       replaceExisting: true  # equivalent option-level flag
+       replaceExisting: true  # cluster: destructive recreate; standalone: --overwrite-destination=true
    ```
 
 3. **Version Incompatibility**:
@@ -368,7 +372,7 @@ See [Property Sharding](../property_sharding.md) for details.
 
 ### Point-in-Time Recovery (PITR) Issues
 
-PITR via `Neo4jRestore` (`source.type: pitr`) runs the `neo4j-admin database restore --restore-until=…` Job and is supported **only for `Neo4jEnterpriseStandalone` targets**. For cluster point-in-time recovery, create a `Neo4jDatabase` with `spec.seedConfig.restoreUntil` instead — a `Neo4jRestore` with `source.type: pitr` pointing at a cluster `clusterRef` is rejected by the validator.
+PITR via `Neo4jRestore` (`source.type: pitr`) runs the `neo4j-admin database restore --restore-until=…` Job and is supported **only for `Neo4jEnterpriseStandalone` targets**. For cluster point-in-time recovery, create a `Neo4jDatabase` with `spec.seedConfig.restoreUntil` instead — a `Neo4jRestore` with `source.type: pitr` whose `instanceRef` points at a cluster is rejected by the validator.
 
 #### Symptom: PITR restore rejected for a cluster target
 
@@ -547,7 +551,7 @@ validate_backup
 
 ## Emergency Recovery
 
-For full disaster recovery (corrupted primary, restore to a new cluster from latest backup), follow the standard restore flow in the [Backup & Restore guide § Restore Operations](../guides/backup_restore.md#restore-operations). The normal `Neo4jRestore` CR with `source.type: backup` + `clusterRef` pointing at a fresh cluster IS the emergency procedure — there's no separate path. Use `spec.force: true` (top-level) to overwrite existing data. To roll back to a specific timestamp before the corruption: on a standalone target use `Neo4jRestore` with `source.type: pitr` and `source.pointInTime`; on a cluster target use a `Neo4jDatabase` with `spec.seedConfig.restoreUntil` (cluster `Neo4jRestore` PITR is rejected — see [PITR Issues](#point-in-time-recovery-pitr-issues)).
+For full disaster recovery (corrupted primary, restore to a new cluster from latest backup), follow the standard restore flow in the [Backup & Restore guide § Restore Operations](../guides/backup_restore.md#restore-operations). The normal `Neo4jRestore` CR with `source.type: backup` + `instanceRef` pointing at a fresh cluster IS the emergency procedure — there's no separate path. Use `spec.options.replaceExisting: true` to overwrite existing data. To roll back to a specific timestamp before the corruption: on a standalone target use `Neo4jRestore` with `source.type: pitr` and `source.pointInTime`; on a cluster target use a `Neo4jDatabase` with `spec.seedConfig.restoreUntil` (cluster `Neo4jRestore` PITR is rejected — see [PITR Issues](#point-in-time-recovery-pitr-issues)).
 
 ## See Also
 

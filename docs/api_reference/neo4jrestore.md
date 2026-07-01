@@ -12,7 +12,7 @@ For practical examples and usage guidance, see the [Backup and Restore Guide](..
 
 ## How it works
 
-The operator picks the restore method based on the target kind referenced by `instanceRef` (or the deprecated `clusterRef`). The Neo4j docs flag `neo4j-admin database restore` as **unsafe on clusters**, so the two paths diverge:
+The operator picks the restore method based on the deployment referenced by `instanceRef`. The Neo4j docs flag `neo4j-admin database restore` as **unsafe on clusters**, so the two paths diverge:
 
 **`Neo4jEnterpriseCluster` target** — Cypher over Bolt, no Job:
 
@@ -21,7 +21,7 @@ The operator picks the restore method based on the target kind referenced by `in
    - For **PVC-backed** backups, the operator spawns a `backup-seed-proxy-<restore-name>` Deployment + Service serving the backup PVC read-only over HTTP, plus a **NetworkPolicy restricting proxy ingress to the target cluster's server pods** (effective on enforcing CNIs). The seedURI becomes an `http://` URL at the exact `.backup` filename (`URLConnectionSeedProvider`). The whole proxy stack is **torn down automatically** as soon as the restore reaches `Completed` or `Failed` (and on CR deletion) — it does not linger for the lifetime of the CR.
 2. Projects cloud credentials onto cluster pods via `spec.extraEnvFrom` (cluster CR) — required so the JVM's AWS/GCP/Azure SDK can authenticate. The operator emits an actionable error if the Secret isn't projected; set the cluster annotation `neo4j.com/auto-inherit-seed-creds=true` to auto-patch (triggers a rolling restart, which the restore waits out in `Pending`). With **workload identity** (no `credentialsSecretRef`), the SDK default chain is used — the IAM binding must then be on the **server pods'** ServiceAccount, since the seed fetch runs inside the Neo4j JVM, not in a Job.
 3. Opens a Bolt session and runs `SHOW DATABASES` to detect whether the target database already exists.
-4. Existing database → `CALL dbms.[cluster.]recreateDatabase($db, {seedURI: $uri})`. **Requires `spec.force: true` or `spec.options.replaceExisting: true`** — recreating wipes and replaces the live contents, so the operator refuses without the explicit opt-in (clear `Failed` message instead of a silent overwrite). Preserves user/role privileges, atomically swaps the database on every server, no `DROP` needed.
+4. Existing database → `CALL dbms.[cluster.]recreateDatabase($db, {seedURI: $uri})`. **Requires `spec.options.replaceExisting: true`** — recreating wipes and replaces the live contents, so the operator refuses without the explicit opt-in (clear `Failed` message instead of a silent overwrite). Preserves user/role privileges, atomically swaps the database on every server, no `DROP` needed.
 5. New database → `CREATE DATABASE $db OPTIONS { seedURI: '<file>' } WAIT` (no opt-in needed; nothing is overwritten).
 6. `CREATE … WAIT` blocks until online, but `dbms.recreateDatabase` is **asynchronous** — it returns once the recreate is scheduled. The operator therefore polls `SHOW DATABASE` until every allocation reports `online` before marking the restore `Completed`. The poll deadline is **`spec.timeout`** (default **5m** when unset) — raise it for multi-GB stores seeded from object storage; on expiry the restore goes `Failed` with the database's last `statusMessage`.
 
@@ -44,7 +44,7 @@ kubectl exec <instance>-server-0 -c neo4j -- bash -c \
 
 ### Retrying a finished restore
 
-`Completed` and `Failed` are terminal **for the current spec generation**, not forever. To re-run a restore, **edit the spec** (any change that bumps `metadata.generation` — typically `source.backupRef` or `databaseName`): the operator clears the previous attempt's one-shot state and issues a fresh restore. Changing `source.backupRef` also invalidates the pinned `status.resolvedSource`, so the new reference is re-resolved rather than silently reusing the old snapshot. Alternatively, delete and recreate the CR.
+`Completed` and `Failed` are terminal **for the current spec generation**, not forever. To re-run a restore, **edit the spec** (any change that bumps `metadata.generation` — typically `source.backupRef` or `database`): the operator clears the previous attempt's one-shot state and issues a fresh restore. Changing `source.backupRef` also invalidates the pinned `status.resolvedSource`, so the new reference is re-resolved rather than silently reusing the old snapshot. Alternatively, delete and recreate the CR.
 
 ## Neo4jRestore Spec
 
@@ -52,18 +52,17 @@ kubectl exec <instance>-server-0 -c neo4j -- bash -c \
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `instanceRef` | `string` | ✅ (or `clusterRef`) | **(v1.13)** The Neo4j deployment to restore into — a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` (topology-agnostic; the operator picks the restore engine). Preferred alias of `clusterRef`. |
-| `clusterRef` | `string` | ⚠️ deprecated | **DEPRECATED (v1.13, removed v1.14)** — use `instanceRef`. |
+| `instanceRef` | `string` | ✅ | The Neo4j deployment to restore into — a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` (topology-agnostic; the operator picks the restore engine). |
 | `source` | [`RestoreSource`](#restoresource) | ✅ | Source of the backup data to restore |
-| `database` | `string` | ✅ (or `allDatabases`) | **(v1.13)** Name of the database to restore. Preferred alias of `databaseName`. |
-| `allDatabases` | `bool` | ❌ | **(v1.13)** Restore **every** user database recorded in the source backup (the `system` database is excluded) — the restore counterpart of an all-databases backup ([#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)). Requires `source.type=backup`; mutually exclusive with `database`/`databaseName`; per-database progress in `status.databaseResults`. **Cluster** targets restore one database per reconcile pass via the in-place Cypher path (cloud and PVC-backed backups). **Standalone** targets ([#288](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/288)) take the offline Job path — a single multi-database `neo4j-admin database restore` (needs `stopCluster: true`, plus `force: true` to overwrite existing databases), after which each database is brought online. |
-| `databaseName` | `string` | ⚠️ deprecated | **DEPRECATED (v1.13, removed v1.14)** — use `database`. |
-| `options` | [`RestoreOptionsSpec`](#restoreoptionsspec) | ❌ | Additional restore configuration options |
-| `force` | `bool` | ❌ | Confirm restoring **over an existing database** (default: `false`). Standalone targets: passes `--overwrite-destination` to `neo4j-admin`. Cluster targets: required (or `options.replaceExisting: true`) before the operator issues the destructive `dbms.recreateDatabase` against an existing database. |
+| `database` | `string` | ✅ (or `allDatabases`) | Name of the database to restore. |
+| `allDatabases` | `bool` | ❌ | Restore **every** user database recorded in the source backup (the `system` database is excluded) — the restore counterpart of an all-databases backup ([#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)). Requires `source.type=backup`; mutually exclusive with `database`; per-database progress in `status.databaseResults`. **Cluster** targets restore one database per reconcile pass via the in-place Cypher path (cloud and PVC-backed backups). **Standalone** targets ([#288](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/288)) take the offline Job path — a single multi-database `neo4j-admin database restore` (needs `stopCluster: true`, plus `options.replaceExisting: true` to overwrite existing databases), after which each database is brought online. |
+| `options` | [`RestoreOptionsSpec`](#restoreoptionsspec) | ❌ | Additional restore configuration options — including `replaceExisting` (the confirmation required to overwrite an existing database). |
 | `stopCluster` | `bool` | ❌ | **Standalone targets only** (cluster targets restore via Cypher and ignore it). `true` scales the instance down before the restore Job (mounting `data-{name}-server-0` directly) and scales it back up after. With `false`, the operator **refuses** to run the Job while any server pod is running — it never writes into a live data volume. |
 | `timeout` | `string` | ❌ | Go duration (e.g. `"30m"`, `"2h"`). For **cluster** targets this bounds the online-convergence wait after `dbms.recreateDatabase` is issued (default **5m** when unset) — raise it for multi-GB stores seeded from object storage. For **PVC-backed cluster restores** it also bounds the wait for the backup-seed-proxy Deployment to become Ready (default **3m** when unset); on expiry the restore fails with the proxy pod's condition (e.g. an RWO backup PVC still attached elsewhere). |
 
-**Target compatibility**: `clusterRef` can reference either:
+> The pre-v1.13 top-level `clusterRef`, `databaseName`, and `force` fields were deprecated in v1.13 and **removed in v1.14**. Use `instanceRef`, `database`, and `options.replaceExisting` respectively.
+
+**Target compatibility**: `instanceRef` can reference either:
 
 - `Neo4jEnterpriseCluster` — for HA cluster restore operations
 - `Neo4jEnterpriseStandalone` — for single-node restore operations
@@ -157,7 +156,7 @@ Additional restore execution options.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `replaceExisting` | `bool` | ❌ | Replace an existing database (default: `false`). Equivalent confirmation to top-level `force` for **cluster** restores of an existing database. For **standalone** restores, use `spec.force` instead. |
+| `replaceExisting` | `bool` | ❌ | Confirm restoring **over an existing database** (default: `false`). Required before the operator overwrites existing contents on **either** target: cluster restores issue the destructive `dbms.recreateDatabase`; standalone restores pass `--overwrite-destination` to `neo4j-admin`. |
 | `additionalArgs` | `[]string` | ❌ | Additional arguments passed verbatim to `neo4j-admin database restore` |
 | `tempPath` | `string` | ❌ | Local directory for temporary files during restore. When `tempStorage` is configured this is set automatically to the mount path; only set manually if you mount your own volume by other means. |
 | `tempStorage` | [`TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud restores. Without it, cloud restores use the container's ephemeral disk (may be too small for large databases). The operator mounts the PVC and passes `--temp-path` automatically. |
@@ -353,8 +352,8 @@ metadata:
   name: simple-backup-restore
   namespace: neo4j
 spec:
-  clusterRef: test-cluster   # Neo4jEnterpriseCluster (Cypher path — no Job)
-  databaseName: testdb
+  instanceRef: test-cluster   # Neo4jEnterpriseCluster (Cypher path — no Job)
+  database: testdb
   source:
     type: backup
     backupRef: daily-test-backup   # References a Neo4jBackup resource
@@ -372,8 +371,8 @@ metadata:
   name: dev-s3-restore
   namespace: development
 spec:
-  clusterRef: dev-standalone   # Neo4jEnterpriseStandalone (Job path — hooks run here)
-  databaseName: dev-app
+  instanceRef: dev-standalone   # Neo4jEnterpriseStandalone (Job path — hooks run here)
+  database: dev-app
   source:
     type: storage
     storage:
@@ -386,12 +385,11 @@ spec:
     # Exact artifact: <chain-root>/<dbname>-<timestamp>.backup
     backupPath: dev-backup/dev-app-2026-06-01T10-30-00.backup
   options:
-    replaceExisting: true
+    replaceExisting: true   # confirms overwriting the existing database
     postRestore:   # hooks run only on standalone targets
       cypherStatements:
         - "CALL db.awaitIndexes(60)"
         - "CREATE (:TestNode {restored: datetime()})"
-  force: true
   stopCluster: true   # standalone Job restores need the instance stopped
   timeout: "30m"
 ```
@@ -405,8 +403,8 @@ metadata:
   name: gcs-restore
   namespace: neo4j
 spec:
-  clusterRef: analytics-cluster   # Neo4jEnterpriseCluster (Cypher path)
-  databaseName: analytics-db
+  instanceRef: analytics-cluster   # Neo4jEnterpriseCluster (Cypher path)
+  database: analytics-db
   source:
     type: storage
     storage:
@@ -421,7 +419,6 @@ spec:
     backupPath: weekly-backup/analytics-db-2026-06-01T03-00-00.backup
   options:
     replaceExisting: true   # required: analytics-db already exists
-  force: true
   timeout: "2h"   # online-convergence budget — raise for large stores
 ```
 
@@ -441,8 +438,8 @@ metadata:
     compliance: required
     environment: production
 spec:
-  clusterRef: enterprise-cluster   # Neo4jEnterpriseCluster (Cypher path)
-  databaseName: customer-data
+  instanceRef: enterprise-cluster   # Neo4jEnterpriseCluster (Cypher path)
+  database: customer-data
   source:
     type: storage
     storage:
@@ -456,7 +453,6 @@ spec:
     backupPath: nightly-backup/customer-data-2026-06-01T02-00-00.backup
   options:
     replaceExisting: true   # required: customer-data already exists
-  force: true
   timeout: "6h"   # large store — generous online-convergence budget
 ```
 
@@ -471,8 +467,8 @@ metadata:
   name: production-pitr-restore
   namespace: neo4j
 spec:
-  clusterRef: recovery-standalone   # Neo4jEnterpriseStandalone (PITR is standalone-only)
-  databaseName: production-db
+  instanceRef: recovery-standalone   # Neo4jEnterpriseStandalone (PITR is standalone-only)
+  database: production-db
   source:
     type: pitr
     pointInTime: "2025-01-04T12:30:00Z"
@@ -488,7 +484,7 @@ spec:
           provider: aws
           credentialsSecretRef: aws-restore-credentials
   options:
-    replaceExisting: true
+    replaceExisting: true   # confirms overwriting the existing database
     preRestore:     # hooks run only on standalone targets, BEFORE the stop
       cypherStatements:
         - "CALL db.checkpoint()"
@@ -496,7 +492,6 @@ spec:
       cypherStatements:
         - "CALL db.awaitIndexes(600)"
         - "CALL dbms.security.clearAuthCache()"
-  force: true
   stopCluster: true
   timeout: "4h"
 ```
@@ -512,8 +507,8 @@ metadata:
   name: offline-restore
   namespace: neo4j
 spec:
-  clusterRef: reporting-standalone   # Neo4jEnterpriseStandalone
-  databaseName: large-graph
+  instanceRef: reporting-standalone   # Neo4jEnterpriseStandalone
+  database: large-graph
   source:
     type: storage
     storage:
@@ -524,14 +519,15 @@ spec:
         provider: aws
         credentialsSecretRef: aws-restore-credentials
     backupPath: nightly-backup/large-graph-2026-06-01T02-00-00.backup
-  force: true
+  options:
+    replaceExisting: true   # confirms overwriting the existing database
   stopCluster: true   # Scales the standalone to 0; mounts data-reporting-standalone-server-0
   timeout: "8h"
 ```
 
 ### Standalone Restore
 
-`clusterRef` can reference a `Neo4jEnterpriseStandalone` resource. The controller detects the type automatically.
+`instanceRef` can reference a `Neo4jEnterpriseStandalone` resource. The controller detects the type automatically.
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -540,14 +536,13 @@ metadata:
   name: standalone-restore
   namespace: development
 spec:
-  clusterRef: dev-standalone   # Neo4jEnterpriseStandalone
-  databaseName: app-db
+  instanceRef: dev-standalone   # Neo4jEnterpriseStandalone
+  database: app-db
   source:
     type: backup
     backupRef: dev-daily-backup
   options:
-    replaceExisting: true
-  force: true
+    replaceExisting: true   # confirms overwriting the existing database
   stopCluster: true   # required: with false the operator refuses while pods are running
   timeout: "30m"
 ```
@@ -561,8 +556,8 @@ metadata:
   name: cross-cloud-dr-restore
   namespace: disaster-recovery
 spec:
-  clusterRef: dr-cluster   # Neo4jEnterpriseCluster (Cypher path — no hooks, no Job)
-  databaseName: critical-app
+  instanceRef: dr-cluster   # Neo4jEnterpriseCluster (Cypher path — no hooks, no Job)
+  database: critical-app
   source:
     type: storage
     storage:
@@ -575,8 +570,7 @@ spec:
     # Exact .backup file, required for cluster targets:
     backupPath: dr-backup/critical-app-2026-06-01T02-00-00.backup
   options:
-    replaceExisting: true
-  force: true
+    replaceExisting: true   # confirms overwriting the existing database
   timeout: "3h"
 ```
 
