@@ -1668,12 +1668,11 @@ func backupRunIDEnvVar() corev1.EnvVar {
 	}
 }
 
-// cloudBlockForBackup returns the CloudBlock from whichever spec field is populated.
+// cloudBlockForBackup returns the storage's CloudBlock (nil for PVC storage).
+// (The top-level spec.cloud alias was removed in v1.14; cloud config lives
+// under spec.storage.cloud.)
 func cloudBlockForBackup(backup *neo4jv1beta1.Neo4jBackup) *neo4jv1beta1.CloudBlock {
-	if backup.Spec.Storage.Cloud != nil {
-		return backup.Spec.Storage.Cloud
-	}
-	return backup.Spec.Cloud
+	return backup.Spec.Storage.Cloud
 }
 
 // buildCloudEnvVars injects cloud provider credentials from a Kubernetes Secret

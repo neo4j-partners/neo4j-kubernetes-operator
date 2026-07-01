@@ -83,9 +83,6 @@ type Neo4jBackupSpec struct {
 	// Schedule for automated backups (cron format)
 	Schedule string `json:"schedule,omitempty"`
 
-	// Cloud configuration for cloud storage
-	Cloud *CloudBlock `json:"cloud,omitempty"`
-
 	// Retention policy for backup cleanup
 	Retention *RetentionPolicy `json:"retention,omitempty"`
 

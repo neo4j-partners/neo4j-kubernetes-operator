@@ -634,29 +634,30 @@ func TestIsValidMaxAge(t *testing.T) {
 	}
 }
 
-// TestBackupValidator_CloudAtSpecLevel pins the fix for the regression that
-// surfaced when BackupValidator was wired into the reconciler: cloud config
-// commonly lives at the top-level spec.cloud (not nested under spec.storage.cloud),
-// and the reconciler resolves storage.cloud ?? spec.cloud. The validator must
-// accept a cloud backup whose provider is set only at spec.cloud.
-func TestBackupValidator_CloudAtSpecLevel(t *testing.T) {
+// TestBackupValidator_CloudAtStorageLevel pins that cloud config lives under
+// spec.storage.cloud (the top-level spec.cloud alias was removed in v1.14): a
+// cloud backup whose provider is set at storage.cloud validates, and one with no
+// provider is rejected.
+func TestBackupValidator_CloudAtStorageLevel(t *testing.T) {
 	v := NewBackupValidator()
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-backup"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
-			Storage: neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "test-bucket"}, // no nested storage.cloud
-			Cloud:   &neo4jv1beta1.CloudBlock{Provider: "aws"},                       // provider only at spec.cloud
+			Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+			Storage: neo4jv1beta1.StorageLocation{
+				Type: "s3", Bucket: "test-bucket",
+				Cloud: &neo4jv1beta1.CloudBlock{Provider: "aws"},
+			},
 		},
 	}
 	if errs := v.Validate(backup); len(errs) != 0 {
-		t.Errorf("expected no errors for S3 backup with provider at spec.cloud, got: %v", errs)
+		t.Errorf("expected no errors for S3 backup with provider at storage.cloud, got: %v", errs)
 	}
 
-	// And it still rejects when neither spec.cloud nor storage.cloud has a provider.
-	backup.Spec.Cloud = nil
+	// And it still rejects when storage.cloud has no provider.
+	backup.Spec.Storage.Cloud = nil
 	if errs := v.Validate(backup); len(errs) == 0 {
-		t.Error("expected an error for S3 backup with no cloud provider anywhere")
+		t.Error("expected an error for S3 backup with no cloud provider")
 	}
 }
 
@@ -669,9 +670,11 @@ func TestBackupValidator_ShellSafetyCharsets(t *testing.T) {
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: "ns"},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "c"},
-				Storage: neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "my-bucket", Path: "backups/prod"},
-				Cloud:   &neo4jv1beta1.CloudBlock{Provider: "aws"},
+				Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "c"},
+				Storage: neo4jv1beta1.StorageLocation{
+					Type: "s3", Bucket: "my-bucket", Path: "backups/prod",
+					Cloud: &neo4jv1beta1.CloudBlock{Provider: "aws"},
+				},
 			},
 		}
 	}

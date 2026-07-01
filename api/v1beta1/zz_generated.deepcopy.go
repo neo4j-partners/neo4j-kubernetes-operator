@@ -1204,11 +1204,6 @@ func (in *Neo4jBackupSpec) DeepCopyInto(out *Neo4jBackupSpec) {
 	*out = *in
 	out.Target = in.Target
 	in.Storage.DeepCopyInto(&out.Storage)
-	if in.Cloud != nil {
-		in, out := &in.Cloud, &out.Cloud
-		*out = new(CloudBlock)
-		(*in).DeepCopyInto(*out)
-	}
 	if in.Retention != nil {
 		in, out := &in.Retention, &out.Retention
 		*out = new(RetentionPolicy)

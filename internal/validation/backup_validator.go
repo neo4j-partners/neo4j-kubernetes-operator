@@ -98,7 +98,7 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 	}
 
 	// Validate storage configuration
-	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage, backup.Spec.Cloud)...)
+	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage)...)
 
 	// Validate schedule if specified
 	if backup.Spec.Schedule != "" {
@@ -124,8 +124,8 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 	}
 
 	// Validate cloud configuration if specified
-	if backup.Spec.Cloud != nil {
-		allErrs = append(allErrs, v.validateCloudConfiguration(backup.Spec.Cloud)...)
+	if backup.Spec.Storage.Cloud != nil {
+		allErrs = append(allErrs, v.validateCloudConfiguration(backup.Spec.Storage.Cloud)...)
 	}
 
 	// Validate retention policy if specified
@@ -297,7 +297,7 @@ func (v *BackupValidator) validateScopeSelection(spec *neo4jv1beta1.Neo4jBackupS
 // specCloud is the top-level spec.cloud block; the operator resolves the
 // effective cloud config as storage.cloud ?? spec.cloud (see getCloudBlock in
 // the backup controller), so provider checks must consider both.
-func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.StorageLocation, specCloud *neo4jv1beta1.CloudBlock) field.ErrorList {
+func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.StorageLocation) field.ErrorList {
 	var allErrs field.ErrorList
 	storagePath := field.NewPath("spec", "storage")
 
@@ -318,7 +318,7 @@ func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.Sto
 	}
 
 	// Validate storage provider specific configurations
-	if err := v.validateStorageProvider(storage, specCloud); err != nil {
+	if err := v.validateStorageProvider(storage); err != nil {
 		allErrs = append(allErrs, field.Invalid(
 			storagePath,
 			storage,
@@ -418,13 +418,10 @@ func (v *BackupValidator) validateSchemeSpecificURI(uri, scheme string) error {
 // so cloud-provider requirements are checked against the block the operator
 // actually uses — the cloud config commonly lives at spec.cloud, not nested
 // under storage.cloud.
-func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageLocation, specCloud *neo4jv1beta1.CloudBlock) error {
+func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageLocation) error {
 	storageType := strings.ToLower(storage.Type)
 
 	effectiveCloud := storage.Cloud
-	if effectiveCloud == nil {
-		effectiveCloud = specCloud
-	}
 
 	// For cloud storage providers, validate additional configuration
 	switch storageType {
@@ -434,7 +431,7 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 			return fmt.Errorf("S3 storage requires bucket name for Neo4j 5.26+")
 		}
 		if effectiveCloud == nil || effectiveCloud.Provider != "aws" {
-			return fmt.Errorf("S3 storage requires cloud provider 'aws' (set spec.cloud.provider or spec.storage.cloud.provider)")
+			return fmt.Errorf("S3 storage requires cloud provider 'aws' (set spec.storage.cloud.provider)")
 		}
 	case "gcs":
 		// GCS specific validations
@@ -442,7 +439,7 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 			return fmt.Errorf("Google Cloud Storage requires bucket name for Neo4j 5.26+")
 		}
 		if effectiveCloud == nil || effectiveCloud.Provider != "gcp" {
-			return fmt.Errorf("GCS storage requires cloud provider 'gcp' (set spec.cloud.provider or spec.storage.cloud.provider)")
+			return fmt.Errorf("GCS storage requires cloud provider 'gcp' (set spec.storage.cloud.provider)")
 		}
 	case "azure":
 		// Azure specific validations
@@ -450,7 +447,7 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 			return fmt.Errorf("Azure Blob Storage requires container name for Neo4j 5.26+")
 		}
 		if effectiveCloud == nil || effectiveCloud.Provider != "azure" {
-			return fmt.Errorf("Azure storage requires cloud provider 'azure' (set spec.cloud.provider or spec.storage.cloud.provider)")
+			return fmt.Errorf("Azure storage requires cloud provider 'azure' (set spec.storage.cloud.provider)")
 		}
 	case "pvc":
 		// PVC specific validations.
