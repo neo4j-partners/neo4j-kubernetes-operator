@@ -220,7 +220,7 @@ var _ = Describe("All-Databases Backup and Cluster Restore (MinIO) Integration T
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
 				InstanceRef:  cluster.Name,
 				AllDatabases: true,
-				Force:        true, // databases exist — recreate from backup
+				Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}, // databases exist — recreate from backup
 				Source:       neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: backup.Name},
 			},
 		}

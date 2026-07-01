@@ -423,8 +423,8 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	// scaled-to-0 instance and pin a terminal Failed — and the check already
 	// passed before the stop. Also skipped for an all-databases restore: there
 	// is no single spec.database to check; per-database overwrite is gated by
-	// spec.force via `--overwrite-destination` in the multi-database command.
-	if !restore.Spec.Force && !restore.Spec.AllDatabases && !r.restoreAlreadyStoppedInstance(ctx, restore, cluster) {
+	// options.replaceExisting via `--overwrite-destination` in the multi-database command.
+	if !restoreOverwriteConfirmed(restore) && !restore.Spec.AllDatabases && !r.restoreAlreadyStoppedInstance(ctx, restore, cluster) {
 		if err := r.checkDatabaseExists(ctx, restore, cluster); err != nil {
 			logger.Error(err, "Database existence check failed")
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Database check failed: %v", err))
@@ -3002,9 +3002,9 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		// standalone Job path requires (#218): without it, a typo'd
 		// databaseName against a cluster target silently overwrote a live
 		// database with backup contents.
-		if !restore.Spec.Force && (restore.Spec.Options == nil || !restore.Spec.Options.ReplaceExisting) {
+		if !restoreOverwriteConfirmed(restore) {
 			msg := fmt.Sprintf(
-				"database %q already exists on the target cluster; a restore would WIPE and replace it. Set spec.force=true (or spec.options.replaceExisting=true) to confirm, or restore to a different databaseName",
+				"database %q already exists on the target cluster; a restore would WIPE and replace it. Set spec.options.replaceExisting=true to confirm, or restore to a different database",
 				restore.Spec.DatabaseName)
 			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 			r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, msg)
@@ -3911,12 +3911,10 @@ func isPodReady(pod *corev1.Pod) bool {
 }
 
 // restoreOverwriteConfirmed reports whether the user confirmed restoring over
-// an existing database — via spec.force OR options.replaceExisting. The two
-// are equivalent confirmations everywhere (cluster recreate gate, preflight
-// error text, API reference); the Job command must honor both too.
+// an existing database — via options.replaceExisting. This is the single
+// overwrite confirmation everywhere (cluster recreate gate, preflight error
+// text, all-databases loop, the standalone Job command). (The top-level
+// spec.force alias was removed in v1.14.)
 func restoreOverwriteConfirmed(restore *neo4jv1beta1.Neo4jRestore) bool {
-	if restore.Spec.Force {
-		return true
-	}
 	return restore.Spec.Options != nil && restore.Spec.Options.ReplaceExisting
 }

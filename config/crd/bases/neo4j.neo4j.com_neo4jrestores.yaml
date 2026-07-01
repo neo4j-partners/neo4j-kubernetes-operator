@@ -97,9 +97,6 @@ spec:
                 maxLength: 65
                 pattern: ^[a-zA-Z][a-zA-Z0-9.\-]*$
                 type: string
-              force:
-                description: Force restore even if database exists
-                type: boolean
               instanceRef:
                 description: |-
                   InstanceRef names the Neo4j deployment to restore INTO — a

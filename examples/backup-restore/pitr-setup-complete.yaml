@@ -157,7 +157,6 @@ spec:
                     name: recovery-standalone-admin-secret
                     key: password
         timeout: "20m"
-  force: true
   stopCluster: true
   timeout: "4h"
 

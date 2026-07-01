@@ -70,9 +70,6 @@ type Neo4jRestoreSpec struct {
 	// Restore options
 	Options *RestoreOptionsSpec `json:"options,omitempty"`
 
-	// Force restore even if database exists
-	Force bool `json:"force,omitempty"`
-
 	// Stop cluster before restore (required for some restore operations)
 	StopCluster bool `json:"stopCluster,omitempty"`
 

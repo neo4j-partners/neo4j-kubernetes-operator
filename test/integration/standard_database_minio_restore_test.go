@@ -262,11 +262,11 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 				// Cypher path — the Cypher procedures handle atomic swap
 				// without scaling down the StatefulSet.
 				StopCluster: false,
-				// Force=true because the database exists and we want
+				// replaceExisting because the database exists and we want
 				// dbms.recreateDatabase to run against it (the operator's
-				// non-force path would reject due to existence; force says
+				// non-overwrite path would reject due to existence; this says
 				// "yes, overwrite").
-				Force: true,
+				Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 			},
 		}
 		Expect(k8sClient.Create(ctx, restore)).To(Succeed())
@@ -347,7 +347,7 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 				ClusterRef:   cluster.Name,
 				DatabaseName: dbName,
 				StopCluster:  false,
-				Force:        true,
+				Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				Source: neo4jv1beta1.RestoreSource{
 					Type: "storage",
 					Storage: &neo4jv1beta1.StorageLocation{

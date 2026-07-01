@@ -46,7 +46,7 @@ spec:
 #     instanceRef: production-cluster
 #     database: neo4j
 #     source: { type: backup, backupRef: cross-region-backup }
-#     force: true
+#     options: { replaceExisting: true }
 #
 # B) Cross-region restore into a DR cluster (different region), from the S3 object:
 #   apiVersion: neo4j.neo4j.com/v1beta1
@@ -63,7 +63,7 @@ spec:
 #         bucket: neo4j-dr-backups
 #         path: "us-east-1"
 #         cloud: { credentialsSecretRef: s3-dr-credentials }
-#     force: true
+#     options: { replaceExisting: true }
 #
 # C) Point-in-time recovery into a NEW database (Neo4j 2025.x+, cluster-native):
 #   apiVersion: neo4j.neo4j.com/v1beta1

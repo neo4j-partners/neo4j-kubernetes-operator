@@ -49,7 +49,6 @@ spec:
         - "CALL db.awaitIndexes()"
         - "CALL dbms.security.clearAuthCache()"
         - "MATCH (n:AuditLog) WHERE n.timestamp > datetime() - duration('PT1H') RETURN count(n) as recentAudits"
-  force: true
   stopCluster: true
   timeout: "3h"
 
@@ -131,6 +130,5 @@ spec:
                     name: dr-standalone-admin-secret
                     key: password
         timeout: "15m"
-  force: true
   stopCluster: true
   timeout: "4h"

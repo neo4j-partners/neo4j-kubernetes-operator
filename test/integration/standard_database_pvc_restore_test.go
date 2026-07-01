@@ -223,7 +223,7 @@ var _ = Describe("Standard Database PVC Restore Integration Tests", Label("exten
 					Type:      "backup",
 					BackupRef: backup.Name,
 				},
-				Force: true,
+				Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 			},
 		}
 		Expect(k8sClient.Create(ctx, restore)).To(Succeed())

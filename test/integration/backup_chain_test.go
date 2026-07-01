@@ -280,7 +280,7 @@ var _ = Describe("Backup Chain Integration Tests", Label("extended"), Serial, fu
 					Type:      "backup",
 					BackupRef: hourlyBackup.Name,
 				},
-				Force: true,
+				Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 			},
 		}
 		Expect(k8sClient.Create(ctx, restore)).To(Succeed())

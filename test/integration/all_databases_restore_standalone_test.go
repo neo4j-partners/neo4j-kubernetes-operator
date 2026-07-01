@@ -173,7 +173,7 @@ var _ = Describe("Standalone All-Databases Restore (v1.13 API)", Label("extended
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
 				InstanceRef:  standalone.Name,
 				AllDatabases: true,
-				Force:        true,
+				Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				StopCluster:  true,
 				Source:       neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: backup.Name},
 			},

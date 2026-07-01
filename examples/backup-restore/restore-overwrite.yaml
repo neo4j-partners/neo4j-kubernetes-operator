@@ -1,14 +1,13 @@
 # ============================================================
 # Destructive restore: overwrite an EXISTING database from a backup.
 #
-#   - force: true            confirms overwriting the existing database
-#   - replaceExisting: true  equivalent option-level confirmation
-#   - source.type: backup    pulls from a Neo4jBackup CR's latest successful run
+#   - options.replaceExisting: true  confirms overwriting the existing database
+#   - source.type: backup            pulls from a Neo4jBackup CR's latest successful run
 #
 # On a CLUSTER target the operator restores via Cypher
 # (dbms.recreateDatabase with a seedURI — no Job, no downtime for other
-# databases). Restoring over an EXISTING database REQUIRES force: true or
-# options.replaceExisting: true — without either the restore fails with an
+# databases). Restoring over an EXISTING database REQUIRES
+# options.replaceExisting: true — without it the restore fails with an
 # actionable message instead of silently wiping the database.
 #
 # Hooks (spec.options.{preRestore,postRestore}) run ONLY on standalone
@@ -23,13 +22,12 @@ metadata:
 spec:
   instanceRef: my-neo4j-cluster
   database: orders
-  # Confirm the destructive overwrite of the existing database
-  force: true
   source:
     type: backup
     backupRef: full-backup
   options:
-    # Replace the existing database rather than failing if it exists
+    # Replace the existing database rather than failing if it exists —
+    # confirms the destructive overwrite.
     replaceExisting: true
   # spec.timeout bounds how long the operator waits for the re-seeded
   # database to converge online across the cluster (default 5m — raise it

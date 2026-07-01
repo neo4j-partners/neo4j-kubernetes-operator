@@ -108,19 +108,18 @@ func TestBuildBackupCommand_ValidateGatedOnCalver(t *testing.T) {
 	}
 }
 
-// #253: both spec.force and options.replaceExisting are documented as the
-// overwrite confirmation; the Job command builders must honor BOTH (only
-// force was wired, so the documented replaceExisting path failed with
-// "Database ... already exists").
+// #253 + v1.14: options.replaceExisting is the single overwrite confirmation
+// (the top-level spec.force alias was removed in v1.14). The Job command
+// builders and the cluster/all-databases recreate gates all funnel through
+// restoreOverwriteConfirmed, so it must key off replaceExisting alone.
 func TestRestoreOverwriteConfirmed(t *testing.T) {
 	cases := []struct {
 		name string
 		spec neo4jv1beta1.Neo4jRestoreSpec
 		want bool
 	}{
-		{"force only", neo4jv1beta1.Neo4jRestoreSpec{Force: true}, true},
-		{"replaceExisting only", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
-		{"both", neo4jv1beta1.Neo4jRestoreSpec{Force: true, Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
+		{"replaceExisting true", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
+		{"replaceExisting false", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: false}}, false},
 		{"neither", neo4jv1beta1.Neo4jRestoreSpec{}, false},
 		{"nil options", neo4jv1beta1.Neo4jRestoreSpec{Options: nil}, false},
 	}
