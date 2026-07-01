@@ -319,6 +319,13 @@ type ResolvedRestoreSource struct {
 	// ResolvedAt is when the backupRef was first dereferenced.
 	ResolvedAt *metav1.Time `json:"resolvedAt,omitempty"`
 
+	// BackupCreatedAt is the completion time of the resolved most-recent
+	// Succeeded run, captured at resolution so restore provenance
+	// (status.backupInfo.backupCreatedAt) survives deletion of the source
+	// Neo4jBackup CR. Empty when the run recorded no completion time.
+	// +optional
+	BackupCreatedAt *metav1.Time `json:"backupCreatedAt,omitempty"`
+
 	// DatabaseArtifacts is the per-database `.backup` map pinned for an
 	// all-databases restore (spec.allDatabases), copied from the resolved
 	// backup's latest Succeeded run so the restore no longer depends on the
@@ -356,38 +363,31 @@ type DatabaseRestoreResult struct {
 
 // RestoreStats provides restore operation statistics
 type RestoreStats struct {
-	// Duration of the restore operation
+	// Duration is the wall-clock time the restore took, derived from
+	// status.completionTime − status.startTime and formatted like "2m3s".
 	Duration string `json:"duration,omitempty"`
-
-	// Size of data restored
-	DataSize string `json:"dataSize,omitempty"`
-
-	// Throughput of the restore operation
-	Throughput string `json:"throughput,omitempty"`
-
-	// Number of files restored
-	FileCount int32 `json:"fileCount,omitempty"`
-
-	// Errors encountered during restore
-	ErrorCount int32 `json:"errorCount,omitempty"`
 }
 
-// RestoreBackupInfo provides information about the backup that was restored
+// RestoreBackupInfo provides provenance about the backup this restore was
+// seeded from. Populated at finalization from the resolved source; fields the
+// operator cannot derive without the (possibly-deleted) source backup are
+// omitted rather than guessed.
 type RestoreBackupInfo struct {
-	// Source backup path
+	// BackupPath is the source backup location this restore read from: the
+	// per-CR chain directory (with the resolved `.backup` filename when known)
+	// for a `source.type: backup` restore, or the explicit storage path for a
+	// `source.type: storage` restore.
 	BackupPath string `json:"backupPath,omitempty"`
 
-	// Original creation time of the backup
+	// BackupCreatedAt is the completion time of the backup run this restore was
+	// seeded from. Populated only for `source.type: backup` restores (copied
+	// from the resolved backup's latest Succeeded run); empty for
+	// `source.type: storage` restores, which carry no backup CR.
 	BackupCreatedAt *metav1.Time `json:"backupCreatedAt,omitempty"`
 
-	// Original database name in the backup
+	// OriginalDatabase is the logical database that was restored. Empty for an
+	// all-databases restore (see status.databaseResults for per-database detail).
 	OriginalDatabase string `json:"originalDatabase,omitempty"`
-
-	// Neo4j version of the backup
-	Neo4jVersion string `json:"neo4jVersion,omitempty"`
-
-	// Backup size
-	BackupSize string `json:"backupSize,omitempty"`
 }
 
 // +kubebuilder:object:root=true

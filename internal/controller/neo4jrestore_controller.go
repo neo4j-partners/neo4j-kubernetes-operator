@@ -1583,6 +1583,7 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 	artifact := ""
 	var dbArtifacts []neo4jv1beta1.DatabaseArtifact
 	var shardedExcluded []string
+	var backupCreatedAt *metav1.Time
 	backup := &neo4jv1beta1.Neo4jBackup{}
 	if gerr := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); gerr == nil {
 		for i := range backup.Status.History {
@@ -1594,6 +1595,10 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 				// an all-databases restore can surface them (they restore via the
 				// Neo4jShardedDatabase CR, not here).
 				shardedExcluded = backup.Status.History[i].ShardedDatabasesExcluded
+				// Pin when the backup ran so restore provenance survives the
+				// Neo4jBackup CR being deleted (surfaced as
+				// status.backupInfo.backupCreatedAt).
+				backupCreatedAt = backup.Status.History[i].CompletionTime
 				break
 			}
 		}
@@ -1608,6 +1613,7 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 		DatabaseArtifacts:        dbArtifacts,
 		ShardedDatabasesExcluded: shardedExcluded,
 		ResolvedAt:               &now,
+		BackupCreatedAt:          backupCreatedAt,
 	}
 	if err := r.persistResolvedSource(ctx, restore, snapshot); err != nil {
 		// Persisting failed; retry on a later reconcile rather than proceeding
@@ -3783,6 +3789,13 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		if restore.Status.CompletionTime != nil && latest.Status.CompletionTime == nil {
 			latest.Status.CompletionTime = restore.Status.CompletionTime
 		}
+		// On success, record restore duration + backup provenance (#227 item 4).
+		// Derived entirely from the refetched object's own timestamps + pinned
+		// resolved source, so every completion path (standalone Job, cluster
+		// Cypher, all-databases) gets it by funneling through here.
+		if phase == StatusCompleted {
+			populateRestoreProvenance(latest)
+		}
 		condStatus, condReason := PhaseToConditionStatus(phase)
 		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		return r.Status().Update(ctx, latest)
@@ -3803,6 +3816,45 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		if terr := teardownPVCSeedProxyResources(ctx, r.Client, restore.Namespace, restore.Name); terr != nil {
 			log.FromContext(ctx).Error(terr, "Failed to tear down seed proxy on terminal restore phase (non-fatal)")
 		}
+	}
+}
+
+// populateRestoreProvenance fills status.stats.duration and status.backupInfo on
+// a successfully-completed restore. It reads only the object's own persisted
+// state — status timestamps, the pinned resolvedSource, and the spec — so it is
+// pure, side-effect free, and correct on every completion path. Fields that
+// cannot be derived without the (possibly-deleted) source backup are left unset
+// rather than guessed; the caller persists the mutated status.
+func populateRestoreProvenance(restore *neo4jv1beta1.Neo4jRestore) {
+	// Duration = completionTime − startTime, when both are known and sane.
+	if st := restore.Status.StartTime; st != nil {
+		if ct := restore.Status.CompletionTime; ct != nil && !ct.Before(st) {
+			restore.Status.Stats = &neo4jv1beta1.RestoreStats{
+				Duration: ct.Sub(st.Time).Round(time.Second).String(),
+			}
+		}
+	}
+
+	info := &neo4jv1beta1.RestoreBackupInfo{}
+	// OriginalDatabase: the single database restored. All-databases restores
+	// span many DBs (see status.databaseResults), so leave it empty there.
+	if !restore.Spec.AllDatabases {
+		info.OriginalDatabase = restore.Spec.EffectiveDatabaseName()
+	}
+	if rs := restore.Status.ResolvedSource; rs != nil {
+		// source.type: backup — provenance pinned at resolution survives the
+		// Neo4jBackup CR being deleted.
+		info.BackupPath = rs.BackupPath
+		if rs.ArtifactFilename != "" {
+			info.BackupPath = strings.TrimRight(rs.BackupPath, "/") + "/" + rs.ArtifactFilename
+		}
+		info.BackupCreatedAt = rs.BackupCreatedAt
+	} else {
+		// source.type: storage — the explicit path in the spec is the source.
+		info.BackupPath = restore.Spec.Source.BackupPath
+	}
+	if *info != (neo4jv1beta1.RestoreBackupInfo{}) {
+		restore.Status.BackupInfo = info
 	}
 }
 

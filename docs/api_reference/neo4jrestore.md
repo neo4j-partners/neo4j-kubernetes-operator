@@ -264,8 +264,8 @@ Storage backend configuration (shared with `Neo4jBackup`).
 | `message` | `string` | Human-readable message about the current state |
 | `startTime` | `*metav1.Time` | When the restore operation started |
 | `completionTime` | `*metav1.Time` | When the restore operation completed |
-| `stats` | [`RestoreStats`](#restorestats) | Restore operation statistics. **Reserved — not currently populated** (see [RestoreStats](#restorestats)). |
-| `backupInfo` | [`RestoreBackupInfo`](#restorebackupinfo) | Information about the backup that was restored. **Reserved — not currently populated**; use [`resolvedSource`](#resolvedrestoresource) for provenance. |
+| `stats` | [`RestoreStats`](#restorestats) | Restore operation statistics — populated on success with the restore `duration`. |
+| `backupInfo` | [`RestoreBackupInfo`](#restorebackupinfo) | Provenance of the backup this restore was seeded from — populated on success (see [RestoreBackupInfo](#restorebackupinfo)). |
 | `resolvedSource` | [`ResolvedRestoreSource`](#resolvedrestoresource) | The concrete backup location this restore pinned the first time it resolved `source.backupRef`. From then on the restore reads this snapshot, so deleting the `Neo4jBackup` CR mid-restore doesn't break it. Cleared automatically if `spec.source.backupRef` changes (the new reference is re-resolved). |
 | `databaseResults` | `[]DatabaseRestoreResult` | **(v1.13)** Per-database progress for an all-databases restore (`spec.allDatabases`): one entry per user database with `database`, `phase` (`Pending`/`Running`/`Completed`/`Failed`), `message`, and `completionTime`. Empty for single-database restores. |
 | `observedGeneration` | `int64` | Generation of the most recently observed `Neo4jRestore` spec |
@@ -281,30 +281,27 @@ Storage backend configuration (shared with `Neo4jBackup`).
 | `databaseArtifacts` | `[]DatabaseArtifact` | **(v1.13)** Per-database `.backup` map pinned from the resolved backup's latest Succeeded run, driving an all-databases restore (`spec.allDatabases`). Empty for single-database restores. |
 | `shardedDatabasesExcluded` | `[]string` | Logical property-sharded databases the all-databases **restore loop** does not recreate (carried forward from `Neo4jBackup` `status.history[].shardedDatabasesExcluded`). The restore surfaces these (`RestoreShardedDatabasesNotCovered` warning) — but they **are** restorable from the same backup: re-apply each one's `Neo4jShardedDatabase` CR with `spec.seedBackupRef` pointing at this backup (its per-shard files are in the backup's `shardedFamilies`). Empty otherwise. |
 | `resolvedAt` | `*metav1.Time` | When the `backupRef` was first dereferenced |
+| `backupCreatedAt` | `*metav1.Time` | Completion time of the resolved most-recent Succeeded run, captured at resolution so restore provenance survives deletion of the source `Neo4jBackup` CR |
 
 ### RestoreStats
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `duration` | `string` | Duration of the restore operation |
-| `dataSize` | `string` | Amount of data restored |
-| `throughput` | `string` | Restore throughput |
-| `fileCount` | `int32` | Number of files restored |
-| `errorCount` | `int32` | Errors encountered during restore |
+| `duration` | `string` | Wall-clock time the restore took, derived from `completionTime − startTime` (e.g. `"2m3s"`). Populated on success. |
 
-> **Reserved — not currently populated.** The restore controller does not emit `status.stats` today; it sets `phase`, `message`, `startTime`, `completionTime`, and (for `spec.allDatabases`) `databaseResults`. Treat the fields above as a forward-looking schema.
+> **(v1.14)** `RestoreStats` was trimmed to the one field the operator can derive without the backup Pod's log. The former `dataSize`, `throughput`, `fileCount`, and `errorCount` fields were never populated and were removed.
 
 ### RestoreBackupInfo
 
+Provenance about the backup this restore was seeded from, populated on success. Fields the operator cannot derive without the (possibly-deleted) source backup are omitted rather than guessed.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `backupPath` | `string` | Source backup path |
-| `backupCreatedAt` | `*metav1.Time` | Original creation time of the backup |
-| `originalDatabase` | `string` | Original database name in the backup |
-| `neo4jVersion` | `string` | Neo4j version of the backup |
-| `backupSize` | `string` | Size of the backup |
+| `backupPath` | `string` | Source backup location: the per-CR chain directory (with the resolved `.backup` filename when known) for a `source.type: backup` restore, or the explicit storage path for a `source.type: storage` restore |
+| `backupCreatedAt` | `*metav1.Time` | Completion time of the backup run this restore was seeded from. Populated only for `source.type: backup` restores; empty for `source.type: storage` (no backup CR) |
+| `originalDatabase` | `string` | The logical database that was restored. Empty for an all-databases restore (see [`databaseResults`](#status-fields) for per-database detail) |
 
-> **Reserved — not currently populated.** The restore controller does not emit `status.backupInfo` today; for the provenance of a `source.type: backup` restore use [`resolvedSource`](#resolvedrestoresource) instead.
+> **(v1.14)** `RestoreBackupInfo` was trimmed to the fields derivable from the resolved source. The former `neo4jVersion` (the backup run records no version) and `backupSize` (Pod-log only) fields were never populated and were removed.
 
 ### Restore Phases
 

@@ -1006,20 +1006,24 @@ spec:
                 description: Backup information that was restored
                 properties:
                   backupCreatedAt:
-                    description: Original creation time of the backup
+                    description: |-
+                      BackupCreatedAt is the completion time of the backup run this restore was
+                      seeded from. Populated only for `source.type: backup` restores (copied
+                      from the resolved backup's latest Succeeded run); empty for
+                      `source.type: storage` restores, which carry no backup CR.
                     format: date-time
                     type: string
                   backupPath:
-                    description: Source backup path
-                    type: string
-                  backupSize:
-                    description: Backup size
-                    type: string
-                  neo4jVersion:
-                    description: Neo4j version of the backup
+                    description: |-
+                      BackupPath is the source backup location this restore read from: the
+                      per-CR chain directory (with the resolved `.backup` filename when known)
+                      for a `source.type: backup` restore, or the explicit storage path for a
+                      `source.type: storage` restore.
                     type: string
                   originalDatabase:
-                    description: Original database name in the backup
+                    description: |-
+                      OriginalDatabase is the logical database that was restored. Empty for an
+                      all-databases restore (see status.databaseResults for per-database detail).
                     type: string
                 type: object
               completionTime:
@@ -1149,6 +1153,14 @@ spec:
                       (cloud seedURI + PVC proxy), which seed from a single file; empty for
                       older backups whose Pod-log capture didn't record it (standalone Job
                       restores don't need it — they resolve the file with a shell glob).
+                    type: string
+                  backupCreatedAt:
+                    description: |-
+                      BackupCreatedAt is the completion time of the resolved most-recent
+                      Succeeded run, captured at resolution so restore provenance
+                      (status.backupInfo.backupCreatedAt) survives deletion of the source
+                      Neo4jBackup CR. Empty when the run recorded no completion time.
+                    format: date-time
                     type: string
                   backupPath:
                     description: |-
@@ -1315,22 +1327,10 @@ spec:
               stats:
                 description: Restore statistics
                 properties:
-                  dataSize:
-                    description: Size of data restored
-                    type: string
                   duration:
-                    description: Duration of the restore operation
-                    type: string
-                  errorCount:
-                    description: Errors encountered during restore
-                    format: int32
-                    type: integer
-                  fileCount:
-                    description: Number of files restored
-                    format: int32
-                    type: integer
-                  throughput:
-                    description: Throughput of the restore operation
+                    description: |-
+                      Duration is the wall-clock time the restore took, derived from
+                      status.completionTime − status.startTime and formatted like "2m3s".
                     type: string
                 type: object
             type: object
