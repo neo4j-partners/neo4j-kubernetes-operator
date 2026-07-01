@@ -599,7 +599,16 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		// would leave a Completed backup with no Succeeded run — which
 		// ResolveBackupRef treats as not-ready FOREVER, wedging every
 		// backupRef restore/seed against a backup that succeeded.
-		r.recordOneShotBackupRun(ctx, backup, job)
+		//
+		// If the restore-critical artifact filename wasn't captured from the
+		// Pod log yet but the Pod is still alive, recordOneShotBackupRun returns
+		// false: requeue (staying non-terminal) so a later reconcile reads the
+		// log before the Job TTL GCs the Pod. Recording+finalizing now would
+		// pin an empty filename permanently (silently un-restorable via the CR).
+		if !r.recordOneShotBackupRun(ctx, backup, job) {
+			r.updateBackupStatus(ctx, backup, "Running", "Backup completed; capturing artifact metadata from the backup Pod")
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 		r.updateBackupStatus(ctx, backup, "Completed", "Backup completed successfully")
 		r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupCompleted, "Backup completed successfully")
 		backupM.RecordBackup(ctx, true, jobDuration(job), 0)
@@ -1071,7 +1080,14 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(),
+			// 30 min (was 5): the operator parses artifact filenames from this
+			// Job's Pod log after completion, and a Succeeded run is not flipped
+			// to Completed until that capture succeeds (recordOneShotBackupRun
+			// requeues while the Pod is alive). A short TTL GC'd the Pod before a
+			// delayed/retried reconcile could read it, leaving an empty
+			// ArtifactFilename and a silently un-restorable backup. Matches the
+			// scheduled-Job TTL rationale below.
+			TTLSecondsAfterFinished: func() *int32 { v := int32(1800); return &v }(),
 			BackoffLimit:            &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
@@ -2122,7 +2138,16 @@ func (r *Neo4jBackupReconciler) recordShardedExclusion(backup *neo4jv1beta1.Neo4
 		fmt.Sprintf("all-databases backup captured property-sharded database(s) %s as per-shard artifacts (status.shardedFamilies); they are NOT recreated by an all-databases restore — restore each from THIS backup via its Neo4jShardedDatabase CR with spec.seedBackupRef: %s", strings.Join(families, ", "), backup.Name))
 }
 
-func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) {
+// recordOneShotBackupRun records a terminal Job's run into status.history and
+// returns whether the caller may finalize the CR (flip to Completed/Failed).
+// It returns FALSE only for a Succeeded run whose artifact-filename metadata was
+// not yet captured from the Pod log AND whose Pod still exists — the caller
+// should requeue so a later reconcile can read the log before the Job's TTL GCs
+// the Pod. Without this, a transient log-fetch miss recorded an empty
+// ArtifactFilename permanently (the terminal guard never re-enters), leaving a
+// Succeeded backup silently un-restorable via the CR path. Once the Pod is gone,
+// it records best-effort (returns true) — retrying can't recover the filename.
+func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) bool {
 	logger := log.FromContext(ctx)
 
 	run, ok := jobToBackupRun(job, chainRoot(backup))
@@ -2130,7 +2155,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		// Job is neither Succeeded nor Failed — nothing terminal to record.
 		// handleExistingBackupJob only calls us once one branch is true, so
 		// reaching this is a programming error elsewhere, not user data.
-		return
+		return true
 	}
 	// Phase 3: stamp the per-shard audit list onto the BackupRun. No-op for
 	// non-sharded kinds; failure to fetch the sharded DB CR is non-fatal.
@@ -2178,6 +2203,39 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// enhancement). jobToBackupRun populates Duration when both StartTime
 	// and CompletionTime are present, which is the success case.
 
+	// Defer finalization if a Succeeded run's restore-critical artifact
+	// metadata (the .backup filename[s]) wasn't captured from the Pod log yet
+	// but the Pod still exists — the caller requeues so a later reconcile can
+	// read the log before the Job TTL GCs the Pod. Recording an empty filename
+	// is permanent (the terminal-phase guard never re-enters) and leaves the
+	// backup un-restorable via the CR path. Once the Pod is gone, retrying
+	// can't help — fall through and record best-effort.
+	if run.Status == "Succeeded" {
+		missing := false
+		switch {
+		case isStandardDB:
+			missing = run.ArtifactFilename == ""
+		case isAllDatabases:
+			missing = len(run.DatabaseArtifacts) == 0
+		case backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindShardedDatabase:
+			for i := range run.ShardArtifacts {
+				if run.ShardArtifacts[i].Filename == "" {
+					missing = true
+					break
+				}
+			}
+		}
+		if missing && r.backupPodExists(ctx, job.Name, job.Namespace) {
+			logger.Info("backup Succeeded but restore-critical artifact metadata not yet captured from Pod log; deferring history record to retry before Pod GC",
+				"job", job.Name, "kind", backup.Spec.Target.Kind)
+			return false
+		}
+		if missing {
+			logger.Info("backup Pod gone before artifact metadata was captured; recording run best-effort (a CR-path restore of this run may need source.type=storage with an explicit backupPath)",
+				"job", job.Name)
+		}
+	}
+
 	update := func() error {
 		latest := &neo4jv1beta1.Neo4jBackup{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
@@ -2217,6 +2275,23 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// status.lastBackup surfaces this run. No-op for non-sharded kinds and
 	// for non-Succeeded runs.
 	r.updateShardedDBLastBackup(ctx, backup, run)
+	return true
+}
+
+// backupPodExists reports whether at least one Pod spawned by the given backup
+// Job still exists (i.e. hasn't been GC'd by the Job's TTL). Used to decide
+// whether a missed artifact-filename capture is worth requeuing for (Pod alive)
+// or must be accepted as best-effort (Pod gone). Best-effort: a List error or a
+// nil Clientset reports false, so the caller records rather than requeues
+// forever.
+func (r *Neo4jBackupReconciler) backupPodExists(ctx context.Context, jobName, namespace string) bool {
+	var podList corev1.PodList
+	if err := r.Client.List(ctx, &podList,
+		client.InNamespace(namespace),
+		client.MatchingLabels{"batch.kubernetes.io/job-name": jobName}); err != nil {
+		return false
+	}
+	return len(podList.Items) > 0
 }
 
 // validateNeo4jVersion validates that the target cluster uses Neo4j 5.26+ or 2025.01+

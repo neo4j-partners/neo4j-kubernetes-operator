@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -458,6 +459,73 @@ func TestRecordOneShotBackupRun_FailedJobAppendsToHistory(t *testing.T) {
 	// NOT overwrite it. If no prior success exists, it stays nil.
 	assert.Nil(t, got.Status.Stats,
 		"a failed run must not write to status.stats (Stats is the latest-succeeded summary)")
+}
+
+// TestRecordOneShotBackupRun_DefersWhenMetadataMissingAndPodAlive pins the
+// capture-reliability fix: a Succeeded run whose restore-critical artifact
+// filename wasn't captured (here, nil Clientset → empty Pod log) must NOT be
+// recorded/finalized while the Pod is still alive — recordOneShotBackupRun
+// returns false so the caller requeues to retry the log read before the Job TTL
+// GCs the Pod. Once the Pod is gone, it records best-effort (returns true).
+func TestRecordOneShotBackupRun_DefersWhenMetadataMissingAndPodAlive(t *testing.T) {
+	ctx := context.Background()
+	ns := "default"
+	start := metav1.NewTime(time.Date(2026, 6, 4, 8, 0, 0, 0, time.UTC))
+	end := metav1.NewTime(start.Add(30 * time.Second))
+	succeededJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-ok"), Name: "b-backup", Namespace: ns},
+		Status: batchv1.JobStatus{
+			Succeeded: 1, StartTime: &start, CompletionTime: &end,
+			Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: "True"}},
+		},
+	}
+	// A single-database backup expects an ArtifactFilename; with a nil Clientset
+	// the Pod-log fetch yields "" so the filename is never captured (a miss).
+	newBackup := func() *neo4jv1beta1.Neo4jBackup {
+		return &neo4jv1beta1.Neo4jBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: ns},
+			Spec: neo4jv1beta1.Neo4jBackupSpec{
+				Target: neo4jv1beta1.BackupTarget{Kind: neo4jv1beta1.BackupTargetKindDatabase, Name: "neo4j", ClusterRef: "c"},
+			},
+		}
+	}
+	backupPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "b-backup-xyz", Namespace: ns,
+		Labels: map[string]string{"batch.kubernetes.io/job-name": "b-backup"},
+	}}
+
+	t.Run("Pod alive + filename missing → defer (false, not recorded)", func(t *testing.T) {
+		backup := newBackup()
+		r := newBackupTestReconcilerWithStatus(t, backup, backupPod)
+		recorded := r.recordOneShotBackupRun(ctx, backup, succeededJob)
+		assert.False(t, recorded, "must defer while the Pod is alive and the filename isn't captured")
+		got := &neo4jv1beta1.Neo4jBackup{}
+		require.NoError(t, r.Get(ctx, client.ObjectKey{Name: "b", Namespace: ns}, got))
+		assert.Empty(t, got.Status.History, "a deferred run must not be appended to history yet")
+	})
+
+	t.Run("Pod gone + filename missing → record best-effort (true)", func(t *testing.T) {
+		backup := newBackup()
+		r := newBackupTestReconcilerWithStatus(t, backup) // no Pod
+		recorded := r.recordOneShotBackupRun(ctx, backup, succeededJob)
+		assert.True(t, recorded, "must record best-effort once the Pod is gone (retry can't recover the filename)")
+		got := &neo4jv1beta1.Neo4jBackup{}
+		require.NoError(t, r.Get(ctx, client.ObjectKey{Name: "b", Namespace: ns}, got))
+		require.Len(t, got.Status.History, 1)
+		assert.Equal(t, "Succeeded", got.Status.History[0].Status)
+	})
+}
+
+// TestBackupPodExists pins the Pod-liveness probe that gates the requeue.
+func TestBackupPodExists(t *testing.T) {
+	ctx := context.Background()
+	ns := "default"
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "j-abc", Namespace: ns,
+		Labels: map[string]string{"batch.kubernetes.io/job-name": "j"},
+	}}
+	assert.True(t, newBackupTestReconcilerWithStatus(t, pod).backupPodExists(ctx, "j", ns))
+	assert.False(t, newBackupTestReconcilerWithStatus(t).backupPodExists(ctx, "j", ns))
 }
 
 // TestReconcile_RejectsInvalidSpec pins the wired-in spec validation (#159):
