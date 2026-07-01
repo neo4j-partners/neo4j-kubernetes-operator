@@ -42,11 +42,10 @@ func TestBackupValidator_Validate(t *testing.T) {
 		// fragments catches regressions where two different validators
 		// happen to fire to produce the same total count.
 		//
-		// Multi-entry usage is for cases like "invalid target kind"
-		// where a single CR is designed to trip TWO validators
-		// simultaneously — each substring asserts a distinct expected
-		// failure mode, so a regression that drops one of them surfaces
-		// instead of being absorbed into the count.
+		// Multi-entry usage is for a single CR designed to trip TWO
+		// validators simultaneously — each substring asserts a distinct
+		// expected failure mode, so a regression that drops one of them
+		// surfaces instead of being absorbed into the count.
 		expectedErrorContains []string
 	}{
 		{
@@ -56,10 +55,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						Name: "test-cluster",
-					},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "s3",
 						Bucket: "backup-bucket",
@@ -81,11 +78,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind:       "Database",
-						Name:       "test-database",
-						ClusterRef: "test-cluster",
-					},
+					InstanceRef: "test-cluster",
+					Database:    "test-database",
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "gcs",
 						Bucket: "backup-bucket",
@@ -100,55 +94,24 @@ func TestBackupValidator_Validate(t *testing.T) {
 			errorCount:  0,
 		},
 		{
-			name: "invalid target kind",
+			name: "missing instanceRef",
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "InvalidKind",
-						Name: "test-target",
-					},
+					// S3 scope selected but no spec.instanceRef.
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "s3",
 						Bucket: "backup-bucket",
+						Cloud:  &neo4jv1beta1.CloudBlock{Provider: "aws"},
 					},
 				},
 			},
-			expectError: true,
-			errorCount:  2,
-			// Both validators MUST fire — invalid `target.kind` AND the
-			// S3 storage requiring a cloud block. The count alone could
-			// be satisfied by any two errors; pinning one fragment per
-			// expected validator catches a regression that swaps either
-			// firing site for an unrelated one and still produces 2.
-			expectedErrorContains: []string{
-				"target.kind", // field.NotSupported on Spec.Target.Kind
-				"cloud",       // S3 storage requires cloud provider
-			},
-		},
-		{
-			name: "missing target name",
-			backup: &neo4jv1beta1.Neo4jBackup{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-backup",
-				},
-				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						// Missing name
-					},
-					Storage: neo4jv1beta1.StorageLocation{
-						Type: "pvc",
-						PVC: &neo4jv1beta1.PVCSpec{
-							Name: "backup-pvc",
-						},
-					},
-				},
-			},
-			expectError: true,
-			errorCount:  1,
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: []string{"instanceRef"},
 		},
 		{
 			name: "invalid storage type",
@@ -157,10 +120,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						Name: "test-cluster",
-					},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "invalid-type",
 					},
@@ -174,7 +135,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-backup"},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						PVC:  &neo4jv1beta1.PVCSpec{}, // PVCSpec set but Name is empty
@@ -193,7 +155,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-backup"},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						// "   " would slip past a naive == "" check; the
@@ -214,8 +177,9 @@ func TestBackupValidator_Validate(t *testing.T) {
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-backup"},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
-					Storage: neo4jv1beta1.StorageLocation{Type: "pvc"}, // no PVC block at all
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
+					Storage:      neo4jv1beta1.StorageLocation{Type: "pvc"}, // no PVC block at all
 				},
 			},
 			expectError:           true,
@@ -229,10 +193,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						Name: "test-cluster",
-					},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "s3",
 						Bucket: "backup-bucket",
@@ -251,10 +213,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						Name: "test-cluster",
-					},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "s3",
 						Bucket: "backup-bucket",
@@ -280,10 +240,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						Name: "test-cluster",
-					},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "s3",
 						Bucket: "backup-bucket",
@@ -306,10 +264,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Name: "test-backup",
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Cluster",
-						Name: "test-cluster",
-					},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						PVC: &neo4jv1beta1.PVCSpec{
@@ -326,11 +282,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind:       "ShardedDatabase",
-						Name:       "products",
-						ClusterRef: "my-cluster",
-					},
+					InstanceRef:     "my-cluster",
+					ShardedDatabase: "products",
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -341,14 +294,11 @@ func TestBackupValidator_Validate(t *testing.T) {
 			errorCount:  0,
 		},
 		{
-			name: "ShardedDatabase missing clusterRef",
+			name: "ShardedDatabase scope missing instanceRef",
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind: "ShardedDatabase",
-						Name: "products",
-					},
+					ShardedDatabase: "products",
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -357,68 +307,7 @@ func TestBackupValidator_Validate(t *testing.T) {
 			},
 			expectError:           true,
 			errorCount:            1,
-			expectedErrorContains: []string{"clusterRef is required when target.kind=ShardedDatabase"},
-		},
-		{
-			name: "ShardedDatabase with cross-namespace target.namespace",
-			backup: &neo4jv1beta1.Neo4jBackup{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
-				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind:       "ShardedDatabase",
-						Name:       "products",
-						ClusterRef: "my-cluster",
-						Namespace:  "other-ns",
-					},
-					Storage: neo4jv1beta1.StorageLocation{
-						Type: "pvc",
-						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
-					},
-				},
-			},
-			expectError:           true,
-			errorCount:            1,
-			expectedErrorContains: []string{"cross-namespace target references are not supported"},
-		},
-		{
-			name: "Cluster with cross-namespace target.namespace is rejected",
-			backup: &neo4jv1beta1.Neo4jBackup{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
-				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind:      "Cluster",
-						Name:      "my-cluster",
-						Namespace: "other-ns",
-					},
-					Storage: neo4jv1beta1.StorageLocation{
-						Type: "pvc",
-						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
-					},
-				},
-			},
-			expectError:           true,
-			errorCount:            1,
-			expectedErrorContains: []string{"cross-namespace target references are not supported"},
-		},
-		{
-			name: "ShardedDatabase with matching target.namespace allowed",
-			backup: &neo4jv1beta1.Neo4jBackup{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
-				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{
-						Kind:       "ShardedDatabase",
-						Name:       "products",
-						ClusterRef: "my-cluster",
-						Namespace:  "default", // same as backup ns
-					},
-					Storage: neo4jv1beta1.StorageLocation{
-						Type: "pvc",
-						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
-					},
-				},
-			},
-			expectError: false,
-			errorCount:  0,
+			expectedErrorContains: []string{"instanceRef"},
 		},
 		{
 			// 41 chars + a schedule → generated CronJob "<name>-backup-cron"
@@ -427,7 +316,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: strings.Repeat("a", 41)},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -446,7 +336,8 @@ func TestBackupValidator_Validate(t *testing.T) {
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: strings.Repeat("a", 41)},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
 					Storage: neo4jv1beta1.StorageLocation{
 						Type: "pvc",
 						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -643,7 +534,8 @@ func TestBackupValidator_CloudAtStorageLevel(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-backup"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+			InstanceRef:  "test-cluster",
+			AllDatabases: true,
 			Storage: neo4jv1beta1.StorageLocation{
 				Type: "s3", Bucket: "test-bucket",
 				Cloud: &neo4jv1beta1.CloudBlock{Provider: "aws"},
@@ -670,7 +562,8 @@ func TestBackupValidator_ShellSafetyCharsets(t *testing.T) {
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: "ns"},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "c"},
+				InstanceRef:  "c",
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "s3", Bucket: "my-bucket", Path: "backups/prod",
 					Cloud: &neo4jv1beta1.CloudBlock{Provider: "aws"},

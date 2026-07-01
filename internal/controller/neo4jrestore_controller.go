@@ -3572,7 +3572,7 @@ func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Con
 			// flaky capture — say so, instead of the misleading "re-run the
 			// backup" (which can't help). Found in the v1.12.1 release-verify
 			// journey.
-			if backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster {
+			if backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster {
 				return "", fmt.Errorf("Neo4jBackup %q is a kind:Cluster (all-databases) backup — it stores one artifact per database, so there is no single artifact to seed a cluster restore from. To restore a database to a cluster, either reference a kind:Database backup of that database, or use source.type=storage with source.backupPath set to the exact <database>-<timestamp>.backup file under the backup directory", backupRef)
 			}
 			// kind:Database backup with an empty filename: a genuine Pod-log

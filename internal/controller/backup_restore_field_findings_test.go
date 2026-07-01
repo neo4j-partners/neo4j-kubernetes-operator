@@ -50,11 +50,8 @@ func fieldFindingsBackup(opts *neo4jv1beta1.BackupOptions) *neo4jv1beta1.Neo4jBa
 	return &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{
-				Kind:       neo4jv1beta1.BackupTargetKindDatabase,
-				Name:       "neo4j",
-				ClusterRef: "ec",
-			},
+			InstanceRef: "ec",
+			Database:    "neo4j",
 			Storage: neo4jv1beta1.StorageLocation{
 				Type: "pvc",
 				PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -288,8 +285,9 @@ func TestEnsureBackupPVC_CreatedWithoutOwnerRef(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default", UID: "uid-nightly"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "ec"},
-			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
+			InstanceRef:  "ec",
+			AllDatabases: true,
+			Storage:      neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
 		},
 	}
 	r := newShardedTestReconciler(t, backup)
@@ -309,8 +307,9 @@ func TestEnsureBackupPVC_StripsStaleOwnerRef(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default", UID: "uid-nightly"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "ec"},
-			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
+			InstanceRef:  "ec",
+			AllDatabases: true,
+			Storage:      neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
 		},
 	}
 	ctrlRef := true

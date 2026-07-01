@@ -126,15 +126,9 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.handleDeletion(ctx, backup)
 	}
 
-	// Normalize the v1.13 scope-based API (spec.instanceRef + database/allDatabases)
-	// onto the internal target model so all downstream target-driven logic is
-	// unchanged. InstanceRef is authoritative; the legacy spec.target block is
-	// deprecated and removed in v1.14.
-	backup.Spec.NormalizeSpec()
-	if backup.Spec.UsesLegacyTarget() {
-		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupAPIDeprecated,
-			"spec.target is deprecated; use spec.instanceRef + spec.database/allDatabases (spec.target is removed in v1.14)")
-	}
+	// Scope is derived from spec.instanceRef + database/allDatabases/shardedDatabase
+	// via backup.Spec.Scope()/ScopedName(); the legacy spec.target block was
+	// removed in v1.14.
 
 	// Add finalizer if not present
 	if !controllerutil.ContainsFinalizer(backup, BackupFinalizer) {
@@ -338,8 +332,8 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 			// with its own log, so we fetch per-Job rather than once per
 			// outer call. Errors non-fatal — empty fields still leave the
 			// ShardName audit list populated.
-			isStandardDB := latest.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
-			isAllDatabases := latest.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
+			isStandardDB := latest.Spec.Scope() == neo4jv1beta1.BackupTargetKindDatabase
+			isAllDatabases := latest.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster
 			var jobLog string
 			if len(shardArtifacts) > 0 || isStandardDB || isAllDatabases ||
 				(latest.Spec.Options != nil && latest.Spec.Options.Validate != nil && *latest.Spec.Options.Validate) {
@@ -355,7 +349,7 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 				run.ShardArtifacts = perJobArtifacts
 			}
 			if isStandardDB && jobLog != "" {
-				run.ArtifactFilename = parseStandardArtifactFromLog(jobLog, latest.Spec.Target.Name)
+				run.ArtifactFilename = parseStandardArtifactFromLog(jobLog, latest.Spec.ScopedName())
 			}
 			if isAllDatabases && jobLog != "" {
 				run.DatabaseArtifacts = parseAllDatabaseArtifactsFromLog(jobLog)
@@ -753,14 +747,11 @@ func jobDuration(job *batchv1.Job) time.Duration {
 	return time.Since(job.Status.StartTime.Time)
 }
 
-// backupTargetName resolves the Neo4j instance name from a backup spec.
-// For database-scoped kinds (Database, ShardedDatabase) the target Name is the
-// database name and ClusterRef holds the actual Neo4j instance.
+// backupTargetName resolves the Neo4j instance name from a backup spec. Every
+// scope names its instance in spec.instanceRef (single/sharded-database scopes
+// carry the database/sharded-CR name in ScopedName(), not the instance).
 func backupTargetName(backup *neo4jv1beta1.Neo4jBackup) string {
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) && backup.Spec.Target.ClusterRef != "" {
-		return backup.Spec.Target.ClusterRef
-	}
-	return backup.Spec.Target.Name
+	return backup.Spec.InstanceRef
 }
 
 // backupLabels returns the standard label set for a Neo4jBackup workload, ready to
@@ -957,14 +948,12 @@ func (r *Neo4jBackupReconciler) validateChainParent(ctx context.Context, backup 
 		return fmt.Errorf("chainFromBackup %q lookup failed in namespace %q: %w",
 			backup.Spec.ChainFromBackup, backup.Namespace, err)
 	}
-	parentTarget := parent.Spec.ResolvedTarget()
-	thisTarget := backup.Spec.ResolvedTarget()
-	if parentTarget.Kind != thisTarget.Kind ||
-		parentTarget.Name != thisTarget.Name ||
-		parentTarget.ClusterRef != thisTarget.ClusterRef {
-		return fmt.Errorf("chainFromBackup %q targets {kind=%q name=%q clusterRef=%q} but this backup targets {kind=%q name=%q clusterRef=%q}; chained backups must share the same target",
-			parent.Name, parentTarget.Kind, parentTarget.Name, parentTarget.ClusterRef,
-			thisTarget.Kind, thisTarget.Name, thisTarget.ClusterRef)
+	if parent.Spec.Scope() != backup.Spec.Scope() ||
+		parent.Spec.ScopedName() != backup.Spec.ScopedName() ||
+		parent.Spec.InstanceRef != backup.Spec.InstanceRef {
+		return fmt.Errorf("chainFromBackup %q targets {scope=%q name=%q instanceRef=%q} but this backup targets {scope=%q name=%q instanceRef=%q}; chained backups must share the same target",
+			parent.Name, parent.Spec.Scope(), parent.Spec.ScopedName(), parent.Spec.InstanceRef,
+			backup.Spec.Scope(), backup.Spec.ScopedName(), backup.Spec.InstanceRef)
 	}
 	if parent.Spec.Storage.Type != backup.Spec.Storage.Type ||
 		parent.Spec.Storage.Bucket != backup.Spec.Storage.Bucket ||
@@ -1333,7 +1322,7 @@ func effectiveRemoteAddressResolution(backup *neo4jv1beta1.Neo4jBackup, version 
 	if version == nil || !version.SupportsRemoteAddressResolution() {
 		return false
 	}
-	switch backup.Spec.Target.Kind {
+	switch backup.Spec.Scope() {
 	case neo4jv1beta1.BackupTargetKindShardedDatabase:
 		return true
 	case neo4jv1beta1.BackupTargetKindCluster:
@@ -1406,11 +1395,11 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	if isStandalone, standalone, lookupErr := r.isStandaloneTarget(ctx, backup); lookupErr == nil && isStandalone && standalone != nil {
 		fromAddresses = resources.BuildStandaloneBackupFromAddress(standalone)
 	}
-	allDatabases := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
+	allDatabases := backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster
 	dbName := ""
-	switch backup.Spec.Target.Kind {
+	switch backup.Spec.Scope() {
 	case neo4jv1beta1.BackupTargetKindDatabase:
-		dbName = backup.Spec.Target.Name
+		dbName = backup.Spec.ScopedName()
 	case neo4jv1beta1.BackupTargetKindShardedDatabase:
 		// Property-sharded DBs are backed up as a glob across all shards:
 		// {name}-g000 (graph) + {name}-p000…p{N-1} (property shards). The
@@ -1811,19 +1800,10 @@ func (r *Neo4jBackupReconciler) buildVolumes(backup *neo4jv1beta1.Neo4jBackup) [
 }
 
 func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) (*neo4jv1beta1.Neo4jEnterpriseCluster, error) {
-	targetNamespace := backup.Spec.Target.Namespace
-	if targetNamespace == "" {
-		targetNamespace = backup.Namespace
-	}
-
-	// For database-scoped kinds the Name is the database name; use ClusterRef for the cluster.
-	clusterName := backup.Spec.Target.Name
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) {
-		if backup.Spec.Target.ClusterRef == "" {
-			return nil, fmt.Errorf("clusterRef must be set when backup target Kind is %s", backup.Spec.Target.Kind)
-		}
-		clusterName = backup.Spec.Target.ClusterRef
-	}
+	// spec.instanceRef names the Neo4j deployment for every scope; the backup
+	// resolves in its own namespace.
+	targetNamespace := backup.Namespace
+	clusterName := backup.Spec.InstanceRef
 
 	// Try Neo4jEnterpriseCluster first.
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
@@ -1848,14 +1828,8 @@ func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *ne
 // standalone pods are {name}-0 — so this branch happens before
 // constructing the --from FQDN.
 func (r *Neo4jBackupReconciler) isStandaloneTarget(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) (bool, *neo4jv1beta1.Neo4jEnterpriseStandalone, error) {
-	targetNamespace := backup.Spec.Target.Namespace
-	if targetNamespace == "" {
-		targetNamespace = backup.Namespace
-	}
-	name := backup.Spec.Target.Name
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) {
-		name = backup.Spec.Target.ClusterRef
-	}
+	targetNamespace := backup.Namespace
+	name := backup.Spec.InstanceRef
 	// Cluster CR wins if both exist (defensive; name collisions are rare).
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: targetNamespace}, cluster); err == nil {
@@ -2163,8 +2137,8 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// once and feed it into both parsers — Pod logs are TTL-bound, so a
 	// single fetch is cheaper than separate calls. Non-fatal — log-fetch
 	// failures and parse misses leave the corresponding fields empty.
-	isStandardDB := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
-	isAllDatabases := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
+	isStandardDB := backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindDatabase
+	isAllDatabases := backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster
 	logContent := ""
 	if shouldFetchLog := r.expectedShardArtifactsForBackup(ctx, backup) != nil || isStandardDB || isAllDatabases ||
 		(backup.Spec.Options != nil && backup.Spec.Options.Validate != nil && *backup.Spec.Options.Validate); shouldFetchLog {
@@ -2182,7 +2156,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		run.ShardArtifacts = artifacts
 	}
 	if isStandardDB && logContent != "" {
-		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.Target.Name)
+		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.ScopedName())
 	}
 	if isAllDatabases && logContent != "" {
 		run.DatabaseArtifacts = parseAllDatabaseArtifactsFromLog(logContent)
@@ -2216,7 +2190,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 			missing = run.ArtifactFilename == ""
 		case isAllDatabases:
 			missing = len(run.DatabaseArtifacts) == 0
-		case backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindShardedDatabase:
+		case backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindShardedDatabase:
 			for i := range run.ShardArtifacts {
 				if run.ShardArtifacts[i].Filename == "" {
 					missing = true
@@ -2226,7 +2200,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		}
 		if missing && r.backupPodExists(ctx, job.Name, job.Namespace) {
 			logger.Info("backup Succeeded but restore-critical artifact metadata not yet captured from Pod log; deferring history record to retry before Pod GC",
-				"job", job.Name, "kind", backup.Spec.Target.Kind)
+				"job", job.Name, "kind", backup.Spec.Scope())
 			return false
 		}
 		if missing {

@@ -436,40 +436,6 @@ spec:
               suspend:
                 description: Suspend the backup schedule
                 type: boolean
-              target:
-                description: |-
-                  Target defines what to back up.
-
-                  DEPRECATED (v1.13): prefer InstanceRef + Database/AllDatabases. The legacy
-                  Target block is honored for one release behind a deprecation warning and
-                  is removed in v1.14. Ignored when InstanceRef is set. An empty Target
-                  (the zero value) means "using the InstanceRef API".
-                properties:
-                  clusterRef:
-                    description: |-
-                      ClusterRef is the name of the Neo4jEnterpriseCluster (or Neo4jEnterpriseStandalone)
-                      that owns the database. Required when Kind=Database or Kind=ShardedDatabase;
-                      unused when Kind=Cluster.
-                    type: string
-                  kind:
-                    enum:
-                    - Cluster
-                    - Database
-                    - ShardedDatabase
-                    type: string
-                  name:
-                    description: |-
-                      Name of the target resource. For Kind=ShardedDatabase, this is the
-                      Neo4jShardedDatabase CR (metadata) name; the operator resolves the logical
-                      sharded-database name from that CR's spec.name and backs up all shards
-                      (e.g. products-g000, products-p000, …) in one neo4j-admin invocation via a
-                      glob. The CR name and spec.name often differ.
-                    type: string
-                  namespace:
-                    description: Namespace of the target resource (defaults to backup
-                      namespace)
-                    type: string
-                type: object
             required:
             - storage
             type: object

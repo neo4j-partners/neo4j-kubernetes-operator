@@ -70,10 +70,6 @@ const (
 	// backup recorded property-sharded databases it did not cover; they are not
 	// recreated here and must be restored via their Neo4jShardedDatabase CR.
 	EventReasonRestoreShardedNotCovered = "RestoreShardedDatabasesNotCovered"
-	// EventReasonBackupAPIDeprecated — the CR uses the deprecated spec.target
-	// block instead of spec.instanceRef + spec.database/allDatabases (removed
-	// in v1.14).
-	EventReasonBackupAPIDeprecated = "BackupAPIDeprecated"
 )
 
 // Database events

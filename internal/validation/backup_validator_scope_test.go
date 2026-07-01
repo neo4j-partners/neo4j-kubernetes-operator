@@ -68,13 +68,6 @@ func TestBackupValidator_ScopeAPI(t *testing.T) {
 			},
 		},
 		{
-			name: "legacy target block still valid (deprecated)",
-			spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "my-neo4j"},
-				Storage: s3,
-			},
-		},
-		{
 			name: "database and allDatabases are mutually exclusive",
 			spec: neo4jv1beta1.Neo4jBackupSpec{
 				InstanceRef:  "my-neo4j",
@@ -136,40 +129,42 @@ func TestBackupValidator_ScopeAPI(t *testing.T) {
 	}
 }
 
-// TestNeo4jBackupSpec_ResolvedTarget verifies the scope→target synthesis the
-// controller relies on (NormalizeSpec / ResolvedTarget).
-func TestNeo4jBackupSpec_ResolvedTarget(t *testing.T) {
+// TestNeo4jBackupSpec_Scope verifies the scope accessors the controller relies
+// on: Scope() classifies the backup and ScopedName() names the targeted
+// resource, both derived from the scope fields.
+func TestNeo4jBackupSpec_Scope(t *testing.T) {
 	tests := []struct {
-		name string
-		spec neo4jv1beta1.Neo4jBackupSpec
-		want neo4jv1beta1.BackupTarget
+		name          string
+		spec          neo4jv1beta1.Neo4jBackupSpec
+		wantScope     string
+		wantScopeName string
 	}{
 		{
-			name: "single database -> Database kind",
-			spec: neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-neo4j", Database: "customers"},
-			want: neo4jv1beta1.BackupTarget{Kind: "Database", Name: "customers", ClusterRef: "my-neo4j"},
+			name:          "single database -> Database scope",
+			spec:          neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-neo4j", Database: "customers"},
+			wantScope:     neo4jv1beta1.BackupTargetKindDatabase,
+			wantScopeName: "customers",
 		},
 		{
-			name: "all databases -> Cluster kind",
-			spec: neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-neo4j", AllDatabases: true},
-			want: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "my-neo4j"},
+			name:          "all databases -> Cluster scope",
+			spec:          neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-neo4j", AllDatabases: true},
+			wantScope:     neo4jv1beta1.BackupTargetKindCluster,
+			wantScopeName: "my-neo4j",
 		},
 		{
-			name: "sharded database -> ShardedDatabase kind",
-			spec: neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-cluster", ShardedDatabase: "products-sharded"},
-			want: neo4jv1beta1.BackupTarget{Kind: "ShardedDatabase", Name: "products-sharded", ClusterRef: "my-cluster"},
-		},
-		{
-			name: "legacy target passes through unchanged",
-			spec: neo4jv1beta1.Neo4jBackupSpec{Target: neo4jv1beta1.BackupTarget{Kind: "Database", Name: "db", ClusterRef: "c"}},
-			want: neo4jv1beta1.BackupTarget{Kind: "Database", Name: "db", ClusterRef: "c"},
+			name:          "sharded database -> ShardedDatabase scope",
+			spec:          neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "my-cluster", ShardedDatabase: "products-sharded"},
+			wantScope:     neo4jv1beta1.BackupTargetKindShardedDatabase,
+			wantScopeName: "products-sharded",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.spec.ResolvedTarget()
-			if got != tt.want {
-				t.Fatalf("ResolvedTarget() = %+v, want %+v", got, tt.want)
+			if got := tt.spec.Scope(); got != tt.wantScope {
+				t.Fatalf("Scope() = %q, want %q", got, tt.wantScope)
+			}
+			if got := tt.spec.ScopedName(); got != tt.wantScopeName {
+				t.Fatalf("ScopedName() = %q, want %q", got, tt.wantScopeName)
 			}
 		})
 	}

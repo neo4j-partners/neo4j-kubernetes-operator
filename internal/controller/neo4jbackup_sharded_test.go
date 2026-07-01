@@ -35,6 +35,22 @@ import (
 
 func ptrBool(b bool) *bool { return &b }
 
+// scopeSpecForKind builds a Neo4jBackupSpec whose Scope() equals kind and whose
+// ScopedName() equals name — the v1.14 replacement for the removed spec.target
+// construction. Cluster (all-databases) scope names its instance in name; the
+// database/sharded scopes name the database/sharded-CR and use "ec" as the
+// owning instance (the cluster these tests build).
+func scopeSpecForKind(kind, name string) neo4jv1beta1.Neo4jBackupSpec {
+	switch kind {
+	case neo4jv1beta1.BackupTargetKindCluster:
+		return neo4jv1beta1.Neo4jBackupSpec{InstanceRef: name, AllDatabases: true}
+	case neo4jv1beta1.BackupTargetKindShardedDatabase:
+		return neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "ec", ShardedDatabase: name}
+	default:
+		return neo4jv1beta1.Neo4jBackupSpec{InstanceRef: "ec", Database: name}
+	}
+}
+
 func newShardedTestReconciler(t *testing.T, objs ...runtime.Object) *Neo4jBackupReconciler {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -164,12 +180,9 @@ func TestEffectiveRemoteAddressResolution(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			backup := &neo4jv1beta1.Neo4jBackup{
-				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target:  neo4jv1beta1.BackupTarget{Kind: tc.kind, Name: "x"},
-					Options: tc.options,
-				},
-			}
+			spec := scopeSpecForKind(tc.kind, "x")
+			spec.Options = tc.options
+			backup := &neo4jv1beta1.Neo4jBackup{Spec: spec}
 			got := effectiveRemoteAddressResolution(backup, tc.version, tc.clusterHasSharding)
 			if got != tc.want {
 				t.Errorf("effectiveRemoteAddressResolution() = %v, want %v", got, tc.want)
@@ -215,9 +228,7 @@ func TestExpectedShardArtifactsForBackup_Matrix(t *testing.T) {
 	mkBackup := func(kind, name string) *neo4jv1beta1.Neo4jBackup {
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: name + "-backup", Namespace: "default"},
-			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{Kind: kind, Name: name, ClusterRef: "ec"},
-			},
+			Spec:       scopeSpecForKind(kind, name),
 		}
 	}
 
@@ -296,9 +307,7 @@ func TestUpdateShardedDBLastBackup_Matrix(t *testing.T) {
 	backup := func(kind string) *neo4jv1beta1.Neo4jBackup {
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "products-backup", Namespace: "default"},
-			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{Kind: kind, Name: "products", ClusterRef: "ec"},
-			},
+			Spec:       scopeSpecForKind(kind, "products"),
 		}
 	}
 
@@ -378,11 +387,8 @@ func TestBuildBackupCommand_ShardedDatabase_EmitsFlagsWithNilOptions(t *testing.
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{
-				Kind:       neo4jv1beta1.BackupTargetKindShardedDatabase,
-				Name:       "products",
-				ClusterRef: "ec",
-			},
+			InstanceRef:     "ec",
+			ShardedDatabase: "products",
 			Storage: neo4jv1beta1.StorageLocation{
 				Type: "pvc",
 				PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -492,11 +498,8 @@ func TestShardedPreflightStatic(t *testing.T) {
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind:       neo4jv1beta1.BackupTargetKindShardedDatabase,
-					Name:       "products",
-					ClusterRef: "ec",
-				},
+				InstanceRef:     "ec",
+				ShardedDatabase: "products",
 			},
 		}
 	}
@@ -512,9 +515,12 @@ func TestShardedPreflightStatic(t *testing.T) {
 	}
 	cases := []tc{
 		{
-			name:       "non-sharded kind short-circuits",
-			cluster:    clusterReady,
-			mutate:     func(b *neo4jv1beta1.Neo4jBackup) { b.Spec.Target.Kind = neo4jv1beta1.BackupTargetKindCluster },
+			name:    "non-sharded kind short-circuits",
+			cluster: clusterReady,
+			mutate: func(b *neo4jv1beta1.Neo4jBackup) {
+				b.Spec.ShardedDatabase = ""
+				b.Spec.AllDatabases = true
+			},
 			wantAction: preflightContinue,
 		},
 		{
@@ -604,12 +610,9 @@ func TestShardedLogicalNameForBackup_ResolvesSpecName(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{
-				Kind:       neo4jv1beta1.BackupTargetKindShardedDatabase,
-				Name:       "basic-sharded-db",
-				ClusterRef: "ec",
-			},
-			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "p"}},
+			InstanceRef:     "ec",
+			ShardedDatabase: "basic-sharded-db",
+			Storage:         neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "p"}},
 		},
 	}
 	r := newShardedTestReconciler(t, shardedDB, backup)
@@ -637,9 +640,10 @@ func TestShardedLogicalNameForBackup_ResolvesSpecName(t *testing.T) {
 		t.Fatalf("artifacts must use the logical prefix, got %+v", arts)
 	}
 
-	// CR missing: fall back to target.name (the historical equal-names case).
+	// CR missing: fall back to the sharded-database name (the historical
+	// equal-names case).
 	orphan := backup.DeepCopy()
-	orphan.Spec.Target.Name = "gone"
+	orphan.Spec.ShardedDatabase = "gone"
 	if got := r.shardedLogicalNameForBackup(ctx, orphan); got != "gone" {
 		t.Fatalf("missing CR fallback = %q, want gone", got)
 	}

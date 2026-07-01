@@ -127,8 +127,9 @@ func TestResolveShardedSeed_Matrix(t *testing.T) {
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target:  neo4jv1beta1.BackupTarget{Kind: neo4jv1beta1.BackupTargetKindShardedDatabase, Name: "products", ClusterRef: "ec"},
-				Storage: storage,
+				InstanceRef:     "ec",
+				ShardedDatabase: "products",
+				Storage:         storage,
 			},
 			Status: neo4jv1beta1.Neo4jBackupStatus{History: history},
 		}
@@ -282,8 +283,9 @@ func TestResolveShardedSeed_AllDatabasesFamily(t *testing.T) {
 	allDBBackup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "all-backup", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:  neo4jv1beta1.BackupTarget{Kind: neo4jv1beta1.BackupTargetKindCluster, ClusterRef: "ec"},
-			Storage: neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "b", Path: "backups"},
+			InstanceRef:  "ec",
+			AllDatabases: true,
+			Storage:      neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "b", Path: "backups"},
 		},
 		Status: neo4jv1beta1.Neo4jBackupStatus{History: []neo4jv1beta1.BackupRun{{
 			RunID: "uid-1", Status: "Succeeded", BackupsPath: "all-backup", CompletionTime: &completionTime,

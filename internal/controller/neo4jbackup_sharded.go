@@ -68,7 +68,7 @@ const (
 // Returns preflightContinue immediately for non-ShardedDatabase kinds so the
 // helper is safe to call unconditionally.
 func (r *Neo4jBackupReconciler) shardedPreflightStatic(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (preflightAction, string, error) {
-	if backup.Spec.Target.Kind != neo4jv1beta1.BackupTargetKindShardedDatabase {
+	if backup.Spec.Scope() != neo4jv1beta1.BackupTargetKindShardedDatabase {
 		return preflightContinue, "", nil
 	}
 
@@ -76,20 +76,17 @@ func (r *Neo4jBackupReconciler) shardedPreflightStatic(ctx context.Context, back
 		return preflightFail, "", fmt.Errorf("cluster preflight failed: %w", err)
 	}
 
-	ns := backup.Spec.Target.Namespace
-	if ns == "" {
-		ns = backup.Namespace
-	}
+	ns := backup.Namespace
 	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.ScopedName(), Namespace: ns}, shardedDB); err != nil {
 		if errors.IsNotFound(err) {
-			return preflightFail, "", fmt.Errorf("Neo4jShardedDatabase %q not found in namespace %q", backup.Spec.Target.Name, ns)
+			return preflightFail, "", fmt.Errorf("Neo4jShardedDatabase %q not found in namespace %q", backup.Spec.ScopedName(), ns)
 		}
-		return preflightFail, "", fmt.Errorf("failed to fetch Neo4jShardedDatabase %q: %w", backup.Spec.Target.Name, err)
+		return preflightFail, "", fmt.Errorf("failed to fetch Neo4jShardedDatabase %q: %w", backup.Spec.ScopedName(), err)
 	}
 
-	if shardedDB.Spec.ClusterRef != backup.Spec.Target.ClusterRef {
-		return preflightFail, "", fmt.Errorf("Neo4jShardedDatabase %q references cluster %q but backup target.clusterRef is %q", shardedDB.Name, shardedDB.Spec.ClusterRef, backup.Spec.Target.ClusterRef)
+	if shardedDB.Spec.ClusterRef != backup.Spec.InstanceRef {
+		return preflightFail, "", fmt.Errorf("Neo4jShardedDatabase %q references cluster %q but backup target.clusterRef is %q", shardedDB.Name, shardedDB.Spec.ClusterRef, backup.Spec.InstanceRef)
 	}
 
 	if shardedDB.Status.ShardingReady == nil || !*shardedDB.Status.ShardingReady {
@@ -108,7 +105,7 @@ func (r *Neo4jBackupReconciler) shardedPreflightStatic(ctx context.Context, back
 // Returns nil if the glob is safe. Returns an error naming the offending
 // database(s) otherwise; the caller should route the backup to Phase=Failed.
 func (r *Neo4jBackupReconciler) shardedPreflightGlobSafety(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
-	if backup.Spec.Target.Kind != neo4jv1beta1.BackupTargetKindShardedDatabase {
+	if backup.Spec.Scope() != neo4jv1beta1.BackupTargetKindShardedDatabase {
 		return nil
 	}
 
@@ -183,18 +180,15 @@ func contains(s []string, v string) bool {
 // future enhancement can populate Filename/Size from Pod logs without a CRD
 // break.
 func (r *Neo4jBackupReconciler) expectedShardArtifactsForBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) []neo4jv1beta1.ShardArtifact {
-	if backup.Spec.Target.Kind != neo4jv1beta1.BackupTargetKindShardedDatabase {
+	if backup.Spec.Scope() != neo4jv1beta1.BackupTargetKindShardedDatabase {
 		return nil
 	}
 
-	ns := backup.Spec.Target.Namespace
-	if ns == "" {
-		ns = backup.Namespace
-	}
+	ns := backup.Namespace
 	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.ScopedName(), Namespace: ns}, shardedDB); err != nil {
 		log.FromContext(ctx).Info("expectedShardArtifactsForBackup: sharded DB CR not found, returning empty artifact list",
-			"shardedDB", backup.Spec.Target.Name, "namespace", ns)
+			"shardedDB", backup.Spec.ScopedName(), "namespace", ns)
 		return nil
 	}
 
@@ -202,7 +196,7 @@ func (r *Neo4jBackupReconciler) expectedShardArtifactsForBackup(ctx context.Cont
 	// actually writes), not the CR name.
 	logical := shardedDB.Spec.Name
 	if logical == "" {
-		logical = backup.Spec.Target.Name
+		logical = backup.Spec.ScopedName()
 	}
 	count := int(shardedDB.Spec.PropertySharding.PropertyShards)
 	if count < 0 {
@@ -234,7 +228,7 @@ func (r *Neo4jBackupReconciler) expectedShardArtifactsForBackup(ctx context.Cont
 // every reconcile, so concurrent writes are normal. Use the standard
 // retry.RetryOnConflict pattern (matches CLAUDE.md rule 1).
 func (r *Neo4jBackupReconciler) updateShardedDBLastBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, run neo4jv1beta1.BackupRun) {
-	if backup.Spec.Target.Kind != neo4jv1beta1.BackupTargetKindShardedDatabase {
+	if backup.Spec.Scope() != neo4jv1beta1.BackupTargetKindShardedDatabase {
 		return
 	}
 	if run.Status != "Succeeded" {
@@ -243,14 +237,11 @@ func (r *Neo4jBackupReconciler) updateShardedDBLastBackup(ctx context.Context, b
 
 	logger := log.FromContext(ctx)
 
-	ns := backup.Spec.Target.Namespace
-	if ns == "" {
-		ns = backup.Namespace
-	}
+	ns := backup.Namespace
 
 	update := func() error {
 		shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
-		if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.ScopedName(), Namespace: ns}, shardedDB); err != nil {
 			return err
 		}
 		shardedDB.Status.LastBackup = &neo4jv1beta1.ShardedDatabaseBackupReference{
@@ -264,11 +255,11 @@ func (r *Neo4jBackupReconciler) updateShardedDBLastBackup(ctx context.Context, b
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Skipping Neo4jShardedDatabase.status.lastBackup update — CR not found",
-				"shardedDB", backup.Spec.Target.Name, "namespace", ns)
+				"shardedDB", backup.Spec.ScopedName(), "namespace", ns)
 			return
 		}
 		logger.Error(err, "Failed to update Neo4jShardedDatabase.status.lastBackup (non-fatal)",
-			"shardedDB", backup.Spec.Target.Name, "namespace", ns, "backup", backup.Name)
+			"shardedDB", backup.Spec.ScopedName(), "namespace", ns, "backup", backup.Name)
 	}
 }
 
@@ -304,13 +295,10 @@ func (r *Neo4jBackupReconciler) applyShardedPreflight(ctx context.Context, backu
 // (fresh-eyes journey, v1.12.1). Falls back to the CR name when the CR is
 // gone or spec.name is empty (where the two were always equal anyway).
 func (r *Neo4jBackupReconciler) shardedLogicalNameForBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) string {
-	ns := backup.Spec.Target.Namespace
-	if ns == "" {
-		ns = backup.Namespace
-	}
+	ns := backup.Namespace
 	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil || shardedDB.Spec.Name == "" {
-		return backup.Spec.Target.Name
+	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.ScopedName(), Namespace: ns}, shardedDB); err != nil || shardedDB.Spec.Name == "" {
+		return backup.Spec.ScopedName()
 	}
 	return shardedDB.Spec.Name
 }

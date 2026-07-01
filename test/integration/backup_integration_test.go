@@ -215,10 +215,8 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 				Namespace: testNamespace,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: "Cluster",
-					Name: cluster.Name,
-				},
+				InstanceRef:  cluster.Name,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
@@ -248,11 +246,9 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 				Namespace: testNamespace,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: "Cluster",
-					Name: cluster.Name,
-				},
-				Schedule: "*/5 * * * *",
+				InstanceRef:  cluster.Name,
+				AllDatabases: true,
+				Schedule:     "*/5 * * * *",
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
@@ -328,10 +324,8 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 				Namespace: testNamespace,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: "Cluster",
-					Name: cluster.Name,
-				},
+				InstanceRef:  cluster.Name,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
@@ -362,11 +356,8 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 				Namespace: testNamespace,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind:      "Cluster",
-					Name:      cluster.Name,
-					Namespace: testNamespace,
-				},
+				InstanceRef:  cluster.Name,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
@@ -420,11 +411,8 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 				Namespace: testNamespace,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind:      "Cluster",
-					Name:      cluster.Name,
-					Namespace: testNamespace,
-				},
+				InstanceRef:  cluster.Name,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -555,11 +543,8 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 				Namespace: testNamespace,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind:      "Cluster",
-					Name:      cluster.Name,
-					Namespace: testNamespace,
-				},
+				InstanceRef:  cluster.Name,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},

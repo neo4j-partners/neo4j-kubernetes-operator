@@ -485,7 +485,8 @@ func TestRecordOneShotBackupRun_DefersWhenMetadataMissingAndPodAlive(t *testing.
 		return &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: ns},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{Kind: neo4jv1beta1.BackupTargetKindDatabase, Name: "neo4j", ClusterRef: "c"},
+				InstanceRef: "c",
+				Database:    "neo4j",
 			},
 		}
 	}
@@ -547,9 +548,10 @@ func TestReconcile_RejectsInvalidSpec(t *testing.T) {
 			Finalizers: []string{BackupFinalizer},
 		},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:   neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "c"},
-			Storage:  neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "pvc"}},
-			Schedule: "0 2 * * *",
+			InstanceRef:  "c",
+			AllDatabases: true,
+			Storage:      neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "pvc"}},
+			Schedule:     "0 2 * * *",
 		},
 	}
 	r := newBackupTestReconcilerWithStatus(t, backup)

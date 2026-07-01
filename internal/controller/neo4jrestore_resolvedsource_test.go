@@ -429,7 +429,7 @@ func TestValidateRestore_StorageBackupPathActionable(t *testing.T) {
 // message, which can't help.
 func TestLatestSucceededArtifactFilename_ClusterKindGivesStructuralError(t *testing.T) {
 	backup := backupCRForRestore("clusterwide", "default", false)
-	backup.Spec.Target.Kind = neo4jv1beta1.BackupTargetKindCluster
+	backup.Spec.AllDatabases = true // all-databases (Cluster) scope
 	backup.Status.History = []neo4jv1beta1.BackupRun{
 		{RunID: "clusterwide-backup", Status: "Succeeded", ArtifactFilename: ""}, // kind:Cluster never captures one
 	}

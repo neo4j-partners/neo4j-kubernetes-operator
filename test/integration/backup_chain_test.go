@@ -198,9 +198,8 @@ var _ = Describe("Backup Chain Integration Tests", Label("extended"), Serial, fu
 		dailyBackup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-daily", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindDatabase, Name: dbName, ClusterRef: cluster.Name,
-				},
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type:   "s3",
 					Bucket: minioBucket,
@@ -233,9 +232,8 @@ var _ = Describe("Backup Chain Integration Tests", Label("extended"), Serial, fu
 		hourlyBackup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-hourly", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindDatabase, Name: dbName, ClusterRef: cluster.Name,
-				},
+				InstanceRef:     cluster.Name,
+				Database:        dbName,
 				Storage:         dailyBackup.Spec.Storage,
 				ChainFromBackup: dailyBackup.Name,
 				Options:         &neo4jv1beta1.BackupOptions{BackupType: "DIFF"},

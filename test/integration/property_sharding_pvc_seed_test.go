@@ -203,9 +203,8 @@ var _ = Describe("Property Sharding PVC Seed (F5) Integration Tests", Label("ext
 		backup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "products-pvc-backup", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindShardedDatabase, Name: "products", ClusterRef: cluster.Name,
-				},
+				InstanceRef:     cluster.Name,
+				ShardedDatabase: "products",
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC:  &neo4jv1beta1.PVCSpec{Name: backupPVC.Name},

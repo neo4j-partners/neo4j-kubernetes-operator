@@ -133,10 +133,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				Namespace: namespaceName,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: "Cluster",
-					Name: clusterName,
-				},
+				InstanceRef:  clusterName,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
