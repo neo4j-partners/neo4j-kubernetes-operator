@@ -633,12 +633,6 @@ spec:
                     required:
                     - size
                     type: object
-                  verifyBackup:
-                    description: |-
-                      VerifyBackup is RESERVED and currently a no-op (#220) — accepted for
-                      backward compatibility but not read by the operator. Verify artifacts
-                      at backup time via Neo4jBackup.spec.options.validate instead.
-                    type: boolean
                 type: object
               source:
                 description: Source backup location

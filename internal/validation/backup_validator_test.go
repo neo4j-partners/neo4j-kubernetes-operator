@@ -293,7 +293,6 @@ func TestBackupValidator_Validate(t *testing.T) {
 					},
 					Options: &neo4jv1beta1.BackupOptions{
 						Compress: ptr.To(true),
-						Verify:   true,
 					},
 				},
 			},

@@ -187,11 +187,6 @@ type RestoreOptionsSpec struct {
 	// Replace existing database
 	ReplaceExisting bool `json:"replaceExisting,omitempty"`
 
-	// VerifyBackup is RESERVED and currently a no-op (#220) — accepted for
-	// backward compatibility but not read by the operator. Verify artifacts
-	// at backup time via Neo4jBackup.spec.options.validate instead.
-	VerifyBackup bool `json:"verifyBackup,omitempty"`
-
 	// Additional neo4j-admin restore arguments
 	AdditionalArgs []string `json:"additionalArgs,omitempty"`
 

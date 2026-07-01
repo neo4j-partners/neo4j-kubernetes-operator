@@ -35,7 +35,7 @@ var _ = Describe("Restore API Tests", func() {
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
 					ClusterRef: "test-cluster", DatabaseName: "restoreddb",
 					Source:  neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: "daily-backup-20250121"},
-					Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true, VerifyBackup: true},
+					Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				},
 			}
 			Expect(k8sClient.Create(ctx, restore)).To(Succeed())

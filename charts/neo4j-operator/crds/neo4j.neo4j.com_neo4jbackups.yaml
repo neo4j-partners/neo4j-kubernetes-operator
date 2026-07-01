@@ -367,14 +367,6 @@ spec:
                       (suppress non-zero exit so the Job stays Succeeded). The operator
                       parses validate's stdout into BackupRun.Validation.
                     type: boolean
-                  verify:
-                    description: |-
-                      Verify is RESERVED and currently a no-op (#220) — it is accepted for
-                      backward compatibility but the operator does not read it. For real
-                      artifact verification use options.validate, which runs
-                      `neo4j-admin backup validate` and records the result in
-                      status.history[].validation.
-                    type: boolean
                 type: object
               retention:
                 description: Retention policy for backup cleanup
@@ -382,12 +374,12 @@ spec:
                   deletePolicy:
                     default: Delete
                     description: |-
-                      Delete policy for expired backups. Only "Delete" is implemented;
-                      "Archive" is RESERVED and currently behaves as a no-op (#220) — no
-                      archival logic exists. Accepted for backward compatibility.
+                      Delete policy for expired backups. Only "Delete" is supported — expired
+                      artifacts (PVC storage) are pruned by the delete-time cleanup Job. For
+                      cloud storage, retention is delegated to bucket lifecycle rules. (The
+                      "Archive" value was removed in v1.14 — it never had archival logic.)
                     enum:
                     - Delete
-                    - Archive
                     type: string
                   maxAge:
                     description: Maximum age of backups to keep

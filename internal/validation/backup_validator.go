@@ -578,9 +578,11 @@ func (v *BackupValidator) validateRetentionPolicy(retention *neo4jv1beta1.Retent
 		))
 	}
 
-	// Validate delete policy
+	// Validate delete policy. Only "Delete" is supported; "Archive" was a
+	// reserved no-op removed in v1.14 (see the CRD enum). Reject anything else
+	// (the CRD enum already blocks it at apply time; this is belt-and-braces).
 	if retention.DeletePolicy != "" {
-		validPolicies := []string{"Delete", "Archive"}
+		validPolicies := []string{"Delete"}
 		valid := false
 		for _, policy := range validPolicies {
 			if retention.DeletePolicy == policy {

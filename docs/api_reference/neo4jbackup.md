@@ -208,7 +208,7 @@ Backup retention configuration.
 |-------|------|----------|-------------|
 | `maxAge` | `string` | ❌ | Maximum age of artifacts to retain. A **single** unit of `d` (days), `h` (hours), `m` (minutes), or `s` (seconds) — e.g. `"30d"`, `"168h"`, `"90m"`. Compound values (`"1h30m"`) and `"4w"` are **rejected** by the validator (the runtime applies exactly what validates). |
 | `maxCount` | `int32` | ❌ | Maximum number of `.backup` artifacts to retain |
-| `deletePolicy` | `string` | ❌ | `"Delete"` (default). `"Archive"` is **RESERVED — currently a no-op** (no archival logic exists; accepted for backward compatibility). |
+| `deletePolicy` | `string` | ❌ | `"Delete"` (default, and the only accepted value). Expired PVC-stored artifacts are pruned by the delete-time cleanup Job; for cloud storage, retention is delegated to bucket lifecycle rules. (The `"Archive"` value was removed in v1.14.) |
 
 **How retention actually works** (read this before relying on it):
 
@@ -229,7 +229,6 @@ Fine-grained backup execution options.
 | `tempPath` | `string` | ❌ | Local directory path for temporary files during backup. When `tempStorage` is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to `--temp-path`. Must be an **absolute** path restricted to `A-Z a-z 0-9 . _ / -` (validator-enforced). The directory must already exist in the container — for staging, prefer `tempStorage`, which mounts a volume at the path. |
 | `tempStorage` | [`*TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud backups. The operator mounts this PVC and passes `--temp-path` automatically. Recommended for large databases to avoid filling ephemeral disk. |
 | `pageCache` | `string` | ❌ | Page cache size hint (e.g., `"4G"`). Must match pattern `^[0-9]+[KMG]?$` |
-| `verify` | `bool` | ❌ | **RESERVED — currently a no-op.** Accepted for backward compatibility but not read by the operator. For real artifact verification use `validate` (below). |
 | `validate` | `*bool` | ❌ | When `true`, runs `neo4j-admin backup validate` against the artifacts **after** the backup succeeds, recording per-shard recoverability into `status.history[].validation`. Appended with `\|\| true` so validate failures don't fail the Job (the backup already succeeded). Pointer type preserves an explicit `true` or `false` across updates; nil (default) skips validate. Requires a CalVer (2025.x+) Neo4j image — on 5.26 the `neo4j-admin backup validate` subcommand does not exist, so the option has no effect and `validation` stays empty. |
 | `parallelDownload` | `bool` | ❌ | Enable parallel download for remote backups |
 | `remoteAddressResolution` | `*bool` | ❌ | Resolve remote addresses via the cluster discovery service (useful in multi-homed environments). Pointer type: when unset and `target.kind=ShardedDatabase` on Neo4j 2025.09+, the operator defaults this to `true` to match the canonical upstream sharded-backup invocation; otherwise unset. Set explicitly (`true` or `false`) to override in either direction. |

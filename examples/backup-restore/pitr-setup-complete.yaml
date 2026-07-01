@@ -41,8 +41,7 @@ spec:
   options:
     compress: true
     # validate runs `neo4j-admin backup validate` after the backup and records
-    # the result on status.history[].validation. (options.verify is a RESERVED
-    # no-op — don't use it.)
+    # the result on status.history[].validation.
     validate: true
     # Include users/roles metadata in the backup (all|none|users|roles).
     includeMetadata: all

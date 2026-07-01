@@ -215,10 +215,11 @@ type RetentionPolicy struct {
 	// Maximum number of backups to keep
 	MaxCount int32 `json:"maxCount,omitempty"`
 
-	// Delete policy for expired backups. Only "Delete" is implemented;
-	// "Archive" is RESERVED and currently behaves as a no-op (#220) — no
-	// archival logic exists. Accepted for backward compatibility.
-	// +kubebuilder:validation:Enum=Delete;Archive
+	// Delete policy for expired backups. Only "Delete" is supported — expired
+	// artifacts (PVC storage) are pruned by the delete-time cleanup Job. For
+	// cloud storage, retention is delegated to bucket lifecycle rules. (The
+	// "Archive" value was removed in v1.14 — it never had archival logic.)
+	// +kubebuilder:validation:Enum=Delete
 	// +kubebuilder:default=Delete
 	DeletePolicy string `json:"deletePolicy,omitempty"`
 }
@@ -245,13 +246,6 @@ type BackupOptions struct {
 	// CompressEffective(), never dereference.
 	// +kubebuilder:default=true
 	Compress *bool `json:"compress,omitempty"`
-
-	// Verify is RESERVED and currently a no-op (#220) — it is accepted for
-	// backward compatibility but the operator does not read it. For real
-	// artifact verification use options.validate, which runs
-	// `neo4j-admin backup validate` and records the result in
-	// status.history[].validation.
-	Verify bool `json:"verify,omitempty"`
 
 	// Backup type
 	// +kubebuilder:validation:Enum=FULL;DIFF;AUTO
