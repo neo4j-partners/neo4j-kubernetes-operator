@@ -584,7 +584,7 @@ Detail: [`14-open-questions.md`](14-open-questions.md).
 | BDR | Topic | Status |
 |-----|-------|--------|
 | [BDR-002](../02-technical-design/decision-records/business/002-neo4j-crd-topology.md) | Topology model (primaries / secondaries) | proposed |
-| [BDR-003](../02-technical-design/decision-records/business/003-operator-install-scope.md) | Single-namespace V1 | proposed |
+| [BDR-003](../02-technical-design/decision-records/business/operator/003-operator-install-scope.md) | Single-namespace V1; dedicated operator namespace | proposed |
 | [BDR-010](../02-technical-design/decision-records/business/010-neo4j-features-catalog.md) | `features` catalog | proposed |
 | [BDR-011](../02-technical-design/decision-records/business/011-https-connector-tls-coupling.md) | HTTPS / TLS coupling | proposed |
 | [BDR-012](../02-technical-design/decision-records/business/012-identity-management.md) | Identity CRDs | proposed |

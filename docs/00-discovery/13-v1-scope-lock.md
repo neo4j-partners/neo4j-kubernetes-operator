@@ -23,8 +23,8 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 
 | Area | V1 variant | BDR |
 |------|------------|-----|
-| Install | YAML manifests | [BDR-003] |
-| Scope | Single namespace | [BDR-003] |
+| Install | YAML manifests in dedicated operator namespace (`neo4j-operator-system`) | [BDR-003] |
+| Scope | Single namespace (watch = operator namespace) | [BDR-003] |
 | Reconcile + basic status | Ready / Installed / Error | — |
 | RBAC | Namespace-scoped | [BDR-003] |
 | Uninstall | Preserve PVCs | — |

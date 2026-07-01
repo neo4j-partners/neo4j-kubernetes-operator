@@ -70,6 +70,7 @@ We will adopt **Option A** with **Helm chart + `config/deploy/` kustomize overla
 | `leader-elect` | `true` |
 | `leader-election-id` | `neo4j.com` (fixed) |
 | `WATCH_NAMESPACE` | unset → operator pod namespace only ([BDR-003](../business/operator/003-operator-install-scope.md) Option A) |
+| Install namespace | `neo4j-operator-system` (Helm value `namespace`; overridable) |
 | Resources | requests `100m/256Mi`; limits `500m/512Mi` (tune in e2e) |
 | Probes | `/healthz`, `/readyz` on metrics port |
 

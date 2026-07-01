@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | proposed |
-| **Reviewers** | Charles Boudry |
+| **Reviewers** | Charles Boudry; Marouane Gazanayi |
 | **Date** | 2026-06-22 |
 | **Deciders** | Operator design team |
 | **Constraints** | `OP-1-001`, `OP-1-002`, `OP-1-006`; variants `OP-2-001-SCOPE-01`…`03` |
@@ -22,9 +22,11 @@ Three scope modes are already defined in requirements:
 | **Multiple namespaces** | `OP-2-001-SCOPE-02` | Watch a configured list of namespaces | `WATCH_NAMESPACE` = comma-separated list |
 | **Cluster-wide** | `OP-2-001-SCOPE-03` | Watch all namespaces | `WATCH_NAMESPACE` unset or `*` |
 
-This decision affects RBAC (`Role` vs `ClusterRole`), blast radius, install documentation, OLM `installModes`, and PS delivery patterns. It is independent of [BDR-001](001-single-neo4j-crd.md) (workload CRD shape) and [BDR-002](002-neo4j-crd-topology.md) (topology model).
+This decision affects RBAC (`Role` vs `ClusterRole`), blast radius, install documentation, OLM `installModes`, and PS delivery patterns. It is independent of [BDR-001](../neo4j/001-single-neo4j-crd.md) (workload CRD shape) and [BDR-002](../neo4j/002-neo4j-crd-topology.md) (topology model).
 
 **Important**: CRDs remain cluster-scoped API objects in all modes. Scope applies to the **controller**, not to CRD registration.
+
+**Watch scope vs deployment layout**: Single-namespace **watch scope** (Option A) means the controller reconciles CRs only in the namespace where it runs. That is independent of **where customers should install** the operator. We always recommend a **dedicated operator namespace** (default `neo4j-operator-system`) — not co-located with unrelated application workloads. With V1 scope, `Neo4j` CRs are created in that same namespace.
 
 ---
 
@@ -120,6 +122,7 @@ There is **no quantitative Neo4j customer survey** in this design package. Prefe
 For V1:
 
 - The operator watches **only the namespace in which it is deployed**.
+- **Deploy the operator in its own dedicated namespace** (default `neo4j-operator-system`, overridable at install). Do not install into a shared application namespace alongside unrelated workloads. With V1 scope, `Neo4j` CRs and reconciled operands live in that same namespace.
 - Workload RBAC uses namespace-scoped `Role` / `RoleBinding` (per `AC-OP-SCOPE-SINGLE-004`).
 - CRD installation may still require cluster-admin once; day-2 operation should not.
 - Packaging (YAML / Helm) documents this as the **only supported** scope in V1.
@@ -133,9 +136,10 @@ Options B and C are **not rejected** — deferred. Code should use the standard 
 | Area | Rule |
 |------|------|
 | `cmd/manager/main.go` | Read `WATCH_NAMESPACE`; V1 Helm/YAML sets it to the operator pod namespace |
+| Install namespace | Default `neo4j-operator-system`; install manifests create the namespace; `Neo4j` CRs in the same namespace |
 | RBAC manifests | `config/rbac/` — namespace `Role` only; no `ClusterRole` for reconciliation |
 | Tests | `TST-SCN-003` (P0) is the scope gate |
-| Docs | Quickstart (`EST-DOC-001`) states single-namespace as V1 default and only mode |
+| Docs | Quickstart (`EST-DOC-001`) states single-namespace as V1 default and only mode; recommends dedicated operator namespace |
 
 ### V1 scope
 
@@ -154,6 +158,7 @@ Options B and C are **not rejected** — deferred. Code should use the standard 
 ### Positive
 
 - Fastest path to enterprise security sign-off — minimal cluster permissions for day-2.
+- Dedicated operator namespace isolates the control plane from unrelated application workloads.
 - Consistent with Neo4j Helm chart: one namespace, one deployment.
 - Matches the install pattern PS and app teams request most often.
 - Reduces V1 test and documentation surface — one scope matrix row.
