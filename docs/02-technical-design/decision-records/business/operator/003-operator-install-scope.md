@@ -121,7 +121,7 @@ There is **no quantitative Neo4j customer survey** in this design package. Prefe
 
 For V1:
 
-- The operator watches **only the namespace in which it is deployed**.
+- The operator watches **only the namespace specified by the user when it's installed**.
 - **Deploy the operator in its own dedicated namespace** (default `neo4j-operator-system`, overridable at install). Do not install into a shared application namespace alongside unrelated workloads. With V1 scope, `Neo4j` CRs and reconciled operands live in that same namespace.
 - Workload RBAC uses namespace-scoped `Role` / `RoleBinding` (per `AC-OP-SCOPE-SINGLE-004`).
 - CRD installation may still require cluster-admin once; day-2 operation should not.

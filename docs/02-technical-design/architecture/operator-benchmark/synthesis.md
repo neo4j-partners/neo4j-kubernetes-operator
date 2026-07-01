@@ -21,7 +21,7 @@ Cross-operator comparison and recommendations for the Neo4j Kubernetes operator.
 
 | Dimension | CloudNativePG | Strimzi | Neo4j direction (draft) |
 |-----------|---------------|---------|-------------------------|
-| **D1 Language / stack** | Go, kubebuilder, controller-runtime | Java, Maven, Fabric8, Vert.x | **Go** — follow CNPG |
+| **D1 Language / stack** | Go, kubebuilder, controller-runtime | Java, Maven, Fabric8, Vert.x | **Go** — [ADR-011](../decision-records/architecture/011-implementation-language.md); follow CNPG |
 | **D1 Layout** | `api/`, `internal/controller`, `pkg/specs`, `pkg/reconciler` | `model/`, `assembly/`, `resource/` | `api/`, `internal/{render,domain,controller}`, `internal/neo4j` |
 | **D2 Thin controller** | Partial — split files, large `cluster_controller.go` | Partial — `KafkaAssemblyOperator` ~1k lines | **Strict** ~150-line `Reconcile()` pipeline (ADR-002) |
 | **D3 CRD count** | Core + backup + pooler + SQL decl. | Many (Kafka, Topic, User, Connect…) | **V1**: `Neo4j` only; satellites post-V1 |
@@ -74,7 +74,7 @@ Cross-operator comparison and recommendations for the Neo4j Kubernetes operator.
 |-------|------|---------|----------------|
 | Default install scope | Cluster-wide | Single namespace | **Single namespace** (V1 PS) |
 | Admission webhooks | Strong | Weak (CRD only) | **Strong** (ADR-001) |
-| Language | Go | Java | Go |
+| Language | Go | Java | **Go** ([ADR-011](../../decision-records/architecture/011-implementation-language.md)) |
 | Operand admin | SQL via instance manager | Kafka Admin API | **Bolt** via `internal/neo4j` |
 
 ---
@@ -83,7 +83,7 @@ Cross-operator comparison and recommendations for the Neo4j Kubernetes operator.
 
 | Priority | ADR | Rationale | Evidence |
 |----------|-----|-----------|----------|
-| **P0** | ADR-011 Reference architecture synthesis | This document | CNPG + Strimzi sheets |
+| **P0** | ADR-011 Implementation language (Go) | [011-implementation-language.md](../decision-records/architecture/011-implementation-language.md) | CNPG + Strimzi sheets |
 | **P0** | ADR-013 Operator & workload RBAC | Both create delegated Roles; CNPG `roles.go` | D6, D7 |
 | **P0** | ADR-014 Watch scope & cache | Opposite defaults — must choose + implement `WATCH_NAMESPACE` | D8, BDR-003 |
 | **P0** | ADR-020 Testing pyramid | CNPG e2e depth + Strimzi systemtest discipline | D15 |
@@ -94,7 +94,7 @@ Cross-operator comparison and recommendations for the Neo4j Kubernetes operator.
 | **P2** | ADR-012 Go dependency policy | CNPG controller-runtime v0.20.2 | D4 |
 | **P2** | ADR-010 Operator deployment | Strimzi numbered YAML; CNPG Helm chart | D17 |
 
-**Gate G-0 satisfied** for CNPG + Strimzi (≥2 Tier-1 sheets). ADR-002 should move to **proposed** only after ADR-011 draft.
+**Gate G-0 satisfied** for CNPG + Strimzi (≥2 Tier-1 sheets). ADR-011 (language) proposed; ADR-002 may move toward acceptance after review.
 
 ---
 

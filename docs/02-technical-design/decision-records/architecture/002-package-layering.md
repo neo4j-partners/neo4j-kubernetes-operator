@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | proposed |
 | **Date** | 2026-06-22 |
-| **Depends on** | [BDR-001](../business/neo4j/001-single-neo4j-crd.md) · [ADR-001](001-crd-validation-process.md) |
+| **Depends on** | [BDR-001](../business/neo4j/001-single-neo4j-crd.md) · [ADR-001](001-crd-validation-process.md) · [ADR-011](011-implementation-language.md) |
 | **Constraints** | `EST-DEV-010` (operator core); kubebuilder scaffold |
 
 ---

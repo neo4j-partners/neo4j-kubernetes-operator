@@ -46,7 +46,7 @@ Use **decision-classifier-bdr-vs-adr** if unsure.
 
 | ID | Title | Backlog / evidence |
 |----|-------|-------------------|
-| ADR-011 | Reference architecture synthesis | K-02, `synthesis.md` |
+| ADR-011 | Operator implementation language (Go) | K-01, `synthesis.md` |
 | ADR-012 | Go & dependency policy | N-01..N-04 |
 | ADR-013 | Operator & workload RBAC | L-01..L-04, BDR-003 |
 | ADR-014 | Watch scope & cache | L-05, H-02 |

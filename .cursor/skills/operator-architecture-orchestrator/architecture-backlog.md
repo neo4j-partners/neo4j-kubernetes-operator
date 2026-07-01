@@ -10,6 +10,7 @@ Legend: `✓` decided · `○` draft exists · `·` open · `—` N/A V1
 
 | ID | Topic | ADR? | Depends on | Notes |
 |----|-------|------|------------|-------|
+| A-00 | Operator implementation language (Go vs Java) | ○ ADR-011 | K-01 | Strimzi = patterns only |
 | A-01 | Validation layering (CEL / webhook / mutating / reconciler) | ✓ ADR-001 | BDR-001 | Ownership table in validation.md |
 | A-02 | Package layering (`render` / `domain` / `controller`) | ○ layer.md | ADR-001 | → ADR-002 |
 | A-03 | Import boundaries & forbidden cycles | · | ADR-002 | enforce in linter or ARCH doc |
@@ -154,7 +155,7 @@ Legend: `✓` decided · `○` draft exists · `·` open · `—` N/A V1
 | ID | Topic | ADR? | Depends on | Notes |
 |----|-------|------|------------|-------|
 | K-01 | Tier-1 operator survey (CNPG, Strimzi, ECK, MongoDB) | · | — | `operator-benchmark/operators/*.md` |
-| K-02 | Code layout synthesis across operators | · | K-01 | → ADR-011 |
+| K-02 | Code layout synthesis across operators | ✓ | K-01 | `synthesis.md` + ADR-011 language decision |
 | K-03 | Neo4j Helm vs operator responsibility split | · | helm-fields | not an operator — parity doc |
 | K-04 | neo4j-cloud managed architecture alignment | · | pg.md | what not to rebuild |
 | K-05 | cert-manager / ESO integration patterns | · | BDR-006 | ownership of Secrets |
@@ -247,8 +248,8 @@ Benchmark **before** locking ADR-011+. Tracks can proceed in parallel after synt
 
 | ADR | Topic | Backlog |
 |-----|-------|---------|
-| ADR-011 | Reference architecture synthesis | K-02 |
-| ADR-012 | Go & dependency policy | N-01..N-04 |
+| ADR-011 | Operator implementation language (Go) | A-00, K-01, synthesis.md |
+| ADR-012 | Go version & dependency policy | N-01..N-04 |
 | ADR-013 | Operator & workload RBAC | L-01..L-04, L-11 |
 | ADR-014 | Watch scope & cache | L-05, H-02 |
 | ADR-015 | Pod security & platform profiles | L-06..L-09 |
@@ -273,7 +274,7 @@ Benchmark **before** locking ADR-011+. Tracks can proceed in parallel after synt
 | ADR-009 | Watches & predicates | B-06 |
 | ADR-010 | Operator deployment & HA | H-01, J-01 |
 
-**Dependency:** ADR-011 (synthesis) should be **proposed** before ADR-002 is **accepted** — internal layout must not contradict benchmark consensus without explicit rationale.
+**Dependency:** ADR-011 (language) and benchmark synthesis should be **proposed** before ADR-002 is **accepted** — internal layout must not contradict benchmark consensus without explicit rationale.
 
 ---
 

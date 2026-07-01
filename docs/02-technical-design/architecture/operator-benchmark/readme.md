@@ -106,7 +106,8 @@ Copy into each `operators/{name}.md` from [`template.md`](template.md).
 | Restricted profiles (ECK, CNPG) | ADR-015 Security profiles & PSS/SCC |
 | Dep policy (controller-runtime pin) | ADR-012 Dependency & upgrade policy |
 | Test layout (CNPG e2e) | ADR-019 Testing strategy (extends old ADR-009) |
-| Code layout consensus | ADR-011 Reference architecture synthesis |
+| Code layout consensus | `synthesis.md` + ADR-002 |
+| Implementation language | ADR-011 (Go) |
 
 ---
 
@@ -116,7 +117,7 @@ Copy into each `operators/{name}.md` from [`template.md`](template.md).
 Week A: CNPG + Strimzi     → D1-D12, D15-D17
 Week B: ECK + MongoDB      → D6-D9, D13-D14
 Week C: Ecosystem + Helm   → D13, cert-manager, neo4j helm parity
-Week D: Synthesis          → operator-benchmark/synthesis.md → ADR-011
+Week D: Synthesis          → operator-benchmark/synthesis.md → ADR-011 (language)
 ```
 
 ---

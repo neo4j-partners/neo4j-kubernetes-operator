@@ -73,6 +73,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [ADR-008](architecture/008-finalizers-and-deletion.md) | Finalizers and deletion | proposed |
 | [ADR-009](architecture/009-watches-and-predicates.md) | Watches and predicates | proposed |
 | [ADR-010](architecture/010-operator-deployment.md) | Operator deployment and HA | proposed |
+| [ADR-011](architecture/011-implementation-language.md) | Operator implementation language — **Go** (kubebuilder / controller-runtime); Strimzi patterns in Go, not Java | proposed |
 
 ---
 
@@ -84,6 +85,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | What is in / out of **V1** from a customer perspective? | `business/` |
 | Helm parity, defaults, migration impact? | `business/` |
 | How do we **structure Go packages** or the reconcile pipeline? | `architecture/` |
+| **Which language** implements the operator? | `architecture/` |
 | CEL vs webhook, envtest vs kind for a gate? | `architecture/` |
 | Naming of K8s child objects, labels, apply strategy? | `architecture/` |
 | Bolt client usage, formation sequence, finalizers? | `architecture/` |

@@ -17,6 +17,7 @@ Do **not** accept ADR-002 until benchmark synthesis has been reviewed (`operator
 |----------|-------|
 | [ADR-001](../decision-records/architecture/001-crd-validation-process.md) | accepted |
 | [ADR-002](../decision-records/architecture/002-package-layering.md) – [ADR-010](../decision-records/architecture/010-operator-deployment.md) | **proposed** (Track 2) |
+| [ADR-011](../decision-records/architecture/011-implementation-language.md) | **proposed** — Go / kubebuilder |
 | [operator-benchmark/](operator-benchmark/readme.md) | CNPG + Strimzi + [synthesis](operator-benchmark/synthesis.md) |
 | [layer.md](layer.md) | promoted into ADR-002 |
 | [file_structure.md](file_structure.md) | draft target tree |
@@ -33,7 +34,7 @@ Do **not** accept ADR-002 until benchmark synthesis has been reviewed (`operator
 1. ADR-002 → ADR-003 → ADR-005 → ADR-006 → ADR-007 → ADR-004 → ADR-008 → ADR-009 → ADR-010 (**all proposed**)
 2. Cross-cutting next: ADR-013 (RBAC), ADR-014 (watch scope), ADR-020 (tests) — not yet drafted
 
-Benchmark evidence: [`operator-benchmark/synthesis.md`](operator-benchmark/synthesis.md) — cited per ADR, not a separate ADR-011.
+Benchmark evidence: [`operator-benchmark/synthesis.md`](operator-benchmark/synthesis.md) · language decision: [ADR-011](../decision-records/architecture/011-implementation-language.md)
 
 ## Reference operators (Tier-1)
 
