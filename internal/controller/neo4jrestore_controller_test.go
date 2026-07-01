@@ -167,8 +167,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				Namespace: namespaceName,
 			},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   clusterName,
-				DatabaseName: "neo4j",
+				InstanceRef: clusterName,
+				Database:    "neo4j",
 				Source: neo4jv1beta1.RestoreSource{
 					Type:      "backup",
 					BackupRef: backupName, // Use the created backup
@@ -251,8 +251,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef:   "non-existent-cluster",
-					DatabaseName: "neo4j",
+					InstanceRef: "non-existent-cluster",
+					Database:    "neo4j",
 					Source: neo4jv1beta1.RestoreSource{
 						Type:      "backup",
 						BackupRef: backupName, // Use existing backup
@@ -296,8 +296,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef:   clusterName, // Use existing cluster
-					DatabaseName: "neo4j",
+					InstanceRef: clusterName, // Use existing cluster
+					Database:    "neo4j",
 					Source: neo4jv1beta1.RestoreSource{
 						Type:      "backup",
 						BackupRef: "non-existent-backup",
@@ -341,8 +341,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef:   clusterName, // Use existing cluster
-					DatabaseName: "neo4j",
+					InstanceRef: clusterName, // Use existing cluster
+					Database:    "neo4j",
 					Source: neo4jv1beta1.RestoreSource{
 						Type: "storage",
 						Storage: &neo4jv1beta1.StorageLocation{
@@ -400,7 +400,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			By("Creating a Neo4jRestore with different database name")
 
 			// Create restore with a different database name from the start
-			restore.Spec.DatabaseName = "testdb"
+			restore.Spec.Database = "testdb"
 			Expect(k8sClient.Create(ctx, restore)).Should(Succeed())
 
 			restoreLookupKey := types.NamespacedName{
@@ -416,7 +416,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			// Verify the spec was set correctly
-			Expect(createdRestore.Spec.DatabaseName).To(Equal("testdb"))
+			Expect(createdRestore.Spec.Database).To(Equal("testdb"))
 		})
 	})
 

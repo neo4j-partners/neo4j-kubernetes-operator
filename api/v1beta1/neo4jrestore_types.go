@@ -24,45 +24,32 @@ import (
 // Neo4jRestoreSpec defines the desired state of Neo4jRestore
 type Neo4jRestoreSpec struct {
 	// InstanceRef names the Neo4j deployment to restore INTO — a
-	// Neo4jEnterpriseCluster OR a Neo4jEnterpriseStandalone. Topology-agnostic
-	// alias for the deprecated ClusterRef; the operator picks the restore engine
-	// from the target's topology. Preferred as of v1.13, authoritative when set.
+	// Neo4jEnterpriseCluster OR a Neo4jEnterpriseStandalone. Topology-agnostic:
+	// the operator picks the restore engine from the target's topology. Required
+	// (the deprecated ClusterRef alias was removed in v1.14).
 	// +optional
 	InstanceRef string `json:"instanceRef,omitempty"`
-
-	// ClusterRef references the Neo4j cluster or standalone to restore to.
-	// DEPRECATED (v1.13): prefer InstanceRef (removed in v1.14). Exactly one of
-	// ClusterRef or InstanceRef must be set; InstanceRef wins if both are.
-	// +optional
-	ClusterRef string `json:"clusterRef,omitempty"`
 
 	// +kubebuilder:validation:Required
 	// Source backup location
 	Source RestoreSource `json:"source"`
 
-	// Database to restore. Preferred as of v1.13 (alias of the deprecated
-	// DatabaseName), authoritative when set. Must be a valid Neo4j database name
-	// (starts with a letter; letters, digits, dots, dashes only) — the name is
-	// interpolated into the restore Job's shell command and Cypher.
+	// Database to restore. Must be a valid Neo4j database name (starts with a
+	// letter; letters, digits, dots, dashes only) — the name is interpolated
+	// into the restore Job's shell command and Cypher. (The deprecated
+	// DatabaseName alias was removed in v1.14.) Mutually exclusive with
+	// AllDatabases.
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9.\-]*$`
 	// +kubebuilder:validation:MaxLength=65
 	// +optional
 	Database string `json:"database,omitempty"`
 
-	// DatabaseName is the database to restore to.
-	// DEPRECATED (v1.13): prefer Database (removed in v1.14). Exactly one of
-	// Database or DatabaseName must be set; Database wins if both are.
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9.\-]*$`
-	// +kubebuilder:validation:MaxLength=65
-	// +optional
-	DatabaseName string `json:"databaseName,omitempty"`
-
 	// AllDatabases restores EVERY user database recorded in the source backup
 	// (the system database is always excluded) — the restore counterpart of an
 	// all-databases (instance-wide) backup (#222). Mutually exclusive with
-	// Database/DatabaseName. Requires source.type=backup (the operator reads the
-	// backup's per-database artifact map). The operator restores one database
-	// per reconcile pass and reports per-database progress in
+	// Database. Requires source.type=backup (the operator reads the backup's
+	// per-database artifact map). The operator restores one database per
+	// reconcile pass and reports per-database progress in
 	// status.databaseResults.
 	// +optional
 	AllDatabases bool `json:"allDatabases,omitempty"`
@@ -78,45 +65,6 @@ type Neo4jRestoreSpec struct {
 	// large stores seeded from object storage. The standalone Job path is
 	// bounded by the Job's own backoff/active-deadline semantics instead.
 	Timeout string `json:"timeout,omitempty"`
-}
-
-// EffectiveClusterRef returns the target deployment ref, preferring the v1.13
-// InstanceRef over the deprecated ClusterRef.
-func (s *Neo4jRestoreSpec) EffectiveClusterRef() string {
-	if s.InstanceRef != "" {
-		return s.InstanceRef
-	}
-	return s.ClusterRef
-}
-
-// EffectiveDatabaseName returns the database to restore, preferring the v1.13
-// Database over the deprecated DatabaseName.
-func (s *Neo4jRestoreSpec) EffectiveDatabaseName() string {
-	if s.Database != "" {
-		return s.Database
-	}
-	return s.DatabaseName
-}
-
-// UsesLegacyRestoreFields reports whether the spec relies on the deprecated
-// ClusterRef/DatabaseName fields rather than InstanceRef/Database. The new
-// fields are authoritative, so this is true only when a legacy field is set
-// without its new counterpart.
-func (s *Neo4jRestoreSpec) UsesLegacyRestoreFields() bool {
-	return (s.InstanceRef == "" && s.ClusterRef != "") ||
-		(s.Database == "" && s.DatabaseName != "")
-}
-
-// NormalizeSpec rewrites the in-memory spec so downstream logic that reads
-// ClusterRef/DatabaseName works unchanged: the v1.13 InstanceRef/Database win.
-// Call once at the top of Reconcile.
-func (s *Neo4jRestoreSpec) NormalizeSpec() {
-	if s.InstanceRef != "" {
-		s.ClusterRef = s.InstanceRef
-	}
-	if s.Database != "" {
-		s.DatabaseName = s.Database
-	}
 }
 
 // RestoreSource defines the source of the backup to restore
@@ -389,8 +337,8 @@ type RestoreBackupInfo struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.clusterRef`
-// +kubebuilder:printcolumn:name="Database",type=string,JSONPath=`.spec.databaseName`
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.instanceRef`
+// +kubebuilder:printcolumn:name="Database",type=string,JSONPath=`.spec.database`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Duration",type=string,JSONPath=`.status.stats.duration`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

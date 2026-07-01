@@ -217,8 +217,8 @@ var _ = Describe("Standard Database PVC Restore Integration Tests", Label("exten
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-pvc-restore", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Source: neo4jv1beta1.RestoreSource{
 					Type:      "backup",
 					BackupRef: backup.Name,

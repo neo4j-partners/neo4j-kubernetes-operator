@@ -252,8 +252,8 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-restore", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Source: neo4jv1beta1.RestoreSource{
 					Type:      "backup",
 					BackupRef: backup.Name,
@@ -344,10 +344,10 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		restoreStorage := &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-restore-storage", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
-				StopCluster:  false,
-				Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
+				InstanceRef: cluster.Name,
+				Database:    dbName,
+				StopCluster: false,
+				Options:     &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				Source: neo4jv1beta1.RestoreSource{
 					Type: "storage",
 					Storage: &neo4jv1beta1.StorageLocation{
@@ -452,8 +452,8 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "products-restore-attempt", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: "products",
+				InstanceRef: cluster.Name,
+				Database:    "products",
 				Source: neo4jv1beta1.RestoreSource{
 					Type: "storage",
 					Storage: &neo4jv1beta1.StorageLocation{

@@ -274,8 +274,8 @@ var _ = Describe("Backup Chain Integration Tests", Label("extended"), Serial, fu
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-restore", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Source: neo4jv1beta1.RestoreSource{
 					Type:      "backup",
 					BackupRef: hourlyBackup.Name,

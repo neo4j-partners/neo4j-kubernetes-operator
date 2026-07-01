@@ -82,9 +82,9 @@ func restoreWithBackupRef(name, ns, backupRef string) *neo4jv1beta1.Neo4jRestore
 	return &neo4jv1beta1.Neo4jRestore{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			ClusterRef:   "standalone-neo4j",
-			DatabaseName: "neo4j",
-			Source:       neo4jv1beta1.RestoreSource{Type: SourceTypeBackup, BackupRef: backupRef},
+			InstanceRef: "standalone-neo4j",
+			Database:    "neo4j",
+			Source:      neo4jv1beta1.RestoreSource{Type: SourceTypeBackup, BackupRef: backupRef},
 		},
 	}
 }
@@ -224,7 +224,7 @@ func TestValidateRestore_PinnedSnapshotSurvivesMissingCR(t *testing.T) {
 func TestValidateRestore_RejectsSystemDatabase(t *testing.T) {
 	for _, name := range []string{"system", "System", "SYSTEM"} {
 		r := restoreWithBackupRef("simple-restore", "default", "deleted-backup")
-		r.Spec.DatabaseName = name
+		r.Spec.Database = name
 		r.Status.ResolvedSource = &neo4jv1beta1.ResolvedRestoreSource{
 			BackupRef:  "deleted-backup",
 			Storage:    pvcStorage("backup-storage"),
@@ -483,7 +483,7 @@ func TestPopulateRestoreProvenance(t *testing.T) {
 	t.Run("storage-type restore uses the explicit spec path, leaves creation time unset", func(t *testing.T) {
 		restore := &neo4jv1beta1.Neo4jRestore{
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				DatabaseName: "neo4j",
+				Database: "neo4j",
 				Source: neo4jv1beta1.RestoreSource{
 					Type:       "storage",
 					BackupPath: "s3://bucket/path/neo4j.backup",

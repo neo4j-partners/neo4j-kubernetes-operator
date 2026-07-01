@@ -303,7 +303,7 @@ func (r *Neo4jRestoreReconciler) ensurePVCSeedProxyReady(
 	}
 	// Restrict the proxy (which serves the whole backup PVC) to the target
 	// cluster's server pods (#219). Best-effort: only enforcing CNIs apply it.
-	if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.ClusterRef); npErr != nil {
+	if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.InstanceRef); npErr != nil {
 		logger.Error(npErr, "Failed to ensure seed-proxy NetworkPolicy (non-fatal)")
 	}
 

@@ -188,10 +188,10 @@ var _ = Describe("Restore Integration Tests", Label("extended"), Ordered, func()
 			restore := &neo4jv1beta1.Neo4jRestore{
 				ObjectMeta: metav1.ObjectMeta{Name: "live-cluster-cypher", Namespace: ns},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef:   clusterName,
-					DatabaseName: "neo4j",
-					StopCluster:  false, // the formerly-dangerous knob — now a no-op for clusters
-					Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
+					InstanceRef: clusterName,
+					Database:    "neo4j",
+					StopCluster: false, // the formerly-dangerous knob — now a no-op for clusters
+					Options:     &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 					Source: neo4jv1beta1.RestoreSource{
 						// Unreachable source: the Cypher path will fail later
 						// on seed resolution, but it must NEVER fail with the
@@ -269,10 +269,10 @@ var _ = Describe("Restore Integration Tests", Label("extended"), Ordered, func()
 			restoreB := &neo4jv1beta1.Neo4jRestore{
 				ObjectMeta: metav1.ObjectMeta{Name: "overlap-second", Namespace: ns},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef:   clusterName,
-					DatabaseName: "neo4j",
-					StopCluster:  true,                                                    // path that calls setRestoreInProgressAnnotation
-					Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}, // skip checkDatabaseExists so the flow reaches the annotation conflict
+					InstanceRef: clusterName,
+					Database:    "neo4j",
+					StopCluster: true,                                                    // path that calls setRestoreInProgressAnnotation
+					Options:     &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}, // skip checkDatabaseExists so the flow reaches the annotation conflict
 					Source: neo4jv1beta1.RestoreSource{
 						Type: "storage",
 						// Path is intentionally unreachable: these tests fail on an earlier guard

@@ -74,10 +74,6 @@ const (
 	// block instead of spec.instanceRef + spec.database/allDatabases (removed
 	// in v1.14).
 	EventReasonBackupAPIDeprecated = "BackupAPIDeprecated"
-	// EventReasonRestoreAPIDeprecated — the CR uses the deprecated
-	// spec.clusterRef/databaseName instead of spec.instanceRef/database
-	// (removed in v1.14).
-	EventReasonRestoreAPIDeprecated = "RestoreAPIDeprecated"
 )
 
 // Database events
