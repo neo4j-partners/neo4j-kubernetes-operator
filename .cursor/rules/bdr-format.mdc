@@ -1,0 +1,35 @@
+---
+description: BDR and ADR document format for neo4j operator design
+globs: design/decision-records/**
+alwaysApply: false
+---
+
+# BDR / ADR format
+
+Follow `design/decision-records/readme.md` (Michael Nygard).
+
+## Filename
+
+`{folder}/{NNN}-{short-kebab-title}.md` — next BDR in business/: **005+**
+
+## Required sections
+
+1. Title + status + date + depends on
+2. **Context** — forces, no judgement
+3. **Options** — A, B, C… each with sketch YAML, advantages, disadvantages
+4. **Comparison table** (recommended for BDRs)
+5. **Decision** — "We will…" or "Not decided."
+6. **Consequences**
+7. **References** — FR IDs, helm paths, `design/analysis/helm-fields/`, existing BDRs
+
+## For breaking-change BDRs
+
+- List affected `helm_path` rows from `_index.csv`
+- State **Proposer direction** and **Recommendation** separately
+- Cross-link `aggregation-matrix.md` group id
+- Update `decision-records/readme.md` index when adding a file
+
+## Do not
+
+- Duplicate BDR-001/002/004 decisions — extend or supersede explicitly
+- Accept a BDR without options table when ≥2 viable approaches exist

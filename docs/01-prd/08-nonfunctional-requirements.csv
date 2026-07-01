@@ -1,0 +1,26 @@
+ID,Category,Requirement,Target / Acceptance,Rationale,V1,V1 Notes
+NFR-AVL-001,Availability,Operator control-plane continuity,Single replica V1; pod restart must resume reconcile within one reconcile interval (≤ 30 s),Day-2 automation must survive node churn,Yes,MVP — single Deployment; leader-election optional post-V1
+NFR-AVL-002,Availability,Managed Neo4j during operator-driven scale,No unplanned Bolt/HTTP outage during V1 scale actions (config restart may cause brief blip),Meets typical dev/staging SLOs,Yes,Scale-only in V1 — no rolling Neo4j upgrade
+NFR-AVL-003,Availability,Neo4j during planned version upgrade,Recorded service downtime ≤ 5 s per client during patch/minor upgrade,V1 defers upgrade workflow,V2+,NEO-2-012 deferred
+NFR-PERF-001,Performance,Reconcile latency,P95 < 5 s from CR change to first reconcile action (V1); target < 1 s post-V1,GitOps and status must feel responsive,Yes,Aspirational — not gated on metrics in V1 (OP-1-007 deferred)
+NFR-PERF-002,Performance,Operator memory footprint,RSS ≤ 200 MiB while watching 500 namespaces / 50 clusters,V1 single-namespace only,V2+,OP-2-001-SCOPE-02/03 deferred
+NFR-PERF-003,Performance,Backup streaming throughput,≥ 150 MB/s sustained to object store when network allows,Large-dataset RPO,V2+,Backup domain deferred
+NFR-SEC-001,Security,Operator RBAC least-privilege,Namespace Role/RoleBinding for V1; no wildcard verbs on managed resources,Passes security review for install,Yes,OP-1-006; cluster-wide hardened ClusterRole post-V1
+NFR-SEC-002,Security,Neo4j pod security,Run as non-root (UID 7474); drop unnecessary capabilities,Aligns with restricted PSS where enforced,Yes,Implementation default
+NFR-SEC-003,Security,Secrets handling,Admin password Secret mounted read-only; no secrets in logs,Minimises exposure,Yes,NEO-2-004
+NFR-SEC-004,Security,Encryption in transit,Cluster inter-member TLS when mode: Cluster; client Bolt/HTTPS TLS post-V1,Defense in depth,Partial,V1 cluster TLS only — plain HTTP+Bolt client path
+NFR-SEC-005,Security,Network isolation,NetworkPolicies restricting Neo4j traffic documented as platform pattern,Defense in depth,V2+,Not operator-managed in V1
+NFR-REL-001,Reliability,Error handling,Controllers use exponential back-off; fatal errors surface in status conditions,Problems visible without log diving,Yes,OP-1-003
+NFR-REL-002,Reliability,Idempotent reconcile,Re-applying identical CR produces no spurious object updates,Safe GitOps re-sync,Yes,OP-1-002
+NFR-REL-003,Reliability,Store migration gate,Operator refuses upgrade when Neo4j store migration required,Prevents broken upgrades,V2+,Tied to NEO-2-012
+NFR-OBS-001,Observability,Operator metrics,Prometheus metrics for controller_runtime and custom neo4j_* gauges,Enables SLO dashboards,V2+,OP-1-007 deferred
+NFR-OBS-002,Observability,Distributed tracing,OTEL spans for reconcile paths and Cypher execution,Root-cause analysis,V2+,Reference PRD F-10
+NFR-OBS-003,Observability,Structured logging,JSON or structured text logs; no secrets; actionable error messages,Supportability,Partial,Minimal logging in V1; full hygiene post-V1
+NFR-MNT-001,Maintainability,CRD evolution,Versioned API with conversion webhook on breaking changes,Rolling operator upgrades,V2+,OP-2-004-UPG-02 deferred
+NFR-MNT-002,Maintainability,Operator packaging SemVer,Chart/manifest changes follow SemVer; major on breaking install contract,Predictable upgrades,V2+,V1 YAML only
+NFR-UX-001,Usability,Cluster Ready SLA,Standalone Ready < 3 min; 3-node Cluster Ready < 5 min on reference kind cluster,Onboarding friction,Yes,CW-1 acceptance target (draft)
+NFR-UX-002,Usability,Web UI responsiveness,P95 HTTP < 300 ms for UI endpoints under 50 req/s,Non-Git users,V2+,Reference PRD — UI not in scope
+NFR-PORT-001,Portability,Kubernetes version support,Target n-2 Kubernetes minor versions; CI on kind + one cloud smoke,Broad adoption,Partial,V1 CI on kind; cloud matrix in test plan
+NFR-PORT-002,Portability,Cloud portability,Same `Neo4j` CR works on kind AKS EKS GKE OpenShift with documented platform deltas,Hybrid / sovereign cloud,Partial,V1 validates kind + one cloud; full matrix P1
+NFR-CMP-001,Compliance,Audit trail for declarative changes,Kubernetes Events + Git history for security CRD changes ≥ 1 year,SOX / ISO evidence,V2+,Security CRDs not in V1
+NFR-DOC-001,Documentation,Published CRD spec and getting-started,OpenAPI / spec.md + 3 sample manifests updated per release,Onboarding,Yes,V1 exit criteria in 13-roadmap.md

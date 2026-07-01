@@ -1,0 +1,149 @@
+# Semantic concerns — cross-cutting client needs
+
+**Purpose**: Helm `values.yaml` layout ≠ semantic domain. Concerns are **discovered** by
+template/code deep dive + Neo4j docs — not by YAML section headers or `_domains.yaml` batches.
+
+**BDR exemplars** (BDR-001, BDR-002, BDR-004): useful hypotheses — **may be revised** when
+evidence from Helm code or Neo4j docs contradicts them.
+
+---
+
+## How to use
+
+1. Phase 2.5: skill **helm-semantic-concern-mapper** validates/extends this file
+2. Each concern lists **all** `helm_path` contributors (including distant lines in values.yaml)
+3. `template_evidence` is mandatory — proves linkage in Helm implementation
+4. Output feeds `aggregation-matrix.md` and may trigger new BDRs or BDR amendments
+
+---
+
+concerns:
+
+  - id: CONCERN-TOPOLOGY
+    label: Deployment topology
+    description: >
+      Standalone vs HA cluster vs primary+secondary (analytics) vs scale-out.
+      Neo4j server roles, member counts, formation, and enable-server — one client
+      concern split across the Helm values file and templates.
+    client_outcomes:
+      - Single-node database (dev / CI)
+      - HA write quorum (3+ primaries)
+      - Primary + analytics secondary (1 primary + N secondaries — often multi-release in Helm)
+      - Post-install scale / enable server
+    helm_paths:
+      # Top of file — neo4j block (~L13–57)
+      - neo4j.minimumClusterSize
+      - neo4j.operations.enableServer
+      - neo4j.edition          # enterprise required for cluster (helpers)
+      # End of file (~L762–770) — NOT adjacent to minimumClusterSize in YAML
+      - analytics.enabled
+      - analytics.type.name    # primary | secondary
+      # Indirect — templates derive topology behavior
+      - services.internals.enabled
+      - services.neo4j.multiCluster
+      - podSpec.loadbalancer
+      - config                 # keys set in neo4j-config.yaml from topology flags
+    template_evidence:
+      - file: helm-charts/neo4j/templates/_helpers.tpl
+        symbol: neo4j.isClusterEnabled
+        note: cluster when minimumClusterSize >= 3 (enterprise)
+      - file: helm-charts/neo4j/templates/neo4j-config.yaml
+        symbols:
+          - $clusterEnabled
+          - $primaryAnalyticsType
+          - $secondaryAnalyticsType
+        note: >
+          analytics.type primary forces default_primaries_count=1;
+          secondary sets SECONDARY mode_constraint + GDS procedures;
+          minimumClusterSize drives primaries when $clusterEnabled
+      - file: helm-charts/neo4j/templates/neo4j-statefulset.yaml
+        note: replicas hardcoded 1 — Helm multi-member = multi-release, not one STS
+      - file: helm-charts/neo4j/templates/neo4j-svc.yaml
+        note: cluster/analytics ports when or $clusterEnabled $.Values.analytics.enabled
+    neo4j_doc_themes:
+      - Clustering / discovery / routing (Operations Manual)
+      - GDS cluster deployment (secondary/analytics server)
+      - ENABLE SERVER / scale (cluster administration)
+    helm_vs_operator_gap: >
+      Helm chart: 1 release = 1 pod (replicas:1); HA = multiple releases.
+      Operator (BDR-002 hypothesis): 1 Neo4j CR = 1 StatefulSet, N replicas, ordinal pools.
+      Validate this divergence explicitly in aggregation — do not assume Helm shape for CRD.
+    bdr_exemplar: BDR-002
+    bdr_status: proposed — challenge allowed
+    aggregation_groups: [AGG-TOPO-ROLES]
+    crd_section_hypothesis: spec.topology
+
+  - id: CONCERN-PLUGINS-ON-TOPOLOGY
+    label: Plugins bound to server role / pool
+    description: >
+      GDS/Bloom/APOC install and config depend on which servers exist (e.g. GDS forbidden
+      on primaries). analytics secondary template sets gds.* procedures — couples plugins
+      to topology even when plugin jars are configured elsewhere.
+    helm_paths:
+      - analytics.enabled
+      - analytics.type.name
+      - apoc_config
+      - apoc_credentials
+      # Plugin jars often via env NEO4J_PLUGINS — trace in neo4j-env.yaml
+    template_evidence:
+      - file: helm-charts/neo4j/templates/neo4j-config.yaml
+        note: secondary analytics block sets dbms.security.procedures.unrestricted gds.*
+    bdr_exemplar: BDR-004
+    bdr_status: proposed — challenge allowed
+    aggregation_groups: [AGG-TOPO-ROLES, AGG-TOPO-PLUGINS]
+    must_co_decide_with: CONCERN-TOPOLOGY
+
+  - id: CONCERN-TLS
+    label: TLS / trust
+    helm_paths: [ssl.bolt, ssl.https, ssl.cluster, config.dbms.security.tls_reload_enabled]
+    aggregation_groups: [AGG-TLS-TRUST]
+    bdr_exemplar: null
+
+  - id: CONCERN-STORAGE
+    label: Persistence & auxiliary volumes
+    helm_paths: [volumes.data, volumes.backups, volumes.logs, volumes.metrics, volumes.import, volumes.licenses]
+    aggregation_groups: [AGG-STORAGE-DATA, AGG-STORAGE-AUX]
+    bdr_exemplar: BDR-005
+
+  - id: CONCERN-STORAGE-ESCAPE
+    label: Pod volume / secret escape hatches
+    description: >
+      Arbitrary extra volumes, mounts, and secret file mounts not modelled as first-class
+      persistence roles. Helm splits volumes and mounts into two lists; secretMounts is a
+      separate map with structured Secret projection.
+    client_outcomes:
+      - Mount custom config files (emptyDir / configMap)
+      - Inject cloud credentials for seedURI / restore (S3 keys at mountPath)
+      - Enterprise integrations (CSI, extra PVCs) without new CRD fields
+    helm_paths:
+      - additionalVolumes
+      - additionalVolumeMounts
+      - secretMounts
+    template_evidence:
+      - file: helm-charts/neo4j/templates/_volumeTemplate.tpl
+        symbols: [neo4j.additionalVolumes, neo4j.additionalVolumeMounts]
+        note: raw YAML passthrough to StatefulSet volumes / volumeMounts
+      - file: helm-charts/neo4j/templates/_secretMounts.tpl
+        note: map key → volume name; secretName, mountPath, items, defaultMode
+      - file: helm-charts/neo4j/templates/neo4j-statefulset.yaml
+        note: includes both tpl outputs on Neo4j container
+    neo4j_doc_themes:
+      - Restore from seed URI (credentials on filesystem)
+      - Kubernetes deployment customisation
+    operator_vs_helm_gap: >
+      Neo4jRestore CRD carries Job-scoped credentials for V1 restore; Helm secretMounts
+      mounts into the long-running Neo4j pod — both may be required depending on workflow.
+    bdr_exemplar: BDR-005
+    aggregation_groups: [AGG-STORAGE-ESCAPE]
+    must_not_conflate_with:
+      - spec.trust (TLS certificates)
+      - spec.auth (password secrets)
+      - spec.pluginDefinitions (APOC credentials)
+
+  - id: CONCERN-EXPOSURE
+    label: Client & cluster networking
+    helm_paths: [services.default, services.neo4j, services.admin, services.internals, clusterDomain]
+    aggregation_groups: [AGG-EXPOSURE]
+    bdr_exemplar: null
+
+# Add concerns discovered during analysis — do not delete exemplar entries; mark superseded if needed

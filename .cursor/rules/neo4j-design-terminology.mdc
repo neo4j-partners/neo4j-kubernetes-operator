@@ -1,0 +1,33 @@
+---
+description: Neo4j operator design vocabulary — primaries/secondaries, BDR conventions, single Neo4j CRD
+globs: design/**
+alwaysApply: false
+---
+
+# Neo4j operator design terminology
+
+When editing files under `design/`:
+
+## API vocabulary (V1)
+
+- **Primary** = `topology.primaries` (quorum / writers)
+- **Secondary** = `topology.secondaries` with fixed keys **`analytics`** | **`read`**
+- Do **not** use: `cores`, `replicaPools`, `serverRole`, `ReadReplica` as spec fields
+
+## CRD model
+
+- **One** workload CRD `Neo4j` (BDR-001) — embedded sections, not separate infra CRDs
+- **Plugins**: assignment on pools + `pluginDefinitions` (BDR-004 Option E)
+- **Backup/restore**: separate CRDs (different lifecycle)
+
+## Decision records
+
+- **BDR** = business (`design/decision-records/business/`)
+- **ADR** = architecture (`design/decision-records/architecture/`)
+- BDR-001/002/004 are **exemplars** — validate via `helm-semantic-concern-mapper`; amend/supersede when Helm code + Neo4j docs warrant it
+- Read accepted BDRs before proposing CRD shape changes
+
+## Helm analysis outputs
+
+- Traceability via `design/analysis/helm-fields/_index.csv`
+- Do not contradict accepted BDRs without marking `supersedes` or new BDR

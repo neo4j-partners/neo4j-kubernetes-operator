@@ -1,0 +1,118 @@
+# Parallel batches for Domain Analyst subagents.
+#
+# IMPORTANT: domains are for PARALLEL WORK ONLY — not semantic boundaries.
+# Scattered values (e.g. analytics at end of values.yaml) may share CONCERN-TOPOLOGY
+# with neo4j.minimumClusterSize at the top. Phase 2.5 helm-semantic-concern-mapper
+# discovers cross-links via template code + Neo4j docs.
+#
+# BDR-002 / BDR-004 are exemplars — may be revised after concern analysis.
+version: 1
+helm_chart: helm-charts/neo4j
+values_file: helm-charts/neo4j/values.yaml
+go_model: helm-charts/internal/model/release_values.go
+
+domains:
+  - id: packaging
+    label: Chart metadata & naming
+    prefixes:
+      - nameOverride
+      - fullnameOverride
+      - disableLookups
+
+  - id: neo4j-core
+    label: Neo4j edition, license, password, resources
+    prefixes:
+      - neo4j.name
+      - neo4j.password
+      - neo4j.passwordFromSecret
+      - neo4j.edition
+      - neo4j.acceptLicenseAgreement
+      - neo4j.offlineMaintenanceModeEnabled
+      - neo4j.resources
+      - neo4j.labels
+      - logInitialPassword
+
+  - id: topology-lifecycle
+    label: Cluster size, analytics, operations
+    prefixes:
+      - neo4j.minimumClusterSize
+      - neo4j.operations
+      - analytics
+
+  - id: storage
+    label: Volumes, PVC modes, mounts
+    prefixes:
+      - volumes
+      - additionalVolumes
+      - additionalVolumeMounts
+      - secretMounts
+
+  - id: network
+    label: Services, exposure, cluster domain
+    prefixes:
+      - services
+      - clusterDomain
+      - podSpec.loadbalancer
+
+  - id: tls
+    label: SSL/TLS policies
+    prefixes:
+      - ssl
+
+  - id: config
+    label: neo4j.conf, JVM, env
+    prefixes:
+      - config
+      - jvm
+      - env
+
+  - id: plugins
+    label: APOC, plugin credentials (topology linkage via Phase 2.5)
+    prefixes:
+      - apoc_config
+      - apoc_credentials
+    note: analytics.* analyzed under topology-lifecycle — semantic link in Phase 2.5
+
+  - id: security
+    label: Auth, LDAP, pod security
+    prefixes:
+      - ldapPasswordFromSecret
+      - ldapPasswordMountPath
+      - securityContext
+      - containerSecurityContext
+
+  - id: health
+    label: Probes
+    prefixes:
+      - readinessProbe
+      - livenessProbe
+      - startupProbe
+
+  - id: scheduling
+    label: Placement, affinity, STS metadata
+    prefixes:
+      - nodeSelector
+      - statefulset
+      - podSpec
+
+  - id: observability
+    label: Logging, metrics scrape
+    prefixes:
+      - logging
+      - serviceMonitor
+
+  - id: resilience
+    label: PDB
+    prefixes:
+      - podDisruptionBudget
+
+  - id: image
+    label: Container image & pull secrets
+    prefixes:
+      - image
+
+# Phase 2 (deferred): neo4j-admin chart, neo4j-loadbalancer, neo4j-reverse-proxy
+deferred_charts:
+  - helm-charts/neo4j-admin
+  - helm-charts/neo4j-loadbalancer
+  - helm-charts/neo4j-reverse-proxy
