@@ -257,6 +257,25 @@ func createTestNamespace(name string) string {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
+	// Tear the namespace down when the spec/container that created it finishes,
+	// rather than leaking it until AfterSuite. Under a long suite run, namespaces
+	// left Active (with terminating pods, MinIO deployments, and dead
+	// Services/Endpoints) pile up on the single Kind node and degrade it —
+	// enough to make otherwise-healthy restores intermittently fail on transient
+	// node/DNS contention (#297). DeferCleanup runs after the spec's own
+	// AfterEach (so CRs/finalizers are already released) and mirrors the
+	// per-namespace teardown cleanupTestNamespaces does at suite end. The delete
+	// is non-blocking (background propagation) so the next spec isn't gated on
+	// namespace termination.
+	DeferCleanup(func() {
+		cleanupCustomResourcesInNamespace(uniqueName)
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: uniqueName}}
+		if delErr := k8sClient.Delete(context.Background(), ns,
+			client.PropagationPolicy(metav1.DeletePropagationBackground)); delErr != nil && !errors.IsNotFound(delErr) {
+			GinkgoWriter.Printf("DeferCleanup: failed to delete namespace %s: %v\n", uniqueName, delErr)
+		}
+	})
+
 	return uniqueName
 }
 
