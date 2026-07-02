@@ -1906,7 +1906,17 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 			"Retention pruning on a chain that may contain differential artifacts can orphan DIFFs whose parent FULL ages out; prefer backupType=FULL with retention, or prune via neo4j-admin backup aggregate")
 	}
 	script := buildRetentionScript(backup.Spec.Retention, chainRoot(backup))
-	cleanupJobName := fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix())
+	// Deterministic name derived from the CR's UID (not a wall-clock timestamp).
+	// cleanupBackupArtifacts runs in the finalizer path (handleDeletion), which
+	// re-reconciles the same deleting CR until the finalizer is removed. A
+	// time.Now().Unix() suffix produced a fresh name each second: two reconciles
+	// within the same second collided (AlreadyExists → error → requeue), while
+	// reconciles across a second boundary leaked a second, redundant cleanup Job.
+	// A UID-derived suffix is stable across all reconciles of this CR instance,
+	// so retries converge on the one Job and the AlreadyExists handling below
+	// makes re-creation a clean no-op. (Removed a low-frequency envtest flake
+	// where this churn starved unrelated specs under -race; see #298.)
+	cleanupJobName := cleanupJobNameFor(backup)
 	backoffLimit := int32(1)
 
 	cleanupLabels := backupLabels(backup, "cleanup")
@@ -1948,12 +1958,41 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 	// finalizer is completing — owner-ref'ing it to the dying CR hands it to
 	// the garbage collector immediately, which deletes the Job before (or
 	// while) the prune script runs. The 300s TTL is the cleanup mechanism.
-	if err := r.Create(ctx, cleanupJob); err != nil {
+	//
+	// AlreadyExists is success, not failure: the name is deterministic per CR,
+	// so a concurrent/retried finalizer reconcile that already created the Job
+	// must not error out (that would requeue without removing the finalizer and
+	// re-enter this path in a tight loop). Idempotent create → the deletion
+	// proceeds cleanly.
+	if err := r.Create(ctx, cleanupJob); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create cleanup job: %w", err)
 	}
 
 	logger.Info("Backup cleanup job created", "job", cleanupJob.Name)
 	return nil
+}
+
+// cleanupJobNameFor builds a deterministic name for a CR's retention cleanup
+// Job. The UID-derived suffix keeps the name stable across every reconcile of a
+// given CR instance (so finalizer retries converge on one Job) while staying
+// unique across CRs that happen to share a name over time. The result is capped
+// to the 63-char Kubernetes object-name limit by trimming the CR-name portion,
+// never the suffix (the suffix is what guarantees uniqueness).
+func cleanupJobNameFor(backup *neo4jv1beta1.Neo4jBackup) string {
+	suffix := "-cleanup"
+	uid := strings.ReplaceAll(string(backup.UID), "-", "")
+	if len(uid) > 8 {
+		uid = uid[:8]
+	}
+	if uid != "" {
+		suffix = suffix + "-" + uid
+	}
+	const maxNameLen = 63
+	base := backup.Name
+	if len(base)+len(suffix) > maxNameLen {
+		base = base[:maxNameLen-len(suffix)]
+	}
+	return base + suffix
 }
 
 // buildRetentionScript generates a shell script that enforces the given

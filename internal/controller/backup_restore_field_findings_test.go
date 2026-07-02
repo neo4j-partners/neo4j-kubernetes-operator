@@ -170,6 +170,31 @@ func TestCleanupJobHasNoOwnerReference(t *testing.T) {
 	}
 }
 
+// #298: cleanupBackupArtifacts runs in the finalizer path and re-reconciles the
+// same deleting CR until the finalizer is removed. It must be idempotent — a
+// repeated call must NOT error (that requeues without removing the finalizer,
+// looping) and must NOT leak a second Job. The old time.Now().Unix() name did
+// both: same-second calls collided (error), cross-second calls duplicated.
+func TestCleanupBackupArtifacts_Idempotent(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(nil)
+	backup.Spec.Retention = &neo4jv1beta1.RetentionPolicy{MaxCount: 2}
+	backup.Spec.Options = &neo4jv1beta1.BackupOptions{BackupType: "FULL"}
+
+	for i := 0; i < 3; i++ {
+		if err := r.cleanupBackupArtifacts(context.Background(), backup); err != nil {
+			t.Fatalf("cleanupBackupArtifacts call %d: %v (must be idempotent)", i+1, err)
+		}
+	}
+	jobs := &batchv1.JobList{}
+	if err := r.List(context.Background(), jobs); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("expected exactly one cleanup Job after repeated calls, got %d", len(jobs.Items))
+	}
+}
+
 // #227: PVC-backed backup Jobs must serialize on the chain directory via
 // flock — the operator's Job-creation gate can't stop two CronJob children
 // (FULL parent + DIFF child sharing the dir via chainFromBackup) firing into
