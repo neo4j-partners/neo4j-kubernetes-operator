@@ -67,24 +67,12 @@ type Neo4jBackupSpec struct {
 	// +optional
 	ShardedDatabase string `json:"shardedDatabase,omitempty"`
 
-	// Target defines what to back up.
-	//
-	// DEPRECATED (v1.13): prefer InstanceRef + Database/AllDatabases. The legacy
-	// Target block is honored for one release behind a deprecation warning and
-	// is removed in v1.14. Ignored when InstanceRef is set. An empty Target
-	// (the zero value) means "using the InstanceRef API".
-	// +optional
-	Target BackupTarget `json:"target,omitempty"`
-
 	// +kubebuilder:validation:Required
 	// Storage defines where to store the backup
 	Storage StorageLocation `json:"storage"`
 
 	// Schedule for automated backups (cron format)
 	Schedule string `json:"schedule,omitempty"`
-
-	// Cloud configuration for cloud storage
-	Cloud *CloudBlock `json:"cloud,omitempty"`
 
 	// Retention policy for backup cleanup
 	Retention *RetentionPolicy `json:"retention,omitempty"`
@@ -120,91 +108,55 @@ type Neo4jBackupSpec struct {
 	ChainFromBackup string `json:"chainFromBackup,omitempty"`
 }
 
-// BackupTargetKind values accepted on BackupTarget.Kind. Use these constants
-// instead of raw strings at call sites.
+// Backup scope values returned by Neo4jBackupSpec.Scope(), derived from the
+// scope fields (instanceRef + database/allDatabases/shardedDatabase). Use these
+// constants instead of raw strings at call sites.
 const (
-	BackupTargetKindCluster         = "Cluster"
-	BackupTargetKindDatabase        = "Database"
+	// BackupTargetKindCluster is instance-wide (all-databases) scope.
+	BackupTargetKindCluster = "Cluster"
+	// BackupTargetKindDatabase is single-database scope.
+	BackupTargetKindDatabase = "Database"
+	// BackupTargetKindShardedDatabase is property-sharded-database scope.
 	BackupTargetKindShardedDatabase = "ShardedDatabase"
 )
 
-// IsDatabaseScoped reports whether the kind addresses a single database (or
-// logical sharded family) rather than the whole cluster. Database-scoped kinds
-// require ClusterRef and carry the database name (not the cluster name) in
-// Target.Name.
+// IsDatabaseScopedBackupKind reports whether the scope addresses a single
+// database (or logical sharded family) rather than the whole instance.
+// Database-scoped scopes carry the database/sharded-CR name in ScopedName() and
+// the owning instance in InstanceRef.
 func IsDatabaseScopedBackupKind(kind string) bool {
 	return kind == BackupTargetKindDatabase || kind == BackupTargetKindShardedDatabase
 }
 
-// UsesLegacyTarget reports whether this spec relies on the deprecated Target
-// block rather than the InstanceRef + scope API. InstanceRef is authoritative:
-// when it is set the Target block is ignored, so this returns false.
-func (s *Neo4jBackupSpec) UsesLegacyTarget() bool {
-	return s.InstanceRef == "" && (s.Target.Kind != "" || s.Target.Name != "" || s.Target.ClusterRef != "")
-}
-
-// ResolvedTarget maps the InstanceRef + scope API onto the internal BackupTarget
-// model the controller consumes, so existing target-driven logic is unchanged.
-// When InstanceRef is unset the legacy Target is returned as-is. Otherwise a
-// target is synthesized:
-//   - AllDatabases       -> {Kind: Cluster,         Name: InstanceRef}
-//   - ShardedDatabase    -> {Kind: ShardedDatabase, Name: ShardedDatabase, ClusterRef: InstanceRef}
-//   - Database (single)  -> {Kind: Database,        Name: Database,        ClusterRef: InstanceRef}
-func (s *Neo4jBackupSpec) ResolvedTarget() BackupTarget {
-	if s.InstanceRef == "" {
-		return s.Target
-	}
-	t := BackupTarget{Namespace: s.Target.Namespace}
-	if s.AllDatabases {
-		t.Kind = BackupTargetKindCluster
-		t.Name = s.InstanceRef
-		return t
-	}
-	if s.ShardedDatabase != "" {
-		t.Kind = BackupTargetKindShardedDatabase
-		t.Name = s.ShardedDatabase
-		t.ClusterRef = s.InstanceRef
-		return t
-	}
-	t.Kind = BackupTargetKindDatabase
-	t.Name = s.Database
-	t.ClusterRef = s.InstanceRef
-	return t
-}
-
-// NormalizeSpec rewrites the in-memory spec so downstream target-driven logic
-// works unchanged: when InstanceRef is set, Target is replaced by ResolvedTarget.
-// Safe to persist — InstanceRef stays authoritative and re-synthesizes the same
-// Target on the next reconcile. Call once at the top of Reconcile.
-func (s *Neo4jBackupSpec) NormalizeSpec() {
-	if s.InstanceRef != "" {
-		s.Target = s.ResolvedTarget()
+// Scope returns the backup's scope — one of the BackupTargetKind* values —
+// derived from the scope fields. AllDatabases → Cluster (instance-wide);
+// ShardedDatabase set → ShardedDatabase; otherwise single Database. An empty
+// spec (no scope field set) reports Database with an empty ScopedName; the
+// validator rejects that up front.
+func (s *Neo4jBackupSpec) Scope() string {
+	switch {
+	case s.AllDatabases:
+		return BackupTargetKindCluster
+	case s.ShardedDatabase != "":
+		return BackupTargetKindShardedDatabase
+	default:
+		return BackupTargetKindDatabase
 	}
 }
 
-// BackupTarget defines what to back up. DEPRECATED (v1.13): the Neo4jBackupSpec
-// InstanceRef + Database/AllDatabases fields supersede this block, which is
-// removed in v1.14.
-type BackupTarget struct {
-	// +kubebuilder:validation:Enum=Cluster;Database;ShardedDatabase
-	// +optional
-	Kind string `json:"kind,omitempty"`
-
-	// Name of the target resource. For Kind=ShardedDatabase, this is the
-	// Neo4jShardedDatabase CR (metadata) name; the operator resolves the logical
-	// sharded-database name from that CR's spec.name and backs up all shards
-	// (e.g. products-g000, products-p000, …) in one neo4j-admin invocation via a
-	// glob. The CR name and spec.name often differ.
-	// +optional
-	Name string `json:"name,omitempty"`
-
-	// ClusterRef is the name of the Neo4jEnterpriseCluster (or Neo4jEnterpriseStandalone)
-	// that owns the database. Required when Kind=Database or Kind=ShardedDatabase;
-	// unused when Kind=Cluster.
-	ClusterRef string `json:"clusterRef,omitempty"`
-
-	// Namespace of the target resource (defaults to backup namespace)
-	Namespace string `json:"namespace,omitempty"`
+// ScopedName returns the name of the resource this backup targets: the
+// Neo4jShardedDatabase CR name (ShardedDatabase scope), the single database name
+// (Database scope), or the instance name (Cluster / all-databases scope). The
+// owning instance is always InstanceRef.
+func (s *Neo4jBackupSpec) ScopedName() string {
+	switch s.Scope() {
+	case BackupTargetKindShardedDatabase:
+		return s.ShardedDatabase
+	case BackupTargetKindCluster:
+		return s.InstanceRef
+	default:
+		return s.Database
+	}
 }
 
 // RetentionPolicy defines backup retention rules
@@ -215,10 +167,11 @@ type RetentionPolicy struct {
 	// Maximum number of backups to keep
 	MaxCount int32 `json:"maxCount,omitempty"`
 
-	// Delete policy for expired backups. Only "Delete" is implemented;
-	// "Archive" is RESERVED and currently behaves as a no-op (#220) — no
-	// archival logic exists. Accepted for backward compatibility.
-	// +kubebuilder:validation:Enum=Delete;Archive
+	// Delete policy for expired backups. Only "Delete" is supported — expired
+	// artifacts (PVC storage) are pruned by the delete-time cleanup Job. For
+	// cloud storage, retention is delegated to bucket lifecycle rules. (The
+	// "Archive" value was removed in v1.14 — it never had archival logic.)
+	// +kubebuilder:validation:Enum=Delete
 	// +kubebuilder:default=Delete
 	DeletePolicy string `json:"deletePolicy,omitempty"`
 }
@@ -245,13 +198,6 @@ type BackupOptions struct {
 	// CompressEffective(), never dereference.
 	// +kubebuilder:default=true
 	Compress *bool `json:"compress,omitempty"`
-
-	// Verify is RESERVED and currently a no-op (#220) — it is accepted for
-	// backward compatibility but the operator does not read it. For real
-	// artifact verification use options.validate, which runs
-	// `neo4j-admin backup validate` and records the result in
-	// status.history[].validation.
-	Verify bool `json:"verify,omitempty"`
 
 	// Backup type
 	// +kubebuilder:validation:Enum=FULL;DIFF;AUTO

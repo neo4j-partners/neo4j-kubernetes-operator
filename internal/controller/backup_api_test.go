@@ -34,9 +34,10 @@ var _ = Describe("Backup API Tests", func() {
 			backup := &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-full-backup", Namespace: testNamespace},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
-					Storage: neo4jv1beta1.StorageLocation{Type: "pvc", Path: "/backups/full"},
-					Options: &neo4jv1beta1.BackupOptions{BackupType: "FULL", Compress: ptr.To(true), PageCache: "2G"},
+					InstanceRef:  "test-cluster",
+					AllDatabases: true,
+					Storage:      neo4jv1beta1.StorageLocation{Type: "pvc", Path: "/backups/full"},
+					Options:      &neo4jv1beta1.BackupOptions{BackupType: "FULL", Compress: ptr.To(true), PageCache: "2G"},
 				},
 			}
 			Expect(k8sClient.Create(ctx, backup)).To(Succeed())
@@ -51,10 +52,11 @@ var _ = Describe("Backup API Tests", func() {
 			backup := &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-scheduled-backup", Namespace: testNamespace},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target:    neo4jv1beta1.BackupTarget{Kind: "Database", Name: "mydb"},
-					Storage:   neo4jv1beta1.StorageLocation{Type: "pvc", Path: "/backups/scheduled"},
-					Schedule:  "0 2 * * *",
-					Retention: &neo4jv1beta1.RetentionPolicy{MaxAge: "7d", MaxCount: 7, DeletePolicy: "Delete"},
+					InstanceRef: "test-cluster",
+					Database:    "mydb",
+					Storage:     neo4jv1beta1.StorageLocation{Type: "pvc", Path: "/backups/scheduled"},
+					Schedule:    "0 2 * * *",
+					Retention:   &neo4jv1beta1.RetentionPolicy{MaxAge: "7d", MaxCount: 7, DeletePolicy: "Delete"},
 				},
 			}
 			Expect(k8sClient.Create(ctx, backup)).To(Succeed())
@@ -68,9 +70,12 @@ var _ = Describe("Backup API Tests", func() {
 			backup := &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-s3-backup", Namespace: testNamespace},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
-					Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "prod-cluster"},
-					Storage: neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "my-bucket", Path: "/neo4j-backups/prod"},
-					Cloud:   &neo4jv1beta1.CloudBlock{Provider: "aws"},
+					InstanceRef:  "prod-cluster",
+					AllDatabases: true,
+					Storage: neo4jv1beta1.StorageLocation{
+						Type: "s3", Bucket: "my-bucket", Path: "/neo4j-backups/prod",
+						Cloud: &neo4jv1beta1.CloudBlock{Provider: "aws"},
+					},
 					Options: &neo4jv1beta1.BackupOptions{
 						BackupType: "AUTO",
 						Compress:   ptr.To(true),
@@ -81,7 +86,7 @@ var _ = Describe("Backup API Tests", func() {
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{Name: backup.Name, Namespace: testNamespace}, backup)
 			}, timeout, interval).Should(Succeed())
-			Expect(backup.Spec.Cloud.Provider).To(Equal("aws"))
+			Expect(backup.Spec.Storage.Cloud.Provider).To(Equal("aws"))
 			Expect(backup.Spec.Options.BackupType).To(Equal("AUTO"))
 		})
 	})

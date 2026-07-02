@@ -444,11 +444,13 @@ kind: Neo4jRestore
 metadata:
   name: split-brain-recovery
 spec:
-  acceptLicenseAgreement: "eval"
-  clusterRef: recovery-cluster
-  backupRef: latest-backup
+  instanceRef: recovery-cluster
+  database: neo4j
+  source:
+    type: backup
+    backupRef: latest-backup
   options:
-    force: true
+    replaceExisting: true
 EOF
 
 # 3. Verify data integrity

@@ -24,54 +24,38 @@ import (
 // Neo4jRestoreSpec defines the desired state of Neo4jRestore
 type Neo4jRestoreSpec struct {
 	// InstanceRef names the Neo4j deployment to restore INTO — a
-	// Neo4jEnterpriseCluster OR a Neo4jEnterpriseStandalone. Topology-agnostic
-	// alias for the deprecated ClusterRef; the operator picks the restore engine
-	// from the target's topology. Preferred as of v1.13, authoritative when set.
+	// Neo4jEnterpriseCluster OR a Neo4jEnterpriseStandalone. Topology-agnostic:
+	// the operator picks the restore engine from the target's topology. Required
+	// (the deprecated ClusterRef alias was removed in v1.14).
 	// +optional
 	InstanceRef string `json:"instanceRef,omitempty"`
-
-	// ClusterRef references the Neo4j cluster or standalone to restore to.
-	// DEPRECATED (v1.13): prefer InstanceRef (removed in v1.14). Exactly one of
-	// ClusterRef or InstanceRef must be set; InstanceRef wins if both are.
-	// +optional
-	ClusterRef string `json:"clusterRef,omitempty"`
 
 	// +kubebuilder:validation:Required
 	// Source backup location
 	Source RestoreSource `json:"source"`
 
-	// Database to restore. Preferred as of v1.13 (alias of the deprecated
-	// DatabaseName), authoritative when set. Must be a valid Neo4j database name
-	// (starts with a letter; letters, digits, dots, dashes only) — the name is
-	// interpolated into the restore Job's shell command and Cypher.
+	// Database to restore. Must be a valid Neo4j database name (starts with a
+	// letter; letters, digits, dots, dashes only) — the name is interpolated
+	// into the restore Job's shell command and Cypher. (The deprecated
+	// DatabaseName alias was removed in v1.14.) Mutually exclusive with
+	// AllDatabases.
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9.\-]*$`
 	// +kubebuilder:validation:MaxLength=65
 	// +optional
 	Database string `json:"database,omitempty"`
 
-	// DatabaseName is the database to restore to.
-	// DEPRECATED (v1.13): prefer Database (removed in v1.14). Exactly one of
-	// Database or DatabaseName must be set; Database wins if both are.
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9.\-]*$`
-	// +kubebuilder:validation:MaxLength=65
-	// +optional
-	DatabaseName string `json:"databaseName,omitempty"`
-
 	// AllDatabases restores EVERY user database recorded in the source backup
 	// (the system database is always excluded) — the restore counterpart of an
 	// all-databases (instance-wide) backup (#222). Mutually exclusive with
-	// Database/DatabaseName. Requires source.type=backup (the operator reads the
-	// backup's per-database artifact map). The operator restores one database
-	// per reconcile pass and reports per-database progress in
+	// Database. Requires source.type=backup (the operator reads the backup's
+	// per-database artifact map). The operator restores one database per
+	// reconcile pass and reports per-database progress in
 	// status.databaseResults.
 	// +optional
 	AllDatabases bool `json:"allDatabases,omitempty"`
 
 	// Restore options
 	Options *RestoreOptionsSpec `json:"options,omitempty"`
-
-	// Force restore even if database exists
-	Force bool `json:"force,omitempty"`
 
 	// Stop cluster before restore (required for some restore operations)
 	StopCluster bool `json:"stopCluster,omitempty"`
@@ -81,45 +65,6 @@ type Neo4jRestoreSpec struct {
 	// large stores seeded from object storage. The standalone Job path is
 	// bounded by the Job's own backoff/active-deadline semantics instead.
 	Timeout string `json:"timeout,omitempty"`
-}
-
-// EffectiveClusterRef returns the target deployment ref, preferring the v1.13
-// InstanceRef over the deprecated ClusterRef.
-func (s *Neo4jRestoreSpec) EffectiveClusterRef() string {
-	if s.InstanceRef != "" {
-		return s.InstanceRef
-	}
-	return s.ClusterRef
-}
-
-// EffectiveDatabaseName returns the database to restore, preferring the v1.13
-// Database over the deprecated DatabaseName.
-func (s *Neo4jRestoreSpec) EffectiveDatabaseName() string {
-	if s.Database != "" {
-		return s.Database
-	}
-	return s.DatabaseName
-}
-
-// UsesLegacyRestoreFields reports whether the spec relies on the deprecated
-// ClusterRef/DatabaseName fields rather than InstanceRef/Database. The new
-// fields are authoritative, so this is true only when a legacy field is set
-// without its new counterpart.
-func (s *Neo4jRestoreSpec) UsesLegacyRestoreFields() bool {
-	return (s.InstanceRef == "" && s.ClusterRef != "") ||
-		(s.Database == "" && s.DatabaseName != "")
-}
-
-// NormalizeSpec rewrites the in-memory spec so downstream logic that reads
-// ClusterRef/DatabaseName works unchanged: the v1.13 InstanceRef/Database win.
-// Call once at the top of Reconcile.
-func (s *Neo4jRestoreSpec) NormalizeSpec() {
-	if s.InstanceRef != "" {
-		s.ClusterRef = s.InstanceRef
-	}
-	if s.Database != "" {
-		s.DatabaseName = s.Database
-	}
 }
 
 // RestoreSource defines the source of the backup to restore
@@ -186,11 +131,6 @@ type RestoreOptionsSpec struct {
 
 	// Replace existing database
 	ReplaceExisting bool `json:"replaceExisting,omitempty"`
-
-	// VerifyBackup is RESERVED and currently a no-op (#220) — accepted for
-	// backward compatibility but not read by the operator. Verify artifacts
-	// at backup time via Neo4jBackup.spec.options.validate instead.
-	VerifyBackup bool `json:"verifyBackup,omitempty"`
 
 	// Additional neo4j-admin restore arguments
 	AdditionalArgs []string `json:"additionalArgs,omitempty"`
@@ -324,6 +264,13 @@ type ResolvedRestoreSource struct {
 	// ResolvedAt is when the backupRef was first dereferenced.
 	ResolvedAt *metav1.Time `json:"resolvedAt,omitempty"`
 
+	// BackupCreatedAt is the completion time of the resolved most-recent
+	// Succeeded run, captured at resolution so restore provenance
+	// (status.backupInfo.backupCreatedAt) survives deletion of the source
+	// Neo4jBackup CR. Empty when the run recorded no completion time.
+	// +optional
+	BackupCreatedAt *metav1.Time `json:"backupCreatedAt,omitempty"`
+
 	// DatabaseArtifacts is the per-database `.backup` map pinned for an
 	// all-databases restore (spec.allDatabases), copied from the resolved
 	// backup's latest Succeeded run so the restore no longer depends on the
@@ -361,44 +308,37 @@ type DatabaseRestoreResult struct {
 
 // RestoreStats provides restore operation statistics
 type RestoreStats struct {
-	// Duration of the restore operation
+	// Duration is the wall-clock time the restore took, derived from
+	// status.completionTime − status.startTime and formatted like "2m3s".
 	Duration string `json:"duration,omitempty"`
-
-	// Size of data restored
-	DataSize string `json:"dataSize,omitempty"`
-
-	// Throughput of the restore operation
-	Throughput string `json:"throughput,omitempty"`
-
-	// Number of files restored
-	FileCount int32 `json:"fileCount,omitempty"`
-
-	// Errors encountered during restore
-	ErrorCount int32 `json:"errorCount,omitempty"`
 }
 
-// RestoreBackupInfo provides information about the backup that was restored
+// RestoreBackupInfo provides provenance about the backup this restore was
+// seeded from. Populated at finalization from the resolved source; fields the
+// operator cannot derive without the (possibly-deleted) source backup are
+// omitted rather than guessed.
 type RestoreBackupInfo struct {
-	// Source backup path
+	// BackupPath is the source backup location this restore read from: the
+	// per-CR chain directory (with the resolved `.backup` filename when known)
+	// for a `source.type: backup` restore, or the explicit storage path for a
+	// `source.type: storage` restore.
 	BackupPath string `json:"backupPath,omitempty"`
 
-	// Original creation time of the backup
+	// BackupCreatedAt is the completion time of the backup run this restore was
+	// seeded from. Populated only for `source.type: backup` restores (copied
+	// from the resolved backup's latest Succeeded run); empty for
+	// `source.type: storage` restores, which carry no backup CR.
 	BackupCreatedAt *metav1.Time `json:"backupCreatedAt,omitempty"`
 
-	// Original database name in the backup
+	// OriginalDatabase is the logical database that was restored. Empty for an
+	// all-databases restore (see status.databaseResults for per-database detail).
 	OriginalDatabase string `json:"originalDatabase,omitempty"`
-
-	// Neo4j version of the backup
-	Neo4jVersion string `json:"neo4jVersion,omitempty"`
-
-	// Backup size
-	BackupSize string `json:"backupSize,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.clusterRef`
-// +kubebuilder:printcolumn:name="Database",type=string,JSONPath=`.spec.databaseName`
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.instanceRef`
+// +kubebuilder:printcolumn:name="Database",type=string,JSONPath=`.spec.database`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Duration",type=string,JSONPath=`.status.stats.duration`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

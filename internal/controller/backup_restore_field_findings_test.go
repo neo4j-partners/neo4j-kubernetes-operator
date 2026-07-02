@@ -50,11 +50,8 @@ func fieldFindingsBackup(opts *neo4jv1beta1.BackupOptions) *neo4jv1beta1.Neo4jBa
 	return &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{
-				Kind:       neo4jv1beta1.BackupTargetKindDatabase,
-				Name:       "neo4j",
-				ClusterRef: "ec",
-			},
+			InstanceRef: "ec",
+			Database:    "neo4j",
 			Storage: neo4jv1beta1.StorageLocation{
 				Type: "pvc",
 				PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
@@ -108,19 +105,18 @@ func TestBuildBackupCommand_ValidateGatedOnCalver(t *testing.T) {
 	}
 }
 
-// #253: both spec.force and options.replaceExisting are documented as the
-// overwrite confirmation; the Job command builders must honor BOTH (only
-// force was wired, so the documented replaceExisting path failed with
-// "Database ... already exists").
+// #253 + v1.14: options.replaceExisting is the single overwrite confirmation
+// (the top-level spec.force alias was removed in v1.14). The Job command
+// builders and the cluster/all-databases recreate gates all funnel through
+// restoreOverwriteConfirmed, so it must key off replaceExisting alone.
 func TestRestoreOverwriteConfirmed(t *testing.T) {
 	cases := []struct {
 		name string
 		spec neo4jv1beta1.Neo4jRestoreSpec
 		want bool
 	}{
-		{"force only", neo4jv1beta1.Neo4jRestoreSpec{Force: true}, true},
-		{"replaceExisting only", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
-		{"both", neo4jv1beta1.Neo4jRestoreSpec{Force: true, Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
+		{"replaceExisting true", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true}}, true},
+		{"replaceExisting false", neo4jv1beta1.Neo4jRestoreSpec{Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: false}}, false},
 		{"neither", neo4jv1beta1.Neo4jRestoreSpec{}, false},
 		{"nil options", neo4jv1beta1.Neo4jRestoreSpec{Options: nil}, false},
 	}
@@ -171,6 +167,31 @@ func TestCleanupJobHasNoOwnerReference(t *testing.T) {
 	}
 	if len(jobs.Items[0].OwnerReferences) != 0 {
 		t.Errorf("cleanup Job must NOT be owner-ref'd to the CR being deleted (GC races the prune script); got: %v", jobs.Items[0].OwnerReferences)
+	}
+}
+
+// #298: cleanupBackupArtifacts runs in the finalizer path and re-reconciles the
+// same deleting CR until the finalizer is removed. It must be idempotent — a
+// repeated call must NOT error (that requeues without removing the finalizer,
+// looping) and must NOT leak a second Job. The old time.Now().Unix() name did
+// both: same-second calls collided (error), cross-second calls duplicated.
+func TestCleanupBackupArtifacts_Idempotent(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(nil)
+	backup.Spec.Retention = &neo4jv1beta1.RetentionPolicy{MaxCount: 2}
+	backup.Spec.Options = &neo4jv1beta1.BackupOptions{BackupType: "FULL"}
+
+	for i := 0; i < 3; i++ {
+		if err := r.cleanupBackupArtifacts(context.Background(), backup); err != nil {
+			t.Fatalf("cleanupBackupArtifacts call %d: %v (must be idempotent)", i+1, err)
+		}
+	}
+	jobs := &batchv1.JobList{}
+	if err := r.List(context.Background(), jobs); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("expected exactly one cleanup Job after repeated calls, got %d", len(jobs.Items))
 	}
 }
 
@@ -289,8 +310,9 @@ func TestEnsureBackupPVC_CreatedWithoutOwnerRef(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default", UID: "uid-nightly"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "ec"},
-			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
+			InstanceRef:  "ec",
+			AllDatabases: true,
+			Storage:      neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
 		},
 	}
 	r := newShardedTestReconciler(t, backup)
@@ -310,8 +332,9 @@ func TestEnsureBackupPVC_StripsStaleOwnerRef(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default", UID: "uid-nightly"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "ec"},
-			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
+			InstanceRef:  "ec",
+			AllDatabases: true,
+			Storage:      neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc", Size: "5Gi"}},
 		},
 	}
 	ctrlRef := true

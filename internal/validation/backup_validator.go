@@ -84,21 +84,12 @@ func NewBackupValidator() *BackupValidator {
 func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.ErrorList {
 	var allErrs field.ErrorList
 
-	// Validate the scope selector: the v1.13 spec.instanceRef + database/allDatabases
-	// API, or the deprecated spec.target block.
+	// Validate the scope selector: spec.instanceRef + exactly one of
+	// database/allDatabases/shardedDatabase.
 	allErrs = append(allErrs, v.validateScopeSelection(&backup.Spec)...)
 
-	// Validate the legacy target block only when it is actually in use. The new
-	// instanceRef + scope API is fully validated by validateScopeSelection above;
-	// its synthesized target is valid by construction once the scope is valid, so
-	// running validateBackupTarget there would only emit confusing spec.target.*
-	// errors for fields the user never set.
-	if backup.Spec.InstanceRef == "" && backup.Spec.UsesLegacyTarget() {
-		allErrs = append(allErrs, v.validateBackupTarget(&backup.Spec.Target, backup.Namespace)...)
-	}
-
 	// Validate storage configuration
-	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage, backup.Spec.Cloud)...)
+	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage)...)
 
 	// Validate schedule if specified
 	if backup.Spec.Schedule != "" {
@@ -124,8 +115,8 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 	}
 
 	// Validate cloud configuration if specified
-	if backup.Spec.Cloud != nil {
-		allErrs = append(allErrs, v.validateCloudConfiguration(backup.Spec.Cloud)...)
+	if backup.Spec.Storage.Cloud != nil {
+		allErrs = append(allErrs, v.validateCloudConfiguration(backup.Spec.Storage.Cloud)...)
 	}
 
 	// Validate retention policy if specified
@@ -176,128 +167,46 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 	return allErrs
 }
 
-// validateBackupTarget validates the backup target configuration. backupNamespace
-// is the namespace of the parent Neo4jBackup CR; used to enforce same-namespace
-// ClusterRef for database-scoped kinds.
-func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget, backupNamespace string) field.ErrorList {
-	var allErrs field.ErrorList
-	targetPath := field.NewPath("spec", "target")
-
-	// Validate target kind
-	validKinds := []string{
-		neo4jv1beta1.BackupTargetKindCluster,
-		neo4jv1beta1.BackupTargetKindDatabase,
-		neo4jv1beta1.BackupTargetKindShardedDatabase,
-	}
-	if target.Kind == "" {
-		allErrs = append(allErrs, field.Required(
-			targetPath.Child("kind"),
-			"backup target kind must be specified",
-		))
-	} else {
-		valid := false
-		for _, validKind := range validKinds {
-			if target.Kind == validKind {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			allErrs = append(allErrs, field.NotSupported(
-				targetPath.Child("kind"),
-				target.Kind,
-				validKinds,
-			))
-		}
-	}
-
-	// Validate target name
-	if target.Name == "" {
-		allErrs = append(allErrs, field.Required(
-			targetPath.Child("name"),
-			"backup target name must be specified",
-		))
-	} else if !v.isValidResourceName(target.Name) {
-		// Validate name format (Kubernetes resource name validation)
-		allErrs = append(allErrs, field.Invalid(
-			targetPath.Child("name"),
-			target.Name,
-			"invalid resource name format",
-		))
-	}
-
-	// Database-scoped kinds (Database, ShardedDatabase) require ClusterRef.
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(target.Kind) {
-		if target.ClusterRef == "" {
-			allErrs = append(allErrs, field.Required(
-				targetPath.Child("clusterRef"),
-				fmt.Sprintf("clusterRef is required when target.kind=%s", target.Kind),
-			))
-		}
-	}
-
-	// Cross-namespace target references are not supported for ANY kind — v1
-	// keeps the blast radius inside one namespace (the same boundary enforced
-	// for user/role clusterRefs; see docs/knowledge/operations.md). This check
-	// was previously scoped to database-scoped kinds only, which silently let a
-	// kind:Cluster backup target a cluster in another namespace.
-	if target.Namespace != "" && target.Namespace != backupNamespace {
-		allErrs = append(allErrs, field.Invalid(
-			targetPath.Child("namespace"),
-			target.Namespace,
-			fmt.Sprintf("cross-namespace target references are not supported (backup namespace: %s)", backupNamespace),
-		))
-	}
-
-	return allErrs
-}
-
-// validateScopeSelection validates the v1.13 scope selector: spec.instanceRef
-// with exactly one of spec.database / spec.allDatabases, OR the deprecated
-// spec.target block. InstanceRef is authoritative — when it is set the target
-// block is ignored (the reconciler synthesizes target from instanceRef+scope).
+// validateScopeSelection validates the scope selector: spec.instanceRef with
+// exactly one of spec.database / spec.allDatabases / spec.shardedDatabase.
+// (The legacy spec.target block was removed in v1.14.)
 func (v *BackupValidator) validateScopeSelection(spec *neo4jv1beta1.Neo4jBackupSpec) field.ErrorList {
 	var allErrs field.ErrorList
 	specPath := field.NewPath("spec")
 
-	if spec.InstanceRef != "" {
-		scopes := 0
-		if spec.Database != "" {
-			scopes++
-		}
-		if spec.AllDatabases {
-			scopes++
-		}
-		if spec.ShardedDatabase != "" {
-			scopes++
-		}
-		switch {
-		case scopes == 0:
-			allErrs = append(allErrs, field.Required(
-				specPath.Child("database"),
-				"set exactly one scope when spec.instanceRef is used: spec.database (single database), spec.allDatabases (instance-wide), or spec.shardedDatabase (a Neo4jShardedDatabase)"))
-		case scopes > 1:
-			allErrs = append(allErrs, field.Invalid(
-				specPath.Child("allDatabases"), spec.AllDatabases,
-				"spec.database, spec.allDatabases, and spec.shardedDatabase are mutually exclusive — set exactly one"))
-		}
+	if spec.InstanceRef == "" {
+		allErrs = append(allErrs, field.Required(
+			specPath.Child("instanceRef"),
+			"set spec.instanceRef + exactly one of spec.database/allDatabases/shardedDatabase"))
 		return allErrs
 	}
 
-	// No instanceRef: the spec must be using the deprecated target block.
-	if spec.Target.Kind == "" && spec.Target.Name == "" && spec.Target.ClusterRef == "" {
+	scopes := 0
+	if spec.Database != "" {
+		scopes++
+	}
+	if spec.AllDatabases {
+		scopes++
+	}
+	if spec.ShardedDatabase != "" {
+		scopes++
+	}
+	switch {
+	case scopes == 0:
 		allErrs = append(allErrs, field.Required(
-			specPath.Child("instanceRef"),
-			"set spec.instanceRef + spec.database/allDatabases (or the deprecated spec.target)"))
+			specPath.Child("database"),
+			"set exactly one scope: spec.database (single database), spec.allDatabases (instance-wide), or spec.shardedDatabase (a Neo4jShardedDatabase)"))
+	case scopes > 1:
+		allErrs = append(allErrs, field.Invalid(
+			specPath.Child("allDatabases"), spec.AllDatabases,
+			"spec.database, spec.allDatabases, and spec.shardedDatabase are mutually exclusive — set exactly one"))
 	}
 	return allErrs
 }
 
 // validateStorageConfiguration validates storage configuration for Neo4j 5.26+.
-// specCloud is the top-level spec.cloud block; the operator resolves the
-// effective cloud config as storage.cloud ?? spec.cloud (see getCloudBlock in
-// the backup controller), so provider checks must consider both.
-func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.StorageLocation, specCloud *neo4jv1beta1.CloudBlock) field.ErrorList {
+// Cloud config lives under spec.storage.cloud.
+func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.StorageLocation) field.ErrorList {
 	var allErrs field.ErrorList
 	storagePath := field.NewPath("spec", "storage")
 
@@ -318,7 +227,7 @@ func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.Sto
 	}
 
 	// Validate storage provider specific configurations
-	if err := v.validateStorageProvider(storage, specCloud); err != nil {
+	if err := v.validateStorageProvider(storage); err != nil {
 		allErrs = append(allErrs, field.Invalid(
 			storagePath,
 			storage,
@@ -414,17 +323,11 @@ func (v *BackupValidator) validateSchemeSpecificURI(uri, scheme string) error {
 }
 
 // validateStorageProvider validates provider-specific storage configurations.
-// effectiveCloud mirrors the controller's resolution (storage.cloud ?? spec.cloud)
-// so cloud-provider requirements are checked against the block the operator
-// actually uses — the cloud config commonly lives at spec.cloud, not nested
-// under storage.cloud.
-func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageLocation, specCloud *neo4jv1beta1.CloudBlock) error {
+// Cloud-provider requirements are checked against spec.storage.cloud.
+func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageLocation) error {
 	storageType := strings.ToLower(storage.Type)
 
 	effectiveCloud := storage.Cloud
-	if effectiveCloud == nil {
-		effectiveCloud = specCloud
-	}
 
 	// For cloud storage providers, validate additional configuration
 	switch storageType {
@@ -434,7 +337,7 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 			return fmt.Errorf("S3 storage requires bucket name for Neo4j 5.26+")
 		}
 		if effectiveCloud == nil || effectiveCloud.Provider != "aws" {
-			return fmt.Errorf("S3 storage requires cloud provider 'aws' (set spec.cloud.provider or spec.storage.cloud.provider)")
+			return fmt.Errorf("S3 storage requires cloud provider 'aws' (set spec.storage.cloud.provider)")
 		}
 	case "gcs":
 		// GCS specific validations
@@ -442,7 +345,7 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 			return fmt.Errorf("Google Cloud Storage requires bucket name for Neo4j 5.26+")
 		}
 		if effectiveCloud == nil || effectiveCloud.Provider != "gcp" {
-			return fmt.Errorf("GCS storage requires cloud provider 'gcp' (set spec.cloud.provider or spec.storage.cloud.provider)")
+			return fmt.Errorf("GCS storage requires cloud provider 'gcp' (set spec.storage.cloud.provider)")
 		}
 	case "azure":
 		// Azure specific validations
@@ -450,7 +353,7 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 			return fmt.Errorf("Azure Blob Storage requires container name for Neo4j 5.26+")
 		}
 		if effectiveCloud == nil || effectiveCloud.Provider != "azure" {
-			return fmt.Errorf("Azure storage requires cloud provider 'azure' (set spec.cloud.provider or spec.storage.cloud.provider)")
+			return fmt.Errorf("Azure storage requires cloud provider 'azure' (set spec.storage.cloud.provider)")
 		}
 	case "pvc":
 		// PVC specific validations.
@@ -578,9 +481,11 @@ func (v *BackupValidator) validateRetentionPolicy(retention *neo4jv1beta1.Retent
 		))
 	}
 
-	// Validate delete policy
+	// Validate delete policy. Only "Delete" is supported; "Archive" was a
+	// reserved no-op removed in v1.14 (see the CRD enum). Reject anything else
+	// (the CRD enum already blocks it at apply time; this is belt-and-braces).
 	if retention.DeletePolicy != "" {
-		validPolicies := []string{"Delete", "Archive"}
+		validPolicies := []string{"Delete"}
 		valid := false
 		for _, policy := range validPolicies {
 			if retention.DeletePolicy == policy {
@@ -652,18 +557,6 @@ func (v *BackupValidator) validateBackupArg(arg string) error {
 	}
 
 	return nil
-}
-
-// isValidResourceName validates Kubernetes resource name format
-func (v *BackupValidator) isValidResourceName(name string) bool {
-	// Basic Kubernetes resource name validation
-	if len(name) == 0 || len(name) > 253 {
-		return false
-	}
-
-	// Must start and end with alphanumeric character
-	validName := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-	return validName.MatchString(name)
 }
 
 // ValidateNeo4jVersion validates that the Neo4j version is 5.26+ or 2025.01+ (calver)

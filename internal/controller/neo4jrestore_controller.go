@@ -201,16 +201,10 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.handleDeletion(ctx, restore)
 	}
 
-	// Normalize the v1.13 scope-based API (spec.instanceRef/database) onto the
-	// internal clusterRef/databaseName model. InstanceRef/Database are
-	// authoritative; the legacy fields are deprecated and removed in v1.14.
-	restore.Spec.NormalizeSpec()
-	if restore.Spec.UsesLegacyRestoreFields() {
-		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreAPIDeprecated,
-			"spec.clusterRef/databaseName are deprecated; use spec.instanceRef/database (removed in v1.14)")
-	}
-	if restore.Spec.ClusterRef == "" {
-		msg := "spec.instanceRef (or the deprecated spec.clusterRef) is required"
+	// spec.instanceRef names the target deployment (cluster or standalone). The
+	// legacy spec.clusterRef/databaseName aliases were removed in v1.14.
+	if restore.Spec.InstanceRef == "" {
+		msg := "spec.instanceRef is required"
 		logger.Info("Invalid Neo4jRestore spec", "error", msg)
 		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 		return ctrl.Result{}, nil
@@ -318,8 +312,8 @@ func (r *Neo4jRestoreReconciler) handleDeletion(ctx context.Context, restore *ne
 	// died mid-cycle (e.g. user deleted the CR while stopCluster was in
 	// progress). Without this the target cluster is permanently un-scalable.
 	// Idempotent — only clears the annotation if THIS restore set it. Issue #117.
-	if restore.Spec.ClusterRef != "" {
-		if err := r.clearRestoreInProgressAnnotation(ctx, restore, restore.Spec.ClusterRef, restore.Namespace); err != nil {
+	if restore.Spec.InstanceRef != "" {
+		if err := r.clearRestoreInProgressAnnotation(ctx, restore, restore.Spec.InstanceRef, restore.Namespace); err != nil {
 			logger.Error(err, "Failed to clear restore-in-progress annotation during finalizer cleanup")
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
@@ -423,8 +417,8 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	// scaled-to-0 instance and pin a terminal Failed — and the check already
 	// passed before the stop. Also skipped for an all-databases restore: there
 	// is no single spec.database to check; per-database overwrite is gated by
-	// spec.force via `--overwrite-destination` in the multi-database command.
-	if !restore.Spec.Force && !restore.Spec.AllDatabases && !r.restoreAlreadyStoppedInstance(ctx, restore, cluster) {
+	// options.replaceExisting via `--overwrite-destination` in the multi-database command.
+	if !restoreOverwriteConfirmed(restore) && !restore.Spec.AllDatabases && !r.restoreAlreadyStoppedInstance(ctx, restore, cluster) {
 		if err := r.checkDatabaseExists(ctx, restore, cluster); err != nil {
 			logger.Error(err, "Database existence check failed")
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Database check failed: %v", err))
@@ -665,7 +659,7 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	} else if err := r.createOrStartDatabase(ctx, restore, cluster); err != nil {
 		logger.Error(err, "Failed to create/start database after restore")
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
-			fmt.Sprintf("Restore succeeded but failed to create database %q: %v", restore.Spec.DatabaseName, err))
+			fmt.Sprintf("Restore succeeded but failed to create database %q: %v", restore.Spec.Database, err))
 	}
 
 	// Run post-restore hooks AFTER the database is registered/started (#218):
@@ -697,7 +691,7 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 			logger.Error(err, "Failed to recreate restored database from seed server")
 			r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
 				fmt.Sprintf("Restore succeeded but recreate-from-seed failed for %q: %v",
-					restore.Spec.DatabaseName, err))
+					restore.Spec.Database, err))
 		}
 	}
 
@@ -720,15 +714,15 @@ func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, rest
 	}
 	defer func() { _ = neo4jClient.Close() }()
 
-	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.DatabaseName)
+	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.Database)
 	if err != nil {
 		return fmt.Errorf("failed to check database existence: %w", err)
 	}
 
 	if exists {
-		return neo4jClient.StartDatabase(ctx, restore.Spec.DatabaseName, false)
+		return neo4jClient.StartDatabase(ctx, restore.Spec.Database, false)
 	}
-	return neo4jClient.CreateDatabase(ctx, restore.Spec.DatabaseName, nil, false, false)
+	return neo4jClient.CreateDatabase(ctx, restore.Spec.Database, nil, false, false)
 }
 
 // recreateRestoredDatabaseOnCluster invokes `dbms.[cluster.]recreateDatabase`
@@ -775,7 +769,7 @@ func (r *Neo4jRestoreReconciler) recreateRestoredDatabaseOnCluster(
 		log.FromContext(ctx).Info(
 			"Skipping post-restore recreate: Neo4j version doesn't support the procedure",
 			"version", fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch),
-			"database", restore.Spec.DatabaseName)
+			"database", restore.Spec.Database)
 		return nil
 	}
 
@@ -819,14 +813,14 @@ func (r *Neo4jRestoreReconciler) recreateRestoredDatabaseOnCluster(
 			"expectedName", seedHostname, "serverCount", len(servers))
 	}
 
-	applied, err := neo4jClient.RecreateDatabase(ctx, version, restore.Spec.DatabaseName, seeders)
+	applied, err := neo4jClient.RecreateDatabase(ctx, version, restore.Spec.Database, seeders)
 	if err != nil {
 		return err
 	}
 	if applied {
 		log.FromContext(ctx).Info(
 			"Re-seeded restored database across all cluster servers",
-			"database", restore.Spec.DatabaseName,
+			"database", restore.Spec.Database,
 			"seedServerID", seedID, "seedServerName", seedHostname,
 			"procedure", version.RecreateDatabaseProcedure())
 	}
@@ -838,7 +832,7 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	// and requires source.type=backup so the operator can read the backup's
 	// per-database artifact map (status.history[*].databaseArtifacts).
 	if restore.Spec.AllDatabases {
-		if restore.Spec.DatabaseName != "" {
+		if restore.Spec.Database != "" {
 			return fmt.Errorf("spec.allDatabases is mutually exclusive with spec.database/databaseName")
 		}
 		if restore.Spec.Source.Type != SourceTypeBackup {
@@ -887,7 +881,7 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 		// Reject it up front with an actionable pointer to the cluster-native
 		// path (Neo4jDatabase.spec.seedConfig.restoreUntil).
 		if isCluster, _, terr := r.isRestoreTargetTrueCluster(ctx, restore); terr == nil && isCluster {
-			return fmt.Errorf("source.type=pitr is not supported for cluster targets (clusterRef %q resolves to a Neo4jEnterpriseCluster); Neo4jRestore PITR applies to Neo4jEnterpriseStandalone targets only. For cluster point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead", restore.Spec.ClusterRef)
+			return fmt.Errorf("source.type=pitr is not supported for cluster targets (clusterRef %q resolves to a Neo4jEnterpriseCluster); Neo4jRestore PITR applies to Neo4jEnterpriseStandalone targets only. For cluster point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead", restore.Spec.InstanceRef)
 		}
 
 	default:
@@ -899,7 +893,7 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	// backup's artifact map (real, already-backed-up databases; system is
 	// excluded by the orchestrator).
 	if !restore.Spec.AllDatabases {
-		if restore.Spec.DatabaseName == "" {
+		if restore.Spec.Database == "" {
 			return fmt.Errorf("spec.database (or the deprecated spec.databaseName) is required")
 		}
 		// The `system` database holds cluster topology, users, roles, and
@@ -907,16 +901,16 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 		// database. Restoring over it would corrupt the deployment's identity and
 		// membership. neo4j-admin restore of `system` is unsupported here and the
 		// in-place Cypher path can't drop/recreate it; reject up front. (#269)
-		if strings.EqualFold(restore.Spec.DatabaseName, "system") {
-			return fmt.Errorf("databaseName %q is not restorable: the system database is managed by Neo4j and holds cluster topology, users, and roles — restoring it via Neo4jRestore is unsupported", restore.Spec.DatabaseName)
+		if strings.EqualFold(restore.Spec.Database, "system") {
+			return fmt.Errorf("databaseName %q is not restorable: the system database is managed by Neo4j and holds cluster topology, users, and roles — restoring it via Neo4jRestore is unsupported", restore.Spec.Database)
 		}
 		// The database name is interpolated into the restore Job's shell command
 		// and Cypher; restrict it to the Neo4j database-name grammar (no shell or
 		// Cypher metacharacters) so it can't inject either. Defense-in-depth on top
 		// of the CRD Pattern marker.
-		if !validation.IsValidDatabaseName(restore.Spec.DatabaseName) {
+		if !validation.IsValidDatabaseName(restore.Spec.Database) {
 			return fmt.Errorf("databaseName %q is invalid: must start with a letter, contain only letters, digits, dots or dashes, and be at most %d characters",
-				restore.Spec.DatabaseName, validation.MaxDatabaseNameLength)
+				restore.Spec.Database, validation.MaxDatabaseNameLength)
 		}
 	}
 
@@ -936,7 +930,7 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	// asked for a point in time is worse than failing: reject up front.
 	if restore.Spec.Source.PointInTime != nil {
 		if isCluster, _, terr := r.isRestoreTargetTrueCluster(ctx, restore); terr == nil && isCluster {
-			return fmt.Errorf("source.pointInTime is not supported for cluster targets (clusterRef %q resolves to a Neo4jEnterpriseCluster) — the cluster restore path seeds from a backup artifact and cannot replay to a point in time. For cluster point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead", restore.Spec.ClusterRef)
+			return fmt.Errorf("source.pointInTime is not supported for cluster targets (clusterRef %q resolves to a Neo4jEnterpriseCluster) — the cluster restore path seeds from a backup artifact and cannot replay to a point in time. For cluster point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead", restore.Spec.InstanceRef)
 		}
 	}
 
@@ -951,11 +945,11 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	// namespace-scoped and sharded CRs are rare, so this stays cheap.
 	shardedList := &neo4jv1beta1.Neo4jShardedDatabaseList{}
 	if err := r.List(ctx, shardedList, client.InNamespace(restore.Namespace)); err != nil {
-		return fmt.Errorf("failed to check whether %q is a Neo4jShardedDatabase: %w", restore.Spec.DatabaseName, err)
+		return fmt.Errorf("failed to check whether %q is a Neo4jShardedDatabase: %w", restore.Spec.Database, err)
 	}
 	for i := range shardedList.Items {
 		sd := &shardedList.Items[i]
-		if sd.Name == restore.Spec.DatabaseName || sd.Spec.Name == restore.Spec.DatabaseName {
+		if sd.Name == restore.Spec.Database || sd.Spec.Name == restore.Spec.Database {
 			return fmt.Errorf(
 				"database %q is a Neo4jShardedDatabase (CR %q) — use the Neo4jShardedDatabase restore path instead:\n"+
 					"  spec:\n"+
@@ -963,7 +957,7 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 					"    replaceExisting: true\n"+
 					"    force: true\n"+
 					"Sharded restores require the SET GRAPH SHARD / SET PROPERTY SHARDS clauses that only CREATE DATABASE accepts; dbms.recreateDatabase doesn't support sharded topology",
-				restore.Spec.DatabaseName, sd.Name, restore.Spec.Source.BackupRef,
+				restore.Spec.Database, sd.Name, restore.Spec.Source.BackupRef,
 			)
 		}
 	}
@@ -985,13 +979,13 @@ func (r *Neo4jRestoreReconciler) checkDatabaseExists(ctx context.Context, restor
 	}()
 
 	// Check if database exists
-	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.DatabaseName)
+	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.Database)
 	if err != nil {
 		return fmt.Errorf("failed to check if database exists: %w", err)
 	}
 
 	if exists && (restore.Spec.Options == nil || !restore.Spec.Options.ReplaceExisting) {
-		return fmt.Errorf("database %s already exists. Use replaceExisting option or force flag to overwrite", restore.Spec.DatabaseName)
+		return fmt.Errorf("database %s already exists. Use replaceExisting option or force flag to overwrite", restore.Spec.Database)
 	}
 
 	return nil
@@ -1583,6 +1577,7 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 	artifact := ""
 	var dbArtifacts []neo4jv1beta1.DatabaseArtifact
 	var shardedExcluded []string
+	var backupCreatedAt *metav1.Time
 	backup := &neo4jv1beta1.Neo4jBackup{}
 	if gerr := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); gerr == nil {
 		for i := range backup.Status.History {
@@ -1594,6 +1589,10 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 				// an all-databases restore can surface them (they restore via the
 				// Neo4jShardedDatabase CR, not here).
 				shardedExcluded = backup.Status.History[i].ShardedDatabasesExcluded
+				// Pin when the backup ran so restore provenance survives the
+				// Neo4jBackup CR being deleted (surfaced as
+				// status.backupInfo.backupCreatedAt).
+				backupCreatedAt = backup.Status.History[i].CompletionTime
 				break
 			}
 		}
@@ -1608,6 +1607,7 @@ func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context,
 		DatabaseArtifacts:        dbArtifacts,
 		ShardedDatabasesExcluded: shardedExcluded,
 		ResolvedAt:               &now,
+		BackupCreatedAt:          backupCreatedAt,
 	}
 	if err := r.persistResolvedSource(ctx, restore, snapshot); err != nil {
 		// Persisting failed; retry on a later reconcile rather than proceeding
@@ -1783,10 +1783,10 @@ func buildLocalRestoreFilePath(restore *neo4jv1beta1.Neo4jRestore, sourceDir str
 	if !isLocalPVCRestoreSource(restore) {
 		return ""
 	}
-	if restore.Spec.DatabaseName == "" {
+	if restore.Spec.Database == "" {
 		return ""
 	}
-	return resolveLocalPVCFromPath(sourceDir, restore.Spec.DatabaseName)
+	return resolveLocalPVCFromPath(sourceDir, restore.Spec.Database)
 }
 
 // resolveLocalPVCFromPath is the path-based equivalent of
@@ -1907,7 +1907,7 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 	if isLocalPVCRestoreSource(restore) {
 		preludeCmd = "rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp && "
 	}
-	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.Database, backupPath)
 
 	// Confirm overwriting an existing database. Both spec.force and
 	// options.replaceExisting are accepted — the preflight error text and
@@ -2045,7 +2045,7 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, re
 	// to be re-detected downstream.
 	isPVC := isPVCBackupPath(backupPath)
 	if isPVC {
-		backupPath = resolveLocalPVCFromPath(backupPath, restore.Spec.DatabaseName)
+		backupPath = resolveLocalPVCFromPath(backupPath, restore.Spec.Database)
 	} else if backupPath != "" {
 		// Cloud --from-path URI: quote so spec.source.{bucket,path,backupPath}
 		// can't break out of /bin/sh -c (PVC takes the $(ls …) branch above).
@@ -2056,7 +2056,7 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, re
 		preludeCmd = "rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp && "
 	}
 
-	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.Database, backupPath)
 
 	if restoreOverwriteConfirmed(restore) {
 		cmd += " --overwrite-destination=true"
@@ -2140,11 +2140,11 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumes(ctx context.Context, restor
 	// is caught earlier with a clear error.
 	//
 	// Clusters use "data-{name}-server-0", standalones use "neo4j-data-{name}-0".
-	dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.ClusterRef)
+	dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.InstanceRef)
 	pvc := &corev1.PersistentVolumeClaim{}
 	if err := r.Get(ctx, types.NamespacedName{Name: dataPVCName, Namespace: restore.Namespace}, pvc); err != nil {
 		// Cluster PVC not found — try standalone naming
-		dataPVCName = fmt.Sprintf("neo4j-data-%s-0", restore.Spec.ClusterRef)
+		dataPVCName = fmt.Sprintf("neo4j-data-%s-0", restore.Spec.InstanceRef)
 	}
 	dataVolume := corev1.Volume{
 		Name: "neo4j-data",
@@ -2543,7 +2543,11 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, restor
 				// (#187), so the cluster client would never connect.
 				neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 				if err != nil {
-					logger.Info("Failed to create Neo4j client, retrying...")
+					// Surface the error: without it, a post-restore connectivity
+					// failure against a healthy standalone is indistinguishable
+					// from "still starting up" and the restore just times out
+					// opaquely after 10 minutes (#297).
+					logger.Info("Failed to create Neo4j client, retrying...", "error", err.Error())
 					continue
 				}
 
@@ -2553,7 +2557,7 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, restor
 					if closeErr := neo4jClient.Close(); closeErr != nil {
 						logger.Error(closeErr, "failed to close Neo4j client")
 					}
-					logger.Info("Neo4j not ready yet, retrying...")
+					logger.Info("Neo4j not ready yet, retrying...", "error", err.Error())
 					continue
 				}
 
@@ -2593,7 +2597,7 @@ func (r *Neo4jRestoreReconciler) runRestoreHooks(ctx context.Context, restore *n
 		}()
 
 		for _, statement := range hooks.CypherStatements {
-			if err := neo4jClient.ExecuteCypher(ctx, restore.Spec.DatabaseName, statement); err != nil {
+			if err := neo4jClient.ExecuteCypher(ctx, restore.Spec.Database, statement); err != nil {
 				return fmt.Errorf("failed to execute Cypher statement in %s hook: %w", phase, err)
 			}
 		}
@@ -2741,7 +2745,7 @@ func (r *Neo4jRestoreReconciler) runHookJob(ctx context.Context, restore *neo4jv
 }
 
 func (r *Neo4jRestoreReconciler) getClusterRef(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (*neo4jv1beta1.Neo4jEnterpriseCluster, error) {
-	key := types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}
+	key := types.NamespacedName{Name: restore.Spec.InstanceRef, Namespace: restore.Namespace}
 
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 	if err := r.Get(ctx, key, cluster); err == nil {
@@ -2751,7 +2755,7 @@ func (r *Neo4jRestoreReconciler) getClusterRef(ctx context.Context, restore *neo
 	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 	if err := r.Get(ctx, key, standalone); err != nil {
 		return nil, fmt.Errorf("target %q not found as Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone: %w",
-			restore.Spec.ClusterRef, err)
+			restore.Spec.InstanceRef, err)
 	}
 	return standaloneAsCluster(standalone), nil
 }
@@ -2963,7 +2967,7 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 	}
 	defer func() { _ = neo4jClient.Close() }()
 
-	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.DatabaseName)
+	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.Database)
 	if err != nil {
 		logger.Error(err, "Failed to check database existence")
 		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Database existence check failed: %v", err))
@@ -2988,7 +2992,7 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 	// idempotent, guarded by the annotation).
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreStarted,
 		fmt.Sprintf("Cluster Cypher restore: database %q (%s), seedURI=%s",
-			restore.Spec.DatabaseName, ternaryString(exists, "recreate", "create"), seedURI))
+			restore.Spec.Database, ternaryString(exists, "recreate", "create"), seedURI))
 
 	if exists {
 		// Recreating an EXISTING database wipes and replaces its contents —
@@ -2996,10 +3000,10 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		// standalone Job path requires (#218): without it, a typo'd
 		// databaseName against a cluster target silently overwrote a live
 		// database with backup contents.
-		if !restore.Spec.Force && (restore.Spec.Options == nil || !restore.Spec.Options.ReplaceExisting) {
+		if !restoreOverwriteConfirmed(restore) {
 			msg := fmt.Sprintf(
-				"database %q already exists on the target cluster; a restore would WIPE and replace it. Set spec.force=true (or spec.options.replaceExisting=true) to confirm, or restore to a different databaseName",
-				restore.Spec.DatabaseName)
+				"database %q already exists on the target cluster; a restore would WIPE and replace it. Set spec.options.replaceExisting=true to confirm, or restore to a different database",
+				restore.Spec.Database)
 			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 			r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, msg)
 			return ctrl.Result{}, fmt.Errorf("%s", msg)
@@ -3014,7 +3018,7 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		// annotation — re-issuing would wipe the partially-seeded database and
 		// restart the seed), then hand off to the requeue-driven poll phase
 		// (checkRestoreProgress → pollClusterRestoreOnline).
-		applied, recreateErr := neo4jClient.RecreateDatabaseWithSeedURI(ctx, version, restore.Spec.DatabaseName, seedURI)
+		applied, recreateErr := neo4jClient.RecreateDatabaseWithSeedURI(ctx, version, restore.Spec.Database, seedURI)
 		if recreateErr != nil {
 			logger.Error(recreateErr, "dbms.recreateDatabase with seedURI failed")
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("recreateDatabase failed: %v", recreateErr))
@@ -3025,7 +3029,7 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 			// only works on absent databases — for an existing one we'd need
 			// DROP + CREATE. Surface as actionable failure.
 			msg := fmt.Sprintf("Neo4j version %d.%d doesn't support dbms.recreateDatabase; DROP DATABASE %q manually and re-run the restore",
-				version.Major, version.Minor, restore.Spec.DatabaseName)
+				version.Major, version.Minor, restore.Spec.Database)
 			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 			return ctrl.Result{}, fmt.Errorf("%s", msg)
 		}
@@ -3038,7 +3042,7 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 		r.updateRestoreStatus(ctx, restore, StatusRunning,
-			fmt.Sprintf("Database %q recreate issued; waiting for seed to converge online (seedURI=%s)", restore.Spec.DatabaseName, seedURI))
+			fmt.Sprintf("Database %q recreate issued; waiting for seed to converge online (seedURI=%s)", restore.Spec.Database, seedURI))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
@@ -3049,24 +3053,24 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 	// offline with the failure in SHOW DATABASE's statusMessage. Verify the
 	// actual allocation state before declaring success; the statusMessage
 	// is the actionable detail the user needs.
-	if createErr := neo4jClient.CreateDatabaseWithSeedURIOptions(ctx, restore.Spec.DatabaseName, seedURI, false); createErr != nil {
+	if createErr := neo4jClient.CreateDatabaseWithSeedURIOptions(ctx, restore.Spec.Database, seedURI, false); createErr != nil {
 		logger.Error(createErr, "CREATE DATABASE OPTIONS{seedURI} failed")
 		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("CREATE DATABASE OPTIONS{seedURI} failed: %v", createErr))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, createErr
 	}
 
-	if failMsg, ferr := neo4jClient.DatabaseSeedFailureMessage(ctx, restore.Spec.DatabaseName); ferr == nil && failMsg != "" {
+	if failMsg, ferr := neo4jClient.DatabaseSeedFailureMessage(ctx, restore.Spec.Database); ferr == nil && failMsg != "" {
 		// Explicit allocation failure (e.g. "Object not found at the path:
 		// s3://…") — fail NOW with Neo4j's own diagnosis instead of either
 		// declaring false success or burning the full poll budget.
 		msg := fmt.Sprintf("Database %q was created but the seed FAILED: %s — fix the cause, DROP DATABASE %s IF EXISTS, and re-trigger the restore",
-			restore.Spec.DatabaseName, failMsg, restore.Spec.DatabaseName)
+			restore.Spec.Database, failMsg, restore.Spec.Database)
 		logger.Error(nil, "Cluster Cypher restore seed failed", "statusMessage", failMsg)
 		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, msg)
 		return ctrl.Result{}, nil
 	}
-	if online, total, _, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.DatabaseName); stateErr != nil || total == 0 || online != total {
+	if online, total, _, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.Database); stateErr != nil || total == 0 || online != total {
 		// Not online yet but no explicit failure either — a large seed can
 		// outlive the statement's internal wait. Hand off to the requeue
 		// poll (bounded by spec.timeout), which Completes on online and
@@ -3075,16 +3079,16 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 		r.updateRestoreStatus(ctx, restore, StatusRunning,
-			fmt.Sprintf("Database %q created; waiting for the seed to converge online", restore.Spec.DatabaseName))
+			fmt.Sprintf("Database %q created; waiting for the seed to converge online", restore.Spec.Database))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
 	completion := metav1.Now()
 	restore.Status.CompletionTime = &completion
 	r.updateRestoreStatus(ctx, restore, StatusCompleted,
-		fmt.Sprintf("Database %q restored via cluster Cypher path (seedURI=%s)", restore.Spec.DatabaseName, seedURI))
+		fmt.Sprintf("Database %q restored via cluster Cypher path (seedURI=%s)", restore.Spec.Database, seedURI))
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
-		fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.DatabaseName))
+		fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.Database))
 	return ctrl.Result{}, nil
 }
 
@@ -3277,15 +3281,15 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 	}
 	defer func() { _ = neo4jClient.Close() }()
 
-	if failMsg, ferr := neo4jClient.DatabaseSeedFailureMessage(ctx, restore.Spec.DatabaseName); ferr == nil && failMsg != "" {
+	if failMsg, ferr := neo4jClient.DatabaseSeedFailureMessage(ctx, restore.Spec.Database); ferr == nil && failMsg != "" {
 		msg := fmt.Sprintf("Restore of %q failed: %s — fix the cause, DROP DATABASE %s IF EXISTS, and re-trigger",
-			restore.Spec.DatabaseName, failMsg, restore.Spec.DatabaseName)
+			restore.Spec.Database, failMsg, restore.Spec.Database)
 		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, msg)
 		return ctrl.Result{}, nil
 	}
 
-	online, total, diag, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.DatabaseName)
+	online, total, diag, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.Database)
 	if stateErr == nil && total > 0 && online == total {
 		// Stale-online guard (#227): `dbms.recreateDatabase` is asynchronous —
 		// right after issue, SHOW DATABASE can still report the PRE-recreate
@@ -3294,15 +3298,15 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 		// the grace window past issue has elapsed.
 		if !cypherRestoreOnlineAcceptable(restore, time.Now()) {
 			logger.V(1).Info("Poll: all-online within the stale-online grace window without an offline observation — likely the pre-recreate allocations; requeueing",
-				"database", restore.Spec.DatabaseName, "grace", cypherRestoreStaleOnlineGrace.String())
+				"database", restore.Spec.Database, "grace", cypherRestoreStaleOnlineGrace.String())
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 		}
 		completion := metav1.Now()
 		restore.Status.CompletionTime = &completion
 		r.updateRestoreStatus(ctx, restore, StatusCompleted,
-			fmt.Sprintf("Database %q restored via cluster Cypher path (%d/%d allocations online)", restore.Spec.DatabaseName, online, total))
+			fmt.Sprintf("Database %q restored via cluster Cypher path (%d/%d allocations online)", restore.Spec.Database, online, total))
 		r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
-			fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.DatabaseName))
+			fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.Database))
 		return ctrl.Result{}, nil
 	}
 
@@ -3326,12 +3330,12 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 			fmt.Sprintf("Restore did not converge to online within %s (%d/%d allocations online); last status: %s — increase spec.timeout for large stores",
 				budget, online, total, detail))
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed,
-			fmt.Sprintf("Cluster Cypher restore for database %q did not converge online", restore.Spec.DatabaseName))
+			fmt.Sprintf("Cluster Cypher restore for database %q did not converge online", restore.Spec.Database))
 		return ctrl.Result{}, nil
 	}
 
 	logger.V(1).Info("Poll: database not yet online, requeueing",
-		"database", restore.Spec.DatabaseName, "online", online, "total", total, "diag", diag)
+		"database", restore.Spec.Database, "online", online, "total", total, "diag", diag)
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 }
 
@@ -3423,7 +3427,7 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 		// Restrict the proxy (which serves the whole backup PVC) to the
 		// target cluster's server pods (#219). Best-effort: only enforcing
 		// CNIs apply it.
-		if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.ClusterRef); npErr != nil {
+		if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.InstanceRef); npErr != nil {
 			log.FromContext(ctx).Error(npErr, "Failed to ensure seed-proxy NetworkPolicy (non-fatal)")
 		}
 	}
@@ -3572,7 +3576,7 @@ func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Con
 			// flaky capture — say so, instead of the misleading "re-run the
 			// backup" (which can't help). Found in the v1.12.1 release-verify
 			// journey.
-			if backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster {
+			if backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster {
 				return "", fmt.Errorf("Neo4jBackup %q is a kind:Cluster (all-databases) backup — it stores one artifact per database, so there is no single artifact to seed a cluster restore from. To restore a database to a cluster, either reference a kind:Database backup of that database, or use source.type=storage with source.backupPath set to the exact <database>-<timestamp>.backup file under the backup directory", backupRef)
 			}
 			// kind:Database backup with an empty filename: a genuine Pod-log
@@ -3656,7 +3660,7 @@ func ternaryString(cond bool, ifTrue, ifFalse string) string {
 // `getClusterRef` directly because it transparently wraps a Standalone as
 // a synthetic Cluster.
 func (r *Neo4jRestoreReconciler) isRestoreTargetTrueCluster(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (bool, *neo4jv1beta1.Neo4jEnterpriseCluster, error) {
-	key := types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}
+	key := types.NamespacedName{Name: restore.Spec.InstanceRef, Namespace: restore.Namespace}
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 	if err := r.Get(ctx, key, cluster); err == nil {
 		return true, cluster, nil
@@ -3665,7 +3669,7 @@ func (r *Neo4jRestoreReconciler) isRestoreTargetTrueCluster(ctx context.Context,
 	}
 	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 	if err := r.Get(ctx, key, standalone); err != nil {
-		return false, nil, fmt.Errorf("target %q not found as Cluster or Standalone: %w", restore.Spec.ClusterRef, err)
+		return false, nil, fmt.Errorf("target %q not found as Cluster or Standalone: %w", restore.Spec.InstanceRef, err)
 	}
 	return false, nil, nil
 }
@@ -3694,8 +3698,8 @@ func (r *Neo4jRestoreReconciler) createNeo4jClient(_ context.Context, cluster *n
 // nonexistent service (#187).
 func (r *Neo4jRestoreReconciler) newStandaloneRestoreClient(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (*neo4j.Client, error) {
 	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
-	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}, standalone); err != nil {
-		return nil, fmt.Errorf("failed to get standalone %q for restore: %w", restore.Spec.ClusterRef, err)
+	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.InstanceRef, Namespace: restore.Namespace}, standalone); err != nil {
+		return nil, fmt.Errorf("failed to get standalone %q for restore: %w", restore.Spec.InstanceRef, err)
 	}
 	return neo4j.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 }
@@ -3783,6 +3787,13 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		if restore.Status.CompletionTime != nil && latest.Status.CompletionTime == nil {
 			latest.Status.CompletionTime = restore.Status.CompletionTime
 		}
+		// On success, record restore duration + backup provenance (#227 item 4).
+		// Derived entirely from the refetched object's own timestamps + pinned
+		// resolved source, so every completion path (standalone Job, cluster
+		// Cypher, all-databases) gets it by funneling through here.
+		if phase == StatusCompleted {
+			populateRestoreProvenance(latest)
+		}
 		condStatus, condReason := PhaseToConditionStatus(phase)
 		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		return r.Status().Update(ctx, latest)
@@ -3803,6 +3814,45 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		if terr := teardownPVCSeedProxyResources(ctx, r.Client, restore.Namespace, restore.Name); terr != nil {
 			log.FromContext(ctx).Error(terr, "Failed to tear down seed proxy on terminal restore phase (non-fatal)")
 		}
+	}
+}
+
+// populateRestoreProvenance fills status.stats.duration and status.backupInfo on
+// a successfully-completed restore. It reads only the object's own persisted
+// state — status timestamps, the pinned resolvedSource, and the spec — so it is
+// pure, side-effect free, and correct on every completion path. Fields that
+// cannot be derived without the (possibly-deleted) source backup are left unset
+// rather than guessed; the caller persists the mutated status.
+func populateRestoreProvenance(restore *neo4jv1beta1.Neo4jRestore) {
+	// Duration = completionTime − startTime, when both are known and sane.
+	if st := restore.Status.StartTime; st != nil {
+		if ct := restore.Status.CompletionTime; ct != nil && !ct.Before(st) {
+			restore.Status.Stats = &neo4jv1beta1.RestoreStats{
+				Duration: ct.Sub(st.Time).Round(time.Second).String(),
+			}
+		}
+	}
+
+	info := &neo4jv1beta1.RestoreBackupInfo{}
+	// OriginalDatabase: the single database restored. All-databases restores
+	// span many DBs (see status.databaseResults), so leave it empty there.
+	if !restore.Spec.AllDatabases {
+		info.OriginalDatabase = restore.Spec.Database
+	}
+	if rs := restore.Status.ResolvedSource; rs != nil {
+		// source.type: backup — provenance pinned at resolution survives the
+		// Neo4jBackup CR being deleted.
+		info.BackupPath = rs.BackupPath
+		if rs.ArtifactFilename != "" {
+			info.BackupPath = strings.TrimRight(rs.BackupPath, "/") + "/" + rs.ArtifactFilename
+		}
+		info.BackupCreatedAt = rs.BackupCreatedAt
+	} else {
+		// source.type: storage — the explicit path in the spec is the source.
+		info.BackupPath = restore.Spec.Source.BackupPath
+	}
+	if *info != (neo4jv1beta1.RestoreBackupInfo{}) {
+		restore.Status.BackupInfo = info
 	}
 }
 
@@ -3859,12 +3909,10 @@ func isPodReady(pod *corev1.Pod) bool {
 }
 
 // restoreOverwriteConfirmed reports whether the user confirmed restoring over
-// an existing database — via spec.force OR options.replaceExisting. The two
-// are equivalent confirmations everywhere (cluster recreate gate, preflight
-// error text, API reference); the Job command must honor both too.
+// an existing database — via options.replaceExisting. This is the single
+// overwrite confirmation everywhere (cluster recreate gate, preflight error
+// text, all-databases loop, the standalone Job command). (The top-level
+// spec.force alias was removed in v1.14.)
 func restoreOverwriteConfirmed(restore *neo4jv1beta1.Neo4jRestore) bool {
-	if restore.Spec.Force {
-		return true
-	}
 	return restore.Spec.Options != nil && restore.Spec.Options.ReplaceExisting
 }

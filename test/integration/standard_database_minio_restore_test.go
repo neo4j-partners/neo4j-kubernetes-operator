@@ -208,9 +208,8 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		backup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-backup", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindDatabase, Name: dbName, ClusterRef: cluster.Name,
-				},
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type:   "s3",
 					Bucket: minioBucket,
@@ -252,8 +251,8 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-restore", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Source: neo4jv1beta1.RestoreSource{
 					Type:      "backup",
 					BackupRef: backup.Name,
@@ -262,11 +261,11 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 				// Cypher path — the Cypher procedures handle atomic swap
 				// without scaling down the StatefulSet.
 				StopCluster: false,
-				// Force=true because the database exists and we want
+				// replaceExisting because the database exists and we want
 				// dbms.recreateDatabase to run against it (the operator's
-				// non-force path would reject due to existence; force says
+				// non-overwrite path would reject due to existence; this says
 				// "yes, overwrite").
-				Force: true,
+				Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 			},
 		}
 		Expect(k8sClient.Create(ctx, restore)).To(Succeed())
@@ -344,10 +343,10 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		restoreStorage := &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-restore-storage", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
-				StopCluster:  false,
-				Force:        true,
+				InstanceRef: cluster.Name,
+				Database:    dbName,
+				StopCluster: false,
+				Options:     &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				Source: neo4jv1beta1.RestoreSource{
 					Type: "storage",
 					Storage: &neo4jv1beta1.StorageLocation{
@@ -452,8 +451,8 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("e
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "products-restore-attempt", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: "products",
+				InstanceRef: cluster.Name,
+				Database:    "products",
 				Source: neo4jv1beta1.RestoreSource{
 					Type: "storage",
 					Storage: &neo4jv1beta1.StorageLocation{

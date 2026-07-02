@@ -62,7 +62,13 @@ var (
 // eliminate. A genuine "cluster can't form" should fail the group fast, not N×20m.
 func useSharedNativeCluster(ctx context.Context) (name, namespace, adminPassword string) {
 	sharedNativeOnce.Do(func() {
-		ns := createTestNamespace("rbac-shared")
+		// createSharedTestNamespace (NOT createTestNamespace): this runs inside
+		// whichever spec first calls useSharedNativeCluster, but the namespace is
+		// reused by every RBAC-family spec. A per-spec DeferCleanup would delete
+		// it when that first spec ends, terminating the shared cluster's
+		// namespace out from under the sibling specs. Teardown is handled once by
+		// AfterSuite (teardownSharedNativeCluster + cleanupTestNamespaces).
+		ns := createSharedTestNamespace("rbac-shared")
 		pass := randomPassword(18)
 		clusterName := "rbac-shared-cluster"
 

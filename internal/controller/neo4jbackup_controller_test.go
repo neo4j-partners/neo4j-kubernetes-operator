@@ -135,10 +135,8 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				Namespace: namespaceName,
 			},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: "Cluster",
-					Name: clusterName,
-				},
+				InstanceRef:  clusterName,
+				AllDatabases: true,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
@@ -337,7 +335,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				Bucket: "test-bucket",
 				Path:   "/backups",
 			}
-			backup.Spec.Cloud = &neo4jv1beta1.CloudBlock{
+			backup.Spec.Storage.Cloud = &neo4jv1beta1.CloudBlock{
 				Provider: "aws",
 				Identity: &neo4jv1beta1.CloudIdentity{
 					Provider:       "aws",
@@ -372,7 +370,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				Bucket: "test-gcs-bucket",
 				Path:   "/gcs-backups",
 			}
-			backup.Spec.Cloud = &neo4jv1beta1.CloudBlock{
+			backup.Spec.Storage.Cloud = &neo4jv1beta1.CloudBlock{
 				Provider: "gcp",
 				Identity: &neo4jv1beta1.CloudIdentity{
 					Provider:       "gcp",
@@ -407,7 +405,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				Bucket: "test-azure-container",
 				Path:   "/azure-backups",
 			}
-			backup.Spec.Cloud = &neo4jv1beta1.CloudBlock{
+			backup.Spec.Storage.Cloud = &neo4jv1beta1.CloudBlock{
 				Provider: "azure",
 				Identity: &neo4jv1beta1.CloudIdentity{
 					Provider:       "azure",

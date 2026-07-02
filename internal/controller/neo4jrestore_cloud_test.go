@@ -492,7 +492,7 @@ func TestBuildRestoreFromPath_S3WithTempStorage(t *testing.T) {
 func TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst(t *testing.T) {
 	restore := &neo4jv1beta1.Neo4jRestore{
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			DatabaseName: "neo4j",
+			Database: "neo4j",
 			Source: neo4jv1beta1.RestoreSource{
 				Type:       "storage",
 				BackupPath: "roundtrip-backup-backup",
@@ -533,7 +533,7 @@ func TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst(t *testing.T) {
 func TestBuildLocalRestoreFilePath_NilStorageSkipped(t *testing.T) {
 	restore := &neo4jv1beta1.Neo4jRestore{
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			DatabaseName: "neo4j",
+			Database: "neo4j",
 			Source: neo4jv1beta1.RestoreSource{
 				Type:       "storage",
 				BackupPath: "some-backup",
@@ -559,7 +559,7 @@ func TestBuildLocalRestoreFilePath_CloudSkipsResolution(t *testing.T) {
 		t.Run(storageType, func(t *testing.T) {
 			restore := &neo4jv1beta1.Neo4jRestore{
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					DatabaseName: "neo4j",
+					Database: "neo4j",
 					Source: neo4jv1beta1.RestoreSource{
 						Type: "storage",
 						Storage: &neo4jv1beta1.StorageLocation{
@@ -575,7 +575,7 @@ func TestBuildLocalRestoreFilePath_CloudSkipsResolution(t *testing.T) {
 	}
 }
 
-// TestBuildLocalRestoreFilePath_ShellInjectionGuard: spec.DatabaseName is
+// TestBuildLocalRestoreFilePath_ShellInjectionGuard: spec.Database is
 // user-controlled. shellQuote() wraps it in single quotes so a dbname
 // containing shell metacharacters can't escape the glob and run extra
 // commands. Defense-in-depth — the database name validator also rejects
@@ -584,7 +584,7 @@ func TestBuildLocalRestoreFilePath_CloudSkipsResolution(t *testing.T) {
 func TestBuildLocalRestoreFilePath_ShellInjectionGuard(t *testing.T) {
 	restore := &neo4jv1beta1.Neo4jRestore{
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			DatabaseName: "evil; rm -rf /data",
+			Database: "evil; rm -rf /data",
 			Source: neo4jv1beta1.RestoreSource{
 				Type:       "storage",
 				BackupPath: "x",
@@ -731,7 +731,7 @@ func TestBuildPITRRestoreCommand_PVCBaseBackupAppliesFixups(t *testing.T) {
 	}
 	restore := &neo4jv1beta1.Neo4jRestore{
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			DatabaseName: "neo4j",
+			Database: "neo4j",
 			Source: neo4jv1beta1.RestoreSource{
 				Type: "pitr",
 				PITR: &neo4jv1beta1.PITRConfig{
@@ -778,7 +778,7 @@ func TestBuildPITRRestoreCommand_CloudBaseBackupNoFixups(t *testing.T) {
 	}
 	restore := &neo4jv1beta1.Neo4jRestore{
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			DatabaseName: "neo4j",
+			Database: "neo4j",
 			Source: neo4jv1beta1.RestoreSource{
 				Type: "pitr",
 				PITR: &neo4jv1beta1.PITRConfig{
@@ -811,7 +811,7 @@ func TestBuildPITRRestoreCommand_CloudBaseBackupNoFixups(t *testing.T) {
 }
 
 // TestBuildLocalRestoreFilePath_EmptyDatabaseNameSkips: a Neo4jRestore with
-// empty spec.DatabaseName would produce a glob like `/-*.backup` which is
+// empty spec.Database would produce a glob like `/-*.backup` which is
 // meaningless. Validators catch empty DB names upstream, but if a future
 // code path bypasses that, returning empty is the safe fallback —
 // neo4j-admin will fail with a clearer error than a malformed glob.
@@ -1005,7 +1005,7 @@ func TestPVCSeedProxyLifecycle(t *testing.T) {
 	scheme := newTestScheme()
 	restore := &neo4jv1beta1.Neo4jRestore{
 		ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: "ns", UID: "uid-r"},
-		Spec:       neo4jv1beta1.Neo4jRestoreSpec{ClusterRef: "prod"},
+		Spec:       neo4jv1beta1.Neo4jRestoreSpec{InstanceRef: "prod"},
 	}
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(restore).Build()
 

@@ -23,10 +23,10 @@ spec:
   source:
     type: backup
     backupRef: simple-backup  # Reference to the backup resource
-  # spec.force confirms overwriting an existing database on standalone
-  # targets (options.replaceExisting applies to cluster targets)
-  force: true
   options:
+    # replaceExisting confirms overwriting an existing database (standalone
+    # and cluster targets alike).
+    replaceExisting: true
     preRestore:
       cypherStatements:
         - "CALL db.checkpoint()"   # flush pending writes before the instance stops
@@ -57,6 +57,7 @@ spec:
     type: backup
     backupRef: daily-backup
   options:
+    replaceExisting: true   # confirms overwriting the existing database
     postRestore:
       job:
         template:
@@ -81,6 +82,5 @@ spec:
                     name: neo4j-admin-secret
                     key: password
         timeout: "10m"
-  force: true   # confirms overwriting the existing database (standalone target)
   stopCluster: true
   timeout: "2h"

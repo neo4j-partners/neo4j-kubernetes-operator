@@ -126,15 +126,9 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.handleDeletion(ctx, backup)
 	}
 
-	// Normalize the v1.13 scope-based API (spec.instanceRef + database/allDatabases)
-	// onto the internal target model so all downstream target-driven logic is
-	// unchanged. InstanceRef is authoritative; the legacy spec.target block is
-	// deprecated and removed in v1.14.
-	backup.Spec.NormalizeSpec()
-	if backup.Spec.UsesLegacyTarget() {
-		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupAPIDeprecated,
-			"spec.target is deprecated; use spec.instanceRef + spec.database/allDatabases (spec.target is removed in v1.14)")
-	}
+	// Scope is derived from spec.instanceRef + database/allDatabases/shardedDatabase
+	// via backup.Spec.Scope()/ScopedName(); the legacy spec.target block was
+	// removed in v1.14.
 
 	// Add finalizer if not present
 	if !controllerutil.ContainsFinalizer(backup, BackupFinalizer) {
@@ -338,8 +332,8 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 			// with its own log, so we fetch per-Job rather than once per
 			// outer call. Errors non-fatal — empty fields still leave the
 			// ShardName audit list populated.
-			isStandardDB := latest.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
-			isAllDatabases := latest.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
+			isStandardDB := latest.Spec.Scope() == neo4jv1beta1.BackupTargetKindDatabase
+			isAllDatabases := latest.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster
 			var jobLog string
 			if len(shardArtifacts) > 0 || isStandardDB || isAllDatabases ||
 				(latest.Spec.Options != nil && latest.Spec.Options.Validate != nil && *latest.Spec.Options.Validate) {
@@ -355,7 +349,7 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 				run.ShardArtifacts = perJobArtifacts
 			}
 			if isStandardDB && jobLog != "" {
-				run.ArtifactFilename = parseStandardArtifactFromLog(jobLog, latest.Spec.Target.Name)
+				run.ArtifactFilename = parseStandardArtifactFromLog(jobLog, latest.Spec.ScopedName())
 			}
 			if isAllDatabases && jobLog != "" {
 				run.DatabaseArtifacts = parseAllDatabaseArtifactsFromLog(jobLog)
@@ -599,7 +593,16 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		// would leave a Completed backup with no Succeeded run — which
 		// ResolveBackupRef treats as not-ready FOREVER, wedging every
 		// backupRef restore/seed against a backup that succeeded.
-		r.recordOneShotBackupRun(ctx, backup, job)
+		//
+		// If the restore-critical artifact filename wasn't captured from the
+		// Pod log yet but the Pod is still alive, recordOneShotBackupRun returns
+		// false: requeue (staying non-terminal) so a later reconcile reads the
+		// log before the Job TTL GCs the Pod. Recording+finalizing now would
+		// pin an empty filename permanently (silently un-restorable via the CR).
+		if !r.recordOneShotBackupRun(ctx, backup, job) {
+			r.updateBackupStatus(ctx, backup, "Running", "Backup completed; capturing artifact metadata from the backup Pod")
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 		r.updateBackupStatus(ctx, backup, "Completed", "Backup completed successfully")
 		r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupCompleted, "Backup completed successfully")
 		backupM.RecordBackup(ctx, true, jobDuration(job), 0)
@@ -744,14 +747,11 @@ func jobDuration(job *batchv1.Job) time.Duration {
 	return time.Since(job.Status.StartTime.Time)
 }
 
-// backupTargetName resolves the Neo4j instance name from a backup spec.
-// For database-scoped kinds (Database, ShardedDatabase) the target Name is the
-// database name and ClusterRef holds the actual Neo4j instance.
+// backupTargetName resolves the Neo4j instance name from a backup spec. Every
+// scope names its instance in spec.instanceRef (single/sharded-database scopes
+// carry the database/sharded-CR name in ScopedName(), not the instance).
 func backupTargetName(backup *neo4jv1beta1.Neo4jBackup) string {
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) && backup.Spec.Target.ClusterRef != "" {
-		return backup.Spec.Target.ClusterRef
-	}
-	return backup.Spec.Target.Name
+	return backup.Spec.InstanceRef
 }
 
 // backupLabels returns the standard label set for a Neo4jBackup workload, ready to
@@ -948,14 +948,12 @@ func (r *Neo4jBackupReconciler) validateChainParent(ctx context.Context, backup 
 		return fmt.Errorf("chainFromBackup %q lookup failed in namespace %q: %w",
 			backup.Spec.ChainFromBackup, backup.Namespace, err)
 	}
-	parentTarget := parent.Spec.ResolvedTarget()
-	thisTarget := backup.Spec.ResolvedTarget()
-	if parentTarget.Kind != thisTarget.Kind ||
-		parentTarget.Name != thisTarget.Name ||
-		parentTarget.ClusterRef != thisTarget.ClusterRef {
-		return fmt.Errorf("chainFromBackup %q targets {kind=%q name=%q clusterRef=%q} but this backup targets {kind=%q name=%q clusterRef=%q}; chained backups must share the same target",
-			parent.Name, parentTarget.Kind, parentTarget.Name, parentTarget.ClusterRef,
-			thisTarget.Kind, thisTarget.Name, thisTarget.ClusterRef)
+	if parent.Spec.Scope() != backup.Spec.Scope() ||
+		parent.Spec.ScopedName() != backup.Spec.ScopedName() ||
+		parent.Spec.InstanceRef != backup.Spec.InstanceRef {
+		return fmt.Errorf("chainFromBackup %q targets {scope=%q name=%q instanceRef=%q} but this backup targets {scope=%q name=%q instanceRef=%q}; chained backups must share the same target",
+			parent.Name, parent.Spec.Scope(), parent.Spec.ScopedName(), parent.Spec.InstanceRef,
+			backup.Spec.Scope(), backup.Spec.ScopedName(), backup.Spec.InstanceRef)
 	}
 	if parent.Spec.Storage.Type != backup.Spec.Storage.Type ||
 		parent.Spec.Storage.Bucket != backup.Spec.Storage.Bucket ||
@@ -1071,7 +1069,14 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(),
+			// 30 min (was 5): the operator parses artifact filenames from this
+			// Job's Pod log after completion, and a Succeeded run is not flipped
+			// to Completed until that capture succeeds (recordOneShotBackupRun
+			// requeues while the Pod is alive). A short TTL GC'd the Pod before a
+			// delayed/retried reconcile could read it, leaving an empty
+			// ArtifactFilename and a silently un-restorable backup. Matches the
+			// scheduled-Job TTL rationale below.
+			TTLSecondsAfterFinished: func() *int32 { v := int32(1800); return &v }(),
 			BackoffLimit:            &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
@@ -1317,7 +1322,7 @@ func effectiveRemoteAddressResolution(backup *neo4jv1beta1.Neo4jBackup, version 
 	if version == nil || !version.SupportsRemoteAddressResolution() {
 		return false
 	}
-	switch backup.Spec.Target.Kind {
+	switch backup.Spec.Scope() {
 	case neo4jv1beta1.BackupTargetKindShardedDatabase:
 		return true
 	case neo4jv1beta1.BackupTargetKindCluster:
@@ -1390,11 +1395,11 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	if isStandalone, standalone, lookupErr := r.isStandaloneTarget(ctx, backup); lookupErr == nil && isStandalone && standalone != nil {
 		fromAddresses = resources.BuildStandaloneBackupFromAddress(standalone)
 	}
-	allDatabases := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
+	allDatabases := backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster
 	dbName := ""
-	switch backup.Spec.Target.Kind {
+	switch backup.Spec.Scope() {
 	case neo4jv1beta1.BackupTargetKindDatabase:
-		dbName = backup.Spec.Target.Name
+		dbName = backup.Spec.ScopedName()
 	case neo4jv1beta1.BackupTargetKindShardedDatabase:
 		// Property-sharded DBs are backed up as a glob across all shards:
 		// {name}-g000 (graph) + {name}-p000…p{N-1} (property shards). The
@@ -1652,12 +1657,11 @@ func backupRunIDEnvVar() corev1.EnvVar {
 	}
 }
 
-// cloudBlockForBackup returns the CloudBlock from whichever spec field is populated.
+// cloudBlockForBackup returns the storage's CloudBlock (nil for PVC storage).
+// (The top-level spec.cloud alias was removed in v1.14; cloud config lives
+// under spec.storage.cloud.)
 func cloudBlockForBackup(backup *neo4jv1beta1.Neo4jBackup) *neo4jv1beta1.CloudBlock {
-	if backup.Spec.Storage.Cloud != nil {
-		return backup.Spec.Storage.Cloud
-	}
-	return backup.Spec.Cloud
+	return backup.Spec.Storage.Cloud
 }
 
 // buildCloudEnvVars injects cloud provider credentials from a Kubernetes Secret
@@ -1796,19 +1800,10 @@ func (r *Neo4jBackupReconciler) buildVolumes(backup *neo4jv1beta1.Neo4jBackup) [
 }
 
 func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) (*neo4jv1beta1.Neo4jEnterpriseCluster, error) {
-	targetNamespace := backup.Spec.Target.Namespace
-	if targetNamespace == "" {
-		targetNamespace = backup.Namespace
-	}
-
-	// For database-scoped kinds the Name is the database name; use ClusterRef for the cluster.
-	clusterName := backup.Spec.Target.Name
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) {
-		if backup.Spec.Target.ClusterRef == "" {
-			return nil, fmt.Errorf("clusterRef must be set when backup target Kind is %s", backup.Spec.Target.Kind)
-		}
-		clusterName = backup.Spec.Target.ClusterRef
-	}
+	// spec.instanceRef names the Neo4j deployment for every scope; the backup
+	// resolves in its own namespace.
+	targetNamespace := backup.Namespace
+	clusterName := backup.Spec.InstanceRef
 
 	// Try Neo4jEnterpriseCluster first.
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
@@ -1833,14 +1828,8 @@ func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *ne
 // standalone pods are {name}-0 — so this branch happens before
 // constructing the --from FQDN.
 func (r *Neo4jBackupReconciler) isStandaloneTarget(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) (bool, *neo4jv1beta1.Neo4jEnterpriseStandalone, error) {
-	targetNamespace := backup.Spec.Target.Namespace
-	if targetNamespace == "" {
-		targetNamespace = backup.Namespace
-	}
-	name := backup.Spec.Target.Name
-	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) {
-		name = backup.Spec.Target.ClusterRef
-	}
+	targetNamespace := backup.Namespace
+	name := backup.Spec.InstanceRef
 	// Cluster CR wins if both exist (defensive; name collisions are rare).
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: targetNamespace}, cluster); err == nil {
@@ -1917,7 +1906,17 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 			"Retention pruning on a chain that may contain differential artifacts can orphan DIFFs whose parent FULL ages out; prefer backupType=FULL with retention, or prune via neo4j-admin backup aggregate")
 	}
 	script := buildRetentionScript(backup.Spec.Retention, chainRoot(backup))
-	cleanupJobName := fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix())
+	// Deterministic name derived from the CR's UID (not a wall-clock timestamp).
+	// cleanupBackupArtifacts runs in the finalizer path (handleDeletion), which
+	// re-reconciles the same deleting CR until the finalizer is removed. A
+	// time.Now().Unix() suffix produced a fresh name each second: two reconciles
+	// within the same second collided (AlreadyExists → error → requeue), while
+	// reconciles across a second boundary leaked a second, redundant cleanup Job.
+	// A UID-derived suffix is stable across all reconciles of this CR instance,
+	// so retries converge on the one Job and the AlreadyExists handling below
+	// makes re-creation a clean no-op. (Removed a low-frequency envtest flake
+	// where this churn starved unrelated specs under -race; see #298.)
+	cleanupJobName := cleanupJobNameFor(backup)
 	backoffLimit := int32(1)
 
 	cleanupLabels := backupLabels(backup, "cleanup")
@@ -1959,12 +1958,41 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 	// finalizer is completing — owner-ref'ing it to the dying CR hands it to
 	// the garbage collector immediately, which deletes the Job before (or
 	// while) the prune script runs. The 300s TTL is the cleanup mechanism.
-	if err := r.Create(ctx, cleanupJob); err != nil {
+	//
+	// AlreadyExists is success, not failure: the name is deterministic per CR,
+	// so a concurrent/retried finalizer reconcile that already created the Job
+	// must not error out (that would requeue without removing the finalizer and
+	// re-enter this path in a tight loop). Idempotent create → the deletion
+	// proceeds cleanly.
+	if err := r.Create(ctx, cleanupJob); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create cleanup job: %w", err)
 	}
 
 	logger.Info("Backup cleanup job created", "job", cleanupJob.Name)
 	return nil
+}
+
+// cleanupJobNameFor builds a deterministic name for a CR's retention cleanup
+// Job. The UID-derived suffix keeps the name stable across every reconcile of a
+// given CR instance (so finalizer retries converge on one Job) while staying
+// unique across CRs that happen to share a name over time. The result is capped
+// to the 63-char Kubernetes object-name limit by trimming the CR-name portion,
+// never the suffix (the suffix is what guarantees uniqueness).
+func cleanupJobNameFor(backup *neo4jv1beta1.Neo4jBackup) string {
+	suffix := "-cleanup"
+	uid := strings.ReplaceAll(string(backup.UID), "-", "")
+	if len(uid) > 8 {
+		uid = uid[:8]
+	}
+	if uid != "" {
+		suffix = suffix + "-" + uid
+	}
+	const maxNameLen = 63
+	base := backup.Name
+	if len(base)+len(suffix) > maxNameLen {
+		base = base[:maxNameLen-len(suffix)]
+	}
+	return base + suffix
 }
 
 // buildRetentionScript generates a shell script that enforces the given
@@ -2122,7 +2150,16 @@ func (r *Neo4jBackupReconciler) recordShardedExclusion(backup *neo4jv1beta1.Neo4
 		fmt.Sprintf("all-databases backup captured property-sharded database(s) %s as per-shard artifacts (status.shardedFamilies); they are NOT recreated by an all-databases restore — restore each from THIS backup via its Neo4jShardedDatabase CR with spec.seedBackupRef: %s", strings.Join(families, ", "), backup.Name))
 }
 
-func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) {
+// recordOneShotBackupRun records a terminal Job's run into status.history and
+// returns whether the caller may finalize the CR (flip to Completed/Failed).
+// It returns FALSE only for a Succeeded run whose artifact-filename metadata was
+// not yet captured from the Pod log AND whose Pod still exists — the caller
+// should requeue so a later reconcile can read the log before the Job's TTL GCs
+// the Pod. Without this, a transient log-fetch miss recorded an empty
+// ArtifactFilename permanently (the terminal guard never re-enters), leaving a
+// Succeeded backup silently un-restorable via the CR path. Once the Pod is gone,
+// it records best-effort (returns true) — retrying can't recover the filename.
+func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) bool {
 	logger := log.FromContext(ctx)
 
 	run, ok := jobToBackupRun(job, chainRoot(backup))
@@ -2130,7 +2167,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		// Job is neither Succeeded nor Failed — nothing terminal to record.
 		// handleExistingBackupJob only calls us once one branch is true, so
 		// reaching this is a programming error elsewhere, not user data.
-		return
+		return true
 	}
 	// Phase 3: stamp the per-shard audit list onto the BackupRun. No-op for
 	// non-sharded kinds; failure to fetch the sharded DB CR is non-fatal.
@@ -2139,8 +2176,8 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// once and feed it into both parsers — Pod logs are TTL-bound, so a
 	// single fetch is cheaper than separate calls. Non-fatal — log-fetch
 	// failures and parse misses leave the corresponding fields empty.
-	isStandardDB := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
-	isAllDatabases := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
+	isStandardDB := backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindDatabase
+	isAllDatabases := backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindCluster
 	logContent := ""
 	if shouldFetchLog := r.expectedShardArtifactsForBackup(ctx, backup) != nil || isStandardDB || isAllDatabases ||
 		(backup.Spec.Options != nil && backup.Spec.Options.Validate != nil && *backup.Spec.Options.Validate); shouldFetchLog {
@@ -2158,7 +2195,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		run.ShardArtifacts = artifacts
 	}
 	if isStandardDB && logContent != "" {
-		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.Target.Name)
+		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.ScopedName())
 	}
 	if isAllDatabases && logContent != "" {
 		run.DatabaseArtifacts = parseAllDatabaseArtifactsFromLog(logContent)
@@ -2177,6 +2214,39 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// they require parsing neo4j-admin stdout from Job pod logs (future
 	// enhancement). jobToBackupRun populates Duration when both StartTime
 	// and CompletionTime are present, which is the success case.
+
+	// Defer finalization if a Succeeded run's restore-critical artifact
+	// metadata (the .backup filename[s]) wasn't captured from the Pod log yet
+	// but the Pod still exists — the caller requeues so a later reconcile can
+	// read the log before the Job TTL GCs the Pod. Recording an empty filename
+	// is permanent (the terminal-phase guard never re-enters) and leaves the
+	// backup un-restorable via the CR path. Once the Pod is gone, retrying
+	// can't help — fall through and record best-effort.
+	if run.Status == "Succeeded" {
+		missing := false
+		switch {
+		case isStandardDB:
+			missing = run.ArtifactFilename == ""
+		case isAllDatabases:
+			missing = len(run.DatabaseArtifacts) == 0
+		case backup.Spec.Scope() == neo4jv1beta1.BackupTargetKindShardedDatabase:
+			for i := range run.ShardArtifacts {
+				if run.ShardArtifacts[i].Filename == "" {
+					missing = true
+					break
+				}
+			}
+		}
+		if missing && r.backupPodExists(ctx, job.Name, job.Namespace) {
+			logger.Info("backup Succeeded but restore-critical artifact metadata not yet captured from Pod log; deferring history record to retry before Pod GC",
+				"job", job.Name, "kind", backup.Spec.Scope())
+			return false
+		}
+		if missing {
+			logger.Info("backup Pod gone before artifact metadata was captured; recording run best-effort (a CR-path restore of this run may need source.type=storage with an explicit backupPath)",
+				"job", job.Name)
+		}
+	}
 
 	update := func() error {
 		latest := &neo4jv1beta1.Neo4jBackup{}
@@ -2217,6 +2287,23 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// status.lastBackup surfaces this run. No-op for non-sharded kinds and
 	// for non-Succeeded runs.
 	r.updateShardedDBLastBackup(ctx, backup, run)
+	return true
+}
+
+// backupPodExists reports whether at least one Pod spawned by the given backup
+// Job still exists (i.e. hasn't been GC'd by the Job's TTL). Used to decide
+// whether a missed artifact-filename capture is worth requeuing for (Pod alive)
+// or must be accepted as best-effort (Pod gone). Best-effort: a List error or a
+// nil Clientset reports false, so the caller records rather than requeues
+// forever.
+func (r *Neo4jBackupReconciler) backupPodExists(ctx context.Context, jobName, namespace string) bool {
+	var podList corev1.PodList
+	if err := r.Client.List(ctx, &podList,
+		client.InNamespace(namespace),
+		client.MatchingLabels{"batch.kubernetes.io/job-name": jobName}); err != nil {
+		return false
+	}
+	return len(podList.Items) > 0
 }
 
 // validateNeo4jVersion validates that the target cluster uses Neo4j 5.26+ or 2025.01+

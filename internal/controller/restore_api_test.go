@@ -33,9 +33,9 @@ var _ = Describe("Restore API Tests", func() {
 			restore := &neo4jv1beta1.Neo4jRestore{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-restore-backup", Namespace: testNamespace},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef: "test-cluster", DatabaseName: "restoreddb",
+					InstanceRef: "test-cluster", Database: "restoreddb",
 					Source:  neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: "daily-backup-20250121"},
-					Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true, VerifyBackup: true},
+					Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				},
 			}
 			Expect(k8sClient.Create(ctx, restore)).To(Succeed())
@@ -52,7 +52,7 @@ var _ = Describe("Restore API Tests", func() {
 			restore := &neo4jv1beta1.Neo4jRestore{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-pitr-restore", Namespace: testNamespace},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef: "prod-cluster", DatabaseName: "pitrdb",
+					InstanceRef: "prod-cluster", Database: "pitrdb",
 					Source: neo4jv1beta1.RestoreSource{
 						Type: "pitr",
 						PITR: &neo4jv1beta1.PITRConfig{
@@ -76,7 +76,7 @@ var _ = Describe("Restore API Tests", func() {
 			restore := &neo4jv1beta1.Neo4jRestore{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-restore-hooks", Namespace: testNamespace},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
-					ClusterRef: "staging-cluster", DatabaseName: "testdb",
+					InstanceRef: "staging-cluster", Database: "testdb",
 					Source: neo4jv1beta1.RestoreSource{
 						Type:    "storage",
 						Storage: &neo4jv1beta1.StorageLocation{Type: "pvc", Path: "/backups/latest"},

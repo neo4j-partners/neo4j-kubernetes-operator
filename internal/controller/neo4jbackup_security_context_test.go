@@ -101,10 +101,8 @@ func TestBackupJobHasHardenedSecurityContext(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: ns},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{
-				Kind: "Cluster",
-				Name: clusterName,
-			},
+			InstanceRef:  clusterName,
+			AllDatabases: true,
 		},
 	}
 	r := newBackupTestReconciler(t, cluster, backup)
@@ -131,11 +129,9 @@ func TestBackupCronJobHasHardenedSecurityContext(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: ns},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{
-				Kind: "Cluster",
-				Name: clusterName,
-			},
-			Schedule: "0 2 * * *",
+			InstanceRef:  clusterName,
+			AllDatabases: true,
+			Schedule:     "0 2 * * *",
 		},
 	}
 	r := newBackupTestReconciler(t, cluster, backup)
@@ -166,7 +162,8 @@ func TestBackupJobPropagatesImagePullSecrets(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: ns},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: clusterName},
+			InstanceRef:  clusterName,
+			AllDatabases: true,
 		},
 	}
 	r := newBackupTestReconciler(t, cluster, backup)
@@ -198,8 +195,9 @@ func TestBackupCronJobPropagatesImagePullSecrets(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: ns},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Target:   neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: clusterName},
-			Schedule: "0 2 * * *",
+			InstanceRef:  clusterName,
+			AllDatabases: true,
+			Schedule:     "0 2 * * *",
 		},
 	}
 	r := newBackupTestReconciler(t, cluster, backup)

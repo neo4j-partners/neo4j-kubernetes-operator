@@ -197,7 +197,7 @@ var _ = Describe("PVC Cluster Restore — All-Databases and Single-Database (v1.
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
 				InstanceRef: cluster.Name,
 				Database:    "inventory",
-				Force:       true,
+				Options:     &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				Source:      neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: singleBackup.Name},
 			},
 		}
@@ -216,7 +216,7 @@ var _ = Describe("PVC Cluster Restore — All-Databases and Single-Database (v1.
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
 				InstanceRef:  cluster.Name,
 				AllDatabases: true,
-				Force:        true,
+				Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 				Source:       neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: backup.Name},
 			},
 		}

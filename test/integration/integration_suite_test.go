@@ -225,8 +225,60 @@ func randomPassword(entropyBytes int) string {
 	return base64.RawURLEncoding.EncodeToString(buf)
 }
 
-// createTestNamespace creates a unique namespace for each test
+// createTestNamespace creates a unique namespace for a single spec and tears it
+// down when that spec finishes (see the DeferCleanup below). Use this for the
+// common case: a namespace owned by exactly one spec. For a namespace that is
+// deliberately shared across specs (provisioned once and reused), use
+// createSharedTestNamespace instead — a per-spec DeferCleanup would delete the
+// shared namespace out from under its sibling specs.
 func createTestNamespace(name string) string {
+	uniqueName := createNamespaceRaw(name)
+
+	// Tear the namespace down when the spec/container that created it finishes,
+	// rather than leaking it until AfterSuite. Under a long suite run, namespaces
+	// left Active (with terminating pods, MinIO deployments, and dead
+	// Services/Endpoints) pile up on the single Kind node and degrade it —
+	// enough to make otherwise-healthy restores intermittently fail on transient
+	// node/DNS contention (#297). DeferCleanup runs after the spec's own
+	// AfterEach (so CRs/finalizers are already released) and mirrors the
+	// per-namespace teardown cleanupTestNamespaces does at suite end. The delete
+	// is non-blocking (background propagation) so the next spec isn't gated on
+	// namespace termination.
+	//
+	// IMPORTANT: DeferCleanup binds to the spec/container that is running when
+	// createTestNamespace is called. A namespace created lazily inside a single
+	// spec but reused by later specs (e.g. the sync.Once shared RBAC cluster)
+	// must NOT go through this path — its DeferCleanup would fire at the end of
+	// that one spec and terminate the namespace mid-suite. Such callers use
+	// createSharedTestNamespace and rely on AfterSuite (cleanupTestNamespaces)
+	// for teardown.
+	DeferCleanup(func() {
+		cleanupCustomResourcesInNamespace(uniqueName)
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: uniqueName}}
+		if delErr := k8sClient.Delete(context.Background(), ns,
+			client.PropagationPolicy(metav1.DeletePropagationBackground)); delErr != nil && !errors.IsNotFound(delErr) {
+			GinkgoWriter.Printf("DeferCleanup: failed to delete namespace %s: %v\n", uniqueName, delErr)
+		}
+	})
+
+	return uniqueName
+}
+
+// createSharedTestNamespace creates a unique namespace WITHOUT registering a
+// per-spec DeferCleanup. Use it for namespaces that outlive the spec that
+// happens to create them — e.g. the sync.Once shared RBAC cluster consumed by
+// the Neo4jUser/Role/RoleBinding/Database specs. Teardown is handled once at
+// suite end by AfterSuite (teardownSharedNativeCluster + cleanupTestNamespaces,
+// which deletes every namespace carrying the test-run label).
+func createSharedTestNamespace(name string) string {
+	return createNamespaceRaw(name)
+}
+
+// createNamespaceRaw creates a uniquely-named, test-run-labelled namespace and
+// returns its name. It performs no cleanup registration — callers choose their
+// teardown strategy (per-spec via createTestNamespace, or suite-scoped via
+// createSharedTestNamespace).
+func createNamespaceRaw(name string) string {
 	namespaceMutex.Lock()
 	defer namespaceMutex.Unlock()
 

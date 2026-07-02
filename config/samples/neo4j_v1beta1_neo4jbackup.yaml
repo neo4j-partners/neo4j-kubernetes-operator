@@ -3,10 +3,9 @@ kind: Neo4jBackup
 metadata:
   name: example-backup
 spec:
-  # target.kind=Cluster backs up all databases on the named cluster
-  target:
-    kind: Cluster
-    name: sample-cluster  # References your Neo4jEnterpriseCluster name
+  # instanceRef + allDatabases backs up every database on the named deployment
+  instanceRef: sample-cluster  # References your Neo4jEnterpriseCluster/Standalone name
+  allDatabases: true
   storage:
     type: pvc
     pvc:

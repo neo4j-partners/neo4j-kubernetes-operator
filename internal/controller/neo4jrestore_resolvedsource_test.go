@@ -82,9 +82,9 @@ func restoreWithBackupRef(name, ns, backupRef string) *neo4jv1beta1.Neo4jRestore
 	return &neo4jv1beta1.Neo4jRestore{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			ClusterRef:   "standalone-neo4j",
-			DatabaseName: "neo4j",
-			Source:       neo4jv1beta1.RestoreSource{Type: SourceTypeBackup, BackupRef: backupRef},
+			InstanceRef: "standalone-neo4j",
+			Database:    "neo4j",
+			Source:      neo4jv1beta1.RestoreSource{Type: SourceTypeBackup, BackupRef: backupRef},
 		},
 	}
 }
@@ -224,7 +224,7 @@ func TestValidateRestore_PinnedSnapshotSurvivesMissingCR(t *testing.T) {
 func TestValidateRestore_RejectsSystemDatabase(t *testing.T) {
 	for _, name := range []string{"system", "System", "SYSTEM"} {
 		r := restoreWithBackupRef("simple-restore", "default", "deleted-backup")
-		r.Spec.DatabaseName = name
+		r.Spec.Database = name
 		r.Status.ResolvedSource = &neo4jv1beta1.ResolvedRestoreSource{
 			BackupRef:  "deleted-backup",
 			Storage:    pvcStorage("backup-storage"),
@@ -429,7 +429,7 @@ func TestValidateRestore_StorageBackupPathActionable(t *testing.T) {
 // message, which can't help.
 func TestLatestSucceededArtifactFilename_ClusterKindGivesStructuralError(t *testing.T) {
 	backup := backupCRForRestore("clusterwide", "default", false)
-	backup.Spec.Target.Kind = neo4jv1beta1.BackupTargetKindCluster
+	backup.Spec.AllDatabases = true // all-databases (Cluster) scope
 	backup.Status.History = []neo4jv1beta1.BackupRun{
 		{RunID: "clusterwide-backup", Status: "Succeeded", ArtifactFilename: ""}, // kind:Cluster never captures one
 	}
@@ -441,4 +441,95 @@ func TestLatestSucceededArtifactFilename_ClusterKindGivesStructuralError(t *test
 	assert.Contains(t, err.Error(), "kind:Database", "error must point at the kind:Database remedy")
 	assert.Contains(t, err.Error(), "type=storage", "error must offer the explicit-path escape hatch")
 	assert.NotContains(t, err.Error(), "re-run the backup", "must not suggest re-running (structural, not flaky)")
+}
+
+// TestPopulateRestoreProvenance covers #227 item 4: on a completed restore the
+// operator derives status.stats.duration and status.backupInfo purely from the
+// object's own persisted state (timestamps, pinned resolvedSource, spec), and
+// omits fields it cannot derive rather than guessing.
+func TestPopulateRestoreProvenance(t *testing.T) {
+	start := metav1.Date(2026, 6, 30, 10, 0, 0, 0, time.UTC)
+	end := metav1.Date(2026, 6, 30, 10, 2, 3, 0, time.UTC)
+	backupRan := metav1.Date(2026, 6, 29, 1, 30, 0, 0, time.UTC)
+
+	t.Run("backup-type restore pins path, creation time and database", func(t *testing.T) {
+		restore := &neo4jv1beta1.Neo4jRestore{
+			Spec: neo4jv1beta1.Neo4jRestoreSpec{
+				Database: "customers",
+				Source:   neo4jv1beta1.RestoreSource{Type: SourceTypeBackup, BackupRef: "nightly"},
+			},
+			Status: neo4jv1beta1.Neo4jRestoreStatus{
+				StartTime:      &start,
+				CompletionTime: &end,
+				ResolvedSource: &neo4jv1beta1.ResolvedRestoreSource{
+					BackupPath:       "nightly-chain/",
+					ArtifactFilename: "customers-2026-06-29T01-30-00.backup",
+					BackupCreatedAt:  &backupRan,
+				},
+			},
+		}
+
+		populateRestoreProvenance(restore)
+
+		require.NotNil(t, restore.Status.Stats)
+		assert.Equal(t, "2m3s", restore.Status.Stats.Duration)
+		require.NotNil(t, restore.Status.BackupInfo)
+		assert.Equal(t, "nightly-chain/customers-2026-06-29T01-30-00.backup", restore.Status.BackupInfo.BackupPath)
+		assert.Equal(t, "customers", restore.Status.BackupInfo.OriginalDatabase)
+		require.NotNil(t, restore.Status.BackupInfo.BackupCreatedAt)
+		assert.True(t, restore.Status.BackupInfo.BackupCreatedAt.Equal(&backupRan))
+	})
+
+	t.Run("storage-type restore uses the explicit spec path, leaves creation time unset", func(t *testing.T) {
+		restore := &neo4jv1beta1.Neo4jRestore{
+			Spec: neo4jv1beta1.Neo4jRestoreSpec{
+				Database: "neo4j",
+				Source: neo4jv1beta1.RestoreSource{
+					Type:       "storage",
+					BackupPath: "s3://bucket/path/neo4j.backup",
+				},
+			},
+			Status: neo4jv1beta1.Neo4jRestoreStatus{StartTime: &start, CompletionTime: &end},
+		}
+
+		populateRestoreProvenance(restore)
+
+		require.NotNil(t, restore.Status.BackupInfo)
+		assert.Equal(t, "s3://bucket/path/neo4j.backup", restore.Status.BackupInfo.BackupPath)
+		assert.Equal(t, "neo4j", restore.Status.BackupInfo.OriginalDatabase)
+		assert.Nil(t, restore.Status.BackupInfo.BackupCreatedAt, "storage restores carry no backup CR")
+	})
+
+	t.Run("all-databases restore leaves OriginalDatabase empty", func(t *testing.T) {
+		restore := &neo4jv1beta1.Neo4jRestore{
+			Spec: neo4jv1beta1.Neo4jRestoreSpec{
+				AllDatabases: true,
+				Database:     "ignored-for-all-databases",
+				Source:       neo4jv1beta1.RestoreSource{Type: SourceTypeBackup, BackupRef: "nightly"},
+			},
+			Status: neo4jv1beta1.Neo4jRestoreStatus{
+				StartTime:      &start,
+				CompletionTime: &end,
+				ResolvedSource: &neo4jv1beta1.ResolvedRestoreSource{BackupPath: "nightly-chain/"},
+			},
+		}
+
+		populateRestoreProvenance(restore)
+
+		require.NotNil(t, restore.Status.BackupInfo)
+		assert.Empty(t, restore.Status.BackupInfo.OriginalDatabase)
+		assert.Equal(t, "nightly-chain/", restore.Status.BackupInfo.BackupPath)
+	})
+
+	t.Run("missing or skewed timestamps yield no duration", func(t *testing.T) {
+		// No completion time.
+		r1 := &neo4jv1beta1.Neo4jRestore{Status: neo4jv1beta1.Neo4jRestoreStatus{StartTime: &start}}
+		populateRestoreProvenance(r1)
+		assert.Nil(t, r1.Status.Stats)
+
+		// Completion before start (clock skew) must not produce a negative duration.
+		r2 := &neo4jv1beta1.Neo4jRestore{Status: neo4jv1beta1.Neo4jRestoreStatus{StartTime: &end, CompletionTime: &start}}
+		populateRestoreProvenance(r2)
+		assert.Nil(t, r2.Status.Stats)
+	})
 }

@@ -171,9 +171,8 @@ var _ = Describe("Standard Database PVC Restore Integration Tests", Label("exten
 		backup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-pvc-backup", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindDatabase, Name: dbName, ClusterRef: cluster.Name,
-				},
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Storage: neo4jv1beta1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1beta1.PVCSpec{
@@ -217,13 +216,13 @@ var _ = Describe("Standard Database PVC Restore Integration Tests", Label("exten
 		restore = &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "inventory-pvc-restore", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jRestoreSpec{
-				ClusterRef:   cluster.Name,
-				DatabaseName: dbName,
+				InstanceRef: cluster.Name,
+				Database:    dbName,
 				Source: neo4jv1beta1.RestoreSource{
 					Type:      "backup",
 					BackupRef: backup.Name,
 				},
-				Force: true,
+				Options: &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 			},
 		}
 		Expect(k8sClient.Create(ctx, restore)).To(Succeed())

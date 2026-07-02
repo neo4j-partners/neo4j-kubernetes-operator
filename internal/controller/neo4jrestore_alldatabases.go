@@ -172,9 +172,9 @@ func (r *Neo4jRestoreReconciler) startAllDatabasesRestore(
 			if exists {
 				// Recreating an existing database is destructive — gate on the
 				// same explicit opt-in as the single-database path (#218).
-				if !restore.Spec.Force && (restore.Spec.Options == nil || !restore.Spec.Options.ReplaceExisting) {
+				if !restoreOverwriteConfirmed(restore) {
 					r.markDatabaseResult(ctx, restore, db, StatusFailed,
-						"database already exists; set spec.force=true (or spec.options.replaceExisting=true) to overwrite it during an all-databases restore")
+						"database already exists; set spec.options.replaceExisting=true to overwrite it during an all-databases restore")
 					return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 				}
 				applied, rErr := neo4jClient.RecreateDatabaseWithSeedURI(ctx, version, db, seedURI)
@@ -303,7 +303,7 @@ func (r *Neo4jRestoreReconciler) ensurePVCSeedProxyReady(
 	}
 	// Restrict the proxy (which serves the whole backup PVC) to the target
 	// cluster's server pods (#219). Best-effort: only enforcing CNIs apply it.
-	if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.ClusterRef); npErr != nil {
+	if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.InstanceRef); npErr != nil {
 		logger.Error(npErr, "Failed to ensure seed-proxy NetworkPolicy (non-fatal)")
 	}
 

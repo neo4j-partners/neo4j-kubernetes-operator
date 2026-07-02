@@ -74,8 +74,8 @@ func minimalRestore(name, namespace, clusterRef string) *neo4jv1beta1.Neo4jResto
 	return &neo4jv1beta1.Neo4jRestore{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			ClusterRef:   clusterRef,
-			DatabaseName: "neo4j",
+			InstanceRef: clusterRef,
+			Database:    "neo4j",
 		},
 	}
 }

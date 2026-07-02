@@ -58,7 +58,7 @@ func TestCheckRestoreProgress_TerminalDecisions(t *testing.T) {
 	newRestore := func() *neo4jv1beta1.Neo4jRestore {
 		return &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "r1", Namespace: "default"},
-			Spec:       neo4jv1beta1.Neo4jRestoreSpec{StopCluster: false, DatabaseName: "db"},
+			Spec:       neo4jv1beta1.Neo4jRestoreSpec{StopCluster: false, Database: "db"},
 			Status:     neo4jv1beta1.Neo4jRestoreStatus{Phase: "Running"},
 		}
 	}
@@ -109,7 +109,7 @@ func TestCheckRestoreProgress_TerminalDecisions(t *testing.T) {
 	t.Run("true-cluster restore with no Job is not failed as TTL-collected", func(t *testing.T) {
 		clusterRestore := &neo4jv1beta1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{Name: "r1", Namespace: "default"},
-			Spec:       neo4jv1beta1.Neo4jRestoreSpec{ClusterRef: "c1", DatabaseName: "db"},
+			Spec:       neo4jv1beta1.Neo4jRestoreSpec{InstanceRef: "c1", Database: "db"},
 			Status:     neo4jv1beta1.Neo4jRestoreStatus{Phase: "Running"},
 		}
 		cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{

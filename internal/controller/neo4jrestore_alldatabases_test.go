@@ -97,7 +97,7 @@ func TestBuildAllDatabasesRestoreCommand_PVC(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
 			InstanceRef:  "sa",
 			AllDatabases: true,
-			Force:        true,
+			Options:      &neo4jv1beta1.RestoreOptionsSpec{ReplaceExisting: true},
 			Source:       neo4jv1beta1.RestoreSource{Type: "storage", Storage: storage, BackupPath: "sa-all-backup"},
 		},
 		Status: neo4jv1beta1.Neo4jRestoreStatus{

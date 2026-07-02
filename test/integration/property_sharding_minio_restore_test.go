@@ -256,9 +256,8 @@ var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Label("e
 		backup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "products-backup", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindShardedDatabase, Name: "products", ClusterRef: cluster.Name,
-				},
+				InstanceRef:     cluster.Name,
+				ShardedDatabase: "products",
 				Storage: neo4jv1beta1.StorageLocation{
 					Type:   "s3",
 					Bucket: minioBucket,
@@ -551,9 +550,8 @@ var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Label("e
 		backup = &neo4jv1beta1.Neo4jBackup{
 			ObjectMeta: metav1.ObjectMeta{Name: "products-backup", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jBackupSpec{
-				Target: neo4jv1beta1.BackupTarget{
-					Kind: neo4jv1beta1.BackupTargetKindShardedDatabase, Name: "products", ClusterRef: cluster.Name,
-				},
+				InstanceRef:     cluster.Name,
+				ShardedDatabase: "products",
 				Storage: neo4jv1beta1.StorageLocation{
 					Type:   "s3",
 					Bucket: minioBucket,
