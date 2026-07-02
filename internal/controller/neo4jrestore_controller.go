@@ -2543,7 +2543,11 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, restor
 				// (#187), so the cluster client would never connect.
 				neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 				if err != nil {
-					logger.Info("Failed to create Neo4j client, retrying...")
+					// Surface the error: without it, a post-restore connectivity
+					// failure against a healthy standalone is indistinguishable
+					// from "still starting up" and the restore just times out
+					// opaquely after 10 minutes (#297).
+					logger.Info("Failed to create Neo4j client, retrying...", "error", err.Error())
 					continue
 				}
 
@@ -2553,7 +2557,7 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, restor
 					if closeErr := neo4jClient.Close(); closeErr != nil {
 						logger.Error(closeErr, "failed to close Neo4j client")
 					}
-					logger.Info("Neo4j not ready yet, retrying...")
+					logger.Info("Neo4j not ready yet, retrying...", "error", err.Error())
 					continue
 				}
 
