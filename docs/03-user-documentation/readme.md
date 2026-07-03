@@ -16,7 +16,7 @@ This estate is separate from product and design documentation:
 ## Reading order
 
 1. [Prerequisites](operator/01-prerequisites.md)
-2. [Install the operator](operator/02-installation.md)
+2. [Install the operator](operator/install/readme.md) — [kind](operator/install/local/kind/install.md) · [Azure AKS](operator/install/azure/aks/install.md)
 3. [Quickstart — Standalone Neo4j](neo4j/01-quickstart-standalone.md)
 4. [Uninstall](operator/03-uninstall.md) when tearing down a lab cluster
 
@@ -29,7 +29,9 @@ This estate is separate from product and design documentation:
 | Doc | Description |
 |-----|-------------|
 | [01-prerequisites.md](operator/01-prerequisites.md) | Cluster, tools, StorageClass |
-| [02-installation.md](operator/02-installation.md) | CRD + controller Deployment |
+| [install/readme.md](operator/install/readme.md) | Installation index (by platform) |
+| [install/local/kind/install.md](operator/install/local/kind/install.md) | kind — local development |
+| [install/azure/aks/install.md](operator/install/azure/aks/install.md) | Azure AKS |
 | [03-uninstall.md](operator/03-uninstall.md) | Remove operator; PVC retention |
 | [04-troubleshooting.md](operator/04-troubleshooting.md) | Common install / reconcile issues |
 

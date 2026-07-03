@@ -47,4 +47,4 @@ The operator sets the container image to `{repository}:{spec.version}` (default 
 
 ## Next step
 
-[Install the operator](02-installation.md)
+[Install the operator](install/readme.md) — [kind](install/local/kind/install.md) · [Azure AKS](install/azure/aks/install.md)

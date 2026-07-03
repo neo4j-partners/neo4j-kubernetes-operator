@@ -472,8 +472,9 @@ type TrustSpec struct {
 // SecondaryPoolSpec configures analytics or read secondary pool (BDR-002).
 type SecondaryPoolSpec struct {
 	// +kubebuilder:validation:Minimum=0
-	Members  int32    `json:"members,omitempty"`
-	Plugins  []string `json:"plugins,omitempty"`
+	Members int32 `json:"members,omitempty"`
+	// +kubebuilder:validation:MaxItems=8
+	Plugins []string `json:"plugins,omitempty"`
 }
 
 // SecondariesSpec holds fixed V1 secondary pools analytics and read.
@@ -485,7 +486,8 @@ type SecondariesSpec struct {
 // PrimariesSpec configures primary (quorum) members in Cluster mode.
 type PrimariesSpec struct {
 	// +kubebuilder:validation:Minimum=1
-	Members int32    `json:"members"`
+	Members int32 `json:"members"`
+	// +kubebuilder:validation:MaxItems=8
 	Plugins []string `json:"plugins,omitempty"`
 }
 

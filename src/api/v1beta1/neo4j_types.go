@@ -34,7 +34,8 @@ import (
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.topology.primaries) || !has(self.topology.primaries.plugins) || self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')",message="GDS and Bloom cannot be installed on primary members in Cluster mode"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.plugins)",message="spec.plugins is not allowed when mode is Cluster"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries))",message="use spec.plugins in standalone mode"
-// +kubebuilder:validation:XValidation:rule="!( (has(self.topology.primaries) && has(self.topology.primaries.plugins) && self.topology.primaries.plugins.exists(p, p == 'gds')) || (has(self.topology.secondaries) && has(self.topology.secondaries.analytics) && has(self.topology.secondaries.analytics.plugins) && self.topology.secondaries.analytics.plugins.exists(p, p == 'gds')) || (has(self.plugins) && self.plugins.exists(p, p == 'gds')) ) || (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds) && has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef != '')",message="gds requires pluginDefinitions.gds.licenseSecretRef when referenced"
+// +kubebuilder:validation:XValidation:rule="!has(self.plugins) || !self.plugins.exists(p, p == 'gds') || (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds) && has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef != '')",message="gds requires pluginDefinitions.gds.licenseSecretRef when referenced in spec.plugins"
+// +kubebuilder:validation:XValidation:rule="!has(self.topology.secondaries) || !has(self.topology.secondaries.analytics) || !has(self.topology.secondaries.analytics.plugins) || !self.topology.secondaries.analytics.plugins.exists(p, p == 'gds') || (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds) && has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef != '')",message="gds requires pluginDefinitions.gds.licenseSecretRef when referenced in secondaries.analytics.plugins"
 // +kubebuilder:validation:XValidation:rule="self.edition == 'enterprise'",message="V1 supports Enterprise edition only"
 // +kubebuilder:validation:XValidation:rule="self.license.accept == 'yes' || self.license.accept == 'eval'",message="Enterprise license must be explicitly accepted"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || self.edition == 'enterprise'",message="Cluster mode requires Enterprise edition"
@@ -61,6 +62,7 @@ type Neo4jSpec struct {
 	Topology TopologySpec `json:"topology"`
 
 	// Plugins lists catalog plugin ids installed on every server (Standalone only).
+	// +kubebuilder:validation:MaxItems=8
 	Plugins []string `json:"plugins,omitempty"`
 	// PluginDefinitions holds per-plugin license, version, and config keyed by catalog id.
 	PluginDefinitions map[string]PluginDefinitionSpec `json:"pluginDefinitions,omitempty"`

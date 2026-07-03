@@ -6,7 +6,7 @@ Deploy a minimal single-instance Neo4j (Enterprise) in **Standalone** mode.
 
 ## 1. Install the operator
 
-If not already done: [Install the operator](../operator/02-installation.md).
+If not already done: [Install the operator](../operator/install/readme.md) ([kind](../operator/install/local/kind/install.md) · [Azure AKS](../operator/install/azure/aks/install.md)).
 
 ## 2. Apply the sample
 

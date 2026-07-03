@@ -1,2 +1,5 @@
 helm-charts
 tests/old
+
+# make build — manager binary (Makefile: go build -o bin/manager)
+/bin/

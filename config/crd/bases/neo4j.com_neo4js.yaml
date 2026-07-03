@@ -635,6 +635,7 @@ spec:
                   (Standalone only).
                 items:
                   type: string
+                maxItems: 8
                 type: array
               podDisruptionBudget:
                 description: PodDisruptionBudget limits voluntary disruption during
@@ -19972,6 +19973,7 @@ spec:
                       plugins:
                         items:
                           type: string
+                        maxItems: 8
                         type: array
                     required:
                     - members
@@ -19991,6 +19993,7 @@ spec:
                           plugins:
                             items:
                               type: string
+                            maxItems: 8
                             type: array
                         type: object
                       read:
@@ -20004,6 +20007,7 @@ spec:
                           plugins:
                             items:
                               type: string
+                            maxItems: 8
                             type: array
                         type: object
                     type: object
@@ -21235,13 +21239,17 @@ spec:
               rule: self.topology.mode != 'Standalone' || (!has(self.topology.primaries)
                 && !has(self.topology.secondaries))
             - message: gds requires pluginDefinitions.gds.licenseSecretRef when referenced
-              rule: '!( (has(self.topology.primaries) && has(self.topology.primaries.plugins)
-                && self.topology.primaries.plugins.exists(p, p == ''gds'')) || (has(self.topology.secondaries)
-                && has(self.topology.secondaries.analytics) && has(self.topology.secondaries.analytics.plugins)
-                && self.topology.secondaries.analytics.plugins.exists(p, p == ''gds''))
-                || (has(self.plugins) && self.plugins.exists(p, p == ''gds'')) ) ||
+                in spec.plugins
+              rule: '!has(self.plugins) || !self.plugins.exists(p, p == ''gds'') ||
                 (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds) &&
                 has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef
+                != '''')'
+            - message: gds requires pluginDefinitions.gds.licenseSecretRef when referenced
+                in secondaries.analytics.plugins
+              rule: '!has(self.topology.secondaries) || !has(self.topology.secondaries.analytics)
+                || !has(self.topology.secondaries.analytics.plugins) || !self.topology.secondaries.analytics.plugins.exists(p,
+                p == ''gds'') || (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds)
+                && has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef
                 != '''')'
             - message: V1 supports Enterprise edition only
               rule: self.edition == 'enterprise'
