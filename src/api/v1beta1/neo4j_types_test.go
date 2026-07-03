@@ -31,7 +31,7 @@ func TestNeo4jSchemeRegistration(t *testing.T) {
 func TestNeo4jDeepCopy(t *testing.T) {
 	trueVal := true
 	orig := &Neo4j{
-		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "graph-dev"},
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
 		Spec: Neo4jSpec{
 			Edition: EditionEnterprise,
 			Version: "2026.05.0",

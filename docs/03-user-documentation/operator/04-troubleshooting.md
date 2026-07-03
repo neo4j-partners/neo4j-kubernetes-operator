@@ -33,8 +33,8 @@ Common causes:
 
 ```bash
 kubectl get neo4j -A
-kubectl describe neo4j dev -n graph-dev
-kubectl get sts,svc,secret,pvc -n graph-dev -l app.kubernetes.io/instance=dev
+kubectl describe neo4j dev -n default
+kubectl get sts,svc,secret,pvc -n default -l app.kubernetes.io/instance=dev
 ```
 
 - Confirm the operator pod is `Running`.
@@ -55,7 +55,7 @@ kubectl get sts,svc,secret,pvc -n graph-dev -l app.kubernetes.io/instance=dev
 When `spec.auth.generatePassword: true`, the operator creates `{metadata.name}-auth`:
 
 ```bash
-kubectl get secret dev-auth -n graph-dev -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d
+kubectl get secret dev-auth -n default -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d
 ```
 
 See [Quickstart — Standalone](../neo4j/01-quickstart-standalone.md#connect).
@@ -65,8 +65,8 @@ See [Quickstart — Standalone](../neo4j/01-quickstart-standalone.md#connect).
 Wait for StatefulSet rollout and PVC binding:
 
 ```bash
-kubectl rollout status statefulset/dev-server -n graph-dev
-kubectl get neo4j dev -n graph-dev -o jsonpath='{.status.conditions[?(@.type=="Ready")]}'
+kubectl rollout status statefulset/dev-server -n default
+kubectl get neo4j dev -n default -o jsonpath='{.status.conditions[?(@.type=="Ready")]}'
 ```
 
 Status semantics: [status model](../../02-technical-design/crd-spec/neo4j/status.md) (design reference).

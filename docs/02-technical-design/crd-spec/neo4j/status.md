@@ -212,7 +212,7 @@ Standalone example — one member, no invented cluster role:
 members:
   - name: dev-server-0
     pool: server
-    address: dev-0.dev.graph-dev.svc:7687
+    address: dev-0.dev.default.svc:7687
     neo4jState: Enabled
     neo4jHealth: Available
     hostingDatabases: 2

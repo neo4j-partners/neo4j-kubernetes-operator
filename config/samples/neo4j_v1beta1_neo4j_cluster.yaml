@@ -2,7 +2,6 @@ apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
   name: prod
-  namespace: graph-prod
 spec:
   edition: enterprise
   version: "2026.05.0"

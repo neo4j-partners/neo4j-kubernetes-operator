@@ -41,10 +41,15 @@ The operator sets the container image to `{repository}:{spec.version}` (default 
 | Namespace | Purpose |
 |-----------|---------|
 | `neo4j-operator-system` | Operator controller (Deployment) |
-| Workload namespace | `Neo4j` CR and Neo4j pods |
+| Workload namespace | `Neo4j` CR and Neo4j pods — **`default`** if `metadata.namespace` is omitted |
 
-**V1 target** ([BDR-003](../../02-technical-design/decision-records/business/operator/003-operator-install-scope.md)): operator and `Neo4j` CR in the **same namespace**. The Makefile quickstart uses `graph-dev` as a separate workload namespace for local labs; production installs should follow the single-namespace policy when enforced by the controller.
+**V1 target** ([BDR-003](../../02-technical-design/decision-records/business/operator/003-operator-install-scope.md)): operator and `Neo4j` CR in the **same namespace** when using the dedicated operator namespace. Samples and quickstarts omit `metadata.namespace` so the `Neo4j` CR is created in **`default`** unless you set another namespace explicitly.
 
 ## Next step
 
-[Install the operator](install/readme.md) — [kind](install/local/kind/install.md) · [Azure AKS](install/azure/aks/install.md)
+Start with a platform quickstart:
+
+- [kind (local)](../quickstart/local-kind/install.md)
+- [Azure AKS](../quickstart/azure-aks/install.md)
+
+Or install the operator on an existing cluster: [02-installation.md](02-installation.md).

@@ -9,7 +9,7 @@ import (
 
 func TestStandaloneContextNaming(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
-		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "graph-dev"},
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Version: "2026.05.0",
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},

@@ -20,12 +20,11 @@ It defines:
 
 ## When available (Slice 2+)
 
-Expected workflow:
+Expected workflow (sample omits `metadata.namespace` — deploys to **`default`**):
 
 ```bash
-kubectl create namespace graph-prod
 kubectl apply -f config/samples/neo4j_v1beta1_neo4j_cluster.yaml
-kubectl get neo4j prod -n graph-prod -w
+kubectl get neo4j prod -n default -w
 ```
 
 Expected pools ([BDR-009](../../02-technical-design/decision-records/business/neo4j/009-scale-pool-ordinal-semantics.md)):

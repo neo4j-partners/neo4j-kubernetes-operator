@@ -15,38 +15,46 @@ This estate is separate from product and design documentation:
 
 ## Reading order
 
-1. [Prerequisites](operator/01-prerequisites.md)
-2. [Install the operator](operator/install/readme.md) — [kind](operator/install/local/kind/install.md) · [Azure AKS](operator/install/azure/aks/install.md)
-3. [Quickstart — Standalone Neo4j](neo4j/01-quickstart-standalone.md)
-4. [Uninstall](operator/03-uninstall.md) when tearing down a lab cluster
+1. **Quickstart** — pick a platform:
+   - [kind (local)](quickstart/local-kind/install.md)
+   - [Azure AKS](quickstart/azure-aks/install.md)
+2. **Operator** — install details, uninstall, troubleshooting → [`operator/`](operator/)
+3. **Neo4j** — workload CR, status, connect → [`neo4j/`](neo4j/)
 
 ---
 
 ## Document index
 
+### Quickstart (end-to-end)
+
+| Doc | Description |
+|-----|-------------|
+| [quickstart/readme.md](quickstart/readme.md) | Platform index |
+| [local-kind/install.md](quickstart/local-kind/install.md) | kind — cluster + operator + Standalone Neo4j |
+| [azure-aks/install.md](quickstart/azure-aks/install.md) | AKS — cluster + operator + Standalone Neo4j |
+
 ### Operator
 
 | Doc | Description |
 |-----|-------------|
-| [01-prerequisites.md](operator/01-prerequisites.md) | Cluster, tools, StorageClass |
-| [install/readme.md](operator/install/readme.md) | Installation index (by platform) |
-| [install/local/kind/install.md](operator/install/local/kind/install.md) | kind — local development |
-| [install/azure/aks/install.md](operator/install/azure/aks/install.md) | Azure AKS |
-| [03-uninstall.md](operator/03-uninstall.md) | Remove operator; PVC retention |
-| [04-troubleshooting.md](operator/04-troubleshooting.md) | Common install / reconcile issues |
+| [01-prerequisites.md](operator/01-prerequisites.md) | Shared prerequisites |
+| [02-installation.md](operator/02-installation.md) | Install operator (generic — all platforms) |
+| [03-uninstall.md](operator/03-uninstall.md) | Remove operator |
+| [04-troubleshooting.md](operator/04-troubleshooting.md) | Common issues |
 
 ### Neo4j workload
 
 | Doc | Description |
 |-----|-------------|
-| [01-quickstart-standalone.md](neo4j/01-quickstart-standalone.md) | Minimal Standalone graph (V1) |
+| [neo4j/readme.md](neo4j/readme.md) | Neo4j install documentation index |
+| [01-quickstart-standalone.md](neo4j/01-quickstart-standalone.md) | Standalone CR, status, connect |
 | [02-quickstart-cluster.md](neo4j/02-quickstart-cluster.md) | Cluster sample (preview — Slice 2) |
 
 ### Reference
 
 | Doc | Description |
 |-----|-------------|
-| [api-cheatsheet.md](reference/api-cheatsheet.md) | Short API summary + links to full spec |
+| [api-cheatsheet.md](reference/api-cheatsheet.md) | Short API summary |
 
 ---
 
@@ -55,6 +63,6 @@ This estate is separate from product and design documentation:
 See [V1 scope lock](../00-discovery/13-v1-scope-lock.md) for the full list. In short:
 
 - **Supported now (Slice 1):** Standalone `Neo4j`, Dynamic data volume, generated auth Secret, ClusterIP Bolt/HTTP.
-- **Deferred:** Cluster formation, TLS, Ingress, backup, monitoring, multi-namespace / cluster-wide operator scope.
+- **Deferred:** Cluster formation, TLS, Ingress, backup, monitoring, multi-namespace operator scope.
 
-Design details: [BDR-003](../02-technical-design/decision-records/business/operator/003-operator-install-scope.md) (install scope), [CRD spec](../02-technical-design/crd-spec/neo4j/spec.md).
+Design details: [BDR-003](../02-technical-design/decision-records/business/operator/003-operator-install-scope.md), [CRD spec](../02-technical-design/crd-spec/neo4j/spec.md).

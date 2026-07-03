@@ -26,7 +26,7 @@ This removes the Deployment and ServiceAccount in `neo4j-operator-system`. It do
 Delete each `Neo4j` CR; owned objects are garbage-collected via owner references:
 
 ```bash
-kubectl delete neo4j dev -n graph-dev
+kubectl delete neo4j dev -n default
 ```
 
 ## Remove CRD (destructive)
@@ -44,12 +44,11 @@ Deleting the CRD removes all `Neo4j` CRs cluster-wide.
 V1 uninstall **preserves PersistentVolumeClaims** ([V1 scope lock](../../00-discovery/13-v1-scope-lock.md)). Delete PVCs explicitly if you want to reclaim storage:
 
 ```bash
-kubectl delete pvc -n graph-dev -l app.kubernetes.io/instance=dev
+kubectl delete pvc -n default -l app.kubernetes.io/instance=dev
 ```
 
 ## Remove namespace
 
 ```bash
-kubectl delete namespace graph-dev --ignore-not-found
 kubectl delete namespace neo4j-operator-system --ignore-not-found
 ```

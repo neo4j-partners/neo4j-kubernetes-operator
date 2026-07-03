@@ -76,8 +76,7 @@ undeploy: ## Remove operator deployment (keeps CRD and Neo4j workloads)
 	kubectl delete -k config/rbac --ignore-not-found
 
 .PHONY: sample-standalone
-sample-standalone: install ## Apply Standalone sample (namespace graph-dev)
-	kubectl create namespace graph-dev --dry-run=client -o yaml | kubectl apply -f -
+sample-standalone: install ## Apply Standalone sample (default namespace)
 	kubectl apply -f config/samples/neo4j_v1beta1_neo4j.yaml
 
 ##@ Code generation
