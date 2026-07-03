@@ -1,5 +1,3 @@
-# Primary + analytics (GDS/Bloom) + read scaling
-# BDR-002 topology · BDR-004 Option E plugins · BDR-005 volumes · BDR-007 connectivity
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:

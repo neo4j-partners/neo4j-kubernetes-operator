@@ -12,10 +12,11 @@ spec:
     accept: "yes"
   topology:
     mode: Standalone
-  volumes:
-    data:
-      mode: Dynamic
-      dynamic:
-        size: 10Gi
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
   auth:
     generatePassword: true

@@ -42,7 +42,7 @@ def _is_crd_doc(doc):
 
 def _check_one(doc, path):
     findings = []
-    has_status_sub = bool(re.search(r"subresources:\s*\n\s*status:\s*\{?\s*\}?", doc))
+    has_status_sub = bool(re.search(r"subresources:[\s\S]*?\n\s*status:\s*\{?\s*\}?", doc))
     if not has_status_sub:
         findings.append(("FAIL", "status_subresource", "no subresources.status block found"))
     storage_count = len(re.findall(r"storage:\s*true\b", doc))

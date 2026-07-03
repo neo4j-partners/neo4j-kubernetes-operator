@@ -1,0 +1,20 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev
+  namespace: graph-dev
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
