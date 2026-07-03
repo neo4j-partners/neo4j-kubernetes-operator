@@ -1,6 +1,8 @@
 package render
 
 import (
+	"strings"
+
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
 )
 
@@ -106,15 +108,25 @@ func (c Context) SelectorLabels() map[string]string {
 	}
 }
 
-// ImageRef returns the effective container image reference.
+// ImageRef returns the effective container image reference (repository:tag).
+// spec.version is the Neo4j calver without edition suffix; Enterprise images use a -enterprise tag (Helm parity).
 func (c Context) ImageRef() string {
 	repo := "neo4j"
 	if c.Neo4j.Spec.Image != nil && c.Neo4j.Spec.Image.Repository != "" {
 		repo = c.Neo4j.Spec.Image.Repository
 	}
-	return repo + ":" + c.Neo4j.Spec.Version
+	return repo + ":" + imageTag(c.Neo4j.Spec.Version, c.Neo4j.Spec.Edition)
 }
 
+func imageTag(version string, edition neo4jv1beta1.Edition) string {
+	if version == "" {
+		return version
+	}
+	if edition == neo4jv1beta1.EditionEnterprise && !strings.HasSuffix(version, "-enterprise") {
+		return version + "-enterprise"
+	}
+	return version
+}
 // BoltPort returns the Bolt listen port (default 7687).
 func (c Context) BoltPort() int32 {
 	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.Listeners != nil &&
