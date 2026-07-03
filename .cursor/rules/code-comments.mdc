@@ -1,0 +1,43 @@
+---
+description: Comment newly created code — API fields, packages, and non-obvious logic
+globs: src/**,config/**,internal/**
+alwaysApply: true
+---
+
+# Code comments (operator implementation)
+
+When **creating or extending** code in this repo, add brief comments so intent is readable without opening BDRs/ADRs.
+
+## Required
+
+| What | Style | Example |
+|------|-------|---------|
+| **Exported struct fields** (CRD types, status) | One line above the field — what it means, not the type | `// Version is the Neo4j image tag driving deploy and rolling upgrade.` |
+| **New packages** | One-line `package` doc comment — responsibility + ADR/BDR ref if relevant | `// Package persistence validates storage spec; Dynamic PVCs use STS volumeClaimTemplates.` |
+| **Domain / pipeline steps** | One line on the type or `Reconcile` — which ADR-003 step | `// Reconciler applies headless and client Services (BDR-007).` |
+| **Public functions** (exported) | One line when name alone is insufficient | `// Apply creates or updates obj with owner reference (ADR-006).` |
+
+## Encouraged
+
+- Non-obvious business rules: cite rule id (`TOPO-006`, `BDR-005`) or doc link in the comment.
+- `render/` builders: note Helm/BDR mapping when naming or labels are convention-driven (ADR-005).
+- Constants and enums: one line on the group; per-value comment only when not self-explanatory.
+
+## Avoid
+
+- Comments that restate the identifier (`// Name is the name`).
+- Paragraphs or block comments for trivial getters/setters.
+- Commenting every line inside reconcile loops or table-driven tests.
+- French in code comments — use **English** (matches existing `src/api/v1beta1/`).
+
+## Exemplars
+
+```go
+// Storage configures data and auxiliary volumes plus extra mounts and Secret projections.
+Storage *StorageSpec `json:"storage,omitempty"`
+
+// Reconciler is a no-op when trust is disabled (Slice 1 Standalone default).
+type Reconciler struct{}
+```
+
+Follow the same density as `src/api/v1beta1/neo4j_types.go` (`Neo4jSpec`, `Neo4jStatus`).

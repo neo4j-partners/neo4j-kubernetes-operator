@@ -1,0 +1,10 @@
+resources:
+- ../crd
+- ../rbac
+- ../manager
+- namespace.yaml
+
+images:
+- name: controller
+  newName: controller
+  newTag: latest

@@ -96,6 +96,16 @@ type IngressBackend string
 // +kubebuilder:validation:Enum=Pending;Provisioning;Bootstrapping;Running;Degraded;Failed;Maintenance
 type Neo4jPhase string
 
+const (
+	Neo4jPhasePending       Neo4jPhase = "Pending"
+	Neo4jPhaseProvisioning  Neo4jPhase = "Provisioning"
+	Neo4jPhaseBootstrapping Neo4jPhase = "Bootstrapping"
+	Neo4jPhaseRunning       Neo4jPhase = "Running"
+	Neo4jPhaseDegraded      Neo4jPhase = "Degraded"
+	Neo4jPhaseFailed        Neo4jPhase = "Failed"
+	Neo4jPhaseMaintenance   Neo4jPhase = "Maintenance"
+)
+
 // UpgradePhase tracks rolling upgrade state.
 // +kubebuilder:validation:Enum=Staging;Rolling;Stabilizing;Verifying;Completed;Failed
 type UpgradePhase string

@@ -1,0 +1,3 @@
+# Image URL used in config/manager/manager.yaml
+resources:
+- manager.yaml
