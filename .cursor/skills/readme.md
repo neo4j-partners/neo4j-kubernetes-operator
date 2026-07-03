@@ -20,6 +20,7 @@ Cursor Agent Skills for the Helm → CRD design pipeline. Invoke with `@skill-na
 
 | Skill | Invoke when |
 |-------|-------------|
+| [kubernetes-operator](kubernetes-operator/SKILL.md) | Implement/audit controllers, CRDs, reconcile loops |
 | [operator-benchmark-analyst](operator-benchmark-analyst/SKILL.md) | Study CNPG/Strimzi/ECK/MongoDB — code, RBAC, cloud, quality |
 | [operator-architecture-orchestrator](operator-architecture-orchestrator/SKILL.md) | ADR backlog, reconcile design, package layout |
 | [decision-classifier-bdr-vs-adr](decision-classifier-bdr-vs-adr/SKILL.md) | Unsure BDR vs ADR for a topic |
@@ -27,4 +28,4 @@ Cursor Agent Skills for the Helm → CRD design pipeline. Invoke with `@skill-na
 
 **Start here:** [`design/analysis/helm-fields/LAUNCH.md`](../design/analysis/helm-fields/LAUNCH.md) (phase 1) · [`docs/02-technical-design/architecture/readme.md`](../docs/02-technical-design/architecture/readme.md) (phase 2)
 
-**Rules:** [`.cursor/rules/`](../rules/) — terminology, BDR/ADR format, layering, classification
+**Rules:** [`.cursor/rules/`](../rules/) — terminology, BDR/ADR format, layering, classification, kubernetes-operator CRD/reconcile

@@ -1,7 +1,7 @@
 # `Neo4j` — validation rules
 
 **API**: `neo4j.com/v1beta1`  
-**Sources**: [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [BDR-009](../../decision-records/business/009-scale-pool-ordinal-semantics.md) (**Option B — accepted**) · [BDR-010](../../decision-records/business/010-neo4j-features-catalog.md) (**Option C — proposed**) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [`spec.md`](spec.md)
+**Sources**: [BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/neo4j/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [BDR-009](../../decision-records/business/neo4j/009-scale-pool-ordinal-semantics.md) (**Option B — accepted**) · [BDR-010](../../decision-records/business/neo4j/010-neo4j-features-catalog.md) (**Option C — accepted**) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [`spec.md`](spec.md)
 
 **Mechanisms**:
 
@@ -240,7 +240,7 @@ CEL sketch (key presence — http example; repeat per listen port name):
 
 Webhook (CFG-LISTENER-002): parse `listen_address` (`:7474`, `0.0.0.0:7474`, `[::]:7474`) → compare numeric port to `connectivity.listeners.{name}`; on mismatch return e.g. `spec.config server.http.listen_address=:8080 contradicts connectivity.listeners.http=7474`.
 
-### Config vs features (coherence — [BDR-010](../../decision-records/business/010-neo4j-features-catalog.md) Option C)
+### Config vs features (coherence — [BDR-010](../../decision-records/business/neo4j/010-neo4j-features-catalog.md) Option C — accepted)
 
 When the same `neo4j.conf` key is set in **both** `spec.features` and `spec.config`, values MUST match (string-normalized: `true`/`yes`/`1`).
 

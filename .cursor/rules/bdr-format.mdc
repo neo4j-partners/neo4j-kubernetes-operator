@@ -6,7 +6,7 @@ alwaysApply: false
 
 # BDR / ADR format
 
-Follow `docs/02-technical-design/decision-records/readme.md` (Michael Nygard).
+Follow `docs/02-technical-design/decision-records/readme.md`.
 
 ## BDR vs ADR
 

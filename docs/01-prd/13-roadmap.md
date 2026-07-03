@@ -26,7 +26,7 @@ Tests: `V1=Yes` in [`../02-technical-design/04-test_catalog.csv`](../02-technica
 
 - [ ] All V1 P0 tests pass on reference platform (kind + one cloud)
 - [ ] `13-v1-scope-lock.md` status = frozen
-- [ ] BDR-002, BDR-003 ratified (`accepted`)
+- [x] BDR-002 ratified (`accepted`); [ ] BDR-003 ratified
 - [ ] Getting-started doc + 3 sample manifests (standalone, cluster, cluster + read scale)
 - [ ] Product Engineering sponsorship decision recorded
 
@@ -37,9 +37,9 @@ Tests: `V1=Yes` in [`../02-technical-design/04-test_catalog.csv`](../02-technica
 | Item | Notes |
 |------|-------|
 | LoadBalancer / NodePort | [BDR-007](../02-technical-design/decision-records/business/006-service-exposure-connectivity.md) |
-| HTTPS + Bolt TLS + ingress | [BDR-011](../02-technical-design/decision-records/business/011-https-connector-tls-coupling.md) |
-| **Reverse proxy** + **ingress.rules** | [BDR-007](../02-technical-design/decision-records/business/006-service-exposure-connectivity.md) Amendment F |
-| `features.monitoring` | [BDR-010](../02-technical-design/decision-records/business/010-neo4j-features-catalog.md) |
+| HTTPS + Bolt TLS + ingress | [BDR-011](../02-technical-design/decision-records/business/neo4j/011-https-connector-tls-coupling.md) |
+| **Reverse proxy** + **ingress.rules** | [BDR-007](../02-technical-design/decision-records/business/neo4j/006-service-exposure-connectivity.md) Amendment F |
+| `features.monitoring` | [BDR-010](../02-technical-design/decision-records/business/neo4j/010-neo4j-features-catalog.md) |
 | Storage `Existing` / aux volumes | [BDR-005](../02-technical-design/decision-records/business/005-storage-volume-mode.md) |
 | Multi-namespace operator scope | [BDR-003](../02-technical-design/decision-records/business/003-operator-install-scope.md) |
 | Custom scheduling & probes | FR `NEO-2-008`, `NEO-3-009-PROBE-02` |

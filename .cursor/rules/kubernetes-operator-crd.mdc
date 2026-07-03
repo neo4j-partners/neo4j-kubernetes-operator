@@ -1,0 +1,39 @@
+---
+description: Kubernetes operator CRD design — status subresource, conditions, validation, printer columns
+globs: config/crd/**,api/**,**/*crd*.yaml,**/*_types.go
+alwaysApply: false
+---
+
+# Operator CRD design
+
+Skill: `@kubernetes-operator` · References: [crd_design.md](../skills/kubernetes-operator/references/crd_design.md)
+
+Project ADRs: [ADR-001](../../docs/02-technical-design/decision-records/architecture/001-crd-validation-process.md), Neo4j BDRs for `spec` shape
+
+## Principles
+
+1. **spec** = user intent; **status** = controller observation
+2. **status subresource required** — without it, status patches re-trigger spec reconcile (loop)
+3. **Conditions** on status: `Ready`, `Reconciling`, `Degraded` (+ reason, message, `observedGeneration`)
+4. **Finalizers** declared in reconcile, not only in docs
+5. **OpenAPI v3 / CEL validation** at admission — [ADR-001](../../docs/02-technical-design/decision-records/architecture/001-crd-validation-process.md)
+6. **`additionalPrinterColumns`**: at minimum `Age` + `Status`/`Phase`
+7. **Namespaced** scope unless BDR justifies cluster scope
+8. Version from day one (`v1alpha1` → …); plan conversion if needed
+
+## Must not
+
+- `x-kubernetes-preserve-unknown-fields: true` on spec root
+- Controller-only validation for rules that should fail at `kubectl apply`
+- CRD field naming that contradicts accepted BDRs — API changes need BDR first
+
+## Template & audit
+
+- Starter: `.cursor/skills/kubernetes-operator/assets/crd_template.yaml`
+- Before merge:
+
+```bash
+python3 .cursor/skills/kubernetes-operator/scripts/crd_validator.py --crd config/crd/
+```
+
+Neo4j API vocabulary (primary/secondary, plugins): rule `neo4j-design-terminology`.

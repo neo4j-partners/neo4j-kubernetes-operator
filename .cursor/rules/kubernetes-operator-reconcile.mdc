@@ -1,0 +1,44 @@
+---
+description: Kubernetes operator reconcile loop — idempotency, status, finalizers, requeue (from kubernetes-operator skill)
+globs: src/**/controller/**,src/**/domain/**,internal/**/controller/**,internal/**/domain/**,controllers/**
+alwaysApply: false
+---
+
+# Operator reconcile loop
+
+Skill: `@kubernetes-operator` · References: [reconcile_loop.md](../skills/kubernetes-operator/references/reconcile_loop.md)
+
+Project ADRs: [ADR-003](../../docs/02-technical-design/decision-records/architecture/003-neo4j-reconcile-pipeline.md), [ADR-004](../../docs/02-technical-design/decision-records/architecture/004-status-and-conditions.md), [ADR-008](../../docs/02-technical-design/decision-records/architecture/008-finalizers-and-deletion.md)
+
+## Shape
+
+Reconcile is **declarative**: make `actual == desired` idempotently — not "if creating / if updating / if deleting".
+
+```
+fetch CR → deletion/finalizer → set Reconciling → work (domain steps) → status().Update → requeue or done
+```
+
+## Must
+
+- Return `(ctrl.Result, error)`; requeue transient errors (`Requeue` or `RequeueAfter`)
+- Update **status subresource only** via `r.Status().Update` — never write user-owned spec fields
+- Use finalizers for external cleanup; pair `AddFinalizer` with `RemoveFinalizer`
+- Set `OwnerReferences` on owned child objects
+- Keep controller `Reconcile()` thin (~150 lines); delegate to `internal/domain/*` per ADR-002
+- Enable leader election when replicas > 1
+
+## Must not
+
+- `time.Sleep` in reconcile — use `RequeueAfter`
+- Long blocking HTTP/RPC without `context` cancellation
+- `r.Client.Update` on the CR to patch status fields
+- Observe-then-act loops inside one reconcile without caching reads
+
+## Before merge
+
+```bash
+python3 .cursor/skills/kubernetes-operator/scripts/reconcile_lint.py --controller src/internal/controller/
+go test ./src/...
+```
+
+See [ADR-012](../../docs/02-technical-design/decision-records/architecture/012-testing-strategy.md) for Gate 1 vs Gate 2 e2e.

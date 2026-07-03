@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | accepted |
 | **Date** | 2026-06-22 |
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-007](006-service-exposure-connectivity.md) — `connectivity.listeners` + `connectivity.service` (accepted) · [BDR-006](007-tls-trust-model.md) — `spec.trust` (accepted) |
@@ -114,14 +114,11 @@ Add TLS/mTLS fields under connectivity (rejected — duplicates `trust`, violate
 
 ## Decision
 
-**Not decided — proposed.**
+**We will adopt Option A** — explicit `connectivity.listeners.https` port; strict validation chain (TLS-LISTENER-001..006); mTLS only in `spec.trust`.
 
-**Recommendation:**
-
-1. Adopt **Option A** coupling rules (TLS-LISTENER-001..006).
-2. Document the **three-layer diagram** in `spec.md` (`connectivity.listeners` § cross-link to `trust`).
-3. Extend `validation.md` with TLS-LISTENER-* rules alongside existing NET-003.
-4. Defer **Ingress-terminated TLS** (pattern B) to a future BDR after V1 ingress shape stabilises.
+1. Document the **three-layer diagram** in `spec.md` (`connectivity.listeners` § cross-link to `trust`).
+2. Extend `validation.md` with TLS-LISTENER-* rules alongside existing NET-003.
+3. Defer **Ingress-terminated TLS** (pattern B) to a future BDR after V1 ingress shape stabilises.
 
 ---
 

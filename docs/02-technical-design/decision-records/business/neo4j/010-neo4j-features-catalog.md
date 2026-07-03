@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | accepted |
 | **Date** | 2026-06-22 |
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-007](006-service-exposure-connectivity.md) — Option E `features` + `connectivity.listeners` (accepted) · [BDR-008](008-neo4j-config-surface.md) — `spec.config` passthrough (accepted) |
@@ -253,9 +253,7 @@ Keys **only** in `spec.config` → passed through (Helm migration). Keys **only*
 
 ## Decision
 
-**Proposed — Option C (feature gates + colocated `neo4j.conf` mirrors).** Charles Boudry, 2026-06-22.
-
-**We will implement Option C for V1** with:
+**We will implement Option C for V1** (feature gates + colocated `neo4j.conf` mirrors) with:
 
 1. **Four-criteria definition** (above) before adding any new `features.*` group beyond backup + monitoring.
 2. **Full parameter inventory** per feature group — every related `neo4j.conf` key listed in this BDR and exposed under `features` (except keys owned by `connectivity`, `trust`, or `volumes`).

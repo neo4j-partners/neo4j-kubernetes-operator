@@ -460,7 +460,7 @@ V1: YAML manifests (Deployment, ServiceAccount, Role, RoleBinding, CRD, webhooks
 
 - [ ] All V1 P0 tests pass on reference platform (kind + one cloud)
 - [ ] [`13-v1-scope-lock.md`](../02-technical-design/13-v1-scope-lock.md) status = **frozen**
-- [ ] BDR-002, BDR-003 ratified (`accepted`)
+- [x] BDR-002 ratified (`accepted`); [ ] BDR-003 ratified
 - [ ] Getting-started doc + 3 sample manifests (standalone, cluster, cluster + read scale)
 - [ ] Product Engineering sponsorship decision recorded
 
@@ -583,10 +583,10 @@ Detail: [`14-open-questions.md`](14-open-questions.md).
 
 | BDR | Topic | Status |
 |-----|-------|--------|
-| [BDR-002](../02-technical-design/decision-records/business/002-neo4j-crd-topology.md) | Topology model (primaries / secondaries) | proposed |
+| [BDR-002](../02-technical-design/decision-records/business/neo4j/002-neo4j-crd-topology.md) | Topology model (primaries / secondaries) | accepted |
 | [BDR-003](../02-technical-design/decision-records/business/operator/003-operator-install-scope.md) | Single-namespace V1; dedicated operator namespace | proposed |
-| [BDR-010](../02-technical-design/decision-records/business/010-neo4j-features-catalog.md) | `features` catalog | proposed |
-| [BDR-011](../02-technical-design/decision-records/business/011-https-connector-tls-coupling.md) | HTTPS / TLS coupling | proposed |
+| [BDR-010](../02-technical-design/decision-records/business/neo4j/010-neo4j-features-catalog.md) | `features` catalog — Option C | accepted |
+| [BDR-011](../02-technical-design/decision-records/business/neo4j/011-https-connector-tls-coupling.md) | HTTPS / TLS coupling — Option A | accepted |
 | [BDR-012](../02-technical-design/decision-records/business/012-identity-management.md) | Identity CRDs | proposed |
 
 ---
@@ -598,7 +598,8 @@ Detail: [`14-open-questions.md`](14-open-questions.md).
 | *pending* | Approve V1 MVP scope (§4) | | Product Management |
 | *pending* | Product Engineering sponsorship | | Product Leadership |
 | *pending* | Support tier for operator deployments | | Product + Support |
-| *pending* | Ratify BDR-002, BDR-003 | | Product + Engineering |
+| 2026-07-03 | Ratify BDR-002, BDR-010, BDR-011 | Topology, features catalog, HTTPS/TLS coupling | Product + Engineering |
+| *pending* | Ratify BDR-003 | Operator install scope | Product + Engineering |
 
 ---
 

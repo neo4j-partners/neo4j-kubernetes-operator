@@ -5,7 +5,7 @@
 | **Status** | accepted |
 | **Date** | 2026-06-22 (accepted 2026-06-22) |
 | **Reviewers** | Charles Boudry |
-| **Depends on** | [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD (accepted) · [BDR-002](002-neo4j-crd-topology.md) — topology pools (proposed) |
+| **Depends on** | [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD (accepted) · [BDR-002](002-neo4j-crd-topology.md) — topology pools (accepted) |
 | **Helm scope** | `services.default`, `services.neo4j` (+`.enabled`, `.spec.type`, `.ports`, `.multiCluster`, `.cleanup`), `services.admin`, `services.internals`, `podSpec.loadbalancer`, `clusterDomain` — group **AGG-EXPOSURE** (BC-005) |
 | **Constraints** | `NEO-2-007` (networking), `NEO-3-007-SVC-01/02/03`, `NEO-3-007-PRT-01..04`, `NEO-3-007-MULTI-02`, `NEO-2-013` (backup access), `NEO-2-018` (uninstall); Neo4j Operations Manual — Networking / Connectors / Clustering |
 

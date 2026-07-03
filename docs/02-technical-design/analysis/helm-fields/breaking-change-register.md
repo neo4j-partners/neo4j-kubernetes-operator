@@ -19,7 +19,7 @@ Dedicated BDR when priority ≥ 16 **or** explicit API contract / migration risk
 
 | ID | Subject | AGG group | impact | freq | **priority** | BDR | BDR status |
 |----|---------|-----------|--------|------|-------------|-----|------------|
-| BC-001 | Topology model (primaries + `secondaries.analytics`/`read`) | AGG-TOPO-ROLES | 5 | 5 | **25** | BDR-002 | proposed |
+| BC-001 | Topology model (primaries + `secondaries.analytics`/`read`) | AGG-TOPO-ROLES | 5 | 5 | **25** | BDR-002 | **accepted** |
 | BC-003 | Single `Neo4j` CRD vs multi-kind | — | 5 | 5 | **25** | BDR-001 | **accepted** |
 | BC-004 | Storage data volume mode | AGG-STORAGE-DATA | 5 | 4 | **20** | BDR-005 | proposed |
 | BC-002 | Plugin assignment + `pluginDefinitions` | AGG-TOPO-PLUGINS | 4 | 4 | **16** | BDR-004 | proposed |

@@ -4,10 +4,10 @@
 **Scope**: Namespaced · **Short name**: `n4j`  
 **Subresources**: `status`, `scale` (optional — maps to `<name>-read` STS when read pool exists; [BDR-009](../../decision-records/business/009-scale-pool-ordinal-semantics.md))
 
-**Sources**: [BDR-001](../../decision-records/business/001-single-neo4j-crd.md) · [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1  
+**Sources**: [BDR-001](../../decision-records/business/neo4j/001-single-neo4j-crd.md) · [BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/neo4j/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1  
 **Related**: [`validation.md`](validation.md) · [`status.md`](status.md) · [`example.yaml`](example.yaml)
 
-> **Conflict rule**: where this document disagrees with `20-operator-proposal.md`, **[BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) wins** for topology, **[BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md) Option E — accepted** wins for plugins, and **[BDR-005](../../decision-records/business/005-storage-volume-mode.md) wins** for storage naming (`spec.volumes`, not `persistence`).
+> **Conflict rule**: where this document disagrees with `20-operator-proposal.md`, **[BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md) wins** for topology, **[BDR-004](../../decision-records/business/neo4j/004-neo4j-plugin-topology.md) Option E — accepted** wins for plugins, and **[BDR-005](../../decision-records/business/neo4j/005-storage-volume-mode.md) wins** for storage naming (`spec.volumes`, not `persistence`).
 
 **FR coverage**: `NEO-1-001`, `NEO-1-002`, `NEO-2-003`…`NEO-2-016`, `NEO-2-018`
 
@@ -316,13 +316,13 @@ Rendered **only** when APOC is assigned (`spec.plugins` or pool `plugins` includ
 
 ## `spec.features`
 
-Optional workload capabilities ([BDR-007](../../decision-records/business/006-service-exposure-connectivity.md) Option E — **accepted**; catalog [BDR-010](../../decision-records/business/010-neo4j-features-catalog.md) **Option C proposed**).
+Optional workload capabilities ([BDR-007](../../decision-records/business/neo4j/006-service-exposure-connectivity.md) Option E — **accepted**; catalog [BDR-010](../../decision-records/business/neo4j/010-neo4j-features-catalog.md) **Option C — accepted**).
 
 Each feature has three layers: **intent** (`enabled`), **mechanism** (`connectivity` / `trust` / `volumes`), **tuning** (fields below, mirroring `neo4j.conf`). The same tuning keys may also appear in `spec.config` for Helm migration — validation enforces coherence (CFG-FEAT-*).
 
 ### `features.backup`
 
-Enterprise online backup ([BDR-010](../../decision-records/business/010-neo4j-features-catalog.md)).
+Enterprise online backup ([BDR-010](../../decision-records/business/neo4j/010-neo4j-features-catalog.md)).
 
 | Field | Type | Default | `neo4j.conf` key | Notes |
 |-------|------|---------|------------------|-------|
@@ -382,7 +382,7 @@ Operator sets `neo4j.conf`, `containerPort`, and every Service `targetPort` from
 | `backup` | disabled | 6362 |
 | `metrics` | disabled | 2004 |
 
-**HTTPS / Bolt TLS:** certificate material and mTLS live in [`spec.trust`](#spectrust). `connectivity.listeners.https` set requires `trust` with https certs ([BDR-011](../../decision-records/business/011-https-connector-tls-coupling.md)).
+**HTTPS / Bolt TLS:** certificate material and mTLS live in [`spec.trust`](#spectrust). `connectivity.listeners.https` set requires `trust` with https certs ([BDR-011](../../decision-records/business/neo4j/011-https-connector-tls-coupling.md)).
 
 Cluster ports (7688, 5000, 7000, 6000) on **internals** — operator-injected when `mode: Cluster`.
 

@@ -32,3 +32,4 @@ Golden rule: `Reconcile()` is a **pipeline of named steps** (~150 lines max in c
 - `render/` → table-driven golden tests
 - `domain/` → envtest / fake client
 - `controller/` → thin integration tests
+- Pre-merge audit: `@kubernetes-operator` → `scripts/operator-audit.sh` (reconcile lint + CRD validator)

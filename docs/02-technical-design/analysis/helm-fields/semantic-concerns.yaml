@@ -69,7 +69,7 @@ concerns:
       Operator (BDR-002 hypothesis): 1 Neo4j CR = 1 StatefulSet, N replicas, ordinal pools.
       Validate this divergence explicitly in aggregation — do not assume Helm shape for CRD.
     bdr_exemplar: BDR-002
-    bdr_status: proposed — challenge allowed
+    bdr_status: accepted
     aggregation_groups: [AGG-TOPO-ROLES]
     crd_section_hypothesis: spec.topology
 
