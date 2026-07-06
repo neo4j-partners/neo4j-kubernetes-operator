@@ -127,6 +127,11 @@ func imageTag(version string, edition neo4jv1beta1.Edition) string {
 	}
 	return version
 }
+// LicenseAcceptEnv returns NEO4J_ACCEPT_LICENSE_AGREEMENT (yes | eval) from spec.license.accept.
+func (c Context) LicenseAcceptEnv() string {
+	return string(c.Neo4j.Spec.License.Accept)
+}
+
 // BoltPort returns the Bolt listen port (default 7687).
 func (c Context) BoltPort() int32 {
 	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.Listeners != nil &&

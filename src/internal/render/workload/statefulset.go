@@ -36,17 +36,7 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 					{Name: "bolt", ContainerPort: ctx.BoltPort()},
 					{Name: "http", ContainerPort: ctx.HTTPPort()},
 				},
-				Env: []corev1.EnvVar{
-					{
-						Name: "NEO4J_AUTH",
-						ValueFrom: &corev1.EnvVarSource{
-							SecretKeyRef: &corev1.SecretKeySelector{
-								LocalObjectReference: corev1.LocalObjectReference{Name: ctx.AuthSecretName()},
-								Key:                  "NEO4J_AUTH",
-							},
-						},
-					},
-				},
+				Env: neo4jContainerEnv(ctx),
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: dataVolumeName, MountPath: "/data"},
 					{Name: configVolumeName, MountPath: "/config/neo4j.conf", SubPath: "neo4j.conf"},
@@ -80,6 +70,24 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 				Spec:       podSpec,
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{vct},
+		},
+	}
+}
+
+func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{
+			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+			Value: ctx.LicenseAcceptEnv(),
+		},
+		{
+			Name: "NEO4J_AUTH",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: ctx.AuthSecretName()},
+					Key:                  "NEO4J_AUTH",
+				},
+			},
 		},
 	}
 }
