@@ -37,7 +37,7 @@ build: ## Build manager binary to bin/manager
 
 .PHONY: docker-build
 docker-build: ## Build the manager Docker image
-	docker build -t ${IMG} .
+	docker build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: test
 test: generate ## Run all unit tests under src/
