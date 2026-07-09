@@ -1,0 +1,11 @@
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - deploy/standalone
+
+case_teardown:
+  - cleanup/standalone
