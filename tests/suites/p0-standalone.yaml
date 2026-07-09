@@ -1,0 +1,18 @@
+name: p0-standalone
+description: Install operator and deploy Standalone Neo4j (Slice 1)
+brief_ref: slice-1-standalone
+use_pipeline: standalone-suite
+on_case_failure: stop
+
+pipeline:
+  case_assert:
+    - assert/standalone-ready
+
+expand_matrix:
+  assert: standalone-ready
+
+cases:
+  - id: happy-minimal
+    from_reconcile: true
+    assert: standalone-ready
+    expect: success

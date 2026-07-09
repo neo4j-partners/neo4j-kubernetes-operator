@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit & audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: go.sum
+
+      - name: Install controller-gen
+        run: make controller-gen
+
+      - name: Unit tests
+        run: make test
+
+      - name: Audit (CRD + reconcile lint)
+        run: make audit
+
+  e2e-local-kind:
+    name: E2E — kind
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Prepare scripts
+        run: find tests -name '*.sh' -exec chmod +x {} +
+
+      - name: Create kind cluster and load operator image
+        run: bash tests/bin/setup-local-kind.sh
+
+      - name: Run e2e suite
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh
+
+  e2e-azure-aks:
+    name: E2E — Azure AKS
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Prepare scripts
+        run: find tests -name '*.sh' -exec chmod +x {} +
+
+      - name: Ensure AKS cluster
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          # Optional repository variables: AZURE_RESOURCE_GROUP, AZURE_AKS_NAME, AZURE_ACR_NAME, AZURE_LOCATION
+          . tests/azure/ensure-aks.sh
+          echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}" >> "${GITHUB_ENV}"
+          echo "AZURE_ACR_NAME=${AZURE_ACR_NAME}" >> "${GITHUB_ENV}"
+
+      - name: Push operator image to ACR
+        run: bash tests/azure/push-operator-image.sh
+
+      - name: Run e2e suite
+        run: CLOUD=azure-aks ./tests/bin/run-e2e.sh
