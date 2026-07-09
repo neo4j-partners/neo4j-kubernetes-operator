@@ -37,3 +37,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 	return shared.Done()
 }
+
+// OwnedTypes returns types watched via Owns().
+func OwnedTypes() []client.Object {
+	return []client.Object{
+		&corev1.ConfigMap{},
+	}
+}

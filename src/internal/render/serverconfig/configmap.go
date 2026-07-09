@@ -2,6 +2,8 @@ package serverconfig
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strings"
 
@@ -10,6 +12,12 @@ import (
 
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
 )
+
+// ConfigChecksumAnnotation triggers a rolling restart when server config changes (AC-NEO-CONFIG-CHANGE).
+const ConfigChecksumAnnotation = "neo4j.com/config-checksum"
+
+// ConfigChecksumEnv is set on the Neo4j container so pod template changes force a rollout.
+const ConfigChecksumEnv = "NEO4J_OPERATOR_CONFIG_CHECKSUM"
 
 // ConfigMap builds the neo4j.conf ConfigMap for Standalone (BDR-008).
 func ConfigMap(ctx render.Context) *corev1.ConfigMap {
@@ -31,6 +39,25 @@ func ConfigMap(ctx render.Context) *corev1.ConfigMap {
 		},
 		Data: data,
 	}
+}
+
+// ConfigChecksum returns a stable SHA-256 digest of rendered ConfigMap data.
+func ConfigChecksum(ctx render.Context) string {
+	data := ConfigMap(ctx).Data
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	h := sha256.New()
+	for _, k := range keys {
+		h.Write([]byte(k))
+		h.Write([]byte{0})
+		h.Write([]byte(data[k]))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func renderNeo4jConf(ctx render.Context) string {

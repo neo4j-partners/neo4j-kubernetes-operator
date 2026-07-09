@@ -5,6 +5,8 @@ import (
 
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	rendercfg "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/serverconfig"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,10 +40,41 @@ func TestStandaloneStatefulSet(t *testing.T) {
 		t.Fatalf("expected one VCT")
 	}
 	env := sts.Spec.Template.Spec.Containers[0].Env
-	if len(env) < 2 {
-		t.Fatalf("expected license and auth env vars, got %d", len(env))
+	envByName := map[string]string{}
+	for _, e := range env {
+		if e.Value != "" {
+			envByName[e.Name] = e.Value
+		}
 	}
-	if env[0].Name != "NEO4J_ACCEPT_LICENSE_AGREEMENT" || env[0].Value != "yes" {
-		t.Fatalf("license env = %#v", env[0])
+	if envByName["NEO4J_ACCEPT_LICENSE_AGREEMENT"] != "yes" {
+		t.Fatalf("license env = %q", envByName["NEO4J_ACCEPT_LICENSE_AGREEMENT"])
+	}
+	if envByName["NEO4J_CONF"] != "/config" {
+		t.Fatalf("NEO4J_CONF = %q", envByName["NEO4J_CONF"])
+	}
+
+	mounts := sts.Spec.Template.Spec.Containers[0].VolumeMounts
+	var configMount *corev1.VolumeMount
+	for i := range mounts {
+		if mounts[i].Name == "config" {
+			configMount = &mounts[i]
+			break
+		}
+	}
+	if configMount == nil {
+		t.Fatal("expected config volume mount")
+	}
+	if configMount.MountPath != "/config" {
+		t.Fatalf("config mount path = %q", configMount.MountPath)
+	}
+	if configMount.SubPath != "" {
+		t.Fatalf("config mount must not use subPath, got %q", configMount.SubPath)
+	}
+
+	if sts.Spec.Template.Annotations[rendercfg.ConfigChecksumAnnotation] == "" {
+		t.Fatal("expected config checksum annotation on pod template")
+	}
+	if envByName[rendercfg.ConfigChecksumEnv] != sts.Spec.Template.Annotations[rendercfg.ConfigChecksumAnnotation] {
+		t.Fatalf("checksum env must match annotation")
 	}
 }
