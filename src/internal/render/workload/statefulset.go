@@ -8,6 +8,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	rendercfg "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/serverconfig"
 )
 
 const (
@@ -39,7 +40,7 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 				Env: neo4jContainerEnv(ctx),
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: dataVolumeName, MountPath: "/data"},
-					{Name: configVolumeName, MountPath: "/config/neo4j.conf", SubPath: "neo4j.conf"},
+					{Name: configVolumeName, MountPath: "/config"},
 				},
 			},
 		},
@@ -66,8 +67,13 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 			Selector:    &metav1.LabelSelector{MatchLabels: ctx.SelectorLabels()},
 			ServiceName: ctx.HeadlessServiceName(),
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec:       podSpec,
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+					Annotations: map[string]string{
+						rendercfg.ConfigChecksumAnnotation: rendercfg.ConfigChecksum(ctx),
+					},
+				},
+				Spec: podSpec,
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{vct},
 		},
@@ -75,10 +81,19 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 }
 
 func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
+	checksum := rendercfg.ConfigChecksum(ctx)
 	return []corev1.EnvVar{
 		{
 			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
 			Value: ctx.LicenseAcceptEnv(),
+		},
+		{
+			Name:  "NEO4J_CONF",
+			Value: "/config",
+		},
+		{
+			Name:  rendercfg.ConfigChecksumEnv,
+			Value: checksum,
 		},
 		{
 			Name: "NEO4J_AUTH",

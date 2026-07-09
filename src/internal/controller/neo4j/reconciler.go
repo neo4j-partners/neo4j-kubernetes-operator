@@ -116,6 +116,9 @@ func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1bet
 
 func (r *Neo4jReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	builder := ctrl.NewControllerManagedBy(mgr).For(&neo4jv1beta1.Neo4j{})
+	for _, obj := range serverconfig.OwnedTypes() {
+		builder = builder.Owns(obj)
+	}
 	for _, obj := range workload.OwnedTypes() {
 		builder = builder.Owns(obj)
 	}
