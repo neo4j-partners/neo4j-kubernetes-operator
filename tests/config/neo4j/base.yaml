@@ -1,0 +1,21 @@
+# Neo4j workload base — neo4j.com/v1beta1 Standalone
+
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+
+defaults:
+  namespace: default
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  auth:
+    generatePassword: true
+
+fixture: tests/fixtures/neo4j-standalone.yaml
+
+timeouts:
+  assert: 300s
+  assert_neo4j_ready: false
