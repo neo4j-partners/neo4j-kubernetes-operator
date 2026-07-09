@@ -36,8 +36,12 @@ build: ## Build manager binary to bin/manager
 	go build -o bin/manager ./src/cmd/manager
 
 .PHONY: docker-build
-docker-build: ## Build the manager Docker image
-	docker build --platform linux/amd64,linux/arm64 -t ${IMG} .
+docker-build: ## Build the manager Docker image (set DOCKER_PLATFORM=linux/amd64 for CI)
+	@if [ -n "$(DOCKER_PLATFORM)" ]; then \
+		docker build --platform "$(DOCKER_PLATFORM)" -t "$(IMG)" .; \
+	else \
+		docker build -t "$(IMG)" .; \
+	fi
 
 .PHONY: test
 test: generate ## Run all unit tests under src/
@@ -78,6 +82,39 @@ undeploy: ## Remove operator deployment (keeps CRD and Neo4j workloads)
 .PHONY: sample-standalone
 sample-standalone: install ## Apply Standalone sample (default namespace)
 	kubectl apply -f config/samples/neo4j_v1beta1_neo4j.yaml
+
+.PHONY: test-e2e
+test-e2e: ## Run e2e suite (CLOUD, E2E_PROFILE=happy-path|matrix|explicit, SUITE=)
+	chmod +x tests/bin/*.sh tests/runner/*.sh tests/actions/*/*/*.sh tests/config/**/*.sh tests/lib/*.sh 2>/dev/null || true
+	CLOUD=$${CLOUD:-local-kind} E2E_PROFILE=$${E2E_PROFILE:-happy-path} ./tests/bin/run-e2e.sh $${SUITE:-$${SCENARIO:-p0-standalone}}
+
+.PHONY: test-e2e-matrix
+test-e2e-matrix: ## Run all reconciled e2e combinations on local-kind
+	bash tests/bin/setup-local-kind.sh
+	$(MAKE) test-e2e CLOUD=local-kind E2E_PROFILE=matrix
+
+.PHONY: test-e2e-combinations
+test-e2e-combinations: ## List e2e matrix combinations (CLOUD, SCENARIO)
+	chmod +x tests/bin/list-e2e-combinations.sh 2>/dev/null || true
+	CLOUD=$${CLOUD:-local-kind} SCENARIO=$${SCENARIO:-p0-standalone} ./tests/bin/list-e2e-combinations.sh
+
+.PHONY: test-e2e-admission
+test-e2e-admission: ## Run neo4j-admission suite on local-kind (shared operator setup)
+	bash tests/bin/setup-local-kind.sh
+	CLOUD=local-kind E2E_PROFILE=happy-path ./tests/bin/run-e2e.sh neo4j-admission
+
+.PHONY: test-e2e-local
+test-e2e-local: ## Prepare kind + run e2e on local-kind
+	bash tests/bin/setup-local-kind.sh
+	$(MAKE) test-e2e CLOUD=local-kind
+
+.PHONY: test-e2e-azure
+test-e2e-azure: ## Ensure AKS, push image, run e2e on azure-aks
+	bash -c 'source tests/azure/ensure-aks.sh && bash tests/azure/push-operator-image.sh && CLOUD=azure-aks ./tests/bin/run-e2e.sh'
+
+.PHONY: test-e2e-azure-matrix
+test-e2e-azure-matrix: ## Ensure AKS, push image, run all e2e matrix combinations on azure-aks
+	bash -c 'source tests/azure/ensure-aks.sh && bash tests/azure/push-operator-image.sh && CLOUD=azure-aks E2E_PROFILE=matrix ./tests/bin/run-e2e.sh'
 
 ##@ Code generation
 

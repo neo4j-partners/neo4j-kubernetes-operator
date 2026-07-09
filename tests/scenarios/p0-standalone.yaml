@@ -1,0 +1,15 @@
+# Deprecated — use tests/suites/p0-standalone.yaml
+# Kept for reference; run-e2e.sh prefers tests/suites/ when present.
+
+name: p0-standalone
+description: Install operator and deploy Standalone Neo4j (Slice 1)
+brief_ref: slice-1-standalone
+
+steps:
+  - operator/install
+  - deploy/standalone
+  - assert/standalone-ready
+
+cleanup:
+  - cleanup/standalone
+  - cleanup/operator

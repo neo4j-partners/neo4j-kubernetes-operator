@@ -22,7 +22,7 @@ spec:
       containers:
       - name: manager
         image: controller:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         command:
         - /manager
         args:

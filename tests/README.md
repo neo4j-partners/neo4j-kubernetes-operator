@@ -1,0 +1,133 @@
+# E2E tests (estate 2 — ADR-012)
+
+End-to-end conformance tests on a real Kubernetes cluster: operator install, Neo4j Standalone deploy, operand assertions.
+
+Unit tests remain under `src/` (`make test`). This directory is **Gate 2**.
+
+## Layout
+
+```
+tests/
+  config/        e2e configuration (cloud, operator/neo4j cases)
+  pipelines/     reusable setup/case/teardown phases
+  suites/        table-driven tests (cases + pipeline refs)
+  azure/         AKS + ACR provisioning for e2e
+  bin/           entry points (run-e2e, setup-local-kind)
+  actions/       atomic run.sh + verify.sh steps
+  scenarios/     legacy (prefer suites/)
+  runner/        suite executor
+  fixtures/      parameterised manifests
+  results/       run diagnostics (gitignored)
+```
+
+## Run locally — kind
+
+```bash
+# 1. Create kind cluster and load operator image
+bash tests/bin/setup-local-kind.sh
+
+# 2. Run full suite (scenario p0-standalone)
+make test-e2e-local
+# or
+CLOUD=local-kind ./tests/bin/run-e2e.sh
+```
+
+## Run locally — Azure AKS
+
+Prerequisites: `az login`, subscription access, `docker`.
+
+```bash
+export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+# optional overrides:
+# export AZURE_RESOURCE_GROUP=neo4j-operator-ci-rg
+# export AZURE_AKS_NAME=neo4j-operator-ci-aks
+# export AZURE_ACR_NAME=neo4joperatorci  # globally unique
+
+make test-e2e-azure
+# matrix on AKS (6 runs — requires ensure-aks + image push first):
+make test-e2e-azure-matrix
+```
+
+`tests/azure/ensure-aks.sh` creates the resource group, ACR, and AKS cluster **if they do not already exist**, then configures `kubectl`.
+
+## Suites
+
+| Suite | File | Description |
+|-------|------|-------------|
+| `p0-standalone` | [suites/p0-standalone.yaml](suites/p0-standalone.yaml) | Positive Standalone (happy path / matrix) |
+| `neo4j-admission` | [suites/neo4j-admission.yaml](suites/neo4j-admission.yaml) | Admission rejections + one happy case |
+
+See [suites/readme.md](suites/readme.md) for the pipeline / case model.
+
+```bash
+./tests/bin/run-e2e.sh neo4j-admission
+```
+
+## Assertions
+
+Default (`E2E_ASSERT_NEO4J_READY=false`): verifies operator is ready, Neo4j CR applied, StatefulSet, Services, Secret, and ConfigMap exist.
+
+### Configuration profiles
+
+| Profile | Command |
+|---------|---------|
+| Happy path (default, CI) | `make test-e2e-local` |
+| All classic combinations | `E2E_PROFILE=matrix make test-e2e-local` or `make test-e2e-matrix` |
+| Explicit single combo | `E2E_PROFILE=explicit OPERATOR_CASE=local-image NEO4J_CASE=standalone-named-cr make test-e2e` |
+
+See [config/readme.md](config/readme.md) for classic cases per domain.
+
+Full Neo4j pod readiness (requires Enterprise image pull):
+
+```bash
+E2E_ASSERT_NEO4J_READY=true CLOUD=local-kind ./tests/bin/run-e2e.sh
+```
+
+## GitHub Actions
+
+Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+
+| Job | When | Cluster |
+|-----|------|---------|
+| `unit` | Every PR / push | — |
+| `e2e-local-kind` | After unit | kind on ubuntu-latest |
+| `e2e-azure-aks` | After unit | AKS (create if missing) |
+
+### Required secrets (Azure job)
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CREDENTIALS` | JSON from `az ad sp create-for-rbac --sdk-auth` |
+| `AZURE_SUBSCRIPTION_ID` | Target subscription (optional if embedded in credentials) |
+
+### Optional repository variables
+
+| Variable | Default |
+|----------|---------|
+| `AZURE_RESOURCE_GROUP` | `neo4j-operator-ci-rg` |
+| `AZURE_AKS_NAME` | `neo4j-operator-ci-aks` |
+| `AZURE_ACR_NAME` | `neo4joperatorci` |
+| `AZURE_LOCATION` | `westeurope` |
+
+Set variables under **Settings → Secrets and variables → Actions → Variables**.
+
+### Create service principal (one-time)
+
+```bash
+az ad sp create-for-rbac \
+  --name neo4j-operator-github-ci \
+  --role contributor \
+  --scopes /subscriptions/<SUBSCRIPTION_ID> \
+  --sdk-auth
+```
+
+Store the JSON output as `AZURE_CREDENTIALS`.
+
+## Adding tests
+
+1. Add `actions/<domain>/<name>/run.sh` and `verify.sh`
+2. Add fixtures under `fixtures/` if needed
+3. Add cases to a suite in `suites/<name>.yaml` (reuse a pipeline from `pipelines/`)
+4. Run: `./tests/bin/run-e2e.sh <suite>`
+
+See [ADR-012](../docs/02-technical-design/decision-records/architecture/012-testing-strategy.md) for the full harness model.

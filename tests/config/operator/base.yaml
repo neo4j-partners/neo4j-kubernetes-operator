@@ -1,0 +1,21 @@
+# Operator base — ps-kubernetes-operator (not tests/old CRDs)
+
+apiVersion: neo4j.com/v1beta1
+
+crd:
+  name: neo4js.neo4j.com
+
+controller:
+  namespace: neo4j-operator-system
+  deployment: neo4j-operator-controller-manager
+  labelSelector: app.kubernetes.io/name=neo4j-operator
+  managerImage: controller:latest
+
+manifests:
+  crd: config/crd/bases/neo4j.com_neo4js.yaml
+  namespace: config/default/namespace.yaml
+  rbac: config/rbac
+  manager: config/manager
+
+timeouts:
+  operator: 180s

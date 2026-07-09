@@ -81,7 +81,7 @@ Only the **controller image delivery** differs by platform. Cluster creation and
 
 | Platform | Before `make deploy` | Details |
 |----------|---------------------|---------|
-| **kind** | Build and load `controller:latest` into kind nodes | [quickstart/local-kind/install.md §2](../quickstart/local-kind/install.md#2-build-and-load-the-operator-image) |
+| **kind** | Build and load `neo4j-operator:local` into kind nodes | [quickstart/local-kind/install.md §2](../quickstart/local-kind/install.md#2-build-and-load-the-operator-image) |
 | **AKS** | Push image to ACR; patch `config/manager/manager.yaml` or kustomize `images:` | [quickstart/azure-aks/install.md §2–3](../quickstart/azure-aks/install.md#2-push-the-operator-image) |
 | **Other** | Push to any registry the cluster can pull from; set Deployment image accordingly | — |
 

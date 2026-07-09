@@ -3,3 +3,7 @@ tests/old
 
 # make build — manager binary (Makefile: go build -o bin/manager)
 /bin/
+
+# E2E run artefacts (diagnostics, logs)
+tests/results/*
+!tests/results/.gitkeep
