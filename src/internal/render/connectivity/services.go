@@ -56,3 +56,26 @@ func ClientService(ctx render.Context) *corev1.Service {
 func intstrFromInt32(port int32) intstr.IntOrString {
 	return intstr.FromInt32(port)
 }
+
+// InternalsService builds the cluster discovery Service (BDR-007).
+func InternalsService(ctx render.Context) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ctx.InternalsServiceName(),
+			Namespace: ctx.Namespace(),
+			Labels:    ctx.CommonLabels("connectivity"),
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: ctx.ClusterMemberSelectorLabels(),
+			Ports: []corev1.ServicePort{
+				{Name: "bolt", Port: ctx.BoltPort(), TargetPort: intstrFromInt32(ctx.BoltPort())},
+				{Name: "http", Port: ctx.HTTPPort(), TargetPort: intstrFromInt32(ctx.HTTPPort())},
+				{Name: "discovery", Port: 5000, TargetPort: intstrFromInt32(5000)},
+				{Name: "cluster", Port: 6000, TargetPort: intstrFromInt32(6000)},
+				{Name: "raft", Port: 7000, TargetPort: intstrFromInt32(7000)},
+				{Name: "tx", Port: 8000, TargetPort: intstrFromInt32(8000)},
+			},
+		},
+	}
+}

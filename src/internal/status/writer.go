@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	ConditionReady       = "Ready"
-	ConditionReconciling = "Reconciling"
-	ConditionInstalled   = "Installed"
-	ConditionError       = "Error"
+	ConditionReady        = "Ready"
+	ConditionReconciling  = "Reconciling"
+	ConditionInstalled    = "Installed"
+	ConditionError        = "Error"
 	ConditionStorageReady = "StorageReady"
 )
 
@@ -48,27 +48,31 @@ func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
 
 // ObserveAndWrite refreshes status from the API server and patches status subresource.
 func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) error {
-	ctxRender := render.StandaloneContext(neo4j)
+	var ready, desired int32
+	var anySTSFound bool
+	storageReady := true
 
-	var sts appsv1.StatefulSet
-	stsKey := types.NamespacedName{Name: ctxRender.STSName(), Namespace: ctxRender.Namespace()}
-	stsFound := w.Client.Get(ctx, stsKey, &sts) == nil
+	for _, pool := range render.ActivePools(neo4j) {
+		ctxRender := render.ContextForPool(neo4j, pool)
+		poolDesired := ctxRender.PoolReplicas()
 
-	setCondition(neo4j, ConditionInstalled, boolCondition(stsFound), installedReason(stsFound), "")
-
-	ready, desired := int32(0), int32(1)
-	if stsFound {
-		desired = 1
-		if sts.Status.ReadyReplicas > 0 {
-			ready = sts.Status.ReadyReplicas
+		var sts appsv1.StatefulSet
+		stsKey := types.NamespacedName{Name: ctxRender.STSName(), Namespace: ctxRender.Namespace()}
+		if w.Client.Get(ctx, stsKey, &sts) == nil {
+			anySTSFound = true
+			desired += poolDesired
+			ready += sts.Status.ReadyReplicas
+		}
+		if !w.checkPoolStorageReady(ctx, ctxRender) {
+			storageReady = false
 		}
 	}
-	neo4j.Status.ServerSummary = &neo4jv1beta1.ReplicaSummary{Servers: desired, Ready: ready}
 
-	storageReady := w.checkStorageReady(ctx, neo4j, ctxRender)
+	setCondition(neo4j, ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
+	neo4j.Status.ServerSummary = &neo4jv1beta1.ReplicaSummary{Servers: desired, Ready: ready}
 	setCondition(neo4j, ConditionStorageReady, boolCondition(storageReady), storageReason(storageReady), "")
 
-	allReady := stsFound && ready == desired && storageReady
+	allReady := anySTSFound && ready == desired && desired > 0 && storageReady
 	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Completed", "")
 	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
 	setCondition(neo4j, ConditionReady, boolCondition(allReady), readyReason(allReady), readyMessage(ready, desired))
@@ -76,19 +80,19 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	if allReady {
 		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseRunning
 		neo4j.Status.Version = neo4j.Spec.Version
-	} else if stsFound {
+	} else if anySTSFound {
 		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseBootstrapping
 	} else {
 		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseProvisioning
 	}
 
-	neo4j.Status.Endpoints = buildEndpoints(ctxRender)
+	neo4j.Status.Endpoints = buildEndpoints(render.ClientServiceContext(neo4j))
 	neo4j.Status.ObservedGeneration = neo4j.Generation
 
 	return w.Client.Status().Update(ctx, neo4j)
 }
 
-func (w *Writer) checkStorageReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, ctxRender render.Context) bool {
+func (w *Writer) checkPoolStorageReady(ctx context.Context, ctxRender render.Context) bool {
 	pvcName := fmt.Sprintf("data-%s-0", ctxRender.STSName())
 	var pvc corev1.PersistentVolumeClaim
 	if err := w.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: ctxRender.Namespace()}, &pvc); err != nil {

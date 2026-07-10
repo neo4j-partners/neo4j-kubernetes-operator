@@ -82,6 +82,73 @@ func TestStandaloneStatefulSet(t *testing.T) {
 	}
 }
 
+func TestClusterPoolStatefulSet(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition: neo4jv1beta1.EditionEnterprise,
+			Version: "2026.05.0",
+			License: neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode: neo4jv1beta1.TopologyModeCluster,
+				Primaries: &neo4jv1beta1.PrimariesSpec{
+					Members: 3,
+					Plugins: []string{"apoc"},
+				},
+				Secondaries: &neo4jv1beta1.SecondariesSpec{
+					Analytics: &neo4jv1beta1.SecondaryPoolSpec{
+						Members: 1,
+						Plugins: []string{"gds"},
+					},
+				},
+			},
+			PluginDefinitions: map[string]neo4jv1beta1.PluginDefinitionSpec{
+				"gds": {LicenseSecretRef: "gds-license"},
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+
+	primary := PoolStatefulSet(render.ContextForPool(neo4j, render.PoolPrimary))
+	if primary.Name != "prod-primary" {
+		t.Fatalf("primary sts = %q", primary.Name)
+	}
+	if *primary.Spec.Replicas != 3 {
+		t.Fatalf("primary replicas = %d", *primary.Spec.Replicas)
+	}
+
+	analytics := PoolStatefulSet(render.ContextForPool(neo4j, render.PoolAnalytics))
+	if analytics.Name != "prod-analytics" {
+		t.Fatalf("analytics sts = %q", analytics.Name)
+	}
+	envByName := map[string]string{}
+	for _, e := range analytics.Spec.Template.Spec.Containers[0].Env {
+		if e.Value != "" {
+			envByName[e.Name] = e.Value
+		}
+	}
+	if envByName["NEO4J_PLUGINS"] != `["graph-data-science"]` {
+		t.Fatalf("analytics NEO4J_PLUGINS = %q", envByName["NEO4J_PLUGINS"])
+	}
+	var licenseMount *corev1.VolumeMount
+	for i := range analytics.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if analytics.Spec.Template.Spec.Containers[0].VolumeMounts[i].Name == "license-gds" {
+			licenseMount = &analytics.Spec.Template.Spec.Containers[0].VolumeMounts[i]
+			break
+		}
+	}
+	if licenseMount == nil || licenseMount.MountPath != "/licenses/gds" {
+		t.Fatalf("expected gds license mount, got %#v", licenseMount)
+	}
+}
+
 func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},

@@ -20,7 +20,7 @@ import (
 	renderwl "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/workload"
 )
 
-// Reconciler applies workload objects for Standalone mode.
+// Reconciler applies workload objects for each active pool.
 type Reconciler struct {
 	Client client.Client
 	Scheme *runtime.Scheme
@@ -31,13 +31,9 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
-	if !renderwl.IsStandalone(neo4j) {
-		return shared.Failed(errClusterNotImplemented)
-	}
+	baseCtx := render.ContextForPool(neo4j, render.ActivePools(neo4j)[0])
 
-	ctxRender := render.StandaloneContext(neo4j)
-
-	saDesired := renderwl.OperandServiceAccount(ctxRender)
+	saDesired := renderwl.OperandServiceAccount(baseCtx)
 	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: saDesired.Name, Namespace: saDesired.Namespace}}
 	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sa, func() error {
 		sa.Labels = saDesired.Labels
@@ -47,29 +43,61 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 
 	generated := false
-	if ctxRender.ShouldGenerateAuthSecret() {
-		password, err := r.ensureAuthSecret(ctx, neo4j, ctxRender)
+	if baseCtx.ShouldGenerateAuthSecret() {
+		password, err := r.ensureAuthSecret(ctx, neo4j, baseCtx)
 		if err != nil {
 			return shared.Failed(err)
 		}
 		_ = password
 		generated = true
-	} else if err := r.ensureReferencedAuthSecret(ctx, ctxRender); err != nil {
+	} else if err := r.ensureReferencedAuthSecret(ctx, baseCtx); err != nil {
 		return shared.Failed(err)
 	}
 
-	stsDesired := renderwl.StandaloneStatefulSet(ctxRender)
-	sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: stsDesired.Name, Namespace: stsDesired.Namespace}}
-	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sts, func() error {
-		sts.Labels = stsDesired.Labels
-		sts.Spec = stsDesired.Spec
-		return nil
-	}); err != nil {
+	if err := r.ensurePluginLicenseSecrets(ctx, neo4j); err != nil {
 		return shared.Failed(err)
 	}
 
-	r.recordCredentials(neo4j, ctxRender.AuthSecretName(), generated)
+	for _, pool := range render.ActivePools(neo4j) {
+		ctxRender := render.ContextForPool(neo4j, pool)
+		stsDesired := renderwl.PoolStatefulSet(ctxRender)
+		sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: stsDesired.Name, Namespace: stsDesired.Namespace}}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sts, func() error {
+			sts.Labels = stsDesired.Labels
+			sts.Spec = stsDesired.Spec
+			return nil
+		}); err != nil {
+			return shared.Failed(err)
+		}
+	}
+
+	r.recordCredentials(neo4j, baseCtx.AuthSecretName(), generated)
 	return shared.Done()
+}
+
+func (r *Reconciler) ensurePluginLicenseSecrets(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) error {
+	if neo4j.Spec.PluginDefinitions == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	for _, pool := range render.ActivePools(neo4j) {
+		poolCtx := render.ContextForPool(neo4j, pool)
+		for _, pluginID := range poolCtx.PoolPluginIDs() {
+			def, ok := neo4j.Spec.PluginDefinitions[pluginID]
+			if !ok || def.LicenseSecretRef == "" {
+				continue
+			}
+			if _, dup := seen[def.LicenseSecretRef]; dup {
+				continue
+			}
+			seen[def.LicenseSecretRef] = struct{}{}
+			var secret corev1.Secret
+			if err := r.Client.Get(ctx, types.NamespacedName{Name: def.LicenseSecretRef, Namespace: poolCtx.Namespace()}, &secret); err != nil {
+				return fmt.Errorf("plugin license secret %q for %q: %w", def.LicenseSecretRef, pluginID, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, ctxRender render.Context) (string, error) {

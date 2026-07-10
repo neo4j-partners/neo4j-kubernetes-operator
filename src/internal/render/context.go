@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"strings"
 
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
@@ -68,8 +69,60 @@ func (c Context) ClientServiceName() string { return c.Neo4j.Name }
 // HeadlessServiceName is the StatefulSet headless Service.
 func (c Context) HeadlessServiceName() string { return c.STSName() }
 
-// ConfigMapName is the neo4j.conf ConfigMap.
-func (c Context) ConfigMapName() string { return c.Neo4j.Name + "-config" }
+// ConfigMapName is the neo4j.conf ConfigMap for this pool.
+func (c Context) ConfigMapName() string {
+	if c.Pool == PoolServer {
+		return c.Neo4j.Name + "-config"
+	}
+	return c.Neo4j.Name + "-" + string(c.Pool) + "-config"
+}
+
+// InternalsServiceName is the cluster discovery Service (BDR-007).
+func (c Context) InternalsServiceName() string { return c.Neo4j.Name + "-internals" }
+
+// ClusterDiscoveryLabelSelector matches all Neo4j pods for this CR across pools.
+func (c Context) ClusterDiscoveryLabelSelector() string {
+	return fmt.Sprintf("%s=%s,%s=%s", LabelInstance, c.Name(), LabelName, AppNameValue)
+}
+
+// ClusterMemberSelectorLabels selects every Neo4j pod in the deployment (all pools).
+func (c Context) ClusterMemberSelectorLabels() map[string]string {
+	return map[string]string{
+		LabelInstance: c.Neo4j.Name,
+		LabelName:     AppNameValue,
+	}
+}
+
+// PoolReplicas returns desired StatefulSet replicas for this pool.
+func (c Context) PoolReplicas() int32 {
+	if !IsClusterMode(c.Neo4j) {
+		return 1
+	}
+	switch c.Pool {
+	case PoolPrimary:
+		if c.Neo4j.Spec.Topology.Primaries != nil {
+			return c.Neo4j.Spec.Topology.Primaries.Members
+		}
+		return 1
+	case PoolAnalytics:
+		if c.Neo4j.Spec.Topology.Secondaries != nil && c.Neo4j.Spec.Topology.Secondaries.Analytics != nil {
+			return c.Neo4j.Spec.Topology.Secondaries.Analytics.Members
+		}
+	case PoolRead:
+		if c.Neo4j.Spec.Topology.Secondaries != nil && c.Neo4j.Spec.Topology.Secondaries.Read != nil {
+			return c.Neo4j.Spec.Topology.Secondaries.Read.Members
+		}
+	}
+	return 0
+}
+
+// ClusterDomain returns the Kubernetes cluster DNS suffix for discovery FQDNs.
+func (c Context) ClusterDomain() string {
+	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.ClusterDomain != "" {
+		return c.Neo4j.Spec.Connectivity.ClusterDomain
+	}
+	return "cluster.local"
+}
 
 // AuthSecretName resolves the auth Secret name from spec or operator default.
 func (c Context) AuthSecretName() string {

@@ -6,7 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/plugins"
 	rendercfg "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/serverconfig"
@@ -17,9 +16,9 @@ const (
 	configVolumeName = "config"
 )
 
-// StandaloneStatefulSet builds a one-replica StatefulSet for Standalone mode (BDR-002).
-func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
-	replicas := int32(1)
+// PoolStatefulSet builds a StatefulSet for one workload pool (Standalone or Cluster).
+func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
+	replicas := ctx.PoolReplicas()
 	labels := ctx.WorkloadLabels()
 	pullPolicy := corev1.PullIfNotPresent
 	if ctx.Neo4j.Spec.Image != nil && ctx.Neo4j.Spec.Image.PullPolicy != "" {
@@ -27,24 +26,23 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	}
 
 	vct := volumeClaimTemplate(ctx)
+	container := corev1.Container{
+		Name:            "neo4j",
+		Image:           ctx.ImageRef(),
+		ImagePullPolicy: pullPolicy,
+		Ports: []corev1.ContainerPort{
+			{Name: "bolt", ContainerPort: ctx.BoltPort()},
+			{Name: "http", ContainerPort: ctx.HTTPPort()},
+		},
+		Env: neo4jContainerEnv(ctx),
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: dataVolumeName, MountPath: "/data"},
+			{Name: configVolumeName, MountPath: "/config"},
+		},
+	}
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: ctx.OperandServiceAccountName(),
-		Containers: []corev1.Container{
-			{
-				Name:            "neo4j",
-				Image:           ctx.ImageRef(),
-				ImagePullPolicy: pullPolicy,
-				Ports: []corev1.ContainerPort{
-					{Name: "bolt", ContainerPort: ctx.BoltPort()},
-					{Name: "http", ContainerPort: ctx.HTTPPort()},
-				},
-				Env: neo4jContainerEnv(ctx),
-				VolumeMounts: []corev1.VolumeMount{
-					{Name: dataVolumeName, MountPath: "/data"},
-					{Name: configVolumeName, MountPath: "/config"},
-				},
-			},
-		},
+		Containers:         []corev1.Container{container},
 		Volumes: []corev1.Volume{
 			{
 				Name: configVolumeName,
@@ -56,6 +54,7 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 			},
 		},
 	}
+	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -79,6 +78,11 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{vct},
 		},
 	}
+}
+
+// StandaloneStatefulSet is an alias kept for tests; Standalone uses the server pool.
+func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
+	return PoolStatefulSet(ctx)
 }
 
 func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
@@ -154,9 +158,4 @@ func OperandServiceAccount(ctx render.Context) *corev1.ServiceAccount {
 			Labels:    ctx.CommonLabels("workload"),
 		},
 	}
-}
-
-// IsStandalone returns true when topology mode is Standalone.
-func IsStandalone(neo4j *neo4jv1beta1.Neo4j) bool {
-	return neo4j.Spec.Topology.Mode == neo4jv1beta1.TopologyModeStandalone
 }

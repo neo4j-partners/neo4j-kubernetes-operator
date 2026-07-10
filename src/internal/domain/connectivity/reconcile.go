@@ -14,7 +14,7 @@ import (
 	renderconn "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/connectivity"
 )
 
-// Reconciler applies headless and client Services (BDR-007).
+// Reconciler applies headless, client, and cluster-internal Services (BDR-007).
 type Reconciler struct {
 	Client client.Client
 	Scheme *runtime.Scheme
@@ -25,19 +25,21 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
-	ctxRender := render.StandaloneContext(neo4j)
-
-	headlessDesired := renderconn.HeadlessService(ctxRender)
-	headless := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: headlessDesired.Name, Namespace: headlessDesired.Namespace}}
-	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, headless, func() error {
-		headless.Labels = headlessDesired.Labels
-		headless.Spec = headlessDesired.Spec
-		return nil
-	}); err != nil {
-		return shared.Failed(err)
+	for _, pool := range render.ActivePools(neo4j) {
+		ctxRender := render.ContextForPool(neo4j, pool)
+		headlessDesired := renderconn.HeadlessService(ctxRender)
+		headless := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: headlessDesired.Name, Namespace: headlessDesired.Namespace}}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, headless, func() error {
+			headless.Labels = headlessDesired.Labels
+			headless.Spec = headlessDesired.Spec
+			return nil
+		}); err != nil {
+			return shared.Failed(err)
+		}
 	}
 
-	clientDesired := renderconn.ClientService(ctxRender)
+	clientCtx := render.ClientServiceContext(neo4j)
+	clientDesired := renderconn.ClientService(clientCtx)
 	clientSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: clientDesired.Name, Namespace: clientDesired.Namespace}}
 	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, clientSvc, func() error {
 		clientSvc.Labels = clientDesired.Labels
@@ -45,6 +47,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return nil
 	}); err != nil {
 		return shared.Failed(err)
+	}
+
+	if render.IsClusterMode(neo4j) {
+		internalsCtx := render.ContextForPool(neo4j, render.PoolPrimary)
+		internalsDesired := renderconn.InternalsService(internalsCtx)
+		internals := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: internalsDesired.Name, Namespace: internalsDesired.Namespace}}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, internals, func() error {
+			internals.Labels = internalsDesired.Labels
+			internals.Spec = internalsDesired.Spec
+			return nil
+		}); err != nil {
+			return shared.Failed(err)
+		}
 	}
 
 	return shared.Done()
