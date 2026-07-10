@@ -1,5 +1,26 @@
 # Troubleshooting — operator install
 
+## CRD apply fails: metadata.annotations too long
+
+**Symptom:** `CustomResourceDefinition "neo4js.neo4j.com" is invalid: metadata.annotations: Too long: may not be more than 262144 bytes`
+
+**Cause:** Plain `kubectl apply -f config/crd/bases/neo4j.com_neo4js.yaml` (or `kubectl apply -k config/crd`) uses client-side apply. Kubernetes stores the entire manifest in `kubectl.kubernetes.io/last-applied-configuration`, and the Neo4j CRD OpenAPI schema is ~1.5 MB — above the 256 KiB annotation limit.
+
+**Fix:** Use server-side apply via `make install`:
+
+```bash
+make install
+# equivalent:
+kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+```
+
+If a previous failed apply left a broken CRD object, delete it first (only when no Neo4j workloads depend on it):
+
+```bash
+kubectl delete crd neo4js.neo4j.com --ignore-not-found
+make install
+```
+
 ## CRD not found when applying Neo4j
 
 **Symptom:** `no matches for kind "Neo4j" in version "neo4j.com/v1beta1"`
