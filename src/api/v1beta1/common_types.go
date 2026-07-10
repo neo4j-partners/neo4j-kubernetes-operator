@@ -501,6 +501,8 @@ type TopologySpec struct {
 }
 
 // PluginDefinitionSpec holds per-plugin install configuration (BDR-004 Option E).
+// licenseSecretRef is optional for GDS Community Edition; set it (with config e.g.
+// gds.enterprise.license_file) to unlock GDS Enterprise features.
 type PluginDefinitionSpec struct {
 	LicenseSecretRef string            `json:"licenseSecretRef,omitempty"`
 	Version          string            `json:"version,omitempty"`

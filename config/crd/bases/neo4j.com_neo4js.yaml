@@ -615,8 +615,10 @@ spec:
                 type: object
               pluginDefinitions:
                 additionalProperties:
-                  description: PluginDefinitionSpec holds per-plugin install configuration
-                    (BDR-004 Option E).
+                  description: |-
+                    PluginDefinitionSpec holds per-plugin install configuration (BDR-004 Option E).
+                    licenseSecretRef is optional for GDS Community Edition; set it (with config e.g.
+                    gds.enterprise.license_file) to unlock GDS Enterprise features.
                   properties:
                     config:
                       additionalProperties:
@@ -21238,19 +21240,6 @@ spec:
             - message: use spec.plugins in standalone mode
               rule: self.topology.mode != 'Standalone' || (!has(self.topology.primaries)
                 && !has(self.topology.secondaries))
-            - message: gds requires pluginDefinitions.gds.licenseSecretRef when referenced
-                in spec.plugins
-              rule: '!has(self.plugins) || !self.plugins.exists(p, p == ''gds'') ||
-                (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds) &&
-                has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef
-                != '''')'
-            - message: gds requires pluginDefinitions.gds.licenseSecretRef when referenced
-                in secondaries.analytics.plugins
-              rule: '!has(self.topology.secondaries) || !has(self.topology.secondaries.analytics)
-                || !has(self.topology.secondaries.analytics.plugins) || !self.topology.secondaries.analytics.plugins.exists(p,
-                p == ''gds'') || (has(self.pluginDefinitions) && has(self.pluginDefinitions.gds)
-                && has(self.pluginDefinitions.gds.licenseSecretRef) && self.pluginDefinitions.gds.licenseSecretRef
-                != '''')'
             - message: V1 supports Enterprise edition only
               rule: self.edition == 'enterprise'
             - message: Enterprise license must be explicitly accepted

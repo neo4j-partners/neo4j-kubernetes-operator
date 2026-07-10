@@ -78,4 +78,7 @@ func TestCRDContainsCELValidations(t *testing.T) {
 			t.Fatalf("CRD missing expected fragment %q", fragment)
 		}
 	}
+	if strings.Contains(content, "gds requires pluginDefinitions.gds.licenseSecretRef") {
+		t.Fatal("CRD must not require GDS licenseSecretRef — Community Edition runs without a license file")
+	}
 }

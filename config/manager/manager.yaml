@@ -21,7 +21,7 @@ spec:
         runAsNonRoot: true
       containers:
       - name: manager
-        image: controller:latest
+        image: "neo4joperatoracr.azurecr.io/neo4j-operator:latest"
         imagePullPolicy: Always
         command:
         - /manager

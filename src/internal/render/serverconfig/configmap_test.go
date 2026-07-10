@@ -32,6 +32,28 @@ func TestConfigMapRendersNeo4jKeys(t *testing.T) {
 	}
 }
 
+func TestConfigMapRendersApocOnlyWhenAssigned(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Config: &neo4jv1beta1.ConfigSpec{
+				Apoc: map[string]string{"apoc.trigger.enabled": "true"},
+			},
+		},
+	}
+	cm := ConfigMap(render.StandaloneContext(neo4j)).Data
+	if _, ok := cm["apoc.conf"]; ok {
+		t.Fatal("apoc.conf should not render without plugins: [apoc]")
+	}
+
+	neo4j.Spec.Plugins = []string{"apoc"}
+	cm = ConfigMap(render.StandaloneContext(neo4j)).Data
+	if cm["apoc.conf"] == "" {
+		t.Fatal("expected apoc.conf when apoc plugin is assigned")
+	}
+}
+
 func TestConfigChecksumChangesWithSpec(t *testing.T) {
 	base := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},

@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/plugins"
 )
 
 // ConfigChecksumAnnotation triggers a rolling restart when server config changes (AC-NEO-CONFIG-CHANGE).
@@ -27,8 +28,10 @@ func ConfigMap(ctx render.Context) *corev1.ConfigMap {
 	if jvm := renderJVMConf(ctx); jvm != "" {
 		data["jvm.options"] = jvm
 	}
-	if apoc := renderApocConf(ctx); apoc != "" {
-		data["apoc.conf"] = apoc
+	if plugins.Assigned(ctx.PoolPluginIDs(), "apoc") {
+		if apoc := renderApocConf(ctx); apoc != "" {
+			data["apoc.conf"] = apoc
+		}
 	}
 
 	return &corev1.ConfigMap{

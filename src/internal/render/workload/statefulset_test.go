@@ -77,4 +77,38 @@ func TestStandaloneStatefulSet(t *testing.T) {
 	if envByName[rendercfg.ConfigChecksumEnv] != sts.Spec.Template.Annotations[rendercfg.ConfigChecksumAnnotation] {
 		t.Fatalf("checksum env must match annotation")
 	}
+	if _, ok := envByName["NEO4J_PLUGINS"]; ok {
+		t.Fatal("NEO4J_PLUGINS should be omitted when spec.plugins is empty")
+	}
+}
+
+func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition: neo4jv1beta1.EditionEnterprise,
+			Version: "2026.05.0",
+			License: neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Plugins: []string{"apoc", "gds"},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	envByName := map[string]string{}
+	for _, e := range sts.Spec.Template.Spec.Containers[0].Env {
+		if e.Value != "" {
+			envByName[e.Name] = e.Value
+		}
+	}
+	if envByName["NEO4J_PLUGINS"] != `["apoc","graph-data-science"]` {
+		t.Fatalf("NEO4J_PLUGINS = %q", envByName["NEO4J_PLUGINS"])
+	}
 }

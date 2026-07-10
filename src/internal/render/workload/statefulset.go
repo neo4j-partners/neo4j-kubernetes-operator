@@ -8,6 +8,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/plugins"
 	rendercfg "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/serverconfig"
 )
 
@@ -82,7 +83,7 @@ func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 
 func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 	checksum := rendercfg.ConfigChecksum(ctx)
-	return []corev1.EnvVar{
+	env := []corev1.EnvVar{
 		{
 			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
 			Value: ctx.LicenseAcceptEnv(),
@@ -95,16 +96,23 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 			Name:  rendercfg.ConfigChecksumEnv,
 			Value: checksum,
 		},
-		{
-			Name: "NEO4J_AUTH",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: ctx.AuthSecretName()},
-					Key:                  "NEO4J_AUTH",
-				},
+	}
+	if pluginsEnv := plugins.NEO4JPluginsEnv(ctx.PoolPluginIDs()); pluginsEnv != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "NEO4J_PLUGINS",
+			Value: pluginsEnv,
+		})
+	}
+	env = append(env, corev1.EnvVar{
+		Name: "NEO4J_AUTH",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: ctx.AuthSecretName()},
+				Key:                  "NEO4J_AUTH",
 			},
 		},
-	}
+	})
+	return env
 }
 
 func volumeClaimTemplate(ctx render.Context) corev1.PersistentVolumeClaim {

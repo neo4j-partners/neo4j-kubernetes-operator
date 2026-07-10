@@ -168,6 +168,28 @@ func (c Context) DataStorageClassName() string {
 	return ""
 }
 
+// PoolPluginIDs returns catalog plugin ids assigned to the current pool (BDR-004).
+func (c Context) PoolPluginIDs() []string {
+	if c.Neo4j.Spec.Topology.Mode == neo4jv1beta1.TopologyModeStandalone {
+		return c.Neo4j.Spec.Plugins
+	}
+	switch c.Pool {
+	case PoolPrimary:
+		if c.Neo4j.Spec.Topology.Primaries != nil {
+			return c.Neo4j.Spec.Topology.Primaries.Plugins
+		}
+	case PoolAnalytics:
+		if c.Neo4j.Spec.Topology.Secondaries != nil && c.Neo4j.Spec.Topology.Secondaries.Analytics != nil {
+			return c.Neo4j.Spec.Topology.Secondaries.Analytics.Plugins
+		}
+	case PoolRead:
+		if c.Neo4j.Spec.Topology.Secondaries != nil && c.Neo4j.Spec.Topology.Secondaries.Read != nil {
+			return c.Neo4j.Spec.Topology.Secondaries.Read.Plugins
+		}
+	}
+	return nil
+}
+
 // ShouldGenerateAuthSecret is true when the operator must create the auth Secret.
 func (c Context) ShouldGenerateAuthSecret() bool {
 	if c.Neo4j.Spec.Auth == nil {
