@@ -1,7 +1,6 @@
 package serverconfig
 
 import (
-	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,17 +61,17 @@ func TestConfigReconcileUpdatesConfigMapAndRollsWorkload(t *testing.T) {
 	afterSTS := mustGetStatefulSet(t, c, neo4j)
 	afterChecksum := afterSTS.Spec.Template.Annotations[rendercfg.ConfigChecksumAnnotation]
 
-	conf := after.Data["neo4j.conf"]
-	for _, want := range []string{
-		"db.transaction.timeout=42s",
-		"dbms.security.auth_minimum_password_length=7",
+	for key, want := range map[string]string{
+		"db.transaction.timeout":                    "42s",
+		"dbms.security.auth_minimum_password_length": "7",
 	} {
-		if !strings.Contains(conf, want) {
-			t.Fatalf("configmap neo4j.conf missing %q:\n%s", want, conf)
+		if after.Data[key] != want {
+			t.Fatalf("configmap key %q = %q, want %q", key, after.Data[key], want)
 		}
 	}
-	if conf == before.Data["neo4j.conf"] {
-		t.Fatalf("configmap neo4j.conf was not updated")
+	if after.Data["db.transaction.timeout"] == before.Data["db.transaction.timeout"] &&
+		after.Data["dbms.security.auth_minimum_password_length"] == before.Data["dbms.security.auth_minimum_password_length"] {
+		t.Fatalf("configmap data was not updated")
 	}
 	if afterChecksum == "" {
 		t.Fatal("statefulset missing config checksum annotation")

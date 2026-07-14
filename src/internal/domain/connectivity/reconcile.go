@@ -14,7 +14,7 @@ import (
 	renderconn "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/connectivity"
 )
 
-// Reconciler applies headless, client, and cluster-internal Services (BDR-007).
+// Reconciler applies headless, client, admin, and cluster-internal Services (BDR-007).
 type Reconciler struct {
 	Client client.Client
 	Scheme *runtime.Scheme
@@ -31,10 +31,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		headless := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: headlessDesired.Name, Namespace: headlessDesired.Namespace}}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, headless, func() error {
 			headless.Labels = headlessDesired.Labels
+			headless.Annotations = headlessDesired.Annotations
 			headless.Spec = headlessDesired.Spec
 			return nil
 		}); err != nil {
 			return shared.Failed(err)
+		}
+
+		if render.IsClusterMode(neo4j) {
+			for _, memberSvc := range renderconn.ClusterMemberServices(ctxRender) {
+				svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: memberSvc.Name, Namespace: memberSvc.Namespace}}
+				if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, svc, func() error {
+					svc.Labels = memberSvc.Labels
+					svc.Annotations = memberSvc.Annotations
+					svc.Spec = memberSvc.Spec
+					return nil
+				}); err != nil {
+					return shared.Failed(err)
+				}
+			}
 		}
 	}
 
@@ -43,19 +58,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	clientSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: clientDesired.Name, Namespace: clientDesired.Namespace}}
 	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, clientSvc, func() error {
 		clientSvc.Labels = clientDesired.Labels
+		clientSvc.Annotations = clientDesired.Annotations
 		clientSvc.Spec = clientDesired.Spec
 		return nil
 	}); err != nil {
 		return shared.Failed(err)
 	}
 
-	if render.IsClusterMode(neo4j) {
-		internalsCtx := render.ContextForPool(neo4j, render.PoolPrimary)
-		internalsDesired := renderconn.InternalsService(internalsCtx)
-		internals := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: internalsDesired.Name, Namespace: internalsDesired.Namespace}}
-		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, internals, func() error {
-			internals.Labels = internalsDesired.Labels
-			internals.Spec = internalsDesired.Spec
+	if clientCtx.ShouldCreateAdminService() {
+		adminDesired := renderconn.AdminService(clientCtx)
+		adminSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: adminDesired.Name, Namespace: adminDesired.Namespace}}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, adminSvc, func() error {
+			adminSvc.Labels = adminDesired.Labels
+			adminSvc.Annotations = adminDesired.Annotations
+			adminSvc.Spec = adminDesired.Spec
 			return nil
 		}); err != nil {
 			return shared.Failed(err)

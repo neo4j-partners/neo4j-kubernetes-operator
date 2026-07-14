@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,6 +41,29 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return nil
 	}); err != nil {
 		return shared.Failed(err)
+	}
+
+	if render.IsClusterMode(neo4j) {
+		roleDesired := renderwl.ServiceReaderRole(baseCtx)
+		role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: roleDesired.Name, Namespace: roleDesired.Namespace}}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, role, func() error {
+			role.Labels = roleDesired.Labels
+			role.Rules = roleDesired.Rules
+			return nil
+		}); err != nil {
+			return shared.Failed(err)
+		}
+
+		bindingDesired := renderwl.ServiceReaderRoleBinding(baseCtx)
+		binding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: bindingDesired.Name, Namespace: bindingDesired.Namespace}}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, binding, func() error {
+			binding.Labels = bindingDesired.Labels
+			binding.Subjects = bindingDesired.Subjects
+			binding.RoleRef = bindingDesired.RoleRef
+			return nil
+		}); err != nil {
+			return shared.Failed(err)
+		}
 	}
 
 	generated := false
@@ -158,5 +182,7 @@ func OwnedTypes() []client.Object {
 		&appsv1.StatefulSet{},
 		&corev1.Secret{},
 		&corev1.ServiceAccount{},
+		&rbacv1.Role{},
+		&rbacv1.RoleBinding{},
 	}
 }

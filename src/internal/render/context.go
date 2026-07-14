@@ -12,9 +12,12 @@ const (
 	LabelInstance  = "app.kubernetes.io/instance"
 	LabelManagedBy = "app.kubernetes.io/managed-by"
 	LabelPool      = "neo4j.com/pool"
-	LabelComponent = "neo4j.com/component"
+	LabelComponent  = "neo4j.com/component"
+	LabelServiceRole = "neo4j.com/service"
 
 	ManagedByValue = "neo4j-operator"
+	ServiceRoleInternals = "internals"
+	ServiceRoleAdmin     = "admin"
 	AppNameValue   = "neo4j"
 )
 
@@ -77,12 +80,38 @@ func (c Context) ConfigMapName() string {
 	return c.Neo4j.Name + "-" + string(c.Pool) + "-config"
 }
 
-// InternalsServiceName is the cluster discovery Service (BDR-007).
+// ApocConfigMapName is the apoc.conf ConfigMap for this pool (Helm: {release}-apoc-config).
+func (c Context) ApocConfigMapName() string {
+	if c.Pool == PoolServer {
+		return c.Neo4j.Name + "-apoc-config"
+	}
+	return c.Neo4j.Name + "-" + string(c.Pool) + "-apoc-config"
+}
+
+// InternalsServiceName is the legacy aggregate internals Service name (unused in cluster mode).
 func (c Context) InternalsServiceName() string { return c.Neo4j.Name + "-internals" }
 
-// ClusterDiscoveryLabelSelector matches all Neo4j pods for this CR across pools.
+// PodName returns the StatefulSet pod name for an ordinal.
+func (c Context) PodName(ordinal int32) string {
+	return fmt.Sprintf("%s-%d", c.STSName(), ordinal)
+}
+
+// MemberInternalsServiceName returns the per-pod internals Service name (Helm: {release}-internals).
+func (c Context) MemberInternalsServiceName(podName string) string {
+	return podName + "-internals"
+}
+
+// HeadlessServiceDomain is the cluster DNS suffix for this pool's headless Service.
+func (c Context) HeadlessServiceDomain() string {
+	return fmt.Sprintf("%s.%s.svc.%s", c.HeadlessServiceName(), c.Namespace(), c.ClusterDomain())
+}
+
+// ClusterDiscoveryLabelSelector matches cluster internals Services (Helm: helm.neo4j.com/service=internals).
 func (c Context) ClusterDiscoveryLabelSelector() string {
-	return fmt.Sprintf("%s=%s,%s=%s", LabelInstance, c.Name(), LabelName, AppNameValue)
+	return fmt.Sprintf("%s=%s,%s=%s,%s=%s",
+		LabelName, AppNameValue,
+		LabelInstance, c.Name(),
+		LabelServiceRole, ServiceRoleInternals)
 }
 
 // ClusterMemberSelectorLabels selects every Neo4j pod in the deployment (all pools).
@@ -180,9 +209,15 @@ func imageTag(version string, edition neo4jv1beta1.Edition) string {
 	}
 	return version
 }
+
 // LicenseAcceptEnv returns NEO4J_ACCEPT_LICENSE_AGREEMENT (yes | eval) from spec.license.accept.
 func (c Context) LicenseAcceptEnv() string {
 	return string(c.Neo4j.Spec.License.Accept)
+}
+
+// Neo4jEditionK8SEnv returns NEO4J_EDITION for the official Neo4j K8s image (Helm: ENTERPRISE_K8S).
+func (c Context) Neo4jEditionK8SEnv() string {
+	return strings.ToUpper(string(c.Neo4j.Spec.Edition)) + "_K8S"
 }
 
 // BoltPort returns the Bolt listen port (default 7687).

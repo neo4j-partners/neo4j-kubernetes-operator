@@ -36,6 +36,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		}); err != nil {
 			return shared.Failed(err)
 		}
+
+		if apocDesired := rendercfg.ApocConfigMap(ctxRender); apocDesired != nil {
+			apocCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: apocDesired.Name, Namespace: apocDesired.Namespace}}
+			if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, apocCM, func() error {
+				apocCM.Labels = apocDesired.Labels
+				apocCM.Data = apocDesired.Data
+				return nil
+			}); err != nil {
+				return shared.Failed(err)
+			}
+		}
 	}
 	return shared.Done()
 }

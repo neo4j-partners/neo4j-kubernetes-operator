@@ -5,6 +5,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/plugins"
@@ -12,8 +13,12 @@ import (
 )
 
 const (
-	dataVolumeName   = "data"
-	configVolumeName = "config"
+	dataVolumeName      = "data"
+	neo4jConfVolumeName = "neo4j-conf"
+	apocConfVolumeName  = "apoc-conf"
+	// configVolumeDefaultMode matches Helm (neo4j-statefulset.yaml defaultMode: 0440).
+	// Neo4j --expand-commands rejects config files readable by others (default ConfigMap mode 0644).
+	configVolumeDefaultMode int32 = 0o440
 )
 
 // PoolStatefulSet builds a StatefulSet for one workload pool (Standalone or Cluster).
@@ -26,33 +31,36 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	}
 
 	vct := volumeClaimTemplate(ctx)
+	configMode := configVolumeDefaultMode
 	container := corev1.Container{
 		Name:            "neo4j",
 		Image:           ctx.ImageRef(),
 		ImagePullPolicy: pullPolicy,
-		Ports: []corev1.ContainerPort{
-			{Name: "bolt", ContainerPort: ctx.BoltPort()},
-			{Name: "http", ContainerPort: ctx.HTTPPort()},
-		},
-		Env: neo4jContainerEnv(ctx),
+		Ports:           neo4jContainerPorts(ctx),
+		Env:             neo4jContainerEnv(ctx),
+		SecurityContext: defaultContainerSecurityContext(),
+		StartupProbe:    boltTCPProbe(ctx, 1000, 5, 10),
+		ReadinessProbe:  boltTCPProbe(ctx, 20, 5, 10),
+		LivenessProbe:   boltTCPProbe(ctx, 40, 5, 10),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: dataVolumeName, MountPath: "/data"},
-			{Name: configVolumeName, MountPath: "/config"},
+			// Helm mounts projected config fragments at /config/neo4j.conf (directory).
+			{Name: neo4jConfVolumeName, MountPath: "/config/neo4j.conf"},
 		},
 	}
+	volumes := []corev1.Volume{neo4jConfVolume(ctx, configMode)}
+	if rendercfg.HasApocConfig(ctx) {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name: apocConfVolumeName, MountPath: "/config/",
+		})
+		volumes = append(volumes, apocConfVolume(ctx, configMode))
+	}
+
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: ctx.OperandServiceAccountName(),
+		SecurityContext:    defaultPodSecurityContext(),
 		Containers:         []corev1.Container{container},
-		Volumes: []corev1.Volume{
-			{
-				Name: configVolumeName,
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: ctx.ConfigMapName()},
-					},
-				},
-			},
-		},
+		Volumes:            volumes,
 	}
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
 
@@ -80,9 +88,112 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	}
 }
 
+func neo4jConfVolume(ctx render.Context, mode int32) corev1.Volume {
+	return corev1.Volume{
+		Name: neo4jConfVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				DefaultMode: &mode,
+				Sources: []corev1.VolumeProjection{
+					{
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{Name: ctx.ConfigMapName()},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func apocConfVolume(ctx render.Context, mode int32) corev1.Volume {
+	return corev1.Volume{
+		Name: apocConfVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				DefaultMode: &mode,
+				Sources: []corev1.VolumeProjection{
+					{
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{Name: ctx.ApocConfigMapName()},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func defaultPodSecurityContext() *corev1.PodSecurityContext {
+	runAsNonRoot := true
+	runAsUser := int64(7474)
+	runAsGroup := int64(7474)
+	fsGroup := int64(7474)
+	policy := corev1.FSGroupChangeAlways
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot:        &runAsNonRoot,
+		RunAsUser:           &runAsUser,
+		RunAsGroup:          &runAsGroup,
+		FSGroup:             &fsGroup,
+		FSGroupChangePolicy: &policy,
+	}
+}
+
+func defaultContainerSecurityContext() *corev1.SecurityContext {
+	runAsNonRoot := true
+	runAsUser := int64(7474)
+	runAsGroup := int64(7474)
+	return &corev1.SecurityContext{
+		RunAsNonRoot: &runAsNonRoot,
+		RunAsUser:    &runAsUser,
+		RunAsGroup:   &runAsGroup,
+		Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
+}
+
+// boltTCPProbe matches Helm defaults (tcpSocket on Bolt); cluster formation can take many minutes.
+func boltTCPProbe(ctx render.Context, failureThreshold, periodSeconds, timeoutSeconds int32) *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(ctx.BoltPort())},
+		},
+		FailureThreshold: failureThreshold,
+		PeriodSeconds:    periodSeconds,
+		TimeoutSeconds:   timeoutSeconds,
+	}
+}
+
 // StandaloneStatefulSet is an alias kept for tests; Standalone uses the server pool.
 func StandaloneStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	return PoolStatefulSet(ctx)
+}
+
+func neo4jContainerPorts(ctx render.Context) []corev1.ContainerPort {
+	ports := make([]corev1.ContainerPort, 0, 8)
+	if ctx.HTTPEnabled() {
+		ports = append(ports, corev1.ContainerPort{Name: "http", ContainerPort: ctx.HTTPPort()})
+	}
+	if ctx.BoltEnabled() {
+		ports = append(ports, corev1.ContainerPort{Name: "bolt", ContainerPort: ctx.BoltPort()})
+	}
+	if ctx.HTTPSEnabled() {
+		ports = append(ports, corev1.ContainerPort{Name: "https", ContainerPort: ctx.HTTPSPort()})
+	}
+	if ctx.BackupListenerEnabled() {
+		ports = append(ports, corev1.ContainerPort{Name: "backup", ContainerPort: ctx.BackupPort()})
+	}
+	if ctx.MetricsListenerEnabled() {
+		ports = append(ports, corev1.ContainerPort{Name: "tcp-prometheus", ContainerPort: ctx.MetricsPort()})
+	}
+	if render.IsClusterMode(ctx.Neo4j) {
+		ports = append(ports,
+			corev1.ContainerPort{Name: "tcp-boltrouting", ContainerPort: 7688},
+			corev1.ContainerPort{Name: "tcp-discovery", ContainerPort: 5000},
+			corev1.ContainerPort{Name: "tcp-tx", ContainerPort: 6000},
+			corev1.ContainerPort{Name: "tcp-raft", ContainerPort: 7000},
+		)
+	}
+	return ports
 }
 
 func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
@@ -93,13 +204,52 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 			Value: ctx.LicenseAcceptEnv(),
 		},
 		{
+			Name:  "NEO4J_EDITION",
+			Value: ctx.Neo4jEditionK8SEnv(),
+		},
+		{
 			Name:  "NEO4J_CONF",
-			Value: "/config",
+			Value: "/config/",
+		},
+		{
+			Name:  "EXTENDED_CONF",
+			Value: "yes",
+		},
+		{
+			Name:  "K8S_NEO4J_NAME",
+			Value: render.AppNameValue,
 		},
 		{
 			Name:  rendercfg.ConfigChecksumEnv,
 			Value: checksum,
 		},
+		{
+			Name: "POD_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
+			},
+		},
+	}
+	if render.IsClusterMode(ctx.Neo4j) {
+		// Helm parity: SERVICE_NEO4J / SERVICE_NEO4J_INTERNALS are per-member Service FQDNs.
+		// K8s expands $(POD_NAME)/$(NAMESPACE) from prior env entries (fieldRef + static).
+		env = append(env,
+			corev1.EnvVar{
+				Name: "NAMESPACE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
+				},
+			},
+			corev1.EnvVar{Name: "CLUSTER_DOMAIN", Value: ctx.ClusterDomain()},
+			corev1.EnvVar{
+				Name:  "SERVICE_NEO4J",
+				Value: "$(POD_NAME).$(NAMESPACE).svc.$(CLUSTER_DOMAIN)",
+			},
+			corev1.EnvVar{
+				Name:  "SERVICE_NEO4J_INTERNALS",
+				Value: "$(POD_NAME)-internals.$(NAMESPACE).svc.$(CLUSTER_DOMAIN)",
+			},
+		)
 	}
 	if pluginsEnv := plugins.NEO4JPluginsEnv(ctx.PoolPluginIDs()); pluginsEnv != "" {
 		env = append(env, corev1.EnvVar{

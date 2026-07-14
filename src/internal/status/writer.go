@@ -104,19 +104,36 @@ func (w *Writer) checkPoolStorageReady(ctx context.Context, ctxRender render.Con
 func buildEndpoints(ctx render.Context) *neo4jv1beta1.EndpointsStatus {
 	ns := ctx.Namespace()
 	name := ctx.ClientServiceName()
-	boltPort := ctx.BoltPort()
-	httpPort := ctx.HTTPPort()
+	boltPort := ctx.ServiceFacadePort(render.ConnectorBolt)
+	if boltPort == 0 {
+		boltPort = ctx.BoltPort()
+	}
 	boltURI := fmt.Sprintf("neo4j://%s.%s.svc:%d", name, ns, boltPort)
-	httpURI := fmt.Sprintf("http://%s.%s.svc:%d", name, ns, httpPort)
-	return &neo4jv1beta1.EndpointsStatus{
+	ep := &neo4jv1beta1.EndpointsStatus{
 		Bolt:     boltURI,
-		HTTP:     httpURI,
-		Internal: fmt.Sprintf("%s.%s.svc:%d", ctx.HeadlessServiceName(), ns, boltPort),
+		Internal: fmt.Sprintf("%s.%s.svc:%d", ctx.HeadlessServiceName(), ns, ctx.BoltPort()),
 		ConnectionExamples: &neo4jv1beta1.ConnectionExamples{
 			BoltURI:     boltURI,
 			PortForward: fmt.Sprintf("kubectl port-forward -n %s svc/%s %d:%d", ns, name, boltPort, boltPort),
 		},
 	}
+	if ctx.HTTPEnabled() {
+		exposed := false
+		for _, name := range ctx.ClientExpose() {
+			if name == render.ConnectorHTTP {
+				exposed = true
+				break
+			}
+		}
+		if exposed {
+			httpPort := ctx.ServiceFacadePort(render.ConnectorHTTP)
+			if httpPort == 0 {
+				httpPort = ctx.HTTPPort()
+			}
+			ep.HTTP = fmt.Sprintf("http://%s.%s.svc:%d", name, ns, httpPort)
+		}
+	}
+	return ep
 }
 
 func setCondition(neo4j *neo4jv1beta1.Neo4j, typ string, status metav1.ConditionStatus, reason, message string) {

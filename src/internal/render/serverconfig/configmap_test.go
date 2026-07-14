@@ -1,7 +1,6 @@
 package serverconfig
 
 import (
-	"strings"
 	"testing"
 
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
@@ -21,14 +20,17 @@ func TestConfigMapRendersNeo4jKeys(t *testing.T) {
 			},
 		},
 	}
-	conf := ConfigMap(render.StandaloneContext(neo4j)).Data["neo4j.conf"]
-	for _, want := range []string{
-		"db.transaction.timeout=42s",
-		"dbms.security.auth_max_failed_attempts=5",
+	data := ConfigMap(render.StandaloneContext(neo4j)).Data
+	for key, want := range map[string]string{
+		"db.transaction.timeout":                 "42s",
+		"dbms.security.auth_max_failed_attempts": "5",
 	} {
-		if !strings.Contains(conf, want) {
-			t.Fatalf("neo4j.conf missing %q:\n%s", want, conf)
+		if data[key] != want {
+			t.Fatalf("config key %q = %q, want %q", key, data[key], want)
 		}
+	}
+	if _, ok := data["neo4j.conf"]; ok {
+		t.Fatal("config must use per-setting keys, not a neo4j.conf blob")
 	}
 }
 
@@ -42,14 +44,13 @@ func TestConfigMapRendersApocOnlyWhenAssigned(t *testing.T) {
 			},
 		},
 	}
-	cm := ConfigMap(render.StandaloneContext(neo4j)).Data
-	if _, ok := cm["apoc.conf"]; ok {
-		t.Fatal("apoc.conf should not render without plugins: [apoc]")
+	if ApocConfigMap(render.StandaloneContext(neo4j)) != nil {
+		t.Fatal("apoc ConfigMap should not render without plugins: [apoc]")
 	}
 
 	neo4j.Spec.Plugins = []string{"apoc"}
-	cm = ConfigMap(render.StandaloneContext(neo4j)).Data
-	if cm["apoc.conf"] == "" {
+	apocCM := ApocConfigMap(render.StandaloneContext(neo4j))
+	if apocCM == nil || apocCM.Data["apoc.conf"] == "" {
 		t.Fatal("expected apoc.conf when apoc plugin is assigned")
 	}
 }
