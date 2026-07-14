@@ -6,6 +6,7 @@ import (
 	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
 	rendercfg "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/serverconfig"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -155,6 +156,9 @@ func TestClusterPoolStatefulSet(t *testing.T) {
 	}
 	if *primary.Spec.Replicas != 3 {
 		t.Fatalf("primary replicas = %d", *primary.Spec.Replicas)
+	}
+	if primary.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
+		t.Fatalf("podManagementPolicy = %q, want Parallel (cluster quorum)", primary.Spec.PodManagementPolicy)
 	}
 	primaryEnv := map[string]string{}
 	for _, e := range primary.Spec.Template.Spec.Containers[0].Env {

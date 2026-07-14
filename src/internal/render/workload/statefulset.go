@@ -71,9 +71,12 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 			Labels:    labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:    &replicas,
-			Selector:    &metav1.LabelSelector{MatchLabels: ctx.SelectorLabels()},
-			ServiceName: ctx.HeadlessServiceName(),
+			Replicas: &replicas,
+			// Cluster formation needs all ordinals up together; OrderedReady deadlocks when
+			// Neo4j waits for quorum before Bolt (and thus readiness) comes up.
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+			Selector:            &metav1.LabelSelector{MatchLabels: ctx.SelectorLabels()},
+			ServiceName:         ctx.HeadlessServiceName(),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
