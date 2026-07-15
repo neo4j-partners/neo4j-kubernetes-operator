@@ -64,16 +64,23 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	result, err := r.runPipeline(ctx, &neo4j)
+	_, err := r.runPipeline(ctx, &neo4j)
 	if err != nil {
+		if apierrors.IsConflict(err) {
+			// Transient RV conflict (STS/CR updated concurrently) — retry, don't fail status.
+			return ctrl.Result{Requeue: true}, nil
+		}
 		r.StatusWriter.MarkPipelineError(&neo4j, err)
 		neo4j.Status.ObservedGeneration = neo4j.Generation
 		_ = r.Client.Status().Update(ctx, &neo4j)
-		return result, err
+		return ctrl.Result{}, err
 	}
 
 	if err := r.StatusWriter.ObserveAndWrite(ctx, &neo4j); err != nil {
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
 	}
 
 	if !status.IsReady(&neo4j) {
