@@ -67,6 +67,9 @@ install: manifests ## Install CRDs into the cluster
 .PHONY: deploy
 deploy: install ## Deploy operator to neo4j-operator-system
 	kubectl apply -f config/default/namespace.yaml
+	# Drop ClusterRole leftovers from older installs (watch scope uses Role now).
+	kubectl delete clusterrolebinding neo4j-operator-manager-rolebinding --ignore-not-found
+	kubectl delete clusterrole neo4j-operator-manager-role --ignore-not-found
 	kubectl apply -k config/rbac
 	kubectl apply -k config/manager
 
@@ -82,8 +85,9 @@ sample-standalone: install ## Apply Standalone sample (default namespace)
 ##@ Code generation
 
 .PHONY: manifests
-manifests: controller-gen ## Generate CRD and RBAC manifests
-	$(CONTROLLER_GEN) rbac:roleName=neo4j-operator-manager-role paths="./src/internal/controller/..." output:rbac:artifacts:config=config/rbac
+manifests: controller-gen ## Generate CRD manifests
+	# Manager RBAC is hand-maintained Role/RoleBinding per WATCH_NAMESPACE (config/rbac/role.yaml).
+	# Do not run controller-gen rbac — it emits a ClusterRole and overwrites that file.
 	$(CONTROLLER_GEN) crd paths="./src/api/..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate

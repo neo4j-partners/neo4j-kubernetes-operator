@@ -1,10 +1,40 @@
+# One RoleBinding per watched namespace (must match WATCH_NAMESPACE + Role).
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: neo4j-operator-manager-rolebinding
+  namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
+  name: neo4j-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: neo4j-operator-controller-manager
+  namespace: neo4j-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: neo4j-operator-manager-rolebinding
+  namespace: neo4j-operator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: neo4j-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: neo4j-operator-controller-manager
+  namespace: neo4j-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: neo4j-operator-manager-rolebinding
+  namespace: restricted
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
   name: neo4j-operator-manager-role
 subjects:
 - kind: ServiceAccount

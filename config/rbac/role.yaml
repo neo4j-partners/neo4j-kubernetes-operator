@@ -1,8 +1,93 @@
----
+# Manager Role — one Role per watched namespace (must match WATCH_NAMESPACE).
+# To add a namespace: copy this Role + the matching RoleBinding, set metadata.namespace,
+# and append the name to WATCH_NAMESPACE in config/manager/manager.yaml.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: neo4j-operator-manager-role
+  namespace: default
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - endpoints
+  - persistentvolumeclaims
+  - secrets
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4js
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4js/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4js/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: neo4j-operator-manager-role
+  namespace: neo4j-operator-system
 rules:
 - apiGroups:
   - ""
