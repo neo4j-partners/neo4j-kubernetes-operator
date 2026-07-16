@@ -55,13 +55,10 @@ func listenerConfKeys(ctx render.Context) map[string]string {
 func clusterNeo4jConfKeys(ctx render.Context) map[string]string {
 	keys := map[string]string{}
 
-	primaries := int32(1)
-	if ctx.Neo4j.Spec.Topology.Primaries != nil {
-		primaries = ctx.Neo4j.Spec.Topology.Primaries.Members
-	}
-	pcount := strconv.FormatInt(int64(primaries), 10)
-	keys["initial.dbms.default_primaries_count"] = pcount
-	keys["dbms.cluster.minimum_initial_system_primaries_count"] = pcount
+	// Formation gate: topology.minimumMembers (Helm minimumClusterSize), not STS replica count.
+	mcount := strconv.FormatInt(int64(ctx.MinimumMembers()), 10)
+	keys["initial.dbms.default_primaries_count"] = mcount
+	keys["dbms.cluster.minimum_initial_system_primaries_count"] = mcount
 	keys["dbms.cluster.raft.binding_timeout"] = "1d"
 
 	keys["dbms.cluster.discovery.resolver_type"] = "K8S"

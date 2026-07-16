@@ -220,6 +220,27 @@ func (c Context) Neo4jEditionK8SEnv() string {
 	return strings.ToUpper(string(c.Neo4j.Spec.Edition)) + "_K8S"
 }
 
+// MinimumMembers returns the cluster formation gate (Helm minimumClusterSize).
+// Defaults to primaries.members when unset. Never exceeds primaries.members —
+// only the primary pool hosts system as PRIMARY; asking for more hangs formation.
+func (c Context) MinimumMembers() int32 {
+	primaries := int32(1)
+	if c.Neo4j.Spec.Topology.Primaries != nil && c.Neo4j.Spec.Topology.Primaries.Members > 0 {
+		primaries = c.Neo4j.Spec.Topology.Primaries.Members
+	}
+	min := primaries
+	if c.Neo4j.Spec.Topology.MinimumMembers != nil {
+		min = *c.Neo4j.Spec.Topology.MinimumMembers
+	}
+	if min > primaries {
+		return primaries
+	}
+	if min < 1 {
+		return 1
+	}
+	return min
+}
+
 // BoltPort returns the Bolt listen port (default 7687).
 func (c Context) BoltPort() int32 {
 	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.Listeners != nil &&
