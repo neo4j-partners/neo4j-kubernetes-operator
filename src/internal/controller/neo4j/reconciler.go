@@ -27,12 +27,12 @@ type Neo4jReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	Persistence   *persistence.Reconciler
-	Trust         *trust.Reconciler
-	ServerConfig  *serverconfig.Reconciler
-	Workload      *workload.Reconciler
-	Connectivity  *connectivity.Reconciler
-	StatusWriter  *status.Writer
+	Persistence  *persistence.Reconciler
+	Trust        *trust.Reconciler
+	ServerConfig *serverconfig.Reconciler
+	Workload     *workload.Reconciler
+	Connectivity *connectivity.Reconciler
+	StatusWriter *status.Writer
 }
 
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js,verbs=get;list;watch;create;update;patch;delete
@@ -143,7 +143,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		Client:       c,
 		Scheme:       scheme,
 		Persistence:  persistence.New(),
-		Trust:        trust.New(),
+		Trust:        trust.New(c),
 		ServerConfig: serverconfig.New(c, scheme),
 		Workload:     workload.New(c, scheme),
 		Connectivity: connectivity.New(c, scheme),

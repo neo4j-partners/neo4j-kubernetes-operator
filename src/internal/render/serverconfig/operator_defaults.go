@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	rendertrust "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/trust"
 )
 
 func operatorNeo4jConfKeys(ctx render.Context) map[string]string {
@@ -16,6 +17,9 @@ func operatorNeo4jConfKeys(ctx render.Context) map[string]string {
 		for k, v := range clusterNeo4jConfKeys(ctx) {
 			keys[k] = v
 		}
+	}
+	for k, v := range rendertrust.Neo4jConfKeys(ctx) {
+		keys[k] = v
 	}
 	return keys
 }

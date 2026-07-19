@@ -88,7 +88,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: stsDesired.Name, Namespace: stsDesired.Namespace}}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sts, func() error {
 			sts.Labels = stsDesired.Labels
-			sts.Spec = stsDesired.Spec
+			// StatefulSet forbids changing serviceName, selector, volumeClaimTemplates,
+			// podManagementPolicy after create — only patch mutable fields on update.
+			if sts.CreationTimestamp.IsZero() {
+				sts.Spec = stsDesired.Spec
+				return nil
+			}
+			sts.Spec.Replicas = stsDesired.Spec.Replicas
+			sts.Spec.Template = stsDesired.Spec.Template
+			sts.Spec.UpdateStrategy = stsDesired.Spec.UpdateStrategy
 			return nil
 		}); err != nil {
 			return shared.Failed(err)

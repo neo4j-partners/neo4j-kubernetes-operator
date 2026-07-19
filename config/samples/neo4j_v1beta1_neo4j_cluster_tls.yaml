@@ -1,0 +1,76 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+      plugins: ["apoc"]
+    minimumMembers: 3
+  features:
+    backup:
+      enabled: true
+  pluginDefinitions:
+    apoc: {}
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 100Gi
+          storageClassName: managed-csi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+      backup: 6362
+    service:
+      type: LoadBalancer
+      expose: [bolt, http, https]
+    ingress:
+      enabled: false
+    clusterDomain: cluster.local
+  auth:
+    generatePassword: true
+  # SSL policies: cluster + https + bolt (Neo4j SSL framework / Helm ssl.* parity).
+  # Lab: reuse one key/cert Secret for all three; production should split SANs as needed.
+  trust:
+    enabled: true
+    certificates:
+      cluster:
+        privateKey:
+          secretName: prod-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-cluster-cert
+          subPath: public.crt
+        trustedCerts:
+          sources:
+            - secret:
+                name: prod-cluster-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+      https:
+        privateKey:
+          secretName: prod-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+      bolt:
+        privateKey:
+          secretName: prod-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-cluster-cert
+          subPath: public.crt
+        clientAuth: None

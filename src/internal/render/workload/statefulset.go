@@ -10,6 +10,7 @@ import (
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/plugins"
 	rendercfg "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/serverconfig"
+	rendertrust "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/trust"
 )
 
 const (
@@ -63,6 +64,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Volumes:            volumes,
 	}
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
+	rendertrust.AppendVolumes(ctx, &podSpec.Containers[0], &podSpec)
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{

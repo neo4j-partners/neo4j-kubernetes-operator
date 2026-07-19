@@ -28,7 +28,7 @@ func TestStandalonePersistenceStep(t *testing.T) {
 
 func TestTrustNoopWhenDisabled(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{}
-	out := trust.New().Reconcile(t.Context(), neo4j)
+	out := trust.New(nil).Reconcile(t.Context(), neo4j)
 	if out.Err != nil {
 		t.Fatalf("trust step failed: %v", out.Err)
 	}
