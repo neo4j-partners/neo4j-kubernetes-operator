@@ -15,10 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/domain/shared"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
-	renderwl "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/workload"
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
 // Reconciler applies workload objects for each active pool.

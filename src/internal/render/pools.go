@@ -1,6 +1,6 @@
 package render
 
-import neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
+import neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 
 // IsClusterMode reports whether the CR targets clustered Neo4j (BDR-002).
 func IsClusterMode(neo4j *neo4jv1beta1.Neo4j) bool {

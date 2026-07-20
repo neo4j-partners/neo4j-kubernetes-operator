@@ -7,7 +7,7 @@ layout:
 - go.kubebuilder.io/v4
 multigroup: false
 projectName: neo4j-operator
-repo: github.com/neo-technology-field/ps-kubernetes-operator
+repo: github.com/neo4j/neo4j-kubernetes-operator
 resources:
 - api:
     crdVersion: v1
@@ -16,6 +16,6 @@ resources:
   domain: neo4j.com
   group: neo4j
   kind: Neo4j
-  path: github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1
+  path: github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1
   version: v1beta1
 version: "3"

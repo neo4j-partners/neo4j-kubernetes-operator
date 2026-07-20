@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

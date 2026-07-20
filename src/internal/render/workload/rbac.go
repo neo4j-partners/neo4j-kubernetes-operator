@@ -4,7 +4,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 // ServiceReaderRole allows Neo4j K8S discovery to list Services (Helm: neo4j-service-account.yaml).

@@ -4,7 +4,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 // applyProbes sets startup/readiness/liveness on the Neo4j container.

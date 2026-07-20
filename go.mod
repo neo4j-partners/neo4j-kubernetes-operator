@@ -1,4 +1,4 @@
-module github.com/neo-technology-field/ps-kubernetes-operator
+module github.com/neo4j/neo4j-kubernetes-operator
 
 go 1.22.0
 

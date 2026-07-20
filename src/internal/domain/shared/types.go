@@ -6,7 +6,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
 // StepResult is returned by each domain reconcile step.

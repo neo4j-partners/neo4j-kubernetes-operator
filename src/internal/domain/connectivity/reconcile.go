@@ -8,10 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/domain/shared"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
-	renderconn "github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/connectivity"
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	renderconn "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/connectivity"
 )
 
 // Reconciler applies headless, client, admin, and cluster-internal Services (BDR-007).

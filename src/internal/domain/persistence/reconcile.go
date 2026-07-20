@@ -3,8 +3,8 @@ package persistence
 import (
 	"context"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/domain/shared"
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 )
 
 // Reconciler validates storage spec; Dynamic PVCs are provisioned via STS volumeClaimTemplates.

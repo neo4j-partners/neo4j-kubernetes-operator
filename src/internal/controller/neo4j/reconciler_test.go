@@ -3,10 +3,10 @@ package neo4j
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo-technology-field/ps-kubernetes-operator/src/api/v1beta1"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/domain/persistence"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/domain/shared"
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/domain/trust"
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 )
 
 func TestStandalonePersistenceStep(t *testing.T) {

@@ -3,7 +3,7 @@ package workload
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 func appendPluginLicenseVolumes(ctx render.Context, container *corev1.Container, podSpec *corev1.PodSpec) {
