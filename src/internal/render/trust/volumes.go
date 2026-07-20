@@ -272,13 +272,13 @@ func ValidateBYO(neo4j *neo4jv1beta1.Neo4j) error {
 	return ValidateClusterBYOShape(neo4j)
 }
 
-// ValidateClusterBYOShape returns a user-facing error if cluster trust is incomplete.
+// ValidateClusterBYOShape validates cluster TLS when mode is Cluster, or Standalone bolt/https-only trust.
 func ValidateClusterBYOShape(neo4j *neo4jv1beta1.Neo4j) error {
 	if !TrustEnabled(neo4j) {
 		return nil
 	}
 	if !render.IsClusterMode(neo4j) {
-		return fmt.Errorf("trust.enabled is only supported for topology.mode Cluster in V1")
+		return validateStandaloneBYOShape(neo4j)
 	}
 	p := policyOf(neo4j, "cluster")
 	if err := requireBYOMaterial("cluster", p); err != nil {
@@ -286,6 +286,29 @@ func ValidateClusterBYOShape(neo4j *neo4jv1beta1.Neo4j) error {
 	}
 	if p.ClientAuth == neo4jv1beta1.TLSClientAuth("None") {
 		return fmt.Errorf("trust.certificates.cluster.clientAuth cannot be None (cluster mTLS requires Require)")
+	}
+	return nil
+}
+
+// Standalone: no cluster policy; require bolt and/or https BYO material.
+func validateStandaloneBYOShape(neo4j *neo4jv1beta1.Neo4j) error {
+	if policyOf(neo4j, "cluster") != nil {
+		return fmt.Errorf("trust.certificates.cluster is only valid when topology.mode is Cluster")
+	}
+	boltOK := PolicyMaterialPresent(policyOf(neo4j, "bolt"))
+	httpsOK := PolicyMaterialPresent(policyOf(neo4j, "https"))
+	if !boltOK && !httpsOK {
+		return fmt.Errorf("trust.enabled on Standalone requires trust.certificates.bolt and/or trust.certificates.https")
+	}
+	if policyOf(neo4j, "bolt") != nil {
+		if err := requireBYOMaterial("bolt", policyOf(neo4j, "bolt")); err != nil {
+			return err
+		}
+	}
+	if policyOf(neo4j, "https") != nil {
+		if err := requireBYOMaterial("https", policyOf(neo4j, "https")); err != nil {
+			return err
+		}
 	}
 	return nil
 }

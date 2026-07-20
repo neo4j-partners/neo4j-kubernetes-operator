@@ -1,0 +1,49 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+          storageClassName: managed-csi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+    service:
+      type: ClusterIP
+      expose: [bolt, http, https]
+  auth:
+    generatePassword: true
+  # Standalone: bolt and/or https only — no trust.certificates.cluster
+  # Secrets from: ./hack/gen-cluster-tls.sh default dev 1
+  trust:
+    enabled: true
+    certificates:
+      bolt:
+        privateKey:
+          secretName: dev-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: dev-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+      https:
+        privateKey:
+          secretName: dev-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: dev-cluster-cert
+          subPath: public.crt
+        clientAuth: None

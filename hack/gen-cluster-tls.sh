@@ -3,6 +3,8 @@
 #
 # Usage:
 #   ./hack/gen-cluster-tls.sh [namespace] [release-name] [primary-count]
+# Standalone (bolt/https only — omit cluster in the CR):
+#   ./hack/gen-cluster-tls.sh default dev 1
 #
 # Optional env (HTTPS / LoadBalancer — Jetty SNI needs a DNS name, not a floating IP):
 #   EXTRA_DNS=neo4j.example.com   # stable hostname in the cert SAN (required for browser HTTPS)

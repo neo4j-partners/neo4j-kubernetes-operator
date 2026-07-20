@@ -1,6 +1,7 @@
 package trust
 
 import (
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -115,6 +116,45 @@ func TestValidateClusterBYOShape(t *testing.T) {
 	}
 }
 
+func TestValidateStandaloneTrust(t *testing.T) {
+	neo4j := standaloneWithBoltTrust()
+	if err := ValidateBYO(neo4j); err != nil {
+		t.Fatal(err)
+	}
+	ctx := render.ContextForPool(neo4j, render.PoolPrimary)
+	container := &corev1.Container{}
+	podSpec := &corev1.PodSpec{}
+	AppendVolumes(ctx, container, podSpec)
+	foundBolt := false
+	for _, m := range container.VolumeMounts {
+		if m.MountPath == "/var/lib/neo4j/certificates/bolt/public.crt" {
+			foundBolt = true
+		}
+		if strings.Contains(m.MountPath, "/certificates/cluster/") {
+			t.Fatalf("standalone must not mount cluster certs: %s", m.MountPath)
+		}
+	}
+	if !foundBolt {
+		t.Fatal("expected bolt mount on standalone")
+	}
+	keys := Neo4jConfKeys(ctx)
+	if keys["server.bolt.tls_level"] != "REQUIRED" {
+		t.Fatalf("tls_level = %q", keys["server.bolt.tls_level"])
+	}
+	if _, ok := keys["dbms.ssl.policy.cluster.enabled"]; ok {
+		t.Fatal("standalone must not enable cluster ssl policy")
+	}
+
+	withCluster := standaloneWithBoltTrust()
+	withCluster.Spec.Trust.Certificates.Cluster = &neo4jv1beta1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-key"},
+		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-cert"},
+	}
+	if err := ValidateClusterBYOShape(withCluster); err == nil {
+		t.Fatal("expected cluster policy rejected on standalone")
+	}
+}
+
 func TestValidateHTTPSBYOShapeRequiresBolt(t *testing.T) {
 	httpsPort := int32(7473)
 	neo4j := clusterWithTrust()
@@ -159,6 +199,25 @@ func clusterWithTrust() *neo4jv1beta1.Neo4j {
 								},
 							}},
 						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func standaloneWithBoltTrust() *neo4jv1beta1.Neo4j {
+	return &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Trust: &neo4jv1beta1.TrustSpec{
+				Enabled: true,
+				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
+					Bolt: &neo4jv1beta1.TLSPolicySpec{
+						PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-key", SubPath: "private.key"},
+						PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-cert", SubPath: "public.crt"},
+						ClientAuth:        "None",
 					},
 				},
 			},
