@@ -47,6 +47,7 @@ Common causes:
 
 - Image `controller:latest` not present on nodes — run `make docker-build` and load into kind, or use `make run` locally.
 - RBAC not applied — re-run `kubectl apply -k config/rbac`.
+- **Tainted nodes** — if the node pool uses taints (e.g. `dedicated=neo4j:NoSchedule`), the manager must tolerate them. Edit `config/manager/manager.yaml` (`spec.template.spec.tolerations` / optional `nodeSelector`), then `kubectl apply -k config/manager`. Events will show `untolerated taint ...`. Match the same keys as `Neo4j.spec.scheduling.tolerations`.
 
 ## Neo4j CR accepted but nothing happens
 

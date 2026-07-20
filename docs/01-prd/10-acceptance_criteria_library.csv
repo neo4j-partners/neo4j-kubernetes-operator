@@ -50,7 +50,7 @@ AC-NEO-LDAP,AC-NEO-LDAP-001,LDAP password secret is mounted and referenced by Ne
 AC-NEO-IMAGE,AC-NEO-IMAGE-001,"Neo4j image registry, repository, tag, and pull policy are applied.",NEO-3-004-IMG-01,Yes,MVP — verifies V1 FR(s): NEO-3-004-IMG-01
 AC-NEO-IMAGE,AC-NEO-IMAGE-002,Image pull secrets are referenced by the Neo4j pod.,NEO-3-004-IMG-01,Yes,MVP — verifies V1 FR(s): NEO-3-004-IMG-01
 AC-NEO-TLS,AC-NEO-TLS-001,TLS secrets are mounted for configured connectors.,NEO-2-005,Yes,MVP — verifies V1 FR(s): NEO-2-005
-AC-NEO-TLS,AC-NEO-TLS-002,Bolt and HTTPS endpoints use the configured TLS policy.,NEO-2-005,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-TLS,AC-NEO-TLS-002,Bolt and HTTPS endpoints use the configured TLS policy.,NEO-2-005; NEO-3-005-TLS-01; NEO-3-005-TLS-02,Yes,MVP — BYO bolt/https policies when configured.
 AC-NEO-TLS,AC-NEO-TLS-003,Cluster communication uses configured TLS when enabled.,NEO-3-005-TLS-03; NEO-1-002,Yes,"MVP — verifies V1 FR(s): NEO-3-005-TLS-03, NEO-1-002"
 AC-NEO-TLS-RELOAD,AC-NEO-TLS-RELOAD-001,TLS certificate reload is enabled when configured.,NEO-3-005-TLS-04,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-STORAGE,AC-NEO-STORAGE-001,Data PVC is created or bound according to the selected storage variant.,NEO-3-006-VOL-01,Yes,MVP — verifies V1 FR(s): NEO-3-006-VOL-01
@@ -67,26 +67,26 @@ AC-NEO-NETWORKING,AC-NEO-NETWORKING-002,"Only the configured connectors (HTTP, H
 AC-NEO-NETWORKING,AC-NEO-NETWORKING-003,Service ports match the configured connector port numbers.,NEO-2-007,Yes,MVP — verifies V1 FR(s): NEO-2-007
 AC-NEO-NETWORKING-CLUSTERIP,AC-NEO-NETWORKING-CLUSTERIP-001,ClusterIP service is created and reachable only from within the cluster.,NEO-3-007-SVC-01,Yes,MVP — verifies V1 FR(s): NEO-3-007-SVC-01
 AC-NEO-NETWORKING-CLUSTERIP,AC-NEO-NETWORKING-CLUSTERIP-002,Service is not assigned an external IP or NodePort.,NEO-3-007-SVC-01,Yes,MVP — verifies V1 FR(s): NEO-3-007-SVC-01
-AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-001,LoadBalancer service is created when requested.,NEO-3-007-SVC-03,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-002,External IP or hostname is assigned and routes traffic to Neo4j on configured ports.,NEO-3-007-SVC-03,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-001,NodePort service is created when requested.,NEO-3-007-SVC-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-002,Each enabled connector is reachable via a stable node IP and assigned NodePort.,NEO-3-007-SVC-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-001,LoadBalancer service is created when requested.,NEO-3-007-SVC-03,Yes,MVP — verifies V1 FR(s): NEO-3-007-SVC-03
+AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-002,External IP or hostname is assigned and routes traffic to Neo4j on configured ports.,NEO-3-007-SVC-03,Yes,MVP — verifies V1 FR(s): NEO-3-007-SVC-03
+AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-001,NodePort service is created when requested.,NEO-3-007-SVC-02,Yes,MVP — verifies V1 FR(s): NEO-3-007-SVC-02
+AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-002,Each enabled connector is reachable via a stable node IP and assigned NodePort.,NEO-3-007-SVC-02,Yes,MVP — verifies V1 FR(s): NEO-3-007-SVC-02
 AC-NEO-NETWORKING-PORTS-BOLT,AC-NEO-NETWORKING-PORTS-BOLT-001,Bolt port is exposed on the service and accepts authenticated driver connections.,NEO-3-007-PCMB-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-NETWORKING-PORTS-BOLT,AC-NEO-NETWORKING-PORTS-BOLT-002,HTTP and HTTPS ports are not exposed when Bolt-only profile is selected.,NEO-3-007-PCMB-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-NETWORKING-PORTS-HTTP,AC-NEO-NETWORKING-PORTS-HTTP-001,HTTP port is exposed and Neo4j Browser responds over HTTP.,NEO-3-007-PRT-01,Yes,MVP — verifies V1 FR(s): NEO-3-007-PRT-01
-AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-001,HTTPS port is exposed and Neo4j Browser responds over HTTPS.,NEO-3-007-PCMB-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-001,HTTPS port is exposed and Neo4j Browser responds over HTTPS.,NEO-3-007-PRT-02,Yes,MVP — verifies V1 FR(s): NEO-3-007-PRT-02
 AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-002,Bolt and HTTP ports are not exposed when HTTPS-only profile is selected.,NEO-3-007-PCMB-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-NETWORKING-PORTS-HTTP-BOLT,AC-NEO-NETWORKING-PORTS-HTTP-BOLT-001,Both HTTP and Bolt ports are exposed and reachable.,NEO-3-007-PCMB-03,Yes,MVP — verifies V1 FR(s): NEO-3-007-PCMB-03
 AC-NEO-NETWORKING-PORTS-HTTP-BOLT,AC-NEO-NETWORKING-PORTS-HTTP-BOLT-002,HTTPS port is not exposed when HTTP + Bolt profile is selected.,NEO-3-007-PCMB-03,Yes,MVP — verifies V1 FR(s): NEO-3-007-PCMB-03
-AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-001,Both HTTPS and Bolt ports are exposed and reachable.,NEO-3-007-PCMB-04,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-002,HTTP port is not exposed when HTTPS + Bolt profile is selected.,NEO-3-007-PCMB-04,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-001,"HTTP, HTTPS, and Bolt ports are all exposed on the service.",NEO-3-007-PCMB-05,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-002,Each exposed connector accepts connections according to its protocol.,NEO-3-007-PCMB-05,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-001,Both HTTPS and Bolt ports are exposed and reachable.,NEO-3-007-PCMB-04,Yes,MVP — verifies V1 FR(s): NEO-3-007-PCMB-04
+AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-002,HTTP port is not exposed when HTTPS + Bolt profile is selected.,NEO-3-007-PCMB-04,Yes,MVP — verifies V1 FR(s): NEO-3-007-PCMB-04
+AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-001,"HTTP, HTTPS, and Bolt ports are all exposed on the service.",NEO-3-007-PCMB-05,Yes,MVP — verifies V1 FR(s): NEO-3-007-PCMB-05
+AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-002,Each exposed connector accepts connections according to its protocol.,NEO-3-007-PCMB-05,Yes,MVP — verifies V1 FR(s): NEO-3-007-PCMB-05
 AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-001,HTTP and HTTPS ports are exposed; Bolt port is not exposed.,NEO-3-007-PCMB-06,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-002,Browser access works over both HTTP and HTTPS.,NEO-3-007-PCMB-06,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MULTICLUSTER,AC-NEO-MULTICLUSTER-001,Internal ports/configuration required for multi-cluster communication are enabled.,NEO-3-007-MULTI-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-001,"Node selectors, affinity, tolerations, and topology spread constraints are applied to Neo4j pods.",NEO-2-008,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-002,Termination grace period and service account are applied when configured.,NEO-2-008,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-001,"Node selectors, affinity, tolerations, and topology spread constraints are applied to Neo4j pods.",NEO-2-008,Yes,MVP — verifies V1 FR(s): NEO-2-008
+AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-002,Termination grace period and service account are applied when configured.,NEO-2-008,Yes,MVP — operand SA always; grace period deferred.
 AC-NEO-PROBES,AC-NEO-PROBES-001,"Startup, readiness, and liveness probes are configured on Neo4j pods.",NEO-3-009-PROBE-01,Yes,MVP — verifies V1 FR(s): NEO-3-009-PROBE-01
 AC-NEO-PROBES,AC-NEO-PROBES-002,Neo4j is not marked ready before Bolt is available.,NEO-3-009-PROBE-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-CONFIG-CHANGE,AC-NEO-CONFIG-CHANGE-001,Configuration change is detected by the operator.,NEO-3-010-RSTR-01,Yes,MVP — verifies V1 FR(s): NEO-3-010-RSTR-01

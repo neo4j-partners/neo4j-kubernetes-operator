@@ -65,6 +65,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	}
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
 	rendertrust.AppendVolumes(ctx, &podSpec.Containers[0], &podSpec)
+	applyScheduling(ctx, &podSpec)
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{

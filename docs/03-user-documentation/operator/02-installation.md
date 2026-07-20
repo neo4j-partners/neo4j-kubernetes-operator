@@ -48,6 +48,19 @@ kubectl apply -k config/manager
 
 > Plain `kubectl apply -f` on the CRD fails with annotation size limits. Always use `make install`.
 
+### Operator scheduling (tainted AKS pools)
+
+If Neo4j nodes are tainted, the controller must tolerate the same taints or it never becomes Ready and cannot reconcile CRs. Defaults in `config/manager/manager.yaml` include:
+
+```yaml
+tolerations:
+- key: dedicated
+  operator: Equal
+  value: neo4j
+  effect: NoSchedule
+```
+
+Change those fields (and optional `nodeSelector`) to match your pool, then re-apply `kubectl apply -k config/manager`. Keep them aligned with `spec.scheduling` on Neo4j CRs.
 ---
 
 ## Verify
