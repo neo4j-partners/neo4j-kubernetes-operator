@@ -5,7 +5,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render"
 	"github.com/neo-technology-field/ps-kubernetes-operator/src/internal/render/plugins"
@@ -40,15 +39,13 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Ports:           neo4jContainerPorts(ctx),
 		Env:             neo4jContainerEnv(ctx),
 		SecurityContext: defaultContainerSecurityContext(),
-		StartupProbe:    boltTCPProbe(ctx, 1000, 5, 10),
-		ReadinessProbe:  boltTCPProbe(ctx, 20, 5, 10),
-		LivenessProbe:   boltTCPProbe(ctx, 40, 5, 10),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: dataVolumeName, MountPath: "/data"},
 			// Helm mounts projected config fragments at /config/neo4j.conf (directory).
 			{Name: neo4jConfVolumeName, MountPath: "/config/neo4j.conf"},
 		},
 	}
+	applyProbes(ctx, &container)
 	volumes := []corev1.Volume{neo4jConfVolume(ctx, configMode)}
 	if rendercfg.HasApocConfig(ctx) {
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
@@ -154,18 +151,6 @@ func defaultContainerSecurityContext() *corev1.SecurityContext {
 		RunAsUser:    &runAsUser,
 		RunAsGroup:   &runAsGroup,
 		Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-	}
-}
-
-// boltTCPProbe matches Helm defaults (tcpSocket on Bolt); cluster formation can take many minutes.
-func boltTCPProbe(ctx render.Context, failureThreshold, periodSeconds, timeoutSeconds int32) *corev1.Probe {
-	return &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(ctx.BoltPort())},
-		},
-		FailureThreshold: failureThreshold,
-		PeriodSeconds:    periodSeconds,
-		TimeoutSeconds:   timeoutSeconds,
 	}
 }
 
