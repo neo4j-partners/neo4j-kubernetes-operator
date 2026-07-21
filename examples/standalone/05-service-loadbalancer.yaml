@@ -1,0 +1,31 @@
+# Purpose: Client Service of type LoadBalancer, exposing bolt + http externally.
+# Prerequisites: a cluster/cloud provider that provisions LoadBalancer Services (not kind, unless
+#   you run metallb or similar).
+# Apply: kubectl apply -f examples/standalone/05-service-loadbalancer.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-lb
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+    service:
+      type: LoadBalancer
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

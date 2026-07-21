@@ -1,0 +1,25 @@
+# Cloud/AKS example — pins the PVC to the "managed-csi" StorageClass (default on AKS).
+# Purpose: Dynamic storage with an explicit StorageClass instead of the cluster default.
+# Prerequisites: an AKS cluster (or any cluster with a "managed-csi" StorageClass).
+# Apply: kubectl apply -f examples/standalone/03-storage-storageclass.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storageclass
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 20Gi
+          storageClassName: managed-csi
+  auth:
+    generatePassword: true

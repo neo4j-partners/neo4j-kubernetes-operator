@@ -1,0 +1,31 @@
+# Purpose: Explicit ClusterIP client Service, exposing bolt + http (the default expose set,
+#   spelled out explicitly here for clarity).
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/standalone/04-service-clusterip.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-clusterip
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

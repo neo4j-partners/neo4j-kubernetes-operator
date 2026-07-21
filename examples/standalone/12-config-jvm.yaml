@@ -1,0 +1,38 @@
+# Purpose: neo4j.conf keys, JVM flags, and an apoc.conf drop-in via spec.config.
+#   config.apoc is only mounted for a pool that also has the "apoc" plugin installed — this
+#   example sets it for illustration; pair with examples/standalone/13-plugins-apoc.yaml (or add
+#   spec.plugins: [apoc] here) to see apoc.conf actually mounted.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/standalone/12-config-jvm.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-jvm
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 1G
+      server.memory.heap.max_size: 2G
+      server.memory.pagecache.size: 512m
+    jvm:
+      useDefaults: true
+      additionalArguments:
+        - "-XX:+ExitOnOutOfMemoryError"
+    apoc:
+      apoc.export.file.enabled: "true"
+      apoc.import.file.enabled: "true"

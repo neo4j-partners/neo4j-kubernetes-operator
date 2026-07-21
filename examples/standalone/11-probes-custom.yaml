@@ -1,0 +1,43 @@
+# Purpose: Shorter probe thresholds for fast local iteration. Operator defaults tolerate slow
+#   cluster formation; a single Standalone instance usually starts much faster than that.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/standalone/11-probes-custom.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-probes
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  probes:
+    startup:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 30
+      periodSeconds: 3
+      timeoutSeconds: 5
+    readiness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 3
+      periodSeconds: 5
+      timeoutSeconds: 5
+    liveness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 5
+      periodSeconds: 10
+      timeoutSeconds: 5

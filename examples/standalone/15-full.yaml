@@ -1,0 +1,106 @@
+# Purpose: Kitchen-sink Standalone example — StorageClass, LoadBalancer, all five listeners
+#   (http/https/bolt/backup/metrics), bolt+https TLS, scheduling, custom probes, config/JVM,
+#   APOC, and backup/Prometheus features. A tour of everything wired for Standalone today.
+# Prerequisites:
+#   ./hack/gen-cluster-tls.sh default dev-full 1
+#   (creates Secrets dev-full-cluster-key / -cert / -ca in namespace "default")
+# Apply: kubectl apply -f examples/standalone/15-full.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-full
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  image:
+    repository: neo4j
+    pullPolicy: IfNotPresent
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 20Gi
+          storageClassName: managed-csi
+  auth:
+    generatePassword: true
+  plugins: [apoc]
+  pluginDefinitions:
+    apoc: {}
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 1G
+      server.memory.heap.max_size: 2G
+    jvm:
+      useDefaults: true
+      additionalArguments:
+        - "-XX:+ExitOnOutOfMemoryError"
+    apoc:
+      apoc.export.file.enabled: "true"
+  features:
+    backup:
+      enabled: true
+    monitoring:
+      prometheus:
+        enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+      backup: 6362
+      metrics: 2004
+    service:
+      type: LoadBalancer
+      expose: [bolt, http, https]
+  trust:
+    enabled: true
+    certificates:
+      bolt:
+        privateKey:
+          secretName: dev-full-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: dev-full-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+      https:
+        privateKey:
+          secretName: dev-full-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: dev-full-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+  scheduling:
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: neo4j
+        effect: NoSchedule
+    affinity:
+      podAntiAffinity: soft
+  probes:
+    startup:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 30
+      periodSeconds: 3
+      timeoutSeconds: 5
+    readiness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 5
+      periodSeconds: 5
+      timeoutSeconds: 5
+    liveness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 8
+      periodSeconds: 10
+      timeoutSeconds: 5

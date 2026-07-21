@@ -1,0 +1,40 @@
+# Purpose: Node placement — nodeSelector, taint toleration, soft pod anti-affinity, and a
+#   hostname topology spread constraint.
+# Prerequisites (optional, only needed for the nodeSelector/toleration to actually match a node):
+#   kubectl label nodes <node> disktype=ssd
+#   kubectl taint nodes <node> dedicated=neo4j:NoSchedule
+# Apply: kubectl apply -f examples/standalone/10-scheduling.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-scheduling
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  scheduling:
+    nodeSelector:
+      disktype: ssd
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: neo4j
+        effect: NoSchedule
+    affinity:
+      podAntiAffinity: soft
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway

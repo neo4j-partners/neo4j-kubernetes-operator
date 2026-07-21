@@ -1,0 +1,47 @@
+# Purpose: Custom probe thresholds for a Cluster. Cluster formation (Raft, discovery) can take
+#   noticeably longer than a single Standalone instance — this example keeps a generous startup
+#   probe while tightening the steady-state readiness/liveness periods.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/09-probes-custom.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-probes
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  probes:
+    startup:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 120
+      periodSeconds: 5
+      timeoutSeconds: 5
+    readiness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 3
+      periodSeconds: 5
+      timeoutSeconds: 5
+    liveness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 5
+      periodSeconds: 10
+      timeoutSeconds: 5

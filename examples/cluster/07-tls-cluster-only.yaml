@@ -1,0 +1,47 @@
+# Purpose: Cluster mTLS only — internal raft/discovery/tx traffic between members is encrypted;
+#   client bolt and http are left plain (no https listener, no bolt TLS).
+# Prerequisites:
+#   ./hack/gen-cluster-tls.sh default prod-mtls 3
+#   (creates Secrets prod-mtls-cluster-key / -cert / -ca in namespace "default")
+# Apply: kubectl apply -f examples/cluster/07-tls-cluster-only.yaml
+# Related README: ../README.md#tls--auth--plugin-prerequisites
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-mtls
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  trust:
+    enabled: true
+    certificates:
+      cluster:
+        privateKey:
+          secretName: prod-mtls-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-mtls-cluster-cert
+          subPath: public.crt
+        clientAuth: Require
+        trustedCerts:
+          sources:
+            - secret:
+                name: prod-mtls-cluster-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt

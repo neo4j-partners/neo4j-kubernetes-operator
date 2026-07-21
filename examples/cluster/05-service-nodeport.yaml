@@ -1,0 +1,33 @@
+# Purpose: 3-primary Cluster with a NodePort client Service.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/05-service-nodeport.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-nodeport
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+    service:
+      type: NodePort
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

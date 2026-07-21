@@ -1,0 +1,42 @@
+# Purpose: Backup (6362) and Prometheus metrics (2004) listeners on a Cluster. Ops-only ports
+#   are automatically published on the derived "<name>-admin" Service, not the client Service.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/12-backup-and-metrics.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-backup-metrics
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  features:
+    backup:
+      enabled: true
+    monitoring:
+      prometheus:
+        enabled: true
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+      metrics: 2004
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

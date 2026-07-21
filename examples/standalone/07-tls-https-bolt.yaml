@@ -1,0 +1,54 @@
+# Purpose: HTTPS + Bolt TLS on Standalone. Neo4j Browser served over HTTPS refuses to open a
+#   plaintext Bolt connection, so listeners.https always needs trust.certificates.bolt too.
+# Prerequisites:
+#   ./hack/gen-cluster-tls.sh default dev-tls-https 1
+#   (creates Secrets dev-tls-https-cluster-key / -cert / -ca in namespace "default")
+# Apply: kubectl apply -f examples/standalone/07-tls-https-bolt.yaml
+# Related README: ../README.md#tls--auth--plugin-prerequisites , ../secrets/README.md
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-tls-https
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+    service:
+      type: ClusterIP
+      expose: [bolt, http, https]
+  auth:
+    generatePassword: true
+  # Standalone TLS: bolt + https only — trust.certificates.cluster is Cluster-mode only.
+  trust:
+    enabled: true
+    certificates:
+      bolt:
+        privateKey:
+          secretName: dev-tls-https-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: dev-tls-https-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+      https:
+        privateKey:
+          secretName: dev-tls-https-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: dev-tls-https-cluster-cert
+          subPath: public.crt
+        clientAuth: None

@@ -1,0 +1,33 @@
+# Purpose: 3-primary Cluster with a LoadBalancer client Service exposing bolt + http.
+# Prerequisites: a cluster/cloud provider that provisions LoadBalancer Services.
+# Apply: kubectl apply -f examples/cluster/04-service-loadbalancer.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-lb
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+    service:
+      type: LoadBalancer
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

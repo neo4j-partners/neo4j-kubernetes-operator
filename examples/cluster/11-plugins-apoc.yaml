@@ -1,0 +1,31 @@
+# Purpose: Install APOC on the primary pool. GDS and Bloom are NOT allowed on primaries
+#   (CRD-enforced) — put them on secondaries.analytics instead, see
+#   examples/cluster/03-pools-analytics-read.yaml.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/11-plugins-apoc.yaml
+# Related README: ../README.md#tls--auth--plugin-prerequisites
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-apoc
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+      plugins: [apoc]
+    minimumMembers: 3
+  pluginDefinitions:
+    apoc: {}
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

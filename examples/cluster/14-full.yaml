@@ -1,0 +1,142 @@
+# Purpose: Kitchen-sink Cluster example — 3 primaries + analytics (GDS/Bloom) + read (APOC)
+#   pools, LoadBalancer, full TLS (cluster mTLS + https + bolt), backup + Prometheus metrics
+#   listeners, hard scheduling, custom probes, and config/JVM. A tour of everything wired for
+#   Cluster today.
+# Prerequisites:
+#   kubectl apply -f examples/secrets/plugin-licenses.yaml
+#   ./hack/gen-cluster-tls.sh default prod-full 3
+#   (creates Secrets prod-full-cluster-key / -cert / -ca in namespace "default")
+# Apply: kubectl apply -f examples/cluster/14-full.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-full
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+      plugins: [apoc]
+    secondaries:
+      analytics:
+        members: 1
+        plugins: [gds, bloom]
+      read:
+        members: 1
+        plugins: [apoc]
+    minimumMembers: 3
+  pluginDefinitions:
+    apoc: {}
+    gds:
+      licenseSecretRef: gds-license
+    bloom:
+      licenseSecretRef: bloom-license
+  image:
+    repository: neo4j
+    pullPolicy: IfNotPresent
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 20Gi
+          storageClassName: managed-csi
+  auth:
+    generatePassword: true
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 2G
+      server.memory.heap.max_size: 4G
+      server.memory.pagecache.size: 1G
+    jvm:
+      useDefaults: true
+      additionalArguments:
+        - "-XX:+ExitOnOutOfMemoryError"
+    apoc:
+      apoc.export.file.enabled: "true"
+  features:
+    backup:
+      enabled: true
+    monitoring:
+      prometheus:
+        enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+      backup: 6362
+      metrics: 2004
+    service:
+      type: LoadBalancer
+      expose: [bolt, http, https]
+  trust:
+    enabled: true
+    certificates:
+      cluster:
+        privateKey:
+          secretName: prod-full-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-full-cluster-cert
+          subPath: public.crt
+        clientAuth: Require
+        trustedCerts:
+          sources:
+            - secret:
+                name: prod-full-cluster-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+      https:
+        privateKey:
+          secretName: prod-full-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-full-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+      bolt:
+        privateKey:
+          secretName: prod-full-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-full-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+  scheduling:
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: neo4j
+        effect: NoSchedule
+    affinity:
+      podAntiAffinity: hard
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+  probes:
+    startup:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 120
+      periodSeconds: 5
+      timeoutSeconds: 5
+    readiness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 3
+      periodSeconds: 5
+      timeoutSeconds: 5
+    liveness:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 5
+      periodSeconds: 10
+      timeoutSeconds: 5

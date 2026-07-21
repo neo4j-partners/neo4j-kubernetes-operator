@@ -1,0 +1,30 @@
+# Purpose: Client Service of type NodePort, exposing bolt + http on every node's IP.
+# Prerequisites: none (works on kind via the mapped host port range).
+# Apply: kubectl apply -f examples/standalone/06-service-nodeport.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-nodeport
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+    service:
+      type: NodePort
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

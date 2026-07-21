@@ -1,0 +1,78 @@
+# Purpose: Full Cluster TLS — cluster mTLS between members + HTTPS (Browser) + Bolt TLS + online
+#   backup listener, behind a LoadBalancer client Service.
+# Prerequisites:
+#   ./hack/gen-cluster-tls.sh default prod-tls 3
+#   (creates Secrets prod-tls-cluster-key / -cert / -ca in namespace "default", one certificate
+#   covering all 3 primary DNS names)
+# Apply: kubectl apply -f examples/cluster/06-tls-full.yaml
+# Related README: ../README.md#tls--auth--plugin-prerequisites , ../secrets/README.md
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-tls
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  features:
+    backup:
+      enabled: true
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+      backup: 6362
+    service:
+      type: LoadBalancer
+      expose: [bolt, http, https]
+  auth:
+    generatePassword: true
+  # SSL policies: cluster (mTLS between members, clientAuth Require + trustedCerts CA) +
+  # https + bolt (Browser over HTTPS needs both).
+  trust:
+    enabled: true
+    certificates:
+      cluster:
+        privateKey:
+          secretName: prod-tls-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-tls-cluster-cert
+          subPath: public.crt
+        clientAuth: Require
+        trustedCerts:
+          sources:
+            - secret:
+                name: prod-tls-cluster-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+      https:
+        privateKey:
+          secretName: prod-tls-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-tls-cluster-cert
+          subPath: public.crt
+        clientAuth: None
+      bolt:
+        privateKey:
+          secretName: prod-tls-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: prod-tls-cluster-cert
+          subPath: public.crt
+        clientAuth: None

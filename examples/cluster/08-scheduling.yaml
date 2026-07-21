@@ -1,0 +1,40 @@
+# Purpose: Production-grade placement — hard pod anti-affinity (never co-locate two primaries
+#   on one node), a dedicated-node toleration, and a hostname topology spread constraint.
+# Prerequisites (optional, only needed for the toleration to actually match a node):
+#   kubectl taint nodes <node> dedicated=neo4j:NoSchedule
+# Apply: kubectl apply -f examples/cluster/08-scheduling.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-scheduling
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  scheduling:
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: neo4j
+        effect: NoSchedule
+    affinity:
+      podAntiAffinity: hard
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule

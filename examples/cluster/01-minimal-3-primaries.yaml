@@ -1,0 +1,30 @@
+# Purpose: Smallest real HA Cluster — 3 primaries, ClusterIP, Dynamic 10Gi storage (no
+#   StorageClass — uses the cluster default).
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/01-minimal-3-primaries.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true

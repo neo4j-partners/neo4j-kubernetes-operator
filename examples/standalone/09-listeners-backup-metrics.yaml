@@ -1,0 +1,40 @@
+# Purpose: Backup (6362) and Prometheus metrics (2004) listeners. These ops-only ports are
+#   automatically published on the derived "<name>-admin" Service, not the client Service —
+#   leaving them out of connectivity.service.expose is expected.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/standalone/09-listeners-backup-metrics.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-backup-metrics
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  features:
+    backup:
+      enabled: true
+    monitoring:
+      prometheus:
+        enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+      metrics: 2004
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

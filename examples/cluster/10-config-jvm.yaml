@@ -1,0 +1,39 @@
+# Purpose: neo4j.conf keys and JVM flags via spec.config on a Cluster. config.apoc is included
+#   for reference but only mounts on a pool that also has the "apoc" plugin installed — see
+#   examples/cluster/11-plugins-apoc.yaml to combine both.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/10-config-jvm.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-jvm
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 2G
+      server.memory.heap.max_size: 4G
+      server.memory.pagecache.size: 1G
+    jvm:
+      useDefaults: true
+      additionalArguments:
+        - "-XX:+ExitOnOutOfMemoryError"
+    apoc:
+      apoc.export.file.enabled: "true"

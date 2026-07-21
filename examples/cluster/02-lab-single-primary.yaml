@@ -1,0 +1,27 @@
+# Purpose: Single-primary "cluster" for local lab/dev only — there is no quorum with 1 member,
+#   so this is NOT highly available. Use examples/cluster/01-minimal-3-primaries.yaml for HA.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/02-lab-single-primary.yaml
+# Related README: ../README.md#cluster
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-lab
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 1
+    minimumMembers: 1
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

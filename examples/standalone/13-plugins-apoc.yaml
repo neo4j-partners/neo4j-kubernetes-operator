@@ -1,0 +1,32 @@
+# Purpose: Install APOC on a Standalone instance. Standalone plugins live on the top-level
+#   spec.plugins array (installed on every server); Cluster mode installs plugins per topology
+#   pool instead (topology.primaries.plugins / secondaries.{analytics,read}.plugins) —
+#   see examples/cluster/11-plugins-apoc.yaml.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/standalone/13-plugins-apoc.yaml
+# Related README: ../README.md#tls--auth--plugin-prerequisites
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-apoc
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  plugins: [apoc]
+  pluginDefinitions:
+    apoc: {}
+  config:
+    apoc:
+      apoc.export.file.enabled: "true"

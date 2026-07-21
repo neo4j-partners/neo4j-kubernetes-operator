@@ -1,0 +1,45 @@
+# Purpose: Same shape as 01-minimal-3-primaries.yaml but scaled to primaries.members: 5.
+#
+# ############################################################################################
+# # IMPORTANT — ENABLE SERVER is NOT automatic yet (tracked as NEO-3-011-SRV-01).
+# #
+# # Editing topology.primaries.members (or a secondary pool's members) makes the operator scale
+# # the underlying StatefulSet, but it does NOT run `ENABLE SERVER` against the Neo4j cluster for
+# # the newly-created members. A new pod joins Kubernetes and becomes Ready, but Neo4j will NOT
+# # route data to it (it will not show as Enabled in `SHOW SERVERS`) until you manually run, via
+# # cypher-shell against an existing primary:
+# #
+# #   SHOW SERVERS;
+# #   ENABLE SERVER "<serverId-of-the-new-member>";
+# #
+# # Do this for every newly added ordinal after applying this file. Scale-in (removing members)
+# # similarly needs a manual `DEALLOCATE DATABASES FROM SERVER ...` / `DROP SERVER ...` sequence
+# # before deleting the pod, to avoid orphaning database replicas.
+# ############################################################################################
+#
+# Prerequisites: none (or apply after examples/cluster/01-minimal-3-primaries.yaml to see the
+#   scale-out in place; note the two files use different metadata.name values).
+# Apply: kubectl apply -f examples/cluster/13-scale-out.yaml
+# Related README: ../README.md#what-is-not-demonstrated-yet
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-scale
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 5
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

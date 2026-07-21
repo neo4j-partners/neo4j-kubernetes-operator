@@ -1,0 +1,44 @@
+# Purpose: 3 primaries + 1 analytics secondary (GDS + Bloom) + 1 read secondary (APOC).
+#   GDS and Bloom must live on secondaries.analytics, not secondaries.read (CRD-enforced).
+# Prerequisites: apply examples/secrets/plugin-licenses.yaml first — dummy license Secrets;
+#   replace "license: REPLACE_ME" with real GDS/Bloom license file contents before relying on
+#   Enterprise features of those plugins.
+# Apply:
+#   kubectl apply -f examples/secrets/plugin-licenses.yaml
+#   kubectl apply -f examples/cluster/03-pools-analytics-read.yaml
+# Related README: ../README.md#cluster , ../README.md#tls--auth--plugin-prerequisites
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-pools
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    secondaries:
+      analytics:
+        members: 1
+        plugins: [gds, bloom]
+      read:
+        members: 1
+        plugins: [apoc]
+    minimumMembers: 3
+  pluginDefinitions:
+    apoc: {}
+    gds:
+      licenseSecretRef: gds-license
+    bloom:
+      licenseSecretRef: bloom-license
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
