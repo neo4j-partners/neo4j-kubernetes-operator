@@ -340,6 +340,69 @@ func ValidateBoltBYOShape(neo4j *neo4jv1beta1.Neo4j) error {
 	return requireBYOMaterial("bolt", p)
 }
 
+// BoltTLSEnabled is true when BYO bolt material is present (server.bolt.tls_level REQUIRED).
+func BoltTLSEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+	return PolicyMaterialPresent(policyOf(neo4j, "bolt"))
+}
+
+// SecretKeyNeed is a Secret name + data key required for BYO TLS mounts.
+type SecretKeyNeed struct {
+	SecretName string
+	Key        string
+}
+
+// RequiredSecretKeys lists Secret data keys that must exist for active BYO policies.
+func RequiredSecretKeys(neo4j *neo4jv1beta1.Neo4j) []SecretKeyNeed {
+	if !TrustEnabled(neo4j) {
+		return nil
+	}
+	var out []SecretKeyNeed
+	seen := map[string]struct{}{}
+	add := func(secret, key string) {
+		if secret == "" || key == "" {
+			return
+		}
+		id := secret + "\x00" + key
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, SecretKeyNeed{SecretName: secret, Key: key})
+	}
+	for _, def := range byoPolicies {
+		spec, ok := policyActive(neo4j, def)
+		if !ok {
+			continue
+		}
+		keySub := defaultPrivateKey
+		if spec.PrivateKey.SubPath != "" {
+			keySub = spec.PrivateKey.SubPath
+		}
+		certSub := defaultPublicCert
+		if spec.PublicCertificate.SubPath != "" {
+			certSub = spec.PublicCertificate.SubPath
+		}
+		add(spec.PrivateKey.SecretName, keySub)
+		add(spec.PublicCertificate.SecretName, certSub)
+		if spec.TrustedCerts == nil {
+			continue
+		}
+		for _, src := range spec.TrustedCerts.Sources {
+			if src.Secret == nil || src.Secret.Name == "" {
+				continue
+			}
+			// Whole-secret projection — keys unknown; existence checked via BYOSecretNames.
+			for _, item := range src.Secret.Items {
+				if item.Key == "" {
+					continue
+				}
+				add(src.Secret.Name, item.Key)
+			}
+		}
+	}
+	return out
+}
+
 // BYOSecretNames returns Secret names referenced by enabled BYO policies.
 func BYOSecretNames(neo4j *neo4jv1beta1.Neo4j) []string {
 	if !TrustEnabled(neo4j) {

@@ -177,6 +177,47 @@ func TestValidateHTTPSBYOShapeRequiresBolt(t *testing.T) {
 	}
 }
 
+func TestRequiredSecretKeys(t *testing.T) {
+	keys := RequiredSecretKeys(clusterWithTrust())
+	want := map[string]string{
+		"cluster-key":  "private.key",
+		"cluster-cert": "public.crt",
+		"cluster-ca":   "ca.crt",
+	}
+	if len(keys) != len(want) {
+		t.Fatalf("keys = %#v", keys)
+	}
+	for _, k := range keys {
+		if want[k.SecretName] != k.Key {
+			t.Fatalf("unexpected %#v", k)
+		}
+	}
+	names := BYOSecretNames(clusterWithTrust())
+	if len(names) != 3 {
+		t.Fatalf("names = %#v", names)
+	}
+	if BoltTLSEnabled(clusterWithTrust()) {
+		t.Fatal("cluster-only trust should not enable bolt TLS")
+	}
+	if !BoltTLSEnabled(standaloneWithBoltTrust()) {
+		t.Fatal("expected bolt TLS on standalone bolt trust")
+	}
+}
+
+func TestRequiredSecretKeysCustomSubPath(t *testing.T) {
+	neo4j := standaloneWithBoltTrust()
+	neo4j.Spec.Trust.Certificates.Bolt.PrivateKey.SubPath = "tls.key"
+	neo4j.Spec.Trust.Certificates.Bolt.PublicCertificate.SubPath = "tls.crt"
+	keys := RequiredSecretKeys(neo4j)
+	got := map[string]string{}
+	for _, k := range keys {
+		got[k.SecretName] = k.Key
+	}
+	if got["dev-bolt-key"] != "tls.key" || got["dev-bolt-cert"] != "tls.crt" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
 func clusterWithTrust() *neo4jv1beta1.Neo4j {
 	return &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},

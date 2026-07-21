@@ -32,20 +32,43 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Done()
 	}
 	for _, name := range rendertrust.BYOSecretNames(neo4j) {
-		if err := r.requireSecret(ctx, neo4j.Namespace, name); err != nil {
+		if _, err := r.getSecret(ctx, neo4j.Namespace, name); err != nil {
+			return shared.Failed(err)
+		}
+	}
+	for _, need := range rendertrust.RequiredSecretKeys(neo4j) {
+		secret, err := r.getSecret(ctx, neo4j.Namespace, need.SecretName)
+		if err != nil {
+			return shared.Failed(err)
+		}
+		if err := requireSecretKey(secret, need.Key); err != nil {
 			return shared.Failed(err)
 		}
 	}
 	return shared.Done()
 }
 
-func (r *Reconciler) requireSecret(ctx context.Context, namespace, name string) error {
+func (r *Reconciler) getSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
 	var secret corev1.Secret
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &secret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("trust secret %q not found in namespace %q", name, namespace)
+			return nil, fmt.Errorf("trust secret %q not found in namespace %q", name, namespace)
 		}
-		return fmt.Errorf("get trust secret %q: %w", name, err)
+		return nil, fmt.Errorf("get trust secret %q: %w", name, err)
+	}
+	return &secret, nil
+}
+
+func requireSecretKey(secret *corev1.Secret, key string) error {
+	if secret.Data == nil {
+		return fmt.Errorf("trust secret %q missing data key %q", secret.Name, key)
+	}
+	v, ok := secret.Data[key]
+	if !ok {
+		return fmt.Errorf("trust secret %q missing data key %q", secret.Name, key)
+	}
+	if len(v) == 0 {
+		return fmt.Errorf("trust secret %q data key %q is empty", secret.Name, key)
 	}
 	return nil
 }
