@@ -1,6 +1,8 @@
 package workload
 
 import (
+	"maps"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -292,11 +294,16 @@ func volumeClaimTemplate(ctx render.Context) corev1.PersistentVolumeClaim {
 
 // OperandServiceAccount builds the workload ServiceAccount.
 func OperandServiceAccount(ctx render.Context) *corev1.ServiceAccount {
-	return &corev1.ServiceAccount{
+	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.OperandServiceAccountName(),
 			Namespace: ctx.Namespace(),
 			Labels:    ctx.CommonLabels("workload"),
 		},
 	}
+	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.ServiceAccount != nil &&
+		len(ctx.Neo4j.Spec.Security.ServiceAccount.Annotations) > 0 {
+		sa.Annotations = maps.Clone(ctx.Neo4j.Spec.Security.ServiceAccount.Annotations)
+	}
+	return sa
 }

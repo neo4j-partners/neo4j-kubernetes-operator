@@ -282,3 +282,23 @@ func TestStandaloneContainerPortsIncludeOptionalListeners(t *testing.T) {
 		}
 	}
 }
+
+func TestOperandServiceAccountAnnotations(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Security: &neo4jv1beta1.SecuritySpec{
+				ServiceAccount: &neo4jv1beta1.ServiceAccountSpec{
+					Annotations: map[string]string{
+						"azure.workload.identity/client-id": "abc-123",
+					},
+				},
+			},
+		},
+	}
+	sa := OperandServiceAccount(render.StandaloneContext(neo4j))
+	if sa.Annotations["azure.workload.identity/client-id"] != "abc-123" {
+		t.Fatalf("annotations = %#v", sa.Annotations)
+	}
+}

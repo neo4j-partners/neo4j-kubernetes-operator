@@ -38,6 +38,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: saDesired.Name, Namespace: saDesired.Namespace}}
 	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sa, func() error {
 		sa.Labels = saDesired.Labels
+		sa.Annotations = saDesired.Annotations
 		return nil
 	}); err != nil {
 		return shared.Failed(err)
