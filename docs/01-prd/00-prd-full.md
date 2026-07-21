@@ -38,13 +38,13 @@ V1 focuses on the **`Neo4j` CRD only**:
 
 - Deploy **Standalone** or **Cluster** (Enterprise) from one manifest
 - **Per-pool StatefulSets** for primaries, analytics, and read replicas
-- **Dynamic PVC** storage, **ClusterIP** exposure (HTTP + Bolt)
-- **Cluster inter-member TLS** via bring-your-own secrets
+- **Storage** Dynamic/Existing data + aux volumes + mounts; **Service** ClusterIP / NodePort / LoadBalancer (HTTP + Bolt + optional HTTPS)
+- **BYO TLS** via `spec.trust` (cluster / bolt / https)
 - **Scale** pool members with automated `ENABLE SERVER` / drain
 - **Config changes** via controlled restart
 - **Status** with Ready / Installed / Error conditions
 
-Backup, restore, monitoring, Neo4j version upgrade, external exposure (LoadBalancer, HTTPS), and day-2 CRDs are **explicitly deferred** to V1.1 / V2.
+Backup/restore **CRDs**, Ingress, ServiceMonitor / full monitoring catalog, cert-manager, and Neo4j version upgrade are **deferred** to V1.1 / V2.
 
 ### Why now
 
@@ -126,7 +126,7 @@ This product definition is authored from **Professional Services (PS)** field ex
 
 **Infrastructure (MVP path)**
 
-- **G8** — **Storage**: dynamic PVC for data ([BDR-005](../02-technical-design/decision-records/business/005-storage-volume-mode.md))
+- **G8** — **Storage**: data Dynamic/Existing + aux Share/Dynamic/Existing + mounts ([BDR-005](../02-technical-design/decision-records/business/005-storage-volume-mode.md))
 - **G9** — **Networking**: ClusterIP with HTTP + Bolt; operator-derived internals in Cluster mode ([BDR-007](../02-technical-design/decision-records/business/006-service-exposure-connectivity.md))
 - **G10** — **Cluster TLS** via BYO secrets when `mode: Cluster` ([BDR-006](../02-technical-design/decision-records/business/007-tls-trust-model.md))
 - **G11** — **Config** passthrough map + default JVM ([BDR-008](../02-technical-design/decision-records/business/008-neo4j-config-surface.md))
@@ -542,14 +542,15 @@ Detail: [`13-roadmap.md`](13-roadmap.md). Engineering milestones: [`../02-techni
 |-------|----------|
 | Operator | YAML install, single-namespace, reconcile, basic status, RBAC, uninstall |
 | Workload | Standalone + Cluster, per-pool STS, scale, config restart |
-| Storage | Dynamic PVC |
-| Network | ClusterIP, HTTP + Bolt |
-| Security | Enterprise license, password Secret, cluster TLS (BYO) |
+| Storage | Dynamic/Existing data + aux volumes + secret/additional mounts |
+| Network | ClusterIP / NodePort / LoadBalancer; HTTP + Bolt (+ HTTPS with trust) |
+| Security | Enterprise license, password Secret, BYO TLS (bolt/https/cluster) |
+| Scheduling | `spec.scheduling` + custom probes |
 | Plugins | `pluginDefinitions` + pool refs |
 
 ### V1.1 — hardening & exposure
 
-LoadBalancer / NodePort · HTTPS + Bolt TLS + ingress · reverse proxy · `features.monitoring` · storage `Existing` / aux volumes · multi-namespace scope · custom scheduling.
+Ingress / reverse proxy · `features.monitoring` ServiceMonitor · multi-namespace scope · cert-manager TLS.
 
 ### V2 — day-2 platform
 

@@ -2,7 +2,7 @@
 
 Deploy a minimal single-instance Neo4j (Enterprise) in **Standalone** mode.
 
-**V1 supported** (Slice 1): Dynamic storage, generated password, ClusterIP Bolt + HTTP.
+**Supported:** Dynamic or Existing data storage, aux volumes, generated/BYO password, ClusterIP (or NodePort/LoadBalancer), optional BYO TLS.
 
 Assumes the operator is already installed. If not, pick a platform quickstart:
 
@@ -52,6 +52,8 @@ spec:
   auth:
     generatePassword: true
 ```
+
+More storage patterns: [`examples/storage/`](../../../examples/storage/).
 
 ## 2. Watch progress
 
@@ -113,7 +115,10 @@ kubectl port-forward -n default svc/dev 7474:7474
 | Goal | Field |
 |------|-------|
 | Larger disk | `spec.storage.volumes.data.dynamic.size` |
-| StorageClass | `spec.storage.volumes.data.dynamic.storageClassName` |
+| StorageClass | `spec.storage.volumes.data.dynamic.storageClassName` (omit = cluster default) |
+| Existing PVC | `spec.storage.volumes.data.mode: Existing` + `existing.claimName` |
+| Aux volumes | `spec.storage.volumes.{backups,logs,metrics,import,licenses}` |
+| Secret mounts | `spec.storage.secretMounts` |
 | Existing password Secret | `spec.auth.passwordSecretRef.name` (disable `generatePassword`) |
 | Neo4j config | `spec.config.neo4j` (key-value → `neo4j.conf`) |
 | JVM flags | `spec.config.jvm.additionalArguments` |

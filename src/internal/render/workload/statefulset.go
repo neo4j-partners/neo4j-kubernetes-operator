@@ -5,17 +5,16 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
+	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
 const (
-	dataVolumeName      = "data"
 	neo4jConfVolumeName = "neo4j-conf"
 	apocConfVolumeName  = "apoc-conf"
 	// configVolumeDefaultMode matches Helm (neo4j-statefulset.yaml defaultMode: 0440).
@@ -32,7 +31,6 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		pullPolicy = ctx.Neo4j.Spec.Image.PullPolicy
 	}
 
-	vct := volumeClaimTemplate(ctx)
 	configMode := configVolumeDefaultMode
 	container := corev1.Container{
 		Name:            "neo4j",
@@ -42,7 +40,6 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Env:             neo4jContainerEnv(ctx),
 		SecurityContext: defaultContainerSecurityContext(),
 		VolumeMounts: []corev1.VolumeMount{
-			{Name: dataVolumeName, MountPath: "/data"},
 			// Helm mounts projected config fragments at /config/neo4j.conf (directory).
 			{Name: neo4jConfVolumeName, MountPath: "/config/neo4j.conf"},
 		},
@@ -62,6 +59,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Containers:         []corev1.Container{container},
 		Volumes:            volumes,
 	}
+	storageVCTs := renderstorage.Apply(ctx, &podSpec.Containers[0], &podSpec)
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
 	rendertrust.AppendVolumes(ctx, &podSpec.Containers[0], &podSpec)
 	applyScheduling(ctx, &podSpec)
@@ -88,7 +86,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 				},
 				Spec: podSpec,
 			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{vct},
+			VolumeClaimTemplates: storageVCTs,
 		},
 	}
 }
@@ -260,36 +258,6 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 		},
 	})
 	return env
-}
-
-func volumeClaimTemplate(ctx render.Context) corev1.PersistentVolumeClaim {
-	size := ctx.DataVolumeSize()
-	storageClass := ctx.DataStorageClassName()
-	accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
-	if ctx.Neo4j.Spec.Storage != nil && ctx.Neo4j.Spec.Storage.Volumes != nil &&
-		ctx.Neo4j.Spec.Storage.Volumes.Data.Dynamic != nil &&
-		ctx.Neo4j.Spec.Storage.Volumes.Data.Dynamic.AccessMode != "" {
-		accessModes = []corev1.PersistentVolumeAccessMode{
-			corev1.PersistentVolumeAccessMode(ctx.Neo4j.Spec.Storage.Volumes.Data.Dynamic.AccessMode),
-		}
-	}
-
-	spec := corev1.PersistentVolumeClaimSpec{
-		AccessModes: accessModes,
-		Resources: corev1.VolumeResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceStorage: resource.MustParse(size),
-			},
-		},
-	}
-	if storageClass != "" {
-		spec.StorageClassName = &storageClass
-	}
-
-	return corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: dataVolumeName},
-		Spec:       spec,
-	}
 }
 
 // OperandServiceAccount builds the workload ServiceAccount.

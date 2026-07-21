@@ -1,0 +1,22 @@
+# Purpose: Minimal Standalone with Dynamic data volume (10Gi, cluster default StorageClass).
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/storage/01-dynamic-data.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-dynamic
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

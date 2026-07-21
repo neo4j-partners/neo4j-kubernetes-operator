@@ -1,0 +1,57 @@
+# Purpose: Kitchen-sink storage example — Dynamic data+StorageClass, logs/metrics Share,
+#   backups Dynamic, additionalMounts, and secretMounts.
+# Prerequisites: apply companion Secret first —
+#   kubectl apply -f examples/storage/10-secret-mounts-secret.yaml
+#   (and a cluster with StorageClass "managed-csi", e.g. AKS)
+# Apply: kubectl apply -f examples/storage/11-full.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-full
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 20Gi
+          storageClassName: managed-csi
+          labels:
+            app: neo4j-data
+      logs:
+        mode: Share
+        shareFrom: data
+      metrics:
+        mode: Share
+        shareFrom: data
+      backups:
+        mode: Dynamic
+        dynamic:
+          size: 20Gi
+    additionalMounts:
+      - name: extra-data
+        mountPath: /extra-data
+        volume:
+          name: extra-data
+          emptyDir: {}
+    secretMounts:
+      creds:
+        secretName: dev-storage-secret-creds
+        mountPath: /var/secrets/creds
+        items:
+          - key: config.txt
+            path: config.txt
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      backup: 6362
+  auth:
+    generatePassword: true

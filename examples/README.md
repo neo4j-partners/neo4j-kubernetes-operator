@@ -24,8 +24,9 @@ for schema fields that are currently no-ops).
    ```
 
 Every `metadata.name` across this tree is unique, so you can `kubectl apply -f examples/standalone/`
-or `-f examples/cluster/` recursively to stand up many examples side by side in one namespace
-(mind resource/PVC usage — each is a full StatefulSet with persistent storage).
+or `-f examples/cluster/` / `-f examples/storage/` recursively to stand up many examples side by side in
+one namespace (mind resource/PVC usage — each Neo4j CR is a full StatefulSet with persistent storage;
+apply companion PVCs/Secrets before CRs that reference them).
 
 ## Standalone
 
@@ -66,13 +67,35 @@ or `-f examples/cluster/` recursively to stand up many examples side by side in 
 | [`cluster/13-scale-out.yaml`](cluster/13-scale-out.yaml) | `primaries.members` scale-out — **manual `ENABLE SERVER` required**, see file |
 | [`cluster/14-full.yaml`](cluster/14-full.yaml) | Kitchen sink — everything above combined (`prod-full`) |
 
+## Storage
+
+Full catalog: [`storage/README.md`](storage/README.md). Demonstrates Dynamic / Existing data modes,
+auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `secretMounts`.
+
+| File | Demonstrates |
+|------|--------------|
+| [`storage/01-dynamic-data.yaml`](storage/01-dynamic-data.yaml) | Minimal Dynamic data |
+| [`storage/02-dynamic-storageclass.yaml`](storage/02-dynamic-storageclass.yaml) | Dynamic + StorageClass + labels (AKS) |
+| [`storage/03-existing-claimname.yaml`](storage/03-existing-claimname.yaml) | Existing `claimName` (+ companion PVC) — Standalone-oriented |
+| [`storage/04-existing-volume-emptydir.yaml`](storage/04-existing-volume-emptydir.yaml) | Existing emptyDir (lab) |
+| [`storage/05-existing-volumeclaimtemplate.yaml`](storage/05-existing-volumeclaimtemplate.yaml) | Existing `volumeClaimTemplate` |
+| [`storage/06-aux-share-logs-metrics.yaml`](storage/06-aux-share-logs-metrics.yaml) | logs/metrics Share from data |
+| [`storage/07-aux-dynamic-backups.yaml`](storage/07-aux-dynamic-backups.yaml) | backups Dynamic + backup listener |
+| [`storage/08-aux-existing-import.yaml`](storage/08-aux-existing-import.yaml) | import Existing emptyDir (lab) |
+| [`storage/09-additional-mounts.yaml`](storage/09-additional-mounts.yaml) | `additionalMounts` |
+| [`storage/10-secret-mounts.yaml`](storage/10-secret-mounts.yaml) | `secretMounts` (+ companion Secret) |
+| [`storage/11-full.yaml`](storage/11-full.yaml) | Kitchen sink (`dev-storage-full`) |
+
 ## Feature × topology matrix
 
 | Feature | Standalone | Cluster |
 |---------|------------|---------|
 | Minimal deploy | [`standalone/01`](standalone/01-minimal.yaml) | [`cluster/01`](cluster/01-minimal-3-primaries.yaml) |
 | Existing auth Secret | [`standalone/02`](standalone/02-auth-existing-secret.yaml) | *(same field, not re-demonstrated)* |
-| StorageClass | [`standalone/03`](standalone/03-storage-storageclass.yaml) | [`cluster/14`](cluster/14-full.yaml) |
+| StorageClass | [`standalone/03`](standalone/03-storage-storageclass.yaml), [`storage/02`](storage/02-dynamic-storageclass.yaml) | [`cluster/14`](cluster/14-full.yaml) |
+| Existing data (`claimName` / `volume` / VCT) | [`storage/03`](storage/03-existing-claimname.yaml)–[`05`](storage/05-existing-volumeclaimtemplate.yaml) | *(claimName Standalone-oriented; prefer Dynamic/VCT)* |
+| Aux Share / Dynamic / Existing | [`storage/06`](storage/06-aux-share-logs-metrics.yaml)–[`08`](storage/08-aux-existing-import.yaml) | *(same fields)* |
+| `additionalMounts` / `secretMounts` | [`storage/09`](storage/09-additional-mounts.yaml), [`storage/10`](storage/10-secret-mounts.yaml) | *(same fields)* |
 | Service: ClusterIP | [`standalone/04`](standalone/04-service-clusterip.yaml) | [`cluster/01`](cluster/01-minimal-3-primaries.yaml) |
 | Service: LoadBalancer | [`standalone/05`](standalone/05-service-loadbalancer.yaml) | [`cluster/04`](cluster/04-service-loadbalancer.yaml) |
 | Service: NodePort | [`standalone/06`](standalone/06-service-nodeport.yaml) | [`cluster/05`](cluster/05-service-nodeport.yaml) |
@@ -115,11 +138,10 @@ workload. They are intentionally left out of every example above:
 | Field | Status |
 |-------|--------|
 | `resources` | schema-only — container has no resource requests/limits set by the operator |
-| `security.*` (podSecurityContext, containerSecurityContext, serviceAccount.annotations, networkPolicy) | schema-only — operator applies its own fixed security context and ServiceAccount |
+| `security.podSecurityContext` / `containerSecurityContext` / `networkPolicy` | schema-only |
 | `podDisruptionBudget` | schema-only — no PDB is created |
 | `maintenance.offlineMode` | schema-only |
 | `podTemplate` (initContainers, sidecars, env) | schema-only |
-| `storage.volumes.data.mode: Existing` / any `Share` mode | schema-only — only `Dynamic` is wired |
 | `trust.certManager` | schema-only — only BYO Secret TLS (`privateKey`/`publicCertificate`) is wired |
 | `connectivity.ingress.enabled: true` | schema-only — no Ingress object is created |
 | `connectivity.reverseProxy` | schema-only |

@@ -1,0 +1,26 @@
+# Purpose: Standalone Existing data volume via claimName (bind a pre-created PVC).
+# Prerequisites: apply companion PVC first —
+#   kubectl apply -f examples/storage/03-existing-claimname-pvc.yaml
+# Apply: kubectl apply -f examples/storage/03-existing-claimname.yaml
+#
+# Standalone only recommended (RWO shared claim): one PVC cannot safely back multiple
+# Cluster members under ReadWriteOnce.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-existing-claim
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Existing
+        existing:
+          claimName: dev-storage-claim-data
+  auth:
+    generatePassword: true

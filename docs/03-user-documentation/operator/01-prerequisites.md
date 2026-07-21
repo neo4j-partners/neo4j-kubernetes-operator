@@ -20,14 +20,19 @@ Before installing the Neo4j operator, ensure your environment meets the followin
 
 ## Storage
 
-Standalone Neo4j uses a **Dynamic** PersistentVolumeClaim (`spec.storage.volumes.data`).
+`Neo4j` requires `spec.storage.volumes.data` (`Dynamic` or `Existing`).
 
-- The cluster must have a **default StorageClass**, or you must set `storageClassName` on the `Neo4j` CR.
-- Verify:
+- **Dynamic:** cluster needs a default StorageClass, or set `dynamic.storageClassName` on the CR.
+- **Existing:** provide a PVC (`claimName`), raw `volume`, or `volumeClaimTemplate` (optional `selector`).
+- **Aux volumes** (`backups`, `logs`, `metrics`, `import`, `licenses`): `Share` / `Dynamic` / `Existing`.
+
+Verify StorageClasses:
 
 ```bash
 kubectl get storageclass
 ```
+
+Examples: [`examples/storage/`](../../../examples/storage/).
 
 ## Neo4j image
 

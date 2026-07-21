@@ -20,17 +20,17 @@ Cluster Size,Scale out/in,NEO-2-011,NEO-3-011-CSZ-01,Change cluster size after i
 Server Enablement,Automatic enable server,NEO-2-011,NEO-3-011-SRV-01,Enable servers added outside initial cluster size using operations job or operator logic.,Scale-specific AC,AC-NEO-SCALE,Yes
 PVC Provisioning Mode,Default StorageClass,NEO-2-006,NEO-3-006-PVC-01,Use Kubernetes default StorageClass to provision PVC.,Storage-specific AC,AC-NEO-STORAGE-DEFAULT,Yes
 PVC Provisioning Mode,Existing StorageClass,NEO-2-006,NEO-3-006-PVC-02,Use an existing named StorageClass to dynamically provision PVC.,Storage-specific AC,AC-NEO-STORAGE-DYNAMIC,Yes
-PVC Provisioning Mode,Existing PVC,NEO-2-006,NEO-3-006-PVC-03,Bind Neo4j to an existing PVC or explicit volume.,Storage-specific AC,AC-NEO-STORAGE-EXISTING,No
-PVC Provisioning Mode,Selector,NEO-2-006,NEO-3-006-PVC-04,Bind to existing volumes matching selectors.,Storage-specific AC,AC-NEO-STORAGE-SELECTOR,No
-PVC Provisioning Mode,VolumeClaimTemplate,NEO-2-006,NEO-3-006-PVC-05,Use a provided volumeClaimTemplate.,Storage-specific AC,AC-NEO-STORAGE-VCT,No
+PVC Provisioning Mode,Existing PVC,NEO-2-006,NEO-3-006-PVC-03,Bind Neo4j to an existing PVC or explicit volume.,Storage-specific AC,AC-NEO-STORAGE-EXISTING,Yes
+PVC Provisioning Mode,Selector,NEO-2-006,NEO-3-006-PVC-04,Bind to existing volumes matching selectors.,Storage-specific AC,AC-NEO-STORAGE-SELECTOR,Yes
+PVC Provisioning Mode,VolumeClaimTemplate,NEO-2-006,NEO-3-006-PVC-05,Use a provided volumeClaimTemplate.,Storage-specific AC,AC-NEO-STORAGE-VCT,Yes
 Cloud Storage,With Workload Identity,NEO-2-006,NEO-3-006-CLD-01,Access cloud object storage using platform workload identity (GKE WI / AKS WI / EKS IRSA).,Cloud storage AC,AC-NEO-CLOUDSTORAGE-MI,Yes
 Cloud Storage,Without Workload Identity,NEO-2-006,NEO-3-006-CLD-02,Access cloud object storage using mounted credentials or Secrets.,Cloud storage AC,AC-NEO-CLOUDSTORAGE,Yes
 Volume Role,Data,NEO-2-006,NEO-3-006-VOL-01,Persistent storage for database data.,Storage-specific AC,AC-NEO-STORAGE,Yes
 Volume Role,Backups,NEO-2-006; NEO-2-013,NEO-3-006-VOL-02,Volume for backup files.,Backup/storage AC,AC-NEO-BACKUP,Yes
 Volume Role,Logs,NEO-2-006; NEO-2-016,NEO-3-006-VOL-03,Volume for logs.,Logging/storage AC,AC-NEO-LOGGING,Yes
-Volume Role,Metrics,NEO-2-006; NEO-2-015,NEO-3-006-VOL-04,Volume for CSV metrics.,Monitoring/storage AC,AC-NEO-MONITORING,No
-Volume Role,Import,NEO-2-006,NEO-3-006-VOL-05,Volume mounted to /import.,Storage AC,AC-NEO-STORAGE,No
-Volume Role,Licenses,NEO-2-006,NEO-3-006-VOL-06,Volume mounted to /licenses.,License/storage AC,AC-NEO-LICENSE,No
+Volume Role,Metrics,NEO-2-006; NEO-2-015,NEO-3-006-VOL-04,Volume for CSV metrics.,Monitoring/storage AC,AC-NEO-MONITORING,Yes
+Volume Role,Import,NEO-2-006,NEO-3-006-VOL-05,Volume mounted to /import.,Storage AC,AC-NEO-STORAGE,Yes
+Volume Role,Licenses,NEO-2-006,NEO-3-006-VOL-06,Volume mounted to /licenses.,License/storage AC,AC-NEO-LICENSE,Yes
 Service Type,ClusterIP,NEO-2-007,NEO-3-007-SVC-01,Expose Neo4j via internal ClusterIP service (in-cluster access only).,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-CLUSTERIP,Yes
 Service Type,NodePort,NEO-2-007,NEO-3-007-SVC-02,Expose Neo4j externally via fixed node ports.,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-NODEPORT,No
 Service Type,LoadBalancer,NEO-2-007,NEO-3-007-SVC-03,Expose Neo4j externally via cloud LoadBalancer.,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-LB,Yes

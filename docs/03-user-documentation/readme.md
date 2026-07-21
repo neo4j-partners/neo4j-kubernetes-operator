@@ -48,7 +48,7 @@ This estate is separate from product and design documentation:
 |-----|-------------|
 | [neo4j/readme.md](neo4j/readme.md) | Neo4j install documentation index |
 | [01-quickstart-standalone.md](neo4j/01-quickstart-standalone.md) | Standalone CR, status, connect |
-| [02-quickstart-cluster.md](neo4j/02-quickstart-cluster.md) | Cluster sample (preview — Slice 2) |
+| [02-quickstart-cluster.md](neo4j/02-quickstart-cluster.md) | Cluster sample |
 
 ### Reference
 
@@ -62,7 +62,7 @@ This estate is separate from product and design documentation:
 
 See [V1 scope lock](../00-discovery/13-v1-scope-lock.md) for the full list. In short:
 
-- **Supported now (Slice 1):** Standalone `Neo4j`, Dynamic data volume, generated auth Secret, ClusterIP Bolt/HTTP.
-- **Deferred:** Cluster formation, TLS, Ingress, backup, monitoring, multi-namespace operator scope.
+- **Supported:** Standalone + Cluster `Neo4j`; storage Dynamic/Existing + aux volumes + mounts; generated/BYO auth; ClusterIP/NodePort/LoadBalancer; BYO TLS (`spec.trust`); `spec.scheduling` / probes.
+- **Deferred:** Ingress, backup/restore CRDs, ServiceMonitor / full monitoring catalog, cert-manager, multi-namespace operator scope, Neo4j version upgrade.
 
-Design details: [BDR-003](../02-technical-design/decision-records/business/operator/003-operator-install-scope.md), [CRD spec](../02-technical-design/crd-spec/neo4j/spec.md).
+Examples: [`examples/storage/`](../../examples/storage/). Design: [BDR-005](../02-technical-design/decision-records/business/neo4j/005-storage-volume-mode.md), [CRD spec](../02-technical-design/crd-spec/neo4j/spec.md).

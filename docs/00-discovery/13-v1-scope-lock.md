@@ -4,7 +4,7 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 
 **Derived from**: `01-functional_requirements.csv` (`V1=Yes`) + accepted BDRs (`design/decision-records/readme.md`).
 
-**Status**: draft — aligned with FR CSV review 2026-06-22.
+**Status**: draft — aligned with implemented storage (BDR-005) and FR CSV 2026-07-17.
 
 ---
 
@@ -12,8 +12,8 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 
 1. **Neo4j CRD only** — V1 delivers the `Neo4j` workload operator; no backup/restore CRs, no neo4j-admin chart integration.
 2. **Simplest path wins** — when a BDR accepts multiple modes, V1 implements one variant; other fields stay in the CRD but are **not V1-supported**.
-3. **Backup out of V1** — `NEO-2-013`, `NEO-2-014`, `features.backup`, backup port, backup volumes deferred.
-4. **CRD ≥ implementation** — deferred options remain in OpenAPI for forward compatibility ([BDR-005] Existing modes, [BDR-007] LoadBalancer, etc.) but are not tested or documented as V1.
+3. **Backup workflows out of V1** — `NEO-2-013`, `NEO-2-014`, `features.backup`, backup port deferred; **`volumes.backups` mount is in scope** ([BDR-005]).
+4. **CRD ≥ implementation** — deferred options (cloud object storage, Ingress, backup CRDs, cert-manager) remain in OpenAPI for forward compatibility but are not V1-supported.
 
 ---
 
@@ -38,11 +38,12 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 | Scale | Per-pool StatefulSet + ENABLE SERVER | [BDR-009] |
 | Plugins | `pluginDefinitions` + pool refs | [BDR-004] |
 | Config | `spec.config` passthrough + default JVM | [BDR-008] |
-| Storage | `volumes.data.mode: Dynamic` + `storageClassName` + `size` | [BDR-005] |
-| Networking | ClusterIP; HTTP + Bolt; internals derived in Cluster | [BDR-007] |
-| TLS | Cluster policy BYO certs when `mode: Cluster` only | [BDR-006] |
+| Storage | Data `Dynamic`/`Existing`; aux `Share`/`Dynamic`/`Existing`; `additionalMounts` / `secretMounts` | [BDR-005] |
+| Networking | ClusterIP / NodePort / LoadBalancer; HTTP + Bolt (+ HTTPS); internals derived in Cluster | [BDR-007] |
+| TLS | BYO via `spec.trust` — cluster (Cluster mode); bolt/https (Cluster + Standalone) | [BDR-006] |
 | Auth | Generated or existing password Secret | — |
-| Probes | Operator defaults | — |
+| Scheduling | `spec.scheduling` wired to STS | — |
+| Probes | Operator defaults or `spec.probes` override | — |
 | Config change | Controlled / rolling restart | — |
 
 ---
@@ -51,14 +52,13 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 
 | Domain | FR IDs | Notes |
 |--------|--------|-------|
-| **Backup / restore** | NEO-2-013, NEO-2-014, NEO-3-013-*, NEO-3-014-* | Entire domain post-V1 |
-| **Monitoring / Prometheus** | NEO-2-015, NEO-3-015-* | `features.monitoring` post-V1 ([BDR-010]) |
+| **Backup / restore workflows** | NEO-2-013, NEO-2-014, NEO-3-013-*, NEO-3-014-* | CRDs / jobs post-V1; `volumes.backups` mount is in V1 |
+| **Monitoring ServiceMonitor / CSV/JMX/Graphite** | NEO-2-015, NEO-3-015-* (except volume) | Prometheus scrape + ServiceMonitor post-V1; `volumes.metrics` mount is in V1 |
+| **Cloud object storage** | NEO-3-006-CLD-01/02 | Workload identity / cloud creds post-V1 |
 | **Neo4j version upgrade** | NEO-2-012, NEO-3-012-* | `spec.version` at install only |
-| **Custom scheduling** | NEO-2-008, NEO-3-008-* | K8s defaults |
-| **LoadBalancer / NodePort** | NEO-3-007-SVC-02/03 | ClusterIP only |
-| **HTTPS / Bolt TLS / ingress** | NEO-3-005-TLS-01/02, NEO-3-007-PRT-02, PCMB-04+ | Plain HTTP+Bolt MVP |
-| **Storage modes other than Dynamic** | NEO-3-006-PVC-01/03/04/05, aux volumes | Existing/Share/selector post-V1 |
-| **Logging customization** | NEO-2-016, NEO-3-016-* | Neo4j defaults |
+| **Ingress / reverse proxy** | NEO-3-007-PRT-*, ingress rules | post-V1 |
+| **cert-manager / TLS reload** | NEO-3-005-TLS-04 | BYO Secrets only in V1 |
+| **Logging customization** | NEO-2-016, NEO-3-016-* | Neo4j defaults; `volumes.logs` mount is in V1 |
 | **Maintenance jobs** | NEO-2-017, NEO-3-017-* | post-V1 |
 | **Operator Helm / multi-scope / upgrade** | OP-1-004, OP-1-007, OP-2-001-PKG-02, SCOPE-02/03 | post-V1 |
 
@@ -78,12 +78,13 @@ spec:
     primaries: { members: 3 }
     secondaries:
       read: { members: 1 }
-  volumes:
-    data:
-      mode: Dynamic
-      dynamic:
-        size: 100Gi
-        storageClassName: gp3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 100Gi
+          storageClassName: gp3
   connectivity:
     listeners:
       bolt: 7687
@@ -93,14 +94,13 @@ spec:
       expose:
         - bolt
         - http
-  trust:                     # Cluster mode only
+  trust:                     # optional BYO TLS
     certificates:
       cluster:
         privateKey: { secretName: ..., subPath: ... }
         publicCertificate: { secretName: ..., subPath: ... }
   config: {}                 # optional passthrough
-  jvm:
-    useDefaults: true
+  # jvm under config in current CRD — see api-cheatsheet
 ```
 
 ---
@@ -109,4 +109,5 @@ spec:
 
 - [x] Align `02-acceptance_criteria_library.csv` V1 flags with `01-functional_requirements.csv`
 - [x] Align `04-test_catalog.csv` V1 flags with FR + AC library
+- [x] Align storage FRs / scope lock with BDR-005 implementation (Existing, aux, mounts)
 - [ ] Filter `04-test_catalog.csv` P0 gate to `V1=Yes` only for release validation

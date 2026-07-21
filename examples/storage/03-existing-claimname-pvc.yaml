@@ -1,0 +1,17 @@
+# Purpose: Companion PVC for 03-existing-claimname.yaml (bound via existing.claimName).
+# Prerequisites: none — apply this before the Neo4j CR.
+# Apply: kubectl apply -f examples/storage/03-existing-claimname-pvc.yaml
+#
+# Standalone only recommended (RWO shared claim): a single PVC cannot be mounted by
+# multiple Cluster pods with ReadWriteOnce.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dev-storage-claim-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: optional — omit to use the cluster default StorageClass

@@ -36,13 +36,12 @@ Tests: `V1=Yes` in [`../02-technical-design/04-test_catalog.csv`](../02-technica
 
 | Item | Notes |
 |------|-------|
-| LoadBalancer / NodePort | [BDR-007](../02-technical-design/decision-records/business/006-service-exposure-connectivity.md) |
-| HTTPS + Bolt TLS + ingress | [BDR-011](../02-technical-design/decision-records/business/neo4j/011-https-connector-tls-coupling.md) |
-| **Reverse proxy** + **ingress.rules** | [BDR-007](../02-technical-design/decision-records/business/neo4j/006-service-exposure-connectivity.md) Amendment F |
-| `features.monitoring` | [BDR-010](../02-technical-design/decision-records/business/neo4j/010-neo4j-features-catalog.md) |
-| Storage `Existing` / aux volumes | [BDR-005](../02-technical-design/decision-records/business/005-storage-volume-mode.md) |
+| Ingress / reverse proxy | [BDR-007](../02-technical-design/decision-records/business/neo4j/006-service-exposure-connectivity.md) Amendment F · [BDR-011](../02-technical-design/decision-records/business/neo4j/011-https-connector-tls-coupling.md) |
+| `features.monitoring` ServiceMonitor / CSV/JMX/Graphite | [BDR-010](../02-technical-design/decision-records/business/neo4j/010-neo4j-features-catalog.md) |
 | Multi-namespace operator scope | [BDR-003](../02-technical-design/decision-records/business/003-operator-install-scope.md) |
-| Custom scheduling & probes | FR `NEO-2-008`, `NEO-3-009-PROBE-02` |
+| cert-manager TLS / certificate reload | [BDR-006](../02-technical-design/decision-records/business/neo4j/007-tls-trust-model.md) |
+
+> **Shipped in MVP (removed from this table):** LoadBalancer/NodePort, BYO bolt/https/cluster TLS, `spec.scheduling` + custom probes, storage `Existing` / aux volumes / `secretMounts` ([BDR-005]).
 
 ---
 

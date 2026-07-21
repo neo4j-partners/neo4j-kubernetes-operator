@@ -1,0 +1,28 @@
+# Purpose: Dynamic data + import Existing emptyDir volume — lab only (import not persistent).
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/storage/08-aux-existing-import.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-import
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+      import:
+        mode: Existing
+        existing:
+          volume:
+            name: import
+            emptyDir: {}
+  auth:
+    generatePassword: true

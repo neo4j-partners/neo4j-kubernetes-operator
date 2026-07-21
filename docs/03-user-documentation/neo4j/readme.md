@@ -7,7 +7,7 @@ Guides for deploying and operating `Neo4j` custom resources (after the operator 
 | Doc | Description |
 |-----|-------------|
 | [01-quickstart-standalone.md](01-quickstart-standalone.md) | Standalone Neo4j — apply CR, watch status, connect, customize |
-| [02-quickstart-cluster.md](02-quickstart-cluster.md) | Cluster sample (preview — Slice 2, not yet supported) |
+| [02-quickstart-cluster.md](02-quickstart-cluster.md) | Cluster sample (primaries / secondaries) |
 
 ## Prerequisites
 

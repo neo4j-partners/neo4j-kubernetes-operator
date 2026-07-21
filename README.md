@@ -79,6 +79,21 @@ Every example is a full, apply-ready `Neo4j` manifest using only fields the oper
 | 14 | [`examples/standalone/14-image-pullsecrets.yaml`](examples/standalone/14-image-pullsecrets.yaml) | Custom image + pull secrets |
 | 15 | [`examples/standalone/15-full.yaml`](examples/standalone/15-full.yaml) | Kitchen sink |
 
+### Storage
+
+Full catalog: [`examples/storage/README.md`](examples/storage/README.md) — Dynamic / Existing data,
+aux `Share`/`Dynamic`/`Existing`, `additionalMounts`, and `secretMounts` are demonstrated there.
+
+| # | Example | What it tests |
+|---|---------|----------------|
+| 01 | [`examples/storage/01-dynamic-data.yaml`](examples/storage/01-dynamic-data.yaml) | Minimal Dynamic data |
+| 02 | [`examples/storage/02-dynamic-storageclass.yaml`](examples/storage/02-dynamic-storageclass.yaml) | Dynamic + StorageClass + labels |
+| 03 | [`examples/storage/03-existing-claimname.yaml`](examples/storage/03-existing-claimname.yaml) | Existing `claimName` (Standalone-oriented) |
+| 04–05 | [`04`](examples/storage/04-existing-volume-emptydir.yaml) / [`05`](examples/storage/05-existing-volumeclaimtemplate.yaml) | Existing emptyDir / volumeClaimTemplate |
+| 06–08 | [`06`](examples/storage/06-aux-share-logs-metrics.yaml)–[`08`](examples/storage/08-aux-existing-import.yaml) | Aux Share / Dynamic backups / Existing import |
+| 09–10 | [`09`](examples/storage/09-additional-mounts.yaml) / [`10`](examples/storage/10-secret-mounts.yaml) | `additionalMounts` / `secretMounts` |
+| 11 | [`examples/storage/11-full.yaml`](examples/storage/11-full.yaml) | Kitchen sink (`dev-storage-full`) |
+
 ### Cluster
 
 | # | Example | What it tests |
@@ -119,7 +134,10 @@ Also kept under [`config/samples/`](config/samples/) for kubebuilder scaffolding
 | Generated password | yes | yes | most examples |
 | Existing auth Secret | yes | yes | [`standalone/02`](examples/standalone/02-auth-existing-secret.yaml) |
 | Dynamic data PVC | yes | yes | all |
-| StorageClass | yes | yes | [`standalone/03`](examples/standalone/03-storage-storageclass.yaml) |
+| StorageClass | yes | yes | [`standalone/03`](examples/standalone/03-storage-storageclass.yaml), [`storage/02`](examples/storage/02-dynamic-storageclass.yaml) |
+| Existing data (`claimName` / `volume` / VCT) | yes | yes* | [`storage/03`](examples/storage/03-existing-claimname.yaml)–[`05`](examples/storage/05-existing-volumeclaimtemplate.yaml) |
+| Aux Share / Dynamic / Existing | yes | yes | [`storage/06`](examples/storage/06-aux-share-logs-metrics.yaml)–[`08`](examples/storage/08-aux-existing-import.yaml) |
+| `additionalMounts` / `secretMounts` | yes | yes | [`storage/09`](examples/storage/09-additional-mounts.yaml), [`storage/10`](examples/storage/10-secret-mounts.yaml) |
 | ClusterIP / NodePort / LB | yes | yes | `04`–`06` / cluster `04`–`05` |
 | HTTP + Bolt | yes | yes | defaults |
 | HTTPS (+ requires Bolt TLS) | yes | yes | [`standalone/07`](examples/standalone/07-tls-https-bolt.yaml), [`cluster/06`](examples/cluster/06-tls-full.yaml) |
@@ -135,6 +153,8 @@ Also kept under [`config/samples/`](config/samples/) for kubebuilder scaffolding
 | Multi-pool (analytics / read) | — | yes | [`cluster/03`](examples/cluster/03-pools-analytics-read.yaml) |
 | STS scale-out | — | STS yes; **ENABLE SERVER no** | [`cluster/13`](examples/cluster/13-scale-out.yaml) |
 | Status conditions / endpoints | yes | yes | `kubectl get neo4j -o yaml` |
+
+\*Existing `claimName` is Standalone-oriented (single RWO PVC); prefer Dynamic or `volumeClaimTemplate` for Cluster.
 
 Full matrix and “schema-only / no-op” fields: [`examples/README.md`](examples/README.md).
 
@@ -267,7 +287,6 @@ Tracked product gaps / schema fields that are **not** wired (do not rely on them
 | `resources` | No requests/limits from CR |
 | `security.*` | SA annotations / securityContext / NetworkPolicy not applied from CR |
 | PDB, Ingress, cert-manager | Deferred |
-| Storage `Existing` / `Share` | Only `Dynamic` |
 | LDAP, reverse proxy, multi-cluster | Deferred |
 | Neo4j version upgrade workflow | Deferred |
 

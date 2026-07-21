@@ -61,7 +61,7 @@ kubectl get sts,svc,secret,pvc -n default -l app.kubernetes.io/instance=dev
 
 - Confirm the operator pod is `Running`.
 - Check `status.conditions` for `Error` or `Ready=False` messages.
-- **Cluster mode** is not supported in Slice 1 — use `topology.mode: Standalone`.
+- For Cluster mode, confirm pool member counts and BYO `spec.trust` Secrets if TLS is enabled.
 
 ## PVC stays Pending
 

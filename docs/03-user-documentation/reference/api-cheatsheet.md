@@ -49,14 +49,17 @@ spec:
 | `edition`, `version`, `license` | Identity — V1: `enterprise` + `accept: "yes"` |
 | `topology` | `Standalone` or `Cluster` (+ pools for Cluster) |
 | `storage` | Volumes, extra mounts, secret mounts ([BDR-005](../../02-technical-design/decision-records/business/neo4j/005-storage-volume-mode.md)) |
-| `storage.volumes.data` | **Required** — `Dynamic` or `Existing` |
+| `storage.volumes.data` | **Required** — `Dynamic` or `Existing` (`claimName` / `volume` / `volumeClaimTemplate`) |
+| `storage.volumes.*` | Aux: `backups`, `logs`, `metrics`, `import`, `licenses` — `Share` / `Dynamic` / `Existing` |
+| `storage.additionalMounts` / `secretMounts` | Escape-hatch mounts |
 | `config.neo4j` | `neo4j.conf` drop-in keys |
 | `config.apoc` | `apoc.conf` drop-in keys |
 | `config.jvm` | JVM arguments |
 | `auth` | Generated or referenced password Secret |
-| `connectivity` | Listen ports, Services, Ingress (Ingress deferred V1) |
-| `trust` | TLS (deferred V1 Standalone) |
-| `features` | Backup, monitoring (mostly deferred V1) |
+| `connectivity` | Listen ports, Services, Ingress (Ingress deferred) |
+| `trust` | BYO TLS for bolt / https / cluster |
+| `scheduling` | nodeSelector, affinity, tolerations, … |
+| `features` | Backup connector, monitoring prometheus (ServiceMonitor deferred) |
 
 ## Status (automation)
 

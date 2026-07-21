@@ -45,7 +45,7 @@ AC-NEO-CONFIG,AC-NEO-CONFIG-002,Invalid configuration is rejected or surfaced wi
 AC-NEO-APOC,AC-NEO-APOC-001,APOC configuration values are applied to Neo4j.,NEO-3-003-APOC-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-APOC-CREDS,AC-NEO-APOC-CREDS-001,APOC credential secrets are mounted at the configured path.,NEO-3-003-APOC-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-SECRETS,AC-NEO-SECRETS-001,Neo4j initial password is generated or read from the configured Secret.,NEO-3-004-CRED-01,Yes,MVP — verifies V1 FR(s): NEO-3-004-CRED-01
-AC-NEO-SECRETS,AC-NEO-SECRETS-002,Secret mounts are available inside the Neo4j pod at the configured path.,NEO-3-004-CRED-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-SECRETS,AC-NEO-SECRETS-002,Secret mounts are available inside the Neo4j pod at the configured path.,NEO-3-004-SEC-01,Yes,MVP — secretMounts / additionalMounts
 AC-NEO-LDAP,AC-NEO-LDAP-001,LDAP password secret is mounted and referenced by Neo4j configuration.,NEO-3-004-SEC-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-IMAGE,AC-NEO-IMAGE-001,"Neo4j image registry, repository, tag, and pull policy are applied.",NEO-3-004-IMG-01,Yes,MVP — verifies V1 FR(s): NEO-3-004-IMG-01
 AC-NEO-IMAGE,AC-NEO-IMAGE-002,Image pull secrets are referenced by the Neo4j pod.,NEO-3-004-IMG-01,Yes,MVP — verifies V1 FR(s): NEO-3-004-IMG-01
@@ -55,11 +55,11 @@ AC-NEO-TLS,AC-NEO-TLS-003,Cluster communication uses configured TLS when enabled
 AC-NEO-TLS-RELOAD,AC-NEO-TLS-RELOAD-001,TLS certificate reload is enabled when configured.,NEO-3-005-TLS-04,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-STORAGE,AC-NEO-STORAGE-001,Data PVC is created or bound according to the selected storage variant.,NEO-3-006-VOL-01,Yes,MVP — verifies V1 FR(s): NEO-3-006-VOL-01
 AC-NEO-STORAGE,AC-NEO-STORAGE-002,Neo4j data persists across pod restart.,NEO-3-006-VOL-01,Yes,MVP — verifies V1 FR(s): NEO-3-006-VOL-01
-AC-NEO-STORAGE-DEFAULT,AC-NEO-STORAGE-DEFAULT-001,PVC uses the default StorageClass when default storage is selected.,NEO-3-006-PVC-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-STORAGE-DEFAULT,AC-NEO-STORAGE-DEFAULT-001,PVC uses the default StorageClass when default storage is selected.,NEO-3-006-PVC-01,Yes,MVP — omit storageClassName
 AC-NEO-STORAGE-DYNAMIC,AC-NEO-STORAGE-DYNAMIC-001,PVC uses the named StorageClass when dynamic storage is selected.,NEO-3-006-PVC-02,Yes,MVP — verifies V1 FR(s): NEO-3-006-PVC-02
-AC-NEO-STORAGE-EXISTING,AC-NEO-STORAGE-EXISTING-001,Neo4j binds to the configured existing PVC.,NEO-3-006-PVC-03,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-STORAGE-SELECTOR,AC-NEO-STORAGE-SELECTOR-001,Neo4j binds to a volume matching the configured selector.,NEO-3-006-PVC-04,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-STORAGE-VCT,AC-NEO-STORAGE-VCT-001,PVC is created from the configured volumeClaimTemplate.,NEO-3-006-PVC-05,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-STORAGE-EXISTING,AC-NEO-STORAGE-EXISTING-001,Neo4j binds to the configured existing PVC.,NEO-3-006-PVC-03,Yes,MVP — Existing.claimName / Existing.volume
+AC-NEO-STORAGE-SELECTOR,AC-NEO-STORAGE-SELECTOR-001,Neo4j binds to a volume matching the configured selector.,NEO-3-006-PVC-04,Yes,MVP — Existing.volumeClaimTemplate.selector
+AC-NEO-STORAGE-VCT,AC-NEO-STORAGE-VCT-001,PVC is created from the configured volumeClaimTemplate.,NEO-3-006-PVC-05,Yes,MVP — Existing.volumeClaimTemplate
 AC-NEO-CLOUDSTORAGE-MI,AC-NEO-CLOUDSTORAGE-MI-001,Cloud object storage access uses platform workload identity (e.g. GKE Workload Identity or AKS Workload Identity).,NEO-3-006-CLD-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-CLOUDSTORAGE,AC-NEO-CLOUDSTORAGE-001,Cloud object storage access uses mounted credentials or Kubernetes Secrets without workload identity.,NEO-3-006-CLD-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-NETWORKING,AC-NEO-NETWORKING-001,Service is created with the selected service type and targets Neo4j pods.,NEO-2-007,Yes,MVP — verifies V1 FR(s): NEO-2-007
@@ -98,7 +98,7 @@ AC-NEO-SCALE,AC-NEO-SCALE-003,Cluster scale-in removes members safely without da
 AC-NEO-UPGRADE,AC-NEO-UPGRADE-001,Preflight validation checks cluster health before upgrade.,NEO-3-012-UPG-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-UPGRADE,AC-NEO-UPGRADE-002,Neo4j version/image is upgraded successfully.,NEO-3-012-UPG-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-UPGRADE,AC-NEO-UPGRADE-003,Neo4j remains available according to the selected deployment mode during upgrade.,NEO-2-012; NEO-1-002,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-BACKUP,AC-NEO-BACKUP-001,Backup storage is created or mounted.,NEO-2-013,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-BACKUP,AC-NEO-BACKUP-001,Backup storage is created or mounted.,NEO-3-006-VOL-02,Yes,MVP — volumes.backups mount only (backup CRDs still deferred)
 AC-NEO-BACKUP,AC-NEO-BACKUP-002,Backup job completes successfully and produces backup artifacts.,NEO-2-013,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-BACKUP-ONDEMAND,AC-NEO-BACKUP-ONDEMAND-001,User can trigger an on-demand backup.,NEO-3-013-BKMD-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-BACKUP-SCHEDULED,AC-NEO-BACKUP-SCHEDULED-001,Scheduled backups run according to the configured schedule.,NEO-3-013-BKMD-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
@@ -106,9 +106,10 @@ AC-NEO-BACKUP-CLOUD,AC-NEO-BACKUP-CLOUD-001,Cloud credentials are mounted or wor
 AC-NEO-RESTORE,AC-NEO-RESTORE-001,Restore job completes successfully from configured backup source.,NEO-3-014-RSTM-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-RESTORE,AC-NEO-RESTORE-002,Restored Neo4j instance starts and accepts queries.,NEO-3-014-RSTM-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-RESTORE-SEEDURI,AC-NEO-RESTORE-SEEDURI-001,Neo4j can restore from configured seed URI.,NEO-3-014-RSTM-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-MONITORING,AC-NEO-MONITORING-001,Neo4j metrics endpoint is available when enabled.,NEO-3-015-MON-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-MONITORING,AC-NEO-MONITORING-001,Neo4j metrics volume is mounted when volumes.metrics is configured.,NEO-3-006-VOL-04,Yes,MVP — volumes.metrics at /metrics (Prometheus scrape still gated by features.monitoring)
+AC-NEO-MONITORING,AC-NEO-MONITORING-002,Neo4j metrics endpoint is available when enabled.,NEO-3-015-MON-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MONITORING-SERVICEMONITOR,AC-NEO-MONITORING-SERVICEMONITOR-001,ServiceMonitor is created when enabled and CRD exists.,NEO-3-015-MON-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-LOGGING,AC-NEO-LOGGING-001,Neo4j logs are written to the configured location.,NEO-3-016-LOG-01; NEO-3-006-VOL-03,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-LOGGING,AC-NEO-LOGGING-001,Neo4j logs are written to the configured location.,NEO-3-006-VOL-03,Yes,MVP — volumes.logs mount; custom log XML still deferred (NEO-3-016-*)
 AC-NEO-LOGGING,AC-NEO-LOGGING-002,Custom logging XML is applied when configured.,NEO-3-016-LOG-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MAINTENANCE-OFFLINE,AC-NEO-MAINTENANCE-OFFLINE-001,Offline maintenance mode restarts workload without running Neo4j process.,NEO-3-017-MNT-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MAINTENANCE-JOBS,AC-NEO-MAINTENANCE-JOBS-001,Maintenance job is created and completes successfully.,NEO-2-017,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)

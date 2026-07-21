@@ -15,6 +15,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
@@ -103,7 +104,11 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 }
 
 func (w *Writer) checkPoolStorageReady(ctx context.Context, ctxRender render.Context) bool {
-	pvcName := fmt.Sprintf("data-%s-0", ctxRender.STSName())
+	pvcName, ok := renderstorage.DataPVCLookup(ctxRender)
+	if !ok {
+		// Existing.volume (raw VolumeSource) — no PVC to observe.
+		return true
+	}
 	var pvc corev1.PersistentVolumeClaim
 	if err := w.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: ctxRender.Namespace()}, &pvc); err != nil {
 		return false

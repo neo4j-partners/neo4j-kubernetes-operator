@@ -1,0 +1,27 @@
+# Purpose: Existing.data via volumeClaimTemplate (raw K8s PVC spec on the StatefulSet).
+# Prerequisites: none (uses cluster default StorageClass unless you set storageClassName).
+# Apply: kubectl apply -f examples/storage/05-existing-volumeclaimtemplate.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-vct
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Existing
+        existing:
+          volumeClaimTemplate:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 10Gi
+  auth:
+    generatePassword: true

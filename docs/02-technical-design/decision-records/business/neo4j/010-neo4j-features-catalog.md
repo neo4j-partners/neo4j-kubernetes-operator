@@ -38,8 +38,8 @@ This BDR defines the **catalog rule** and resolves how feature-related settings 
 | Log rotation | `config.dbms.logs.*`, `logging.*` | log retention | ⚠️ — V1.1 `features.logging` |
 | JMX / diagnostics (beyond config flags) | sidecars, deep JVM | JVM / ops endpoints | ⚠️ — deferred |
 | Operations Job | `neo4j.operations.*` | ENABLE SERVER on scale | ❌ — operator workflow ([BDR-009](009-scale-pool-ordinal-semantics.md)) |
-| Import / bulk load | `volumes.import` | mount only | ❌ — **volumes** ([BDR-005](005-storage-volume-mode.md)) |
-| Backup / metrics storage | `volumes.backups`, `volumes.metrics` | PVC mounts | ❌ — **volumes** ([BDR-005](005-storage-volume-mode.md)) |
+| Import / bulk load | `volumes.import` | mount only | ❌ feature — **volumes** ([BDR-005](005-storage-volume-mode.md)); mount **implemented** |
+| Backup / metrics storage | `volumes.backups`, `volumes.metrics` | PVC mounts | ❌ feature — **volumes** ([BDR-005](005-storage-volume-mode.md)); mounts **implemented** |
 | Multi-cluster K8s | `services.neo4j.multiCluster` | extra LB ports | ❌ — **connectivity** ([BDR-007](006-service-exposure-connectivity.md)) |
 | LDAP / auth providers | `config.dbms.security.*` | auth stack | ❌ — **auth** + **config** |
 | Index / constraint auto-create | `config` flags | DDL on startup | ⚠️ — config only |

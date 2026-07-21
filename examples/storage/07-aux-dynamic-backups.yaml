@@ -1,0 +1,32 @@
+# Purpose: Dynamic data + dedicated Dynamic backups volume (20Gi) with backup feature/listener.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/storage/07-aux-dynamic-backups.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-backups
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+      backups:
+        mode: Dynamic
+        dynamic:
+          size: 20Gi
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      backup: 6362
+  auth:
+    generatePassword: true

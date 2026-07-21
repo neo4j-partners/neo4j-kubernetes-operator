@@ -1,0 +1,24 @@
+# Purpose: Existing.data via inline emptyDir volume — lab only, data is not persistent.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/storage/04-existing-volume-emptydir.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-emptydir
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Existing
+        existing:
+          volume:
+            name: data
+            emptyDir: {}
+  auth:
+    generatePassword: true
