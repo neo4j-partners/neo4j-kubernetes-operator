@@ -25,6 +25,9 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+	if err := rendercfg.ValidateConfig(neo4j); err != nil {
+		return shared.Failed(err)
+	}
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		desired := rendercfg.ConfigMap(ctxRender)

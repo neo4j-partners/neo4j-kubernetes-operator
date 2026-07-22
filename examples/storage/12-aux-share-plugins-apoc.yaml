@@ -1,0 +1,48 @@
+# Purpose: Persist NEO4J_PLUGINS downloads via volumes.plugins Share, install APOC, and
+#   show config split — dbms.security.procedures.* in config.neo4j (neo4j.conf);
+#   apoc.* only in config.apoc (apoc.conf). Omit the neo4j procedure keys to keep
+#   operator defaults (apoc.*).
+# Prerequisites: outbound network so the image can download APOC on first start;
+#   CRD with storage.volumes.plugins; operator image that injects plugin conf defaults.
+# Apply: kubectl apply -f examples/storage/12-aux-share-plugins-apoc.yaml
+# Verify:
+#   kubectl exec -it sts/dev-storage-plugins-apoc-server -- printenv NEO4J_PLUGINS
+#   kubectl exec -it sts/dev-storage-plugins-apoc-server -- ls -la /plugins
+#   kubectl exec -it sts/dev-storage-plugins-apoc-server -- ls /config/neo4j.conf
+#   # expect: server.directories.plugins, dbms.security.procedures.*
+#   kubectl get secret dev-storage-plugins-apoc-auth -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d; echo
+#   kubectl exec -it sts/dev-storage-plugins-apoc-server -- cypher-shell -u neo4j -p '<pw>' \
+#     "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc' RETURN name LIMIT 5"
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-storage-plugins-apoc
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+      plugins:
+        mode: Share
+        shareFrom: data
+  auth:
+    generatePassword: true
+  plugins: [apoc]
+  pluginDefinitions:
+    apoc: {}
+  config:
+    # neo4j.conf — overrides operator defaults (apoc.*). Delete these two keys to use defaults.
+    neo4j:
+      dbms.security.procedures.allowlist: "apoc.algo.aStar"
+      dbms.security.procedures.unrestricted: "apoc.algo.aStar"
+    # apoc.conf — only apoc.* (https://neo4j.com/docs/apoc/current/config/)
+    apoc:
+      apoc.export.file.enabled: "true"

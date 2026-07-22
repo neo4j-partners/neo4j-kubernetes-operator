@@ -7,6 +7,7 @@
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD (accepted) |
 | **Helm scope** | `volumes.data.*`, `volumes.{backups,logs,metrics,import,licenses}`, `additionalVolumes`, `additionalVolumeMounts`, `secretMounts`; groups **AGG-STORAGE-DATA**, **AGG-STORAGE-AUX**, **AGG-STORAGE-ESCAPE** |
+| **Operator extension** | `volumes.plugins` (Share/Dynamic/Existing → `/plugins`) so `NEO4J_PLUGINS` downloads persist on disk — not in Helm |
 | **Constraints** | `NEO-2-006`, `NEO-3-006-PVC-01..05`, `NEO-3-006-VOL-01..06`; AC `AC-NEO-STORAGE*`; Neo4j [Kubernetes storage](https://neo4j.com/docs/operations-manual/current/kubernetes/) |
 
 ---
@@ -140,7 +141,7 @@ spec:
 
 #### `spec.volumes.<aux>` — `Share` | `Dynamic` | `Existing`
 
-Aux roles: `backups`, `logs`, `metrics`, `import`, `licenses`.
+Aux roles: `backups`, `logs`, `metrics`, `import`, `licenses`, plus operator extension `plugins` (`/plugins`).
 
 ```yaml
 spec:

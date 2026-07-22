@@ -86,6 +86,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | [`storage/09-additional-mounts.yaml`](storage/09-additional-mounts.yaml) | `additionalMounts` |
 | [`storage/10-secret-mounts.yaml`](storage/10-secret-mounts.yaml) | `secretMounts` (+ companion Secret) |
 | [`storage/11-full.yaml`](storage/11-full.yaml) | Kitchen sink (`dev-storage-full`) |
+| [`storage/12-aux-share-plugins-apoc.yaml`](storage/12-aux-share-plugins-apoc.yaml) | `volumes.plugins` Share + APOC + neo4j.conf procedure overrides |
 
 ## Feature × topology matrix
 
@@ -95,7 +96,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Existing auth Secret | [`standalone/02`](standalone/02-auth-existing-secret.yaml) | *(same field, not re-demonstrated)* |
 | StorageClass | [`standalone/03`](standalone/03-storage-storageclass.yaml), [`storage/02`](storage/02-dynamic-storageclass.yaml) | [`cluster/14`](cluster/14-full.yaml) |
 | Existing data (`claimName` / `volume` / VCT) | [`storage/03`](storage/03-existing-claimname.yaml)–[`05`](storage/05-existing-volumeclaimtemplate.yaml) | *(claimName Standalone-oriented; prefer Dynamic/VCT)* |
-| Aux Share / Dynamic / Existing | [`storage/06`](storage/06-aux-share-logs-metrics.yaml)–[`08`](storage/08-aux-existing-import.yaml) | *(same fields)* |
+| Aux Share / Dynamic / Existing | [`storage/06`](storage/06-aux-share-logs-metrics.yaml)–[`08`](storage/08-aux-existing-import.yaml), [`storage/12`](storage/12-aux-share-plugins-apoc.yaml) | *(same fields)* |
 | `additionalMounts` / `secretMounts` | [`storage/09`](storage/09-additional-mounts.yaml), [`storage/10`](storage/10-secret-mounts.yaml) | *(same fields)* |
 | Service: ClusterIP | [`standalone/04`](standalone/04-service-clusterip.yaml) | [`cluster/01`](cluster/01-minimal-3-primaries.yaml) |
 | Service: LoadBalancer | [`standalone/05`](standalone/05-service-loadbalancer.yaml) | [`cluster/04`](cluster/04-service-loadbalancer.yaml) |
@@ -108,7 +109,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Scheduling (affinity/tolerations/spread) | [`standalone/10`](standalone/10-scheduling.yaml) | [`cluster/08`](cluster/08-scheduling.yaml) |
 | Custom probes | [`standalone/11`](standalone/11-probes-custom.yaml) | [`cluster/09`](cluster/09-probes-custom.yaml) |
 | `config.neo4j` / `config.jvm` / `config.apoc` | [`standalone/12`](standalone/12-config-jvm.yaml) | [`cluster/10`](cluster/10-config-jvm.yaml) |
-| Plugins — APOC | [`standalone/13`](standalone/13-plugins-apoc.yaml) (`spec.plugins`) | [`cluster/11`](cluster/11-plugins-apoc.yaml) (`primaries.plugins`) |
+| Plugins — APOC | [`standalone/13`](standalone/13-plugins-apoc.yaml), [`storage/12`](storage/12-aux-share-plugins-apoc.yaml) | [`cluster/11`](cluster/11-plugins-apoc.yaml) (`primaries.plugins`) |
 | Plugins — GDS / Bloom | n/a (Standalone `spec.plugins` also accepts gds/bloom, untested combo here) | [`cluster/03`](cluster/03-pools-analytics-read.yaml) (`secondaries.analytics.plugins` only) |
 | Image repository / pullPolicy / pullSecrets | [`standalone/14`](standalone/14-image-pullsecrets.yaml) | *(same fields, not re-demonstrated)* |
 | Scale-out | n/a (single pool) | [`cluster/13`](cluster/13-scale-out.yaml) |

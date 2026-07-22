@@ -187,7 +187,8 @@ type AuxiliaryVolumeSpec struct {
 	Existing  *ExistingVolumeSpec `json:"existing,omitempty"`
 }
 
-// VolumesSpec mirrors Helm values.yaml volumes block (BDR-005).
+// VolumesSpec mirrors Helm values.yaml volumes block (BDR-005), plus operator extension `plugins`
+// (persist NEO4J_PLUGINS downloads under /plugins — not in Helm volumes).
 type VolumesSpec struct {
 	// +kubebuilder:validation:Required
 	Data DataVolumeSpec `json:"data"`
@@ -196,6 +197,8 @@ type VolumesSpec struct {
 	Metrics  *AuxiliaryVolumeSpec `json:"metrics,omitempty"`
 	Import   *AuxiliaryVolumeSpec `json:"import,omitempty"`
 	Licenses *AuxiliaryVolumeSpec `json:"licenses,omitempty"`
+	// Plugins mounts /plugins (typically Share from data so NEO4J_PLUGINS downloads persist).
+	Plugins *AuxiliaryVolumeSpec `json:"plugins,omitempty"`
 }
 
 // AdditionalMount pairs volume source with mount (BDR-005 Option E).

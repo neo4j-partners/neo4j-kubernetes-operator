@@ -23,6 +23,7 @@ Every CR uses `edition: enterprise`, `version: "2026.05.0"`, `license.accept: "y
 | [`10-secret-mounts-secret.yaml`](10-secret-mounts-secret.yaml) | Companion Opaque Secret `dev-storage-secret-creds` (`config.txt`) |
 | [`10-secret-mounts.yaml`](10-secret-mounts.yaml) | Dynamic data + `secretMounts` |
 | [`11-full.yaml`](11-full.yaml) | Kitchen sink (`dev-storage-full`) |
+| [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml) | `volumes.plugins` Share + APOC + `config.neo4j` procedure overrides |
 
 ## How to apply
 
@@ -48,7 +49,8 @@ kubectl apply -f examples/storage/
 - **Existing `claimName` is Standalone-oriented.** A single RWO PVC cannot be mounted by
   multiple Cluster members; use Dynamic or `volumeClaimTemplate` for Cluster.
 - **Share** mounts reuse the data volume with `subPathExpr` such as `logs/$(POD_NAME)`
-  (and `metrics/$(POD_NAME)`).
+  (and `metrics/$(POD_NAME)`). `volumes.plugins` Share uses subPath `plugins` so
+  `NEO4J_PLUGINS` downloads persist; see [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml).
 - **Dynamic PVC naming:** the operator creates a StatefulSet volumeClaimTemplate named `data`;
   Kubernetes names the pod-0 claim `data-<sts>-0` (Standalone STS is `<cr-name>-server`, e.g.
   `data-dev-storage-dynamic-server-0`).

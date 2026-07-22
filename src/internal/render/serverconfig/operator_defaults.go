@@ -3,26 +3,10 @@ package serverconfig
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
-	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
-
-func operatorNeo4jConfKeys(ctx render.Context) map[string]string {
-	keys := k8sNeo4jConfKeys()
-	for k, v := range listenerConfKeys(ctx) {
-		keys[k] = v
-	}
-	if render.IsClusterMode(ctx.Neo4j) {
-		for k, v := range clusterNeo4jConfKeys(ctx) {
-			keys[k] = v
-		}
-	}
-	for k, v := range rendertrust.Neo4jConfKeys(ctx) {
-		keys[k] = v
-	}
-	return keys
-}
 
 func k8sNeo4jConfKeys() map[string]string {
 	return map[string]string{
@@ -84,12 +68,58 @@ func clusterNeo4jConfKeys(ctx render.Context) map[string]string {
 		keys["server.cluster.system_database_mode"] = "SECONDARY"
 		keys["initial.server.mode_constraint"] = "SECONDARY"
 	}
-	if ctx.Pool == render.PoolAnalytics {
-		// Helm analytics secondary: open GDS procedures on the analytics member.
-		keys["dbms.security.procedures.unrestricted"] = "gds.*"
-		keys["dbms.security.http_auth_allowlist"] = "gds.*"
-		keys["dbms.security.procedures.allowlist"] = "gds.*"
+
+	return keys
+}
+
+// pluginConfKeys points Neo4j at /plugins and opens procedures for assigned catalog plugins.
+// Overridable via spec.config.neo4j (BDR-008 defaults layer).
+func pluginConfKeys(ctx render.Context) map[string]string {
+	ids := ctx.PoolPluginIDs()
+	pluginsVolume := ctx.Neo4j.Spec.Storage != nil &&
+		ctx.Neo4j.Spec.Storage.Volumes != nil &&
+		ctx.Neo4j.Spec.Storage.Volumes.Plugins != nil
+
+	if len(ids) == 0 && !pluginsVolume && ctx.Pool != render.PoolAnalytics {
+		return nil
 	}
 
+	keys := map[string]string{}
+	if len(ids) > 0 || pluginsVolume {
+		keys["server.directories.plugins"] = "/plugins"
+	}
+
+	var patterns []string
+	seen := map[string]struct{}{}
+	add := func(p string) {
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		patterns = append(patterns, p)
+	}
+	for _, id := range ids {
+		switch id {
+		case "apoc":
+			add("apoc.*")
+		case "gds":
+			add("gds.*")
+		case "bloom":
+			add("bloom.*")
+		}
+	}
+	// Helm analytics secondary: open GDS procedures on the analytics member.
+	if ctx.Pool == render.PoolAnalytics {
+		add("gds.*")
+	}
+	if len(patterns) == 0 {
+		return keys
+	}
+	joined := strings.Join(patterns, ",")
+	keys["dbms.security.procedures.unrestricted"] = joined
+	keys["dbms.security.procedures.allowlist"] = joined
+	if _, ok := seen["gds.*"]; ok {
+		keys["dbms.security.http_auth_allowlist"] = "gds.*"
+	}
 	return keys
 }

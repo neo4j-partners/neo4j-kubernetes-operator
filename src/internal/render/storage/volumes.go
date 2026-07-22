@@ -94,6 +94,7 @@ func auxRoles(vols *neo4jv1beta1.VolumesSpec) []auxRole {
 		{name: "metrics", mountPath: "/metrics", spec: vols.Metrics},
 		{name: "import", mountPath: "/import", spec: vols.Import},
 		{name: "licenses", mountPath: "/licenses", spec: vols.Licenses},
+		{name: "plugins", mountPath: "/plugins", spec: vols.Plugins},
 	}
 }
 

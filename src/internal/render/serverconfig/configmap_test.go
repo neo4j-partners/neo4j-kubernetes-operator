@@ -1,6 +1,7 @@
 package serverconfig
 
 import (
+	"strings"
 	"testing"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
@@ -52,6 +53,45 @@ func TestConfigMapRendersApocOnlyWhenAssigned(t *testing.T) {
 	apocCM := ApocConfigMap(render.StandaloneContext(neo4j))
 	if apocCM == nil || apocCM.Data["apoc.conf"] == "" {
 		t.Fatal("expected apoc.conf when apoc plugin is assigned")
+	}
+}
+
+func TestValidateConfigRejectsNeo4jKeysInApoc(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Config: &neo4jv1beta1.ConfigSpec{
+				Apoc: map[string]string{
+					"apoc.trigger.enabled":                  "true",
+					"dbms.security.procedures.unrestricted": "apoc.*",
+				},
+			},
+		},
+	}
+	if err := ValidateConfig(neo4j); err == nil {
+		t.Fatal("expected error for dbms.* under config.apoc")
+	}
+}
+
+func TestRenderApocConfSkipsNonApocKeys(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Plugins:  []string{"apoc"},
+			Config: &neo4jv1beta1.ConfigSpec{
+				Apoc: map[string]string{
+					"apoc.trigger.enabled":                  "true",
+					"dbms.security.procedures.unrestricted": "apoc.*",
+				},
+			},
+		},
+	}
+	body := renderApocConf(render.StandaloneContext(neo4j))
+	if !strings.Contains(body, "apoc.trigger.enabled=true") {
+		t.Fatalf("missing apoc key: %q", body)
+	}
+	if strings.Contains(body, "dbms.security") {
+		t.Fatalf("dbms.security must not appear in apoc.conf: %q", body)
 	}
 }
 

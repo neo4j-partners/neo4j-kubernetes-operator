@@ -51,6 +51,38 @@ func TestApplyDynamicDataAndShareLogs(t *testing.T) {
 	}
 }
 
+func TestApplySharePlugins(t *testing.T) {
+	shareFrom := neo4jv1beta1.ShareFromData
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{
+						Mode:      neo4jv1beta1.VolumeModeShare,
+						ShareFrom: &shareFrom,
+					},
+				},
+			},
+		},
+	}
+	ctx := render.StandaloneContext(neo4j)
+	c := &corev1.Container{}
+	pod := &corev1.PodSpec{}
+	_ = Apply(ctx, c, pod)
+	for _, m := range c.VolumeMounts {
+		if m.Name == "data" && m.MountPath == "/plugins" && m.SubPathExpr == "plugins" {
+			return
+		}
+	}
+	t.Fatalf("expected /plugins Share mount, got %#v", c.VolumeMounts)
+}
+
 func TestApplyExistingClaimName(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},

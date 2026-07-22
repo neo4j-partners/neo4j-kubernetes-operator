@@ -180,6 +180,74 @@ func TestListenerConfKeysHTTPSBackupMetrics(t *testing.T) {
 	}
 }
 
+func TestPluginConfKeysAPOC(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Plugins:  []string{"apoc"},
+		},
+	}
+	data := ConfigMap(render.StandaloneContext(neo4j)).Data
+	if data["server.directories.plugins"] != "/plugins" {
+		t.Fatalf("directories.plugins = %q", data["server.directories.plugins"])
+	}
+	if data["dbms.security.procedures.unrestricted"] != "apoc.*" {
+		t.Fatalf("unrestricted = %q", data["dbms.security.procedures.unrestricted"])
+	}
+	if data["dbms.security.procedures.allowlist"] != "apoc.*" {
+		t.Fatalf("allowlist = %q", data["dbms.security.procedures.allowlist"])
+	}
+}
+
+func TestPluginConfKeysPluginsVolumeOnly(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
+					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeShare},
+				},
+			},
+		},
+	}
+	data := ConfigMap(render.StandaloneContext(neo4j)).Data
+	if data["server.directories.plugins"] != "/plugins" {
+		t.Fatalf("directories.plugins = %q", data["server.directories.plugins"])
+	}
+	if _, ok := data["dbms.security.procedures.unrestricted"]; ok {
+		t.Fatalf("unrestricted should be unset without catalog plugins, got %q", data["dbms.security.procedures.unrestricted"])
+	}
+}
+
+func TestUserNeo4jConfigOverridesPluginDefaults(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Plugins:  []string{"apoc"},
+			Config: &neo4jv1beta1.ConfigSpec{
+				Neo4j: map[string]string{
+					"dbms.security.procedures.unrestricted": "apoc.algo.aStar",
+					"dbms.security.procedures.allowlist":    "apoc.algo.aStar",
+				},
+			},
+		},
+	}
+	data := ConfigMap(render.StandaloneContext(neo4j)).Data
+	if data["dbms.security.procedures.unrestricted"] != "apoc.algo.aStar" {
+		t.Fatalf("unrestricted = %q, want user override", data["dbms.security.procedures.unrestricted"])
+	}
+	if data["dbms.security.procedures.allowlist"] != "apoc.algo.aStar" {
+		t.Fatalf("allowlist = %q, want user override", data["dbms.security.procedures.allowlist"])
+	}
+	if data["server.directories.plugins"] != "/plugins" {
+		t.Fatalf("directories.plugins default should remain, got %q", data["server.directories.plugins"])
+	}
+}
+
 func TestNeo4jConfDataHasNoNeo4jConfBlobKey(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
