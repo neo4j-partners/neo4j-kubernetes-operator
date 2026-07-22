@@ -63,6 +63,6 @@ This estate is separate from product and design documentation:
 See [V1 scope lock](../00-discovery/13-v1-scope-lock.md) for the full list. In short:
 
 - **Supported:** Standalone + Cluster `Neo4j`; storage Dynamic/Existing + aux volumes + mounts; generated/BYO auth; ClusterIP/NodePort/LoadBalancer; BYO TLS (`spec.trust`); `spec.scheduling` / probes.
-- **Deferred:** Ingress, backup/restore CRDs, ServiceMonitor / full monitoring catalog, cert-manager, multi-namespace operator scope, Neo4j version upgrade.
+- **Deferred:** Ingress, backup/restore CRDs, CSV/JMX/Graphite monitoring, cert-manager, multi-namespace operator scope, Neo4j version upgrade.
 
 Examples: [`examples/storage/`](../../examples/storage/). Design: [BDR-005](../02-technical-design/decision-records/business/neo4j/005-storage-volume-mode.md), [CRD spec](../02-technical-design/crd-spec/neo4j/spec.md).

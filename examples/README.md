@@ -47,6 +47,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/13-plugins-apoc.yaml`](standalone/13-plugins-apoc.yaml) | `spec.plugins` (Standalone-only) + `pluginDefinitions` |
 | [`standalone/14-image-pullsecrets.yaml`](standalone/14-image-pullsecrets.yaml) | `image.repository`/`pullPolicy`/`pullSecrets` |
 | [`standalone/15-full.yaml`](standalone/15-full.yaml) | Kitchen sink — everything above combined (`dev-full`) |
+| [`standalone/16-servicemonitor.yaml`](standalone/16-servicemonitor.yaml) | `features.monitoring.serviceMonitor` (Prometheus Operator CR) |
 
 ## Cluster
 
@@ -147,7 +148,8 @@ workload. They are intentionally left out of every example above:
 | `connectivity.reverseProxy` | schema-only |
 | `connectivity.multiCluster.enabled: true` | rejected by CRD validation in V1 |
 | `auth.ldap` | schema-only |
-| `features.monitoring.csv` / `.jmx` / `.graphite` / `.serviceMonitor` | schema-only — only `features.monitoring.prometheus` (listener) is wired |
+| `features.monitoring.csv` / `.jmx` / `.graphite` | schema-only — not wired |
+| `features.monitoring.serviceMonitor` | wired — creates ServiceMonitor when CRD present; requires prometheus + metrics listener |
 | Automatic `ENABLE SERVER` on scale-out/in | not implemented — see the big comment in [`cluster/13-scale-out.yaml`](cluster/13-scale-out.yaml) (tracked as `NEO-3-011-SRV-01`) |
 | Rolling Neo4j version upgrade | deferred — `spec.version` is applied at install time only |
 

@@ -108,7 +108,7 @@ AC-NEO-RESTORE,AC-NEO-RESTORE-002,Restored Neo4j instance starts and accepts que
 AC-NEO-RESTORE-SEEDURI,AC-NEO-RESTORE-SEEDURI-001,Neo4j can restore from configured seed URI.,NEO-3-014-RSTM-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MONITORING,AC-NEO-MONITORING-001,Neo4j metrics volume is mounted when volumes.metrics is configured.,NEO-3-006-VOL-04,Yes,MVP — volumes.metrics at /metrics (Prometheus scrape still gated by features.monitoring)
 AC-NEO-MONITORING,AC-NEO-MONITORING-002,Neo4j metrics endpoint is available when enabled.,NEO-3-015-MON-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-NEO-MONITORING-SERVICEMONITOR,AC-NEO-MONITORING-SERVICEMONITOR-001,ServiceMonitor is created when enabled and CRD exists.,NEO-3-015-MON-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-MONITORING-SERVICEMONITOR,AC-NEO-MONITORING-SERVICEMONITOR-001,ServiceMonitor is created when enabled and CRD exists.,NEO-3-015-MON-02,Yes,MVP — skip when monitoring.coreos.com CRD absent
 AC-NEO-LOGGING,AC-NEO-LOGGING-001,Neo4j logs are written to the configured location.,NEO-3-006-VOL-03,Yes,MVP — volumes.logs mount; custom log XML still deferred (NEO-3-016-*)
 AC-NEO-LOGGING,AC-NEO-LOGGING-002,Custom logging XML is applied when configured.,NEO-3-016-LOG-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MAINTENANCE-OFFLINE,AC-NEO-MAINTENANCE-OFFLINE-001,Offline maintenance mode restarts workload without running Neo4j process.,NEO-3-017-MNT-01,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)

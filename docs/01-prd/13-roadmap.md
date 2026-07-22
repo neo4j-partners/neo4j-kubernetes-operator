@@ -37,11 +37,11 @@ Tests: `V1=Yes` in [`../02-technical-design/04-test_catalog.csv`](../02-technica
 | Item | Notes |
 |------|-------|
 | Ingress / reverse proxy | [BDR-007](../02-technical-design/decision-records/business/neo4j/006-service-exposure-connectivity.md) Amendment F · [BDR-011](../02-technical-design/decision-records/business/neo4j/011-https-connector-tls-coupling.md) |
-| `features.monitoring` ServiceMonitor / CSV/JMX/Graphite | [BDR-010](../02-technical-design/decision-records/business/neo4j/010-neo4j-features-catalog.md) |
+| `features.monitoring` CSV / JMX / Graphite | [BDR-010](../02-technical-design/decision-records/business/neo4j/010-neo4j-features-catalog.md) |
 | Multi-namespace operator scope | [BDR-003](../02-technical-design/decision-records/business/003-operator-install-scope.md) |
 | cert-manager TLS / certificate reload | [BDR-006](../02-technical-design/decision-records/business/neo4j/007-tls-trust-model.md) |
 
-> **Shipped in MVP (removed from this table):** LoadBalancer/NodePort, BYO bolt/https/cluster TLS, `spec.scheduling` + custom probes, storage `Existing` / aux volumes / `secretMounts` ([BDR-005]).
+> **Shipped in MVP (removed from this table):** LoadBalancer/NodePort, BYO bolt/https/cluster TLS, `spec.scheduling` + custom probes, storage `Existing` / aux volumes / `secretMounts` ([BDR-005]), `features.monitoring.prometheus` + `serviceMonitor`.
 
 ---
 

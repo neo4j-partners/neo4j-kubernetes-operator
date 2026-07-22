@@ -59,7 +59,7 @@ spec:
 | `connectivity` | Listen ports, Services, Ingress (Ingress deferred) |
 | `trust` | BYO TLS for bolt / https / cluster |
 | `scheduling` | nodeSelector, affinity, tolerations, … |
-| `features` | Backup connector, monitoring prometheus (ServiceMonitor deferred) |
+| `features` | Backup connector, monitoring prometheus + ServiceMonitor (CSV/JMX/Graphite deferred) |
 
 ## Status (automation)
 

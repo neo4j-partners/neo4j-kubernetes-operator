@@ -287,6 +287,7 @@ Tracked product gaps / schema fields that are **not** wired (do not rely on them
 | `resources` | No requests/limits from CR |
 | `security.*` | SA annotations / securityContext / NetworkPolicy not applied from CR |
 | PDB, Ingress, cert-manager | Deferred |
+| CSV / JMX / Graphite monitoring | Deferred (`features.monitoring.prometheus` + `serviceMonitor` are wired) |
 | LDAP, reverse proxy, multi-cluster | Deferred |
 | Neo4j version upgrade workflow | Deferred |
 

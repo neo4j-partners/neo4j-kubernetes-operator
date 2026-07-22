@@ -1,0 +1,44 @@
+# Purpose: Prometheus metrics + ServiceMonitor for the Neo4j admin Service
+#   (scrapes tcp-prometheus on <name>-admin). Requires the Prometheus Operator
+#   ServiceMonitor CRD in the cluster; if the CRD is absent the operator skips
+#   creating the ServiceMonitor (reconcile still succeeds).
+# Prerequisites: Prometheus Operator CRDs (optional — skip is safe without them).
+# Apply: kubectl apply -f examples/standalone/16-servicemonitor.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-servicemonitor
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  features:
+    monitoring:
+      prometheus:
+        enabled: true
+      serviceMonitor:
+        enabled: true
+        # interval: 30s          # default
+        # port: tcp-prometheus   # default — admin Service port name
+        # path: /metrics         # default
+        # labels: {}             # extra ServiceMonitor metadata labels
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      metrics: 2004
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

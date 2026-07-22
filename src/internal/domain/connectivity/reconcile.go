@@ -78,6 +78,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		}
 	}
 
+	if out := r.reconcileServiceMonitor(ctx, neo4j); out.Err != nil {
+		return out
+	}
+
 	return shared.Done()
 }
 
