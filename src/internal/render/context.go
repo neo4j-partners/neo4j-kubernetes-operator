@@ -299,6 +299,11 @@ func (c Context) PoolPluginIDs() []string {
 	return nil
 }
 
+// OfflineModeEnabled is true when spec.maintenance.offlineMode is set (NEO-3-017-MNT-01).
+func (c Context) OfflineModeEnabled() bool {
+	return c.Neo4j.Spec.Maintenance != nil && c.Neo4j.Spec.Maintenance.OfflineMode
+}
+
 // ShouldGenerateAuthSecret is true when the operator must create the auth Secret.
 func (c Context) ShouldGenerateAuthSecret() bool {
 	if c.Neo4j.Spec.Auth == nil {

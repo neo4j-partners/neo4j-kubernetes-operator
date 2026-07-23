@@ -60,6 +60,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Volumes:            volumes,
 		ImagePullSecrets:   imagePullSecrets(ctx),
 	}
+	applyOfflineMaintenance(ctx, &podSpec.Containers[0], &podSpec)
 	storageVCTs := renderstorage.Apply(ctx, &podSpec.Containers[0], &podSpec)
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
 	rendertrust.AppendVolumes(ctx, &podSpec.Containers[0], &podSpec)

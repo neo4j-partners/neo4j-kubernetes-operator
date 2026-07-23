@@ -1,0 +1,29 @@
+# Purpose: Offline maintenance mode (NEO-3-017-MNT-01) — Neo4j process replaced with a sleep loop.
+# Prerequisites: none (or stop a running instance by patching offlineMode onto an existing CR).
+# Apply: kubectl apply -f examples/standalone/17-offline-maintenance.yaml
+# Related README: ../README.md#standalone
+#
+# Pod stays Running but NotReady (Bolt readiness fails). Exec in to work on /data:
+#   kubectl exec -it statefulset/dev-offline-server -- bash
+# Resume: set maintenance.offlineMode: false (or remove maintenance) and re-apply.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-offline
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  maintenance:
+    offlineMode: true

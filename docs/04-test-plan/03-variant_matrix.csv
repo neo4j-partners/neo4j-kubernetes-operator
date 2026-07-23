@@ -86,7 +86,7 @@ Monitoring Mode,Disabled,NEO-2-015,NEO-3-015-MON-01,Deploy without ServiceMonito
 Monitoring Mode,ServiceMonitor,NEO-2-015,NEO-3-015-MON-02,Create ServiceMonitor when CRD exists.,Monitoring AC,AC-NEO-MONITORING-SERVICEMONITOR,Yes
 Logging Mode,Default logs,NEO-2-016,NEO-3-016-LOG-01,Use default Neo4j logging configuration.,Logging AC,AC-NEO-LOGGING,Yes
 Logging Mode,Custom log config,NEO-2-016,NEO-3-016-LOG-02,Apply custom serverLogsXml and userLogsXml.,Logging AC,AC-NEO-LOGGING,Yes
-Maintenance Mode,Offline maintenance,NEO-2-017,NEO-3-017-MNT-01,Restart StatefulSet without Neo4j process running.,Maintenance AC,AC-NEO-MAINTENANCE-OFFLINE,No
+Maintenance Mode,Offline maintenance,NEO-2-017,NEO-3-017-MNT-01,Restart StatefulSet without Neo4j process running.,Maintenance AC,AC-NEO-MAINTENANCE-OFFLINE,Yes
 Job Type,Dump/load,NEO-2-017,NEO-3-017-JOB-01,Run neo4j-admin dump/load jobs.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
 Job Type,Consistency check,NEO-2-017,NEO-3-017-JOB-02,Run consistency check jobs.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
 Job Type,Backup verification,NEO-2-017,NEO-3-017-JOB-03,Verify backup integrity.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No

@@ -48,6 +48,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/14-image-pullsecrets.yaml`](standalone/14-image-pullsecrets.yaml) | `image.repository`/`pullPolicy`/`pullSecrets` |
 | [`standalone/15-full.yaml`](standalone/15-full.yaml) | Kitchen sink — everything above combined (`dev-full`) |
 | [`standalone/16-servicemonitor.yaml`](standalone/16-servicemonitor.yaml) | `features.monitoring.serviceMonitor` (Prometheus Operator CR) |
+| [`standalone/17-offline-maintenance.yaml`](standalone/17-offline-maintenance.yaml) | `maintenance.offlineMode` — sleep loop, no Neo4j process |
 
 ## Cluster
 
@@ -112,6 +113,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Plugins — APOC | [`standalone/13`](standalone/13-plugins-apoc.yaml), [`storage/12`](storage/12-aux-share-plugins-apoc.yaml) | [`cluster/11`](cluster/11-plugins-apoc.yaml) (`primaries.plugins`) |
 | Plugins — GDS / Bloom | n/a (Standalone `spec.plugins` also accepts gds/bloom, untested combo here) | [`cluster/03`](cluster/03-pools-analytics-read.yaml) (`secondaries.analytics.plugins` only) |
 | Image repository / pullPolicy / pullSecrets | [`standalone/14`](standalone/14-image-pullsecrets.yaml) | *(same fields, not re-demonstrated)* |
+| Offline maintenance (`maintenance.offlineMode`) | [`standalone/17`](standalone/17-offline-maintenance.yaml) | *(same field — full cluster outage)* |
 | Scale-out | n/a (single pool) | [`cluster/13`](cluster/13-scale-out.yaml) |
 | Kitchen sink | [`standalone/15`](standalone/15-full.yaml) | [`cluster/14`](cluster/14-full.yaml) |
 
@@ -142,7 +144,6 @@ workload. They are intentionally left out of every example above:
 | `resources` | schema-only — container has no resource requests/limits set by the operator |
 | `security.podSecurityContext` / `containerSecurityContext` / `networkPolicy` | schema-only |
 | `podDisruptionBudget` | schema-only — no PDB is created |
-| `maintenance.offlineMode` | schema-only |
 | `podTemplate` (initContainers, sidecars, env) | schema-only |
 | `trust.certManager` | schema-only — only BYO Secret TLS (`privateKey`/`publicCertificate`) is wired |
 | `connectivity.ingress.enabled: true` | schema-only — no Ingress object is created |

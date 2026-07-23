@@ -84,6 +84,11 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	if status.OfflineMode(&neo4j) {
+		// Stable maintenance window — avoid 30s polling while Ready stays false.
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+
 	if !status.IsReady(&neo4j) {
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}

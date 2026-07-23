@@ -86,15 +86,22 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady
 	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Completed", "")
 	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
-	setCondition(neo4j, ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady), readyMessage(ready, desired))
 
-	if allReady {
-		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseRunning
-		neo4j.Status.Version = neo4j.Spec.Version
-	} else if anySTSFound {
-		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseBootstrapping
+	if offlineMode(neo4j) {
+		// Pods run a sleep loop (NotReady via Bolt readiness) — do not report Running/Ready.
+		setCondition(neo4j, ConditionReady, metav1.ConditionFalse, "OfflineMaintenance",
+			"spec.maintenance.offlineMode is true; Neo4j process is not running")
+		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseMaintenance
 	} else {
-		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseProvisioning
+		setCondition(neo4j, ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady), readyMessage(ready, desired))
+		if allReady {
+			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseRunning
+			neo4j.Status.Version = neo4j.Spec.Version
+		} else if anySTSFound {
+			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseBootstrapping
+		} else {
+			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseProvisioning
+		}
 	}
 
 	neo4j.Status.Endpoints = buildEndpoints(render.ClientServiceContext(neo4j))
@@ -265,4 +272,13 @@ func IsReady(neo4j *neo4jv1beta1.Neo4j) bool {
 		}
 	}
 	return false
+}
+
+// OfflineMode reports whether the CR requests offline maintenance (NEO-3-017-MNT-01).
+func OfflineMode(neo4j *neo4jv1beta1.Neo4j) bool {
+	return offlineMode(neo4j)
+}
+
+func offlineMode(neo4j *neo4jv1beta1.Neo4j) bool {
+	return neo4j.Spec.Maintenance != nil && neo4j.Spec.Maintenance.OfflineMode
 }

@@ -114,4 +114,4 @@ NEO-3-016-LOG-02,NEO-2-016,,Logging,Logging Mode,Custom log config,Apply custom 
 NEO-3-017-JOB-01,NEO-2-017,,Maintenance,Job Type,Dump/load,Run neo4j-admin dump/load jobs.,AC-NEO-MAINTENANCE-JOBS,No,Deferred post-MVP.
 NEO-3-017-JOB-02,NEO-2-017,,Maintenance,Job Type,Consistency check,Run consistency check jobs.,AC-NEO-MAINTENANCE-JOBS,No,Deferred post-MVP.
 NEO-3-017-JOB-03,NEO-2-017,,Maintenance,Job Type,Backup verification,Verify backup integrity.,AC-NEO-MAINTENANCE-JOBS,No,Out of V1 with backup.
-NEO-3-017-MNT-01,NEO-2-017,,Maintenance,Maintenance Mode,Offline maintenance,Restart StatefulSet without Neo4j process running.,AC-NEO-MAINTENANCE-OFFLINE,No,Deferred post-MVP.
+NEO-3-017-MNT-01,NEO-2-017,,Maintenance,Maintenance Mode,Offline maintenance,Restart StatefulSet without Neo4j process running.,AC-NEO-MAINTENANCE-OFFLINE,Yes,MVP — `spec.maintenance.offlineMode` (Helm offlineMaintenanceModeEnabled parity).
