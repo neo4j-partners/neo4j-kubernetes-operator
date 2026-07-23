@@ -302,3 +302,31 @@ func TestOperandServiceAccountAnnotations(t *testing.T) {
 		t.Fatalf("annotations = %#v", sa.Annotations)
 	}
 }
+
+func TestImagePullSecrets(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Image: &neo4jv1beta1.ImageSpec{
+				PullSecrets: []string{"my-registry-secret", "", "other-secret"},
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	got := sts.Spec.Template.Spec.ImagePullSecrets
+	if len(got) != 2 || got[0].Name != "my-registry-secret" || got[1].Name != "other-secret" {
+		t.Fatalf("ImagePullSecrets = %#v", got)
+	}
+}

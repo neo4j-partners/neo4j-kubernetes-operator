@@ -58,6 +58,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		SecurityContext:    defaultPodSecurityContext(),
 		Containers:         []corev1.Container{container},
 		Volumes:            volumes,
+		ImagePullSecrets:   imagePullSecrets(ctx),
 	}
 	storageVCTs := renderstorage.Apply(ctx, &podSpec.Containers[0], &podSpec)
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
@@ -258,6 +259,24 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 		},
 	})
 	return env
+}
+
+// imagePullSecrets maps spec.image.pullSecrets → pod ImagePullSecrets (NEO-3-004-IMG-01).
+func imagePullSecrets(ctx render.Context) []corev1.LocalObjectReference {
+	if ctx.Neo4j.Spec.Image == nil || len(ctx.Neo4j.Spec.Image.PullSecrets) == 0 {
+		return nil
+	}
+	out := make([]corev1.LocalObjectReference, 0, len(ctx.Neo4j.Spec.Image.PullSecrets))
+	for _, name := range ctx.Neo4j.Spec.Image.PullSecrets {
+		if name == "" {
+			continue
+		}
+		out = append(out, corev1.LocalObjectReference{Name: name})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // OperandServiceAccount builds the workload ServiceAccount.
