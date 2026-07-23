@@ -86,7 +86,7 @@ AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-001,HTTP a
 AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-002,Browser access works over both HTTP and HTTPS.,NEO-3-007-PCMB-06,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-MULTICLUSTER,AC-NEO-MULTICLUSTER-001,Internal ports/configuration required for multi-cluster communication are enabled.,NEO-3-007-MULTI-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
 AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-001,"Node selectors, affinity, tolerations, and topology spread constraints are applied to Neo4j pods.",NEO-2-008,Yes,MVP — verifies V1 FR(s): NEO-2-008
-AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-002,Termination grace period and service account are applied when configured.,NEO-2-008,Yes,MVP — operand SA always; grace period deferred.
+AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-002,Termination grace period and service account are applied when configured.,NEO-2-008,Yes,MVP — operand SA always; `scheduling.terminationGracePeriodSeconds` (default 3600).
 AC-NEO-PROBES,AC-NEO-PROBES-001,"Startup, readiness, and liveness probes are configured on Neo4j pods.",NEO-3-009-PROBE-01,Yes,MVP — verifies V1 FR(s): NEO-3-009-PROBE-01
 AC-NEO-PROBES,AC-NEO-PROBES-002,Neo4j is not marked ready before Bolt is available.,NEO-3-009-PROBE-01,Yes,MVP — default readiness is Bolt TCP.
 AC-NEO-PROBES,AC-NEO-PROBES-003,Custom probes from spec.probes replace the corresponding default probe.,NEO-3-009-PROBE-02,Yes,MVP — verifies V1 FR(s): NEO-3-009-PROBE-02

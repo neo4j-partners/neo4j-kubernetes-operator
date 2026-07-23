@@ -27,6 +27,7 @@ spec:
   scheduling:
     nodeSelector:
       disktype: ssd
+    terminationGracePeriodSeconds: 3600
     tolerations:
       - key: dedicated
         operator: Equal

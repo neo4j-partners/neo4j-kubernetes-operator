@@ -5106,6 +5106,12 @@ spec:
                     type: object
                   priorityClassName:
                     type: string
+                  terminationGracePeriodSeconds:
+                    description: |-
+                      TerminationGracePeriodSeconds is the pod shutdown window before SIGKILL.
+                      Defaults to 3600 (Helm parity) when unset. Forced to 0 in offline maintenance.
+                    format: int64
+                    type: integer
                   tolerations:
                     items:
                       description: |-

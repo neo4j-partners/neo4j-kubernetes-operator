@@ -60,11 +60,12 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Volumes:            volumes,
 		ImagePullSecrets:   imagePullSecrets(ctx),
 	}
-	applyOfflineMaintenance(ctx, &podSpec.Containers[0], &podSpec)
 	storageVCTs := renderstorage.Apply(ctx, &podSpec.Containers[0], &podSpec)
 	appendPluginLicenseVolumes(ctx, &podSpec.Containers[0], &podSpec)
 	rendertrust.AppendVolumes(ctx, &podSpec.Containers[0], &podSpec)
 	applyScheduling(ctx, &podSpec)
+	// After scheduling so offline can force terminationGracePeriodSeconds=0.
+	applyOfflineMaintenance(ctx, &podSpec.Containers[0], &podSpec)
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{

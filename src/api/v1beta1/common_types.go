@@ -525,6 +525,10 @@ type SchedulingSpec struct {
 	Affinity                  *SchedulingAffinitySpec            `json:"affinity,omitempty"`
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint  `json:"topologySpreadConstraints,omitempty"`
 	PriorityClassName         string                             `json:"priorityClassName,omitempty"`
+	// TerminationGracePeriodSeconds is the pod shutdown window before SIGKILL.
+	// Defaults to 3600 (Helm parity) when unset. Forced to 0 in offline maintenance.
+	// +optional
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
 }
 
 // PodDisruptionBudgetSpec configures PDB for cluster workloads.
