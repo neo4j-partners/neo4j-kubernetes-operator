@@ -117,4 +117,4 @@ AC-NEO-MAINTENANCE-JOBS,AC-NEO-MAINTENANCE-JOBS-002,Maintenance job result is ex
 AC-NEO-UNINSTALL,AC-NEO-UNINSTALL-001,Neo4j workload resources are deleted.,NEO-2-018,Yes,MVP — verifies V1 FR(s): NEO-2-018
 AC-NEO-UNINSTALL,AC-NEO-UNINSTALL-002,PVCs are preserved by default.,NEO-2-018,Yes,MVP — verifies V1 FR(s): NEO-2-018
 AC-NEO-UNINSTALL-PRESERVE,AC-NEO-UNINSTALL-PRESERVE-001,Data PVCs remain after CR deletion when preservation is selected.,OP-2-005-UNINST-01,Yes,MVP — verifies V1 FR(s): OP-2-005-UNINST-01
-AC-NEO-UNINSTALL-DELETE,AC-NEO-UNINSTALL-DELETE-001,PVCs are deleted only when explicit delete-data policy is selected.,OP-2-005-UNINST-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-NEO-UNINSTALL-DELETE,AC-NEO-UNINSTALL-DELETE-001,PVCs are deleted only when explicit delete-data policy is selected.,OP-2-005-UNINST-02,Yes,MVP — verifies V1 FR(s): OP-2-005-UNINST-02

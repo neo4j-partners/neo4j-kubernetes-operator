@@ -90,6 +90,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 				Spec: podSpec,
 			},
 			VolumeClaimTemplates: storageVCTs,
+			PersistentVolumeClaimRetentionPolicy: renderstorage.RetentionPolicy(ctx.Neo4j),
 		},
 	}
 }

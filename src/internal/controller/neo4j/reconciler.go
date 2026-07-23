@@ -121,7 +121,13 @@ func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1bet
 	if !controllerutil.ContainsFinalizer(neo4j, FinalizerName) {
 		return ctrl.Result{}, nil
 	}
-	// V1: preserve PVCs — child objects are garbage-collected via owner references.
+	// Default Retain (UNINST-01): GC removes owned objects; Dynamic PVCs stay.
+	// whenDeleted=Delete (UNINST-02): wipe STS then Dynamic PVCs before releasing the finalizer.
+	if pending, err := persistence.WipeOnUninstall(ctx, r.Client, neo4j); err != nil {
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+	} else if pending {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 	controllerutil.RemoveFinalizer(neo4j, FinalizerName)
 	if err := r.Update(ctx, neo4j); err != nil {
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err

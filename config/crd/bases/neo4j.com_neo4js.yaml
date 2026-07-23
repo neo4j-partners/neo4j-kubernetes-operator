@@ -7580,6 +7580,29 @@ spec:
                       - secretName
                       type: object
                     type: object
+                  volumeClaimRetention:
+                    description: |-
+                      VolumeClaimRetention controls PVC lifecycle when the StatefulSet is deleted or scaled (OP-2-005-UNINST-*).
+                      Default Retain preserves data (UNINST-01). Set whenDeleted=Delete for ephemeral wipe (UNINST-02).
+                      Existing.claimName PVCs are never deleted by the operator.
+                    properties:
+                      whenDeleted:
+                        default: Retain
+                        description: WhenDeleted is applied when the StatefulSet is
+                          deleted. Default Retain.
+                        enum:
+                        - Retain
+                        - Delete
+                        type: string
+                      whenScaled:
+                        default: Retain
+                        description: WhenScaled is applied when the StatefulSet scales
+                          down. Default Retain.
+                        enum:
+                        - Retain
+                        - Delete
+                        type: string
+                    type: object
                   volumes:
                     description: |-
                       VolumesSpec mirrors Helm values.yaml volumes block (BDR-005), plus operator extension `plugins`

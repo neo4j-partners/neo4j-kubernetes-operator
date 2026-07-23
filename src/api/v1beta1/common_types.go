@@ -231,9 +231,32 @@ type SecretMountSpec struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.volumes) || !has(self.volumes.data) || self.volumes.data.mode != 'Dynamic' || (has(self.volumes.data.dynamic) && has(self.volumes.data.dynamic.size) && self.volumes.data.dynamic.size != '')",message="data volume size is required when mode is Dynamic"
 // +kubebuilder:validation:XValidation:rule="!has(self.volumes) || !has(self.volumes.data) || self.volumes.data.mode != 'Share'",message="data volume cannot use Share mode"
 type StorageSpec struct {
-	Volumes          *VolumesSpec               `json:"volumes,omitempty"`
-	AdditionalMounts []AdditionalMount          `json:"additionalMounts,omitempty"`
-	SecretMounts     map[string]SecretMountSpec `json:"secretMounts,omitempty"`
+	Volumes *VolumesSpec `json:"volumes,omitempty"`
+	// VolumeClaimRetention controls PVC lifecycle when the StatefulSet is deleted or scaled (OP-2-005-UNINST-*).
+	// Default Retain preserves data (UNINST-01). Set whenDeleted=Delete for ephemeral wipe (UNINST-02).
+	// Existing.claimName PVCs are never deleted by the operator.
+	VolumeClaimRetention *VolumeClaimRetentionPolicySpec `json:"volumeClaimRetention,omitempty"`
+	AdditionalMounts     []AdditionalMount               `json:"additionalMounts,omitempty"`
+	SecretMounts         map[string]SecretMountSpec      `json:"secretMounts,omitempty"`
+}
+
+// VolumeClaimRetentionPolicyType is Retain or Delete (StatefulSet PVC retention parity).
+// +kubebuilder:validation:Enum=Retain;Delete
+type VolumeClaimRetentionPolicyType string
+
+const (
+	VolumeClaimRetentionRetain VolumeClaimRetentionPolicyType = "Retain"
+	VolumeClaimRetentionDelete VolumeClaimRetentionPolicyType = "Delete"
+)
+
+// VolumeClaimRetentionPolicySpec maps to StatefulSet.spec.persistentVolumeClaimRetentionPolicy.
+type VolumeClaimRetentionPolicySpec struct {
+	// WhenDeleted is applied when the StatefulSet is deleted. Default Retain.
+	// +kubebuilder:default=Retain
+	WhenDeleted VolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
+	// WhenScaled is applied when the StatefulSet scales down. Default Retain.
+	// +kubebuilder:default=Retain
+	WhenScaled VolumeClaimRetentionPolicyType `json:"whenScaled,omitempty"`
 }
 
 // ConfigSpec groups Neo4j configuration files and JVM settings (BDR-008).

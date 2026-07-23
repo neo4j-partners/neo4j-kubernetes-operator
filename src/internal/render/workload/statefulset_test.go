@@ -40,6 +40,10 @@ func TestStandaloneStatefulSet(t *testing.T) {
 	if len(sts.Spec.VolumeClaimTemplates) != 1 {
 		t.Fatalf("expected one VCT")
 	}
+	pol := sts.Spec.PersistentVolumeClaimRetentionPolicy
+	if pol == nil || pol.WhenDeleted != appsv1.RetainPersistentVolumeClaimRetentionPolicyType {
+		t.Fatalf("default retention = %#v", pol)
+	}
 	env := sts.Spec.Template.Spec.Containers[0].Env
 	envByName := map[string]string{}
 	for _, e := range env {

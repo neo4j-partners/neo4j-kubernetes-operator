@@ -1,6 +1,6 @@
 # Uninstall the operator
 
-Remove the operator controller and RBAC. **Neo4j workloads and PVCs are not deleted automatically** when uninstalling the operator (V1 policy: preserve data).
+Remove the operator controller and RBAC. **Neo4j workloads and PVCs are not deleted automatically** when uninstalling the operator (preserve-data by default).
 
 ## Remove controller and RBAC
 
@@ -29,6 +29,29 @@ Delete each `Neo4j` CR; owned objects are garbage-collected via owner references
 kubectl delete neo4j dev -n default
 ```
 
+## PVC retention
+
+Default uninstall **preserves PersistentVolumeClaims** (`storage.volumeClaimRetention.whenDeleted` defaults to `Retain`, OP-2-005-UNINST-01).
+
+For ephemeral labs, opt into wipe:
+
+```yaml
+spec:
+  storage:
+    volumeClaimRetention:
+      whenDeleted: Delete   # also set whenScaled: Delete to drop PVCs on scale-down
+```
+
+That sets StatefulSet `persistentVolumeClaimRetentionPolicy` and, on CR delete, removes Dynamic PVCs labeled for the instance. **`Existing.claimName` PVCs are never deleted.**
+
+Example: [`examples/standalone/18-pvc-delete-on-uninstall.yaml`](../../examples/standalone/18-pvc-delete-on-uninstall.yaml).
+
+Manual reclaim when using Retain:
+
+```bash
+kubectl delete pvc -n default -l app.kubernetes.io/instance=dev,app.kubernetes.io/component=storage
+```
+
 ## Remove CRD (destructive)
 
 Only when no `Neo4j` resources remain in the cluster:
@@ -38,14 +61,6 @@ kubectl delete -f config/crd/bases/neo4j.com_neo4js.yaml
 ```
 
 Deleting the CRD removes all `Neo4j` CRs cluster-wide.
-
-## PVC retention
-
-V1 uninstall **preserves PersistentVolumeClaims** ([V1 scope lock](../../00-discovery/13-v1-scope-lock.md)). Delete PVCs explicitly if you want to reclaim storage:
-
-```bash
-kubectl delete pvc -n default -l app.kubernetes.io/instance=dev
-```
 
 ## Remove namespace
 

@@ -49,6 +49,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/15-full.yaml`](standalone/15-full.yaml) | Kitchen sink — everything above combined (`dev-full`) |
 | [`standalone/16-servicemonitor.yaml`](standalone/16-servicemonitor.yaml) | `features.monitoring.serviceMonitor` (Prometheus Operator CR) |
 | [`standalone/17-offline-maintenance.yaml`](standalone/17-offline-maintenance.yaml) | `maintenance.offlineMode` — sleep loop, no Neo4j process |
+| [`standalone/18-pvc-delete-on-uninstall.yaml`](standalone/18-pvc-delete-on-uninstall.yaml) | `storage.volumeClaimRetention.whenDeleted: Delete` |
 
 ## Cluster
 
@@ -116,6 +117,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Plugins — GDS / Bloom | n/a (Standalone `spec.plugins` also accepts gds/bloom, untested combo here) | [`cluster/03`](cluster/03-pools-analytics-read.yaml) (`secondaries.analytics.plugins` only) |
 | Image repository / pullPolicy / pullSecrets | [`standalone/14`](standalone/14-image-pullsecrets.yaml) | *(same fields, not re-demonstrated)* |
 | Offline maintenance (`maintenance.offlineMode`) | [`standalone/17`](standalone/17-offline-maintenance.yaml) | *(same field — full cluster outage)* |
+| PVC delete on uninstall (`volumeClaimRetention`) | [`standalone/18`](standalone/18-pvc-delete-on-uninstall.yaml) | *(same field)* |
 | Scale-out | n/a (single pool) | [`cluster/13`](cluster/13-scale-out.yaml) |
 | Kitchen sink | [`standalone/15`](standalone/15-full.yaml) | [`cluster/14`](cluster/14-full.yaml) |
 

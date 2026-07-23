@@ -99,6 +99,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			sts.Spec.Replicas = stsDesired.Spec.Replicas
 			sts.Spec.Template = stsDesired.Spec.Template
 			sts.Spec.UpdateStrategy = stsDesired.Spec.UpdateStrategy
+			sts.Spec.PersistentVolumeClaimRetentionPolicy = stsDesired.Spec.PersistentVolumeClaimRetentionPolicy
 			return nil
 		}); err != nil {
 			return shared.Failed(err)

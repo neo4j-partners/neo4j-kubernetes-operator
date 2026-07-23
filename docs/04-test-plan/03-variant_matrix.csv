@@ -9,7 +9,7 @@ Status Model,Detailed phase/status,OP-1-003,OP-2-003-STATUS-02,"Expose detailed 
 Upgrade Strategy,In-place controller upgrade,OP-1-004,OP-2-004-UPG-01,Upgrade operator deployment without changing CRD versions.,Specific upgrade AC,AC-OP-UPGRADE,Yes
 Upgrade Strategy,CRD conversion webhook,OP-1-004,OP-2-004-UPG-02,Support API version conversion for CRDs.,Specific upgrade AC,AC-OP-CRD-CONVERSION,No
 Uninstall Policy,Preserve data,OP-1-005; NEO-2-018,OP-2-005-UNINST-01,Delete control plane/workload resources while preserving PVCs.,Specific uninstall AC,AC-NEO-UNINSTALL-PRESERVE,Yes
-Uninstall Policy,Delete data,OP-1-005; NEO-2-018,OP-2-005-UNINST-02,Delete PVCs and data for ephemeral environments.,Specific uninstall AC,AC-NEO-UNINSTALL-DELETE,No
+Uninstall Policy,Delete data,OP-1-005; NEO-2-018,OP-2-005-UNINST-02,Delete PVCs and data for ephemeral environments.,Specific uninstall AC,AC-NEO-UNINSTALL-DELETE,Yes
 Neo4j Deployment Mode,Standalone,NEO-1-001,NEO-2-001-MODE-01,Deploy one Neo4j server.,Specific deployment AC,AC-NEO-STANDALONE,Yes
 Neo4j Deployment Mode,Cluster,NEO-1-002; NEO-2-011,NEO-2-002-MODE-01,Deploy a clustered Neo4j topology.,Specific deployment AC,AC-NEO-CLUSTER,Yes
 Edition,Enterprise,NEO-1-001; NEO-1-002; NEO-2-003,NEO-2-001-EDT-01,Deploy Neo4j Enterprise edition.,Shared install AC + license AC,AC-NEO-LICENSE,Yes

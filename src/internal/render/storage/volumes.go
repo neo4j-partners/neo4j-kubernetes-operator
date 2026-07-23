@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
@@ -174,9 +175,14 @@ func dynamicPVC(ctx render.Context, name string, dyn *neo4jv1beta1.DynamicVolume
 		spec.StorageClassName = &sc
 	}
 	meta := metav1.ObjectMeta{Name: name}
-	if len(dyn.Labels) > 0 {
-		meta.Labels = dyn.Labels
+	labels := maps.Clone(ctx.CommonLabels("storage"))
+	if labels == nil {
+		labels = map[string]string{}
 	}
+	for k, v := range dyn.Labels {
+		labels[k] = v
+	}
+	meta.Labels = labels
 	return &corev1.PersistentVolumeClaim{ObjectMeta: meta, Spec: spec}
 }
 

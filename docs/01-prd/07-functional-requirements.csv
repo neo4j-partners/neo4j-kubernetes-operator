@@ -40,7 +40,7 @@ OP-2-003-STATUS-02,OP-1-003,,Lifecycle,Status Model,Detailed phase/status,"Expos
 OP-2-004-UPG-01,OP-1-004,,Lifecycle,Upgrade Strategy,In-place controller upgrade,Upgrade operator deployment without changing CRD versions.,AC-OP-UPGRADE,No,Deferred with OP-1-004.
 OP-2-004-UPG-02,OP-1-004,,Lifecycle,Upgrade Strategy,CRD conversion webhook,Support API version conversion for CRDs.,AC-OP-CRD-CONVERSION,No,Deferred V1.1+.
 OP-2-005-UNINST-01,OP-1-005,,Uninstallation,Uninstall Policy,Preserve data,Delete control plane/workload resources while preserving PVCs.,AC-NEO-UNINSTALL-PRESERVE,Yes,MVP default uninstall behavior.
-OP-2-005-UNINST-02,OP-1-005,,Uninstallation,Uninstall Policy,Delete data,Delete PVCs and data for ephemeral environments.,AC-NEO-UNINSTALL-DELETE,No,Deferred — explicit data wipe post-MVP.
+OP-2-005-UNINST-02,OP-1-005,,Uninstallation,Uninstall Policy,Delete data,Delete PVCs and data for ephemeral environments.,AC-NEO-UNINSTALL-DELETE,Yes,MVP — storage.volumeClaimRetention.whenDeleted=Delete (Existing.claimName never wiped).
 NEO-3-003-APOC-01,NEO-2-003,,Configuration,APOC,APOC config,Apply APOC configuration.,AC-NEO-APOC,No,Deferred — use `spec.plugins` + `pluginDefinitions` ([BDR-004]) when APOC needed.
 NEO-3-003-APOC-02,NEO-2-003,,Configuration,APOC,APOC credentials,Mount APOC credentials from secrets.,AC-NEO-APOC-CREDS,No,Deferred with APOC config.
 NEO-3-003-CFG-01,NEO-2-003,,Configuration,Neo4j Config,Core config,Apply server config values.,AC-NEO-CONFIG,Yes,MVP — `spec.config` map passthrough ([BDR-008]).
