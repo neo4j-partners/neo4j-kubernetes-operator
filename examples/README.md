@@ -68,6 +68,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`cluster/12-backup-and-metrics.yaml`](cluster/12-backup-and-metrics.yaml) | Backup + Prometheus metrics listeners |
 | [`cluster/13-scale-out.yaml`](cluster/13-scale-out.yaml) | `primaries.members` scale-out — **manual `ENABLE SERVER` required**, see file |
 | [`cluster/14-full.yaml`](cluster/14-full.yaml) | Kitchen sink — everything above combined (`prod-full`) |
+| [`cluster/15-pdb.yaml`](cluster/15-pdb.yaml) | `podDisruptionBudget.enabled` — instance-wide PDB |
 
 ## Storage
 
@@ -108,6 +109,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Backup listener/feature | [`standalone/09`](standalone/09-listeners-backup-metrics.yaml) | [`cluster/12`](cluster/12-backup-and-metrics.yaml) |
 | Prometheus metrics listener/feature | [`standalone/09`](standalone/09-listeners-backup-metrics.yaml) | [`cluster/12`](cluster/12-backup-and-metrics.yaml) |
 | Scheduling (affinity/tolerations/spread) | [`standalone/10`](standalone/10-scheduling.yaml) | [`cluster/08`](cluster/08-scheduling.yaml) |
+| PodDisruptionBudget | *(works on Standalone too)* | [`cluster/15`](cluster/15-pdb.yaml) |
 | Custom probes | [`standalone/11`](standalone/11-probes-custom.yaml) | [`cluster/09`](cluster/09-probes-custom.yaml) |
 | `config.neo4j` / `config.jvm` / `config.apoc` | [`standalone/12`](standalone/12-config-jvm.yaml) | [`cluster/10`](cluster/10-config-jvm.yaml) |
 | Plugins — APOC | [`standalone/13`](standalone/13-plugins-apoc.yaml), [`storage/12`](storage/12-aux-share-plugins-apoc.yaml) | [`cluster/11`](cluster/11-plugins-apoc.yaml) (`primaries.plugins`) |
@@ -143,7 +145,6 @@ workload. They are intentionally left out of every example above:
 |-------|--------|
 | `resources` | schema-only — container has no resource requests/limits set by the operator |
 | `security.podSecurityContext` / `containerSecurityContext` / `networkPolicy` | schema-only |
-| `podDisruptionBudget` | schema-only — no PDB is created |
 | `podTemplate` (initContainers, sidecars, env) | schema-only |
 | `trust.certManager` | schema-only — only BYO Secret TLS (`privateKey`/`publicCertificate`) is wired |
 | `connectivity.ingress.enabled: true` | schema-only — no Ingress object is created |

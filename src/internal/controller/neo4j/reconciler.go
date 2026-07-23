@@ -39,6 +39,7 @@ type Neo4jReconciler struct {
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;secrets;configmaps;serviceaccounts;persistentvolumeclaims;endpoints,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch

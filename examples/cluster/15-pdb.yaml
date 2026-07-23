@@ -1,0 +1,33 @@
+# Purpose: PodDisruptionBudget spanning all cluster pods (NEO-2-008).
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/cluster/15-pdb.yaml
+# Related README: ../README.md#cluster
+#
+# Creates policy/v1 PodDisruptionBudget "prod-pdb" selecting all pods for this CR
+# (all pools). Default minAvailable is 2 when Cluster has ≥3 members.
+# Verify: kubectl get pdb prod-pdb -o yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-pdb
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+  podDisruptionBudget:
+    enabled: true
+    # minAvailable: 2   # optional override (int or percentage string)

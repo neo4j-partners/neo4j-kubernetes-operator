@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,7 +105,44 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		}
 	}
 
+	if out := r.reconcilePDB(ctx, neo4j, baseCtx); out.Err != nil {
+		return out
+	}
+
 	r.recordCredentials(neo4j, baseCtx.AuthSecretName(), generated)
+	return shared.Done()
+}
+
+func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+	if !renderwl.PDBEnabled(neo4j) {
+		return r.deletePDBIfPresent(ctx, neo4j, baseCtx)
+	}
+	desired := renderwl.PodDisruptionBudget(baseCtx)
+	pdb := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
+	}
+	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, pdb, func() error {
+		pdb.Labels = desired.Labels
+		pdb.Spec = desired.Spec
+		return nil
+	}); err != nil {
+		return shared.Failed(fmt.Errorf("apply PodDisruptionBudget: %w", err))
+	}
+	return shared.Done()
+}
+
+func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+	pdb := &policyv1.PodDisruptionBudget{}
+	key := types.NamespacedName{Name: renderwl.PDBName(baseCtx), Namespace: neo4j.Namespace}
+	if err := r.Client.Get(ctx, key, pdb); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return shared.Done()
+		}
+		return shared.Failed(fmt.Errorf("get PodDisruptionBudget for delete: %w", err))
+	}
+	if err := r.Client.Delete(ctx, pdb); err != nil && client.IgnoreNotFound(err) != nil {
+		return shared.Failed(fmt.Errorf("delete PodDisruptionBudget: %w", err))
+	}
 	return shared.Done()
 }
 
@@ -193,5 +231,6 @@ func OwnedTypes() []client.Object {
 		&corev1.ServiceAccount{},
 		&rbacv1.Role{},
 		&rbacv1.RoleBinding{},
+		&policyv1.PodDisruptionBudget{},
 	}
 }

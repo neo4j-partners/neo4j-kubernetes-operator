@@ -238,7 +238,7 @@ Tracked product gaps / schema fields that are **not** wired (do not rely on them
 | **Automatic** `ENABLE SERVER`      | STS scale works; DBMS enablement is manual — `[examples/cluster/13-scale-out.yaml](examples/cluster/13-scale-out.yaml)` (`NEO-3-011-SRV-01`) |
 | `resources`                        | No requests/limits from CR                                                                                                                   |
 | `security.*`                       | SA annotations / securityContext / NetworkPolicy not applied from CR                                                                         |
-| PDB, Ingress, cert-manager         | Deferred                                                                                                                                     |
+| PDB, Ingress, cert-manager         | PDB wired (`spec.podDisruptionBudget`); Ingress / cert-manager deferred                                                                     |
 | CSV / JMX / Graphite monitoring    | Deferred (`features.monitoring.prometheus` + `serviceMonitor` are wired)                                                                     |
 | LDAP, reverse proxy, multi-cluster | Deferred                                                                                                                                     |
 | Neo4j version upgrade workflow     | Deferred                                                                                                                                     |
