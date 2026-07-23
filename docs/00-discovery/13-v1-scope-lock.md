@@ -58,7 +58,7 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 | **Neo4j version upgrade** | NEO-2-012, NEO-3-012-* | `spec.version` at install only |
 | **Ingress / reverse proxy** | NEO-3-007-PRT-*, ingress rules | post-V1 |
 | **cert-manager / TLS reload** | NEO-3-005-TLS-04 | BYO Secrets only in V1 |
-| **Logging customization** | NEO-2-016, NEO-3-016-* | Neo4j defaults; `volumes.logs` mount is in V1 |
+| **Logging customization** | NEO-2-016, NEO-3-016-* | In V1: image defaults + optional `spec.logging.*Xml`; `volumes.logs` mount |
 | **Maintenance jobs** | NEO-2-017, NEO-3-017-* | post-V1 |
 | **Operator Helm / multi-scope / upgrade** | OP-1-004, OP-1-007, OP-2-001-PKG-02, SCOPE-02/03 | post-V1 |
 

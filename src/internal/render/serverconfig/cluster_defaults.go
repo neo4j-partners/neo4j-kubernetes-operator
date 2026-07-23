@@ -70,5 +70,8 @@ func operatorInjectedNeo4jConfKeys(ctx render.Context) map[string]string {
 	for k, v := range rendertrust.Neo4jConfKeys(ctx) {
 		keys[k] = v
 	}
+	for k, v := range loggingNeo4jConfKeys(ctx) {
+		keys[k] = v
+	}
 	return keys
 }

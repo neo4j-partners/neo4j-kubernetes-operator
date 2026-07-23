@@ -1,0 +1,76 @@
+# Custom Log4j2 XML (NEO-3-016-LOG-02). Omit spec.logging for image defaults (LOG-01).
+# Purpose: mount server-logs.xml / user-logs.xml and point server.logs.* at them.
+# Apply: kubectl apply -f examples/standalone/19-custom-logging.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: lab-logging
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+      # Optional: persist log files under /logs (NEO-3-006-VOL-03).
+      logs:
+        mode: Share
+        shareFrom: data
+  logging:
+    # Minimal placeholders — replace with full Neo4j Log4j2 XML from the Operations Manual
+    # or helm-charts/neo4j/server-logs.xml / user-logs.xml.
+    serverLogsXml: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <Configuration status="ERROR" monitorInterval="30" packages="org.neo4j.logging.log4j">
+        <Appenders>
+          <Console name="ConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSSZ}{GMT+0} %-5p [%c{1.}] %m%n"/>
+          </Console>
+          <RollingRandomAccessFile name="DebugLog" fileName="${config:server.directories.logs}/debug.log"
+                                   filePattern="$${config:server.directories.logs}/debug.log.%02i">
+            <Neo4jDebugLogLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSSZ}{GMT+0} %-5p [%c{1.}] %m%n"/>
+            <Policies>
+              <SizeBasedTriggeringPolicy size="20 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy fileIndex="min" max="7"/>
+          </RollingRandomAccessFile>
+        </Appenders>
+        <Loggers>
+          <Root level="INFO">
+            <AppenderRef ref="ConsoleAppender"/>
+            <AppenderRef ref="DebugLog"/>
+          </Root>
+        </Loggers>
+      </Configuration>
+    userLogsXml: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <Configuration status="ERROR" monitorInterval="30" packages="org.neo4j.logging.log4j">
+        <Appenders>
+          <Console name="ConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSSZ}{GMT+0} %-5p %m%n"/>
+          </Console>
+          <RollingRandomAccessFile name="Neo4jLog" fileName="${config:server.directories.logs}/neo4j.log"
+                                   filePattern="$${config:server.directories.logs}/neo4j.log.%02i">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSSZ}{GMT+0} %-5p %m%n"/>
+            <Policies>
+              <SizeBasedTriggeringPolicy size="20 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy fileIndex="min" max="7"/>
+          </RollingRandomAccessFile>
+        </Appenders>
+        <Loggers>
+          <Root level="INFO">
+            <AppenderRef ref="ConsoleAppender"/>
+            <AppenderRef ref="Neo4jLog"/>
+          </Root>
+        </Loggers>
+      </Configuration>
+  auth:
+    generatePassword: true

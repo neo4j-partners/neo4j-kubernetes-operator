@@ -23,7 +23,6 @@ Source of truth for engineering: [`../02-technical-design/13-v1-scope-lock.md`](
 | Non-goal | Rationale |
 |----------|-----------|
 | **Monitoring / Prometheus / ServiceMonitor** | Post-V1 ([BDR-010](../02-technical-design/decision-records/business/010-neo4j-features-catalog.md)) |
-| **Custom logging** (serverLogsXml / userLogsXml) | Neo4j defaults sufficient for MVP |
 | **Operator metrics & structured observability** (`OP-1-007`) | Post-V1 |
 
 ### Neo4j & platform variants

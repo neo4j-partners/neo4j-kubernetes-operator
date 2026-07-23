@@ -606,6 +606,61 @@ spec:
                 required:
                 - accept
                 type: object
+              logging:
+                description: Logging overrides Neo4j Log4j2 XML (NEO-3-016-LOG-*).
+                  Omit for image defaults (LOG-01).
+                properties:
+                  serverLogsConfigMapRef:
+                    description: ServerLogsConfigMapRef mounts an existing ConfigMap
+                      instead of inlining serverLogsXml.
+                    properties:
+                      key:
+                        description: Key within the ConfigMap. Defaults to server-logs.xml
+                          or user-logs.xml.
+                        type: string
+                      name:
+                        description: Name of the ConfigMap in the Neo4j namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  serverLogsXml:
+                    description: ServerLogsXml is the full contents of server-logs.xml
+                      (debug/query/http/security appenders).
+                    type: string
+                  userLogsConfigMapRef:
+                    description: UserLogsConfigMapRef mounts an existing ConfigMap
+                      instead of inlining userLogsXml.
+                    properties:
+                      key:
+                        description: Key within the ConfigMap. Defaults to server-logs.xml
+                          or user-logs.xml.
+                        type: string
+                      name:
+                        description: Name of the ConfigMap in the Neo4j namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  userLogsXml:
+                    description: UserLogsXml is the full contents of user-logs.xml
+                      (neo4j.log / console).
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: provide serverLogsXml or serverLogsConfigMapRef, not both
+                  rule: '!(has(self.serverLogsXml) && self.serverLogsXml != '''' &&
+                    has(self.serverLogsConfigMapRef))'
+                - message: provide userLogsXml or userLogsConfigMapRef, not both
+                  rule: '!(has(self.userLogsXml) && self.userLogsXml != '''' && has(self.userLogsConfigMapRef))'
+                - message: serverLogsConfigMapRef.name is required
+                  rule: '!has(self.serverLogsConfigMapRef) || (has(self.serverLogsConfigMapRef.name)
+                    && self.serverLogsConfigMapRef.name != '''')'
+                - message: userLogsConfigMapRef.name is required
+                  rule: '!has(self.userLogsConfigMapRef) || (has(self.userLogsConfigMapRef.name)
+                    && self.userLogsConfigMapRef.name != '''')'
               maintenance:
                 description: Maintenance enables operator-led maintenance such as
                   offline mode.

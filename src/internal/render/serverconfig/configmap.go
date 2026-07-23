@@ -80,6 +80,33 @@ func ConfigChecksum(ctx render.Context) string {
 		h.Write([]byte(data[k]))
 		h.Write([]byte{0})
 	}
+	if HasServerLogsXml(ctx) {
+		h.Write([]byte(serverLogsFileName))
+		h.Write([]byte{0})
+		h.Write([]byte(ctx.Neo4j.Spec.Logging.ServerLogsXml))
+		h.Write([]byte{0})
+	} else if HasServerLogsConfigMapRef(ctx) {
+		// External CM content is not hashed — changing the CM alone does not roll pods.
+		h.Write([]byte("serverLogsConfigMapRef"))
+		h.Write([]byte{0})
+		h.Write([]byte(ServerLogsConfigMapName(ctx)))
+		h.Write([]byte{0})
+		h.Write([]byte(ServerLogsConfigMapKey(ctx)))
+		h.Write([]byte{0})
+	}
+	if HasUserLogsXml(ctx) {
+		h.Write([]byte(userLogsFileName))
+		h.Write([]byte{0})
+		h.Write([]byte(ctx.Neo4j.Spec.Logging.UserLogsXml))
+		h.Write([]byte{0})
+	} else if HasUserLogsConfigMapRef(ctx) {
+		h.Write([]byte("userLogsConfigMapRef"))
+		h.Write([]byte{0})
+		h.Write([]byte(UserLogsConfigMapName(ctx)))
+		h.Write([]byte{0})
+		h.Write([]byte(UserLogsConfigMapKey(ctx)))
+		h.Write([]byte{0})
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 

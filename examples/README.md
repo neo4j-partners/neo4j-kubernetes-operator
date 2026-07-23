@@ -50,6 +50,8 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/16-servicemonitor.yaml`](standalone/16-servicemonitor.yaml) | `features.monitoring.serviceMonitor` (Prometheus Operator CR) |
 | [`standalone/17-offline-maintenance.yaml`](standalone/17-offline-maintenance.yaml) | `maintenance.offlineMode` — sleep loop, no Neo4j process |
 | [`standalone/18-pvc-delete-on-uninstall.yaml`](standalone/18-pvc-delete-on-uninstall.yaml) | `storage.volumeClaimRetention.whenDeleted: Delete` |
+| [`standalone/19-custom-logging.yaml`](standalone/19-custom-logging.yaml) | `logging.serverLogsXml` / `userLogsXml` (inline) |
+| [`standalone/20-logging-configmap-ref.yaml`](standalone/20-logging-configmap-ref.yaml) | `logging.*ConfigMapRef` (existing ConfigMaps) |
 
 ## Cluster
 
@@ -118,6 +120,8 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Image repository / pullPolicy / pullSecrets | [`standalone/14`](standalone/14-image-pullsecrets.yaml) | *(same fields, not re-demonstrated)* |
 | Offline maintenance (`maintenance.offlineMode`) | [`standalone/17`](standalone/17-offline-maintenance.yaml) | *(same field — full cluster outage)* |
 | PVC delete on uninstall (`volumeClaimRetention`) | [`standalone/18`](standalone/18-pvc-delete-on-uninstall.yaml) | *(same field)* |
+| Custom Log4j (`logging.serverLogsXml` / `userLogsXml`) | [`standalone/19`](standalone/19-custom-logging.yaml) | *(same field)* |
+| Custom Log4j ConfigMap ref | [`standalone/20`](standalone/20-logging-configmap-ref.yaml) | *(same field)* |
 | Scale-out | n/a (single pool) | [`cluster/13`](cluster/13-scale-out.yaml) |
 | Kitchen sink | [`standalone/15`](standalone/15-full.yaml) | [`cluster/14`](cluster/14-full.yaml) |
 

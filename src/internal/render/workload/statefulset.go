@@ -17,6 +17,8 @@ import (
 const (
 	neo4jConfVolumeName = "neo4j-conf"
 	apocConfVolumeName  = "apoc-conf"
+	serverLogsVolumeName = "neo4j-server-logs"
+	userLogsVolumeName   = "neo4j-user-logs"
 	// configVolumeDefaultMode matches Helm (neo4j-statefulset.yaml defaultMode: 0440).
 	// Neo4j --expand-commands rejects config files readable by others (default ConfigMap mode 0644).
 	configVolumeDefaultMode int32 = 0o440
@@ -52,6 +54,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		})
 		volumes = append(volumes, apocConfVolume(ctx, configMode))
 	}
+	appendLoggingVolumes(ctx, &container, &volumes, configMode)
 
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: ctx.OperandServiceAccountName(),
@@ -128,6 +131,42 @@ func apocConfVolume(ctx render.Context, mode int32) corev1.Volume {
 				},
 			},
 		},
+	}
+}
+
+// appendLoggingVolumes mounts custom Log4j XML as files under /config (NEO-3-016-LOG-02).
+func appendLoggingVolumes(ctx render.Context, container *corev1.Container, volumes *[]corev1.Volume, mode int32) {
+	if rendercfg.HasServerLogsConfig(ctx) {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      serverLogsVolumeName,
+			MountPath: "/config/server-logs.xml",
+			SubPath:   rendercfg.ServerLogsConfigMapKey(ctx),
+		})
+		*volumes = append(*volumes, corev1.Volume{
+			Name: serverLogsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: rendercfg.ServerLogsConfigMapName(ctx)},
+					DefaultMode:          &mode,
+				},
+			},
+		})
+	}
+	if rendercfg.HasUserLogsConfig(ctx) {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      userLogsVolumeName,
+			MountPath: "/config/user-logs.xml",
+			SubPath:   rendercfg.UserLogsConfigMapKey(ctx),
+		})
+		*volumes = append(*volumes, corev1.Volume{
+			Name: userLogsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: rendercfg.UserLogsConfigMapName(ctx)},
+					DefaultMode:          &mode,
+				},
+			},
+		})
 	}
 }
 

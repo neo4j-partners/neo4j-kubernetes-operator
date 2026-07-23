@@ -88,6 +88,12 @@ func (c Context) ApocConfigMapName() string {
 	return c.Neo4j.Name + "-" + string(c.Pool) + "-apoc-config"
 }
 
+// ServerLogsConfigMapName is the instance-wide server-logs.xml ConfigMap (Helm parity).
+func (c Context) ServerLogsConfigMapName() string { return c.Neo4j.Name + "-server-logs-config" }
+
+// UserLogsConfigMapName is the instance-wide user-logs.xml ConfigMap (Helm parity).
+func (c Context) UserLogsConfigMapName() string { return c.Neo4j.Name + "-user-logs-config" }
+
 // InternalsServiceName is the legacy aggregate internals Service name (unused in cluster mode).
 func (c Context) InternalsServiceName() string { return c.Neo4j.Name + "-internals" }
 

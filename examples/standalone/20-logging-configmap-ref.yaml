@@ -1,0 +1,32 @@
+# Custom Log4j via existing ConfigMaps (NEO-3-016-LOG-02) — no inline XML in the Neo4j CR.
+# Prerequisites: create the ConfigMaps first (keys default to server-logs.xml / user-logs.xml).
+#   kubectl create configmap my-server-logs --from-file=server-logs.xml=./server-logs.xml
+#   kubectl create configmap my-user-logs --from-file=user-logs.xml=./user-logs.xml
+# Apply: kubectl apply -f examples/standalone/20-logging-configmap-ref.yaml
+# Note: editing ConfigMap data does not auto-roll pods; bump the CR or restart the STS.
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: lab-logging-cm
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  logging:
+    serverLogsConfigMapRef:
+      name: my-server-logs
+      # key: server-logs.xml   # optional; this is the default
+    userLogsConfigMapRef:
+      name: my-user-logs
+  auth:
+    generatePassword: true

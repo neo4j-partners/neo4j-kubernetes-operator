@@ -343,6 +343,34 @@ type MonitoringFeaturesSpec struct {
 	ServiceMonitor *ServiceMonitorSpec       `json:"serviceMonitor,omitempty"`
 }
 
+// LoggingConfigMapRef references an existing ConfigMap that holds Log4j2 XML.
+type LoggingConfigMapRef struct {
+	// Name of the ConfigMap in the Neo4j namespace.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Key within the ConfigMap. Defaults to server-logs.xml or user-logs.xml.
+	Key string `json:"key,omitempty"`
+}
+
+// LoggingSpec overrides Neo4j Log4j2 configuration (Helm logging.* / NEO-3-016-LOG-02).
+// When unset, Neo4j uses image-bundled defaults (NEO-3-016-LOG-01).
+// Per side: inline XML XOR ConfigMap ref.
+// +kubebuilder:validation:XValidation:rule="!(has(self.serverLogsXml) && self.serverLogsXml != '' && has(self.serverLogsConfigMapRef))",message="provide serverLogsXml or serverLogsConfigMapRef, not both"
+// +kubebuilder:validation:XValidation:rule="!(has(self.userLogsXml) && self.userLogsXml != '' && has(self.userLogsConfigMapRef))",message="provide userLogsXml or userLogsConfigMapRef, not both"
+// +kubebuilder:validation:XValidation:rule="!has(self.serverLogsConfigMapRef) || (has(self.serverLogsConfigMapRef.name) && self.serverLogsConfigMapRef.name != '')",message="serverLogsConfigMapRef.name is required"
+// +kubebuilder:validation:XValidation:rule="!has(self.userLogsConfigMapRef) || (has(self.userLogsConfigMapRef.name) && self.userLogsConfigMapRef.name != '')",message="userLogsConfigMapRef.name is required"
+type LoggingSpec struct {
+	// ServerLogsXml is the full contents of server-logs.xml (debug/query/http/security appenders).
+	ServerLogsXml string `json:"serverLogsXml,omitempty"`
+	// ServerLogsConfigMapRef mounts an existing ConfigMap instead of inlining serverLogsXml.
+	ServerLogsConfigMapRef *LoggingConfigMapRef `json:"serverLogsConfigMapRef,omitempty"`
+	// UserLogsXml is the full contents of user-logs.xml (neo4j.log / console).
+	UserLogsXml string `json:"userLogsXml,omitempty"`
+	// UserLogsConfigMapRef mounts an existing ConfigMap instead of inlining userLogsXml.
+	UserLogsConfigMapRef *LoggingConfigMapRef `json:"userLogsConfigMapRef,omitempty"`
+}
+
 // FeaturesSpec optional workload capabilities (BDR-007, BDR-010).
 type FeaturesSpec struct {
 	Backup     *BackupFeatureSpec      `json:"backup,omitempty"`

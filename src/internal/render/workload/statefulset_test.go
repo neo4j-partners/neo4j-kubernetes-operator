@@ -334,3 +334,78 @@ func TestImagePullSecrets(t *testing.T) {
 		t.Fatalf("ImagePullSecrets = %#v", got)
 	}
 }
+
+func TestStatefulSetCustomLoggingMounts(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Logging: &neo4jv1beta1.LoggingSpec{
+				ServerLogsXml: "<Configuration/>",
+				UserLogsXml:   "<Configuration/>",
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	var sawServer, sawUser bool
+	for _, m := range sts.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.MountPath == "/config/server-logs.xml" && m.SubPath == "server-logs.xml" {
+			sawServer = true
+		}
+		if m.MountPath == "/config/user-logs.xml" && m.SubPath == "user-logs.xml" {
+			sawUser = true
+		}
+	}
+	if !sawServer || !sawUser {
+		t.Fatalf("expected log XML mounts, server=%v user=%v", sawServer, sawUser)
+	}
+}
+
+func TestStatefulSetLoggingConfigMapRefMounts(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Logging: &neo4jv1beta1.LoggingSpec{
+				ServerLogsConfigMapRef: &neo4jv1beta1.LoggingConfigMapRef{Name: "ext-server-logs", Key: "slog.xml"},
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	var mountOK, volOK bool
+	for _, m := range sts.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.MountPath == "/config/server-logs.xml" && m.SubPath == "slog.xml" {
+			mountOK = true
+		}
+	}
+	for _, v := range sts.Spec.Template.Spec.Volumes {
+		if v.Name == "neo4j-server-logs" && v.ConfigMap != nil && v.ConfigMap.Name == "ext-server-logs" {
+			volOK = true
+		}
+	}
+	if !mountOK || !volOK {
+		t.Fatalf("configmap ref mounts: mount=%v vol=%v", mountOK, volOK)
+	}
+}

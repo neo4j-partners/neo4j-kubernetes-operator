@@ -78,6 +78,8 @@ type Neo4jSpec struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// Config merges neo4j.conf, apoc.conf drop-ins, and JVM flags.
 	Config *ConfigSpec `json:"config,omitempty"`
+	// Logging overrides Neo4j Log4j2 XML (NEO-3-016-LOG-*). Omit for image defaults (LOG-01).
+	Logging *LoggingSpec `json:"logging,omitempty"`
 	// Features toggles optional capabilities such as backup and monitoring export.
 	Features *FeaturesSpec `json:"features,omitempty"`
 	// Trust configures TLS certificates and mTLS policies.
