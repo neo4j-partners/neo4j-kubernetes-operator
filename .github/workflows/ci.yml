@@ -71,6 +71,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh p1-connectivity
 
+      # spec.config passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002).
+      - name: "Scenario: p2-serverconfig"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p2-serverconfig
+
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
