@@ -15,7 +15,7 @@ Before installing the Neo4j operator, ensure your environment meets the followin
 |------|---------|--------------|
 | `kubectl` | Apply manifests | All installs |
 | `make` | Project deployment targets | Recommended |
-| `go` 1.22+ | Build manager locally | `make build`, `make run` |
+| `go` 1.24+ | Build manager locally | `make build`, `make run` |
 | `docker` | Build controller image | `make docker-build` (optional) |
 
 ## Storage

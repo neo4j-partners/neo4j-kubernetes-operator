@@ -12,7 +12,7 @@ Minimal path from zero to a running Standalone Neo4j on a local [kind](https://k
 | [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) | Cluster runtime |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | Configured after cluster creation |
 | `make` | From repository root — deploy targets |
-| Go 1.22+ | Optional — only for `make run` (controller on laptop) |
+| Go 1.24+ | Optional — only for `make run` (controller on laptop) |
 | Neo4j Enterprise image | Sample uses `neo4j:2026.05.0` — pull access or pre-load into kind |
 
 Shared requirements (StorageClass, license, RBAC): [operator prerequisites](../../operator/01-prerequisites.md).

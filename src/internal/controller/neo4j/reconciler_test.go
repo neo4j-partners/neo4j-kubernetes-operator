@@ -15,7 +15,10 @@ func TestStandalonePersistenceStep(t *testing.T) {
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Storage: &neo4jv1beta1.StorageSpec{
 				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic},
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
 				},
 			},
 		},
