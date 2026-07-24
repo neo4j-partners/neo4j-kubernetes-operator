@@ -1,0 +1,19 @@
+name: p7-config-change
+description: >
+  NEO-2-010 / NEO-3-010-RSTR-01 — a change to spec.config on a running Neo4j is
+  detected, rendered into the ConfigMap, and applied via a controlled restart
+  (StatefulSet pod-template revision bump).
+brief_ref: slice-config-change
+use_pipeline: standalone-suite
+on_case_failure: stop
+
+pipeline:
+  case_assert:
+    - assert/standalone-ready
+    - assert/config-restart
+
+cases:
+  - id: config-change-restart
+    fixture: tests/fixtures/neo4j-standalone.yaml
+    expect: success
+    cr_name: e2e-cfgchange
