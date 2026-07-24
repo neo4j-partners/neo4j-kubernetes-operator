@@ -1,0 +1,21 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Existing
+        existing:
+          # No PVC with this name exists: admission passes, but the pod cannot bind
+          # the volume, so it stays Pending and the CR never becomes Ready.
+          claimName: e2e-storage-claim-missing
+  auth:
+    generatePassword: true

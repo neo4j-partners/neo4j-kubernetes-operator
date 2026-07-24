@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 1Gi
+    # Extra pod-level volume mounted at a caller-chosen path. The mount name/path
+    # are checked from inside the neo4j container by the assertion.
+    additionalMounts:
+      - name: __MOUNT_NAME__
+        mountPath: __MOUNT_PATH__
+        volume:
+          name: __MOUNT_NAME__
+          emptyDir: {}
+  auth:
+    generatePassword: true

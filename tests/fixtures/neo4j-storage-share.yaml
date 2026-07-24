@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 1Gi
+      # logs and metrics reuse the data PVC (Share) under per-pod subPathExpr
+      # (logs/$(POD_NAME), metrics/$(POD_NAME)), mounted at /logs and /metrics.
+      logs:
+        mode: Share
+        shareFrom: data
+      metrics:
+        mode: Share
+        shareFrom: data
+  auth:
+    generatePassword: true

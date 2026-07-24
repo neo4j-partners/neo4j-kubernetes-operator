@@ -1,0 +1,35 @@
+# Pre-created PVC referenced by the Neo4j CR below via existing.claimName.
+# Applied together with the CR (single kubectl apply), so the claim exists on
+# first reconcile. Uses kind's default StorageClass (WaitForFirstConsumer).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e2e-storage-claim-data
+  labels:
+    app.kubernetes.io/managed-by: neo4j-e2e
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Existing
+        existing:
+          claimName: e2e-storage-claim-data
+  auth:
+    generatePassword: true

@@ -81,6 +81,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh p3-credentials
 
+      # Data modes (Dynamic/StorageClass, claimName, volumeClaimTemplate, emptyDir),
+      # Share logs/metrics + additionalMounts mount checks, and invalid-storage failures.
+      - name: "Scenario: p4-storage"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p4-storage
+
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
