@@ -76,6 +76,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh p2-serverconfig
 
+      # Generated password vs referenced Secret, each verified with a real bolt query.
+      - name: "Scenario: p3-credentials"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p3-credentials
+
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
