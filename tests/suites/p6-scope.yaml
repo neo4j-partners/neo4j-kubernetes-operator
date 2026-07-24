@@ -1,0 +1,19 @@
+name: p6-scope
+description: >
+  OP-2-001-SCOPE-01 — the namespace-scoped operator ignores Neo4j CRs created
+  outside WATCH_NAMESPACE. A CR in an unwatched namespace gets no operands and
+  no status conditions.
+brief_ref: slice-scope
+use_pipeline: scope-suite
+on_case_failure: stop
+clouds: [local-kind]
+
+pipeline:
+  case_assert:
+    - assert/scope-ignored
+
+# Single case; the CR name/namespace come from the scope action defaults
+# (E2E_SCOPE_CR / E2E_SCOPE_NAMESPACE), not from case fields.
+cases:
+  - id: unwatched-namespace-ignored
+    expect: success
