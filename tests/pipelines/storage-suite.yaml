@@ -1,0 +1,16 @@
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+# deploy/standalone applies the storage fixture (some fixtures bundle a pre-created PVC
+# as a second document, applied in the same kubectl apply).
+case_run:
+  - deploy/standalone
+
+# cleanup/standalone removes the CR + its owned PVCs; cleanup-extra removes the
+# pre-created (non-owned) claimName PVC.
+case_teardown:
+  - cleanup/standalone
+  - storage/cleanup-extra
