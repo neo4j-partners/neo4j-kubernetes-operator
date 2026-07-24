@@ -14,7 +14,6 @@ tests/
   azure/         AKS + ACR provisioning for e2e
   bin/           entry points (run-e2e, setup-local-kind)
   actions/       atomic run.sh + verify.sh steps
-  scenarios/     legacy (prefer suites/)
   runner/        suite executor
   fixtures/      parameterised manifests
   results/       run diagnostics (gitignored)
@@ -56,6 +55,22 @@ make test-e2e-azure-matrix
 |-------|------|-------------|
 | `p0-standalone` | [suites/p0-standalone.yaml](suites/p0-standalone.yaml) | Positive Standalone (happy path / matrix) |
 | `neo4j-admission` | [suites/neo4j-admission.yaml](suites/neo4j-admission.yaml) | Admission rejections + one happy case |
+| `p1-connectivity` | [suites/p1-connectivity.yaml](suites/p1-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
+
+### Connectivity (`p1-connectivity`)
+
+Boots a real Neo4j (`E2E_ASSERT_NEO4J_READY=true`) and probes each connector both from the
+Neo4j pod itself (`localhost`) and from a separate client pod (client Service DNS):
+
+| Protocol | Port | Probe | No-TLS expectation |
+|----------|------|-------|--------------------|
+| `bolt`   | 7687 | `cypher-shell bolt://`  | success |
+| `neo4j`  | 7687 | `cypher-shell neo4j://` | success |
+| `http`   | 7474 | raw HTTP over `/dev/tcp` | success |
+| `https`  | 7473 | TCP connect | failure (connector not exposed without TLS) |
+
+Expectations are data-driven via `EXPECT_CONN_{BOLT,NEO4J,HTTP,HTTPS}` (see
+`config/neo4j/cases/standalone-connectivity.sh`); a TLS case flips `https` to `success`.
 
 See [suites/readme.md](suites/readme.md) for the pipeline / case model.
 

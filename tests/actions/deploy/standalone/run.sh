@@ -28,9 +28,9 @@ kubectl apply -n "${NEO4J_NAMESPACE}" -f "${rendered}" 2>"${stderr_file}"
 apply_exit=$?
 set -e
 
-export LAST_APPLY_EXIT_CODE="${apply_exit}"
-export LAST_APPLY_STDERR
-LAST_APPLY_STDERR="$(cat "${stderr_file}")"
+# Persist to files so a later assert (separate subprocess) can read the outcome.
+apply_stderr="$(cat "${stderr_file}")"
+record_apply_result "${apply_exit}" "${stderr_file}"
 
 rm -f "${rendered}" "${stderr_file}"
 
@@ -39,5 +39,5 @@ if [[ "${CASE_EXPECT:-success}" == "failure" ]]; then
   exit 0
 fi
 
-[[ "${apply_exit}" -eq 0 ]] || die "kubectl apply failed (exit ${apply_exit}): ${LAST_APPLY_STDERR}"
+[[ "${apply_exit}" -eq 0 ]] || die "kubectl apply failed (exit ${apply_exit}): ${apply_stderr}"
 log "kubectl apply succeeded"

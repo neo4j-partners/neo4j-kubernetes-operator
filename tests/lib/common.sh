@@ -22,22 +22,6 @@ require_cmd() {
   done
 }
 
-# parse_scenario_list reads a top-level YAML list (steps/cleanup) without yq.
-parse_scenario_list() {
-  local section=$1
-  local file=$2
-  awk -v section="${section}:" '
-    { sub(/\r$/, "") }
-    $0 == section { in_section=1; next }
-    in_section && /^[^[:space:]#-]/ { in_section=0 }
-    in_section && /^  - / {
-      line=$0
-      sub(/^  - /, "", line)
-      print line
-    }
-  ' "${file}"
-}
-
 kubectl_wait_deployment() {
   local namespace=$1
   local name=$2
@@ -112,6 +96,33 @@ run_cleanup_phase() {
     resolved="$(resolve_action_template "${step}")"
     bash "${TESTS_DIR}/actions/${resolved}/run.sh" || true
   done
+}
+
+# Apply-result handoff: actions run in separate `bash` processes, so exported
+# vars don't survive between deploy (case_run) and admission asserts (case_assert).
+# Persist the last kubectl apply outcome to files keyed by run + case instead.
+_apply_state_dir() {
+  printf '%s' "${TESTS_DIR}/results/runs/${RUN_ID:-manual}/.apply-state"
+}
+
+# record_apply_result <exit_code> <stderr_file> — called by deploy after apply.
+record_apply_result() {
+  local exit_code=$1
+  local stderr_file=$2
+  local dir
+  dir="$(_apply_state_dir)"
+  mkdir -p "${dir}"
+  printf '%s' "${exit_code}" >"${dir}/${SUITE_CASE_ID:-case}.exit"
+  cp "${stderr_file}" "${dir}/${SUITE_CASE_ID:-case}.stderr" 2>/dev/null \
+    || : >"${dir}/${SUITE_CASE_ID:-case}.stderr"
+}
+
+read_apply_exit() {
+  cat "$(_apply_state_dir)/${SUITE_CASE_ID:-case}.exit" 2>/dev/null || printf ''
+}
+
+read_apply_stderr() {
+  cat "$(_apply_state_dir)/${SUITE_CASE_ID:-case}.stderr" 2>/dev/null || printf ''
 }
 
 collect_diagnostics() {
