@@ -58,6 +58,34 @@ make test-e2e-azure-matrix
 | `p1-connectivity` | [suites/p1-connectivity.yaml](suites/p1-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
 | `p2-serverconfig` | [suites/p2-serverconfig.yaml](suites/p2-serverconfig.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) |
 | `p3-credentials` | [suites/p3-credentials.yaml](suites/p3-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
+| `p4-storage` | [suites/p4-storage.yaml](suites/p4-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
+
+### Storage (`p4-storage`)
+
+Covers the `spec.storage` surface, one case per feature (all admitted). Mount points are
+verified from inside the `neo4j` container via `/proc/mounts` (no write permission required).
+
+> **Expected-fail:** the three PVC-impossible cases use `assert/storage-error`, which encodes
+> the target contract — the operator should **time out and mark the CR `Failed`** with a
+> message that mentions the PVC. That timeout/failure status is **not implemented yet**, so
+> these cases (and therefore the `p4-storage` suite / CI step) currently **fail on purpose**.
+> Do not patch operator code to make them pass — that work is tracked separately.
+
+| Case | Fixture | Assertion |
+|------|---------|-----------|
+| `dynamic-sc-ok` | `neo4j-storage-dynamic-sc.yaml` | data PVC Bound with `storageClassName=standard` |
+| `dynamic-sc-fail` | `neo4j-storage-dynamic-sc-bad.yaml` | **want:** non-existent StorageClass → operator times out, `phase=Failed`, message contains `pvc` *(expected-fail)* |
+| `claimname-ok` | `neo4j-storage-claimname.yaml` | pod mounts a pre-created PVC via `existing.claimName` |
+| `claimname-fail` | `neo4j-storage-claimname-missing.yaml` | **want:** missing PVC → operator times out, `phase=Failed`, message contains `pvc` *(expected-fail)* |
+| `vct-ok` | `neo4j-storage-vct.yaml` | `existing.volumeClaimTemplate` provisions `data-<cr>-server-0` |
+| `vct-fail` | `neo4j-storage-vct-bad.yaml` | **want:** template with bad StorageClass → operator times out, `phase=Failed`, message contains `pvc` *(expected-fail)* |
+| `emptydir` | `neo4j-storage-emptydir.yaml` | inline `emptyDir` data volume mounted at `/data`, no PVC |
+| `share-logs-metrics` | `neo4j-storage-share.yaml` | logs/metrics Share the data volume; `/logs` + `/metrics` mounted |
+| `additional-mounts` | `neo4j-storage-additional.yaml` | `additionalMounts` (random name) mounted at its `mountPath` |
+
+The additionalMounts volume name/path are generated per run by `deploy/standalone` (random) and
+read back by `assert/storage-additional`. The `claimname-ok` fixture bundles the PVC as a second
+document; `storage/cleanup-extra` removes it (label `app.kubernetes.io/managed-by=neo4j-e2e`).
 
 ### Connectivity (`p1-connectivity`)
 

@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Existing
+        existing:
+          volumeClaimTemplate:
+            accessModes:
+              - ReadWriteOnce
+            # StorageClass that does not exist: the provisioned PVC stays Pending
+            # and the CR never becomes Ready.
+            storageClassName: no-such-storage-class
+            resources:
+              requests:
+                storage: 1Gi
+  auth:
+    generatePassword: true

@@ -1,0 +1,84 @@
+name: p4-storage
+description: Storage surface (spec.storage) — data modes, aux Share, additionalMounts, and invalid-storage failures
+brief_ref: neo4j-storage-surface
+use_pipeline: storage-suite
+on_case_failure: continue
+clouds: [local-kind]
+
+# Each case picks its own assertion; apply always succeeds at admission, so the
+# "fail" cases (bad StorageClass / missing PVC) are asserted at runtime.
+#
+# NOTE: the three PVC-impossible cases use assert/storage-error, which encodes the
+# DESIRED (not yet implemented) contract — the operator should time out and mark the CR
+# Failed with a message that mentions the PVC. Those cases are EXPECTED TO FAIL until that
+# behavior is coded (today the operator stays Bootstrapping / not Ready with no timeout).
+pipeline:
+  case_assert:
+    - assert/{{assert}}
+
+cases:
+  # Dynamic data with an explicit storageClassName — provisions the PVC and boots.
+  - id: dynamic-sc-ok
+    fixture: tests/fixtures/neo4j-storage-dynamic-sc.yaml
+    assert: storage-sc
+    expect: success
+    cr_name: st-dyn-sc
+
+  # Dynamic data with a non-existent storageClassName — operator should time out and
+  # mark the CR Failed with a PVC error (EXPECTED-FAIL until implemented).
+  - id: dynamic-sc-fail
+    fixture: tests/fixtures/neo4j-storage-dynamic-sc-bad.yaml
+    assert: storage-error
+    expect: success
+    cr_name: st-dyn-scbad
+
+  # Existing data referencing a pre-created PVC by claimName (bundled in the fixture).
+  - id: claimname-ok
+    fixture: tests/fixtures/neo4j-storage-claimname.yaml
+    assert: storage-claimname
+    expect: success
+    cr_name: st-claim
+
+  # Existing claimName pointing at a PVC that does not exist — operator should time out and
+  # mark the CR Failed with a PVC error (EXPECTED-FAIL until implemented).
+  - id: claimname-fail
+    fixture: tests/fixtures/neo4j-storage-claimname-missing.yaml
+    assert: storage-error
+    expect: success
+    cr_name: st-claimmiss
+
+  # Existing data via a raw volumeClaimTemplate — operator provisions data-<cr>-server-0.
+  - id: vct-ok
+    fixture: tests/fixtures/neo4j-storage-vct.yaml
+    assert: storage-vct
+    expect: success
+    cr_name: st-vct
+
+  # volumeClaimTemplate with a non-existent storageClassName — operator should time out and
+  # mark the CR Failed with a PVC error (EXPECTED-FAIL until implemented).
+  - id: vct-fail
+    fixture: tests/fixtures/neo4j-storage-vct-bad.yaml
+    assert: storage-error
+    expect: success
+    cr_name: st-vctbad
+
+  # Existing data via an inline emptyDir (ephemeral) — /data mounted, no PVC.
+  - id: emptydir
+    fixture: tests/fixtures/neo4j-storage-emptydir.yaml
+    assert: storage-emptydir
+    expect: success
+    cr_name: st-empty
+
+  # logs + metrics Share the data volume — verified as real mounts at /logs and /metrics.
+  - id: share-logs-metrics
+    fixture: tests/fixtures/neo4j-storage-share.yaml
+    assert: storage-share
+    expect: success
+    cr_name: st-share
+
+  # additionalMounts with a random volume name — verified as a mount at its mountPath.
+  - id: additional-mounts
+    fixture: tests/fixtures/neo4j-storage-additional.yaml
+    assert: storage-additional
+    expect: success
+    cr_name: st-add
