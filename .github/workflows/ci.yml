@@ -87,6 +87,21 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh p4-storage
 
+      # Deleting the CR preserves the data PVC by default (NEO-2-018).
+      - name: "Scenario: p5-uninstall"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p5-uninstall
+
+      # Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE (OP-2-001-SCOPE-01).
+      - name: "Scenario: p6-scope"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p6-scope
+
+      # spec.config change is applied via a controlled restart (NEO-2-010).
+      - name: "Scenario: p7-config-change"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p7-config-change
+
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
