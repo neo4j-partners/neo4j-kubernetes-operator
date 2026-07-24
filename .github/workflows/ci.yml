@@ -16,9 +16,9 @@ jobs:
     name: Unit & audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.24"
           cache-dependency-path: go.sum
@@ -37,9 +37,9 @@ jobs:
     needs: unit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.24"
 
@@ -56,8 +56,14 @@ jobs:
       - name: Create kind cluster and load operator image
         run: bash tests/bin/setup-local-kind.sh
 
-      - name: Run e2e suite
-        run: CLOUD=local-kind ./tests/bin/run-e2e.sh
+      # One step per suite so each scenario shows its own pass/fail in the job view.
+      # `!cancelled()` lets every scenario run (and report) even if a previous one failed.
+      - name: "Scenario: p0-standalone"
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p0-standalone
+
+      - name: "Scenario: neo4j-admission"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh neo4j-admission
 
       - name: Upload e2e results (on failure)
         if: failure()
@@ -86,9 +92,9 @@ jobs:
       AZURE_AKS_NODE_COUNT: ${{ vars.AZURE_AKS_NODE_COUNT }}
       AZURE_AKS_NODE_VM_SIZE: ${{ vars.AZURE_AKS_NODE_VM_SIZE }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.24"
 
