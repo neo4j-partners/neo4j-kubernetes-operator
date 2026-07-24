@@ -56,6 +56,7 @@ make test-e2e-azure-matrix
 | `p0-standalone` | [suites/p0-standalone.yaml](suites/p0-standalone.yaml) | Positive Standalone (happy path / matrix) |
 | `neo4j-admission` | [suites/neo4j-admission.yaml](suites/neo4j-admission.yaml) | Admission rejections + one happy case |
 | `p1-connectivity` | [suites/p1-connectivity.yaml](suites/p1-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
+| `p2-serverconfig` | [suites/p2-serverconfig.yaml](suites/p2-serverconfig.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) |
 
 ### Connectivity (`p1-connectivity`)
 
