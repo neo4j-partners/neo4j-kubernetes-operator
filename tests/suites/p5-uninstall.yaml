@@ -1,0 +1,23 @@
+name: p5-uninstall
+description: >
+  NEO-2-018 — deleting the Neo4j CR preserves the data PVC by default, so
+  uninstalling the workload never destroys data.
+brief_ref: slice-uninstall
+use_pipeline: standalone-suite
+on_case_failure: stop
+
+# standalone-ready first (operands must exist and bind a PVC), then pvc-retained
+# deletes the CR and asserts the PVC survives. case_teardown (cleanup/standalone
+# from the pipeline) removes the lingering PVC afterwards.
+pipeline:
+  case_assert:
+    - assert/standalone-ready
+    - assert/pvc-retained
+
+# Fixture + cr_name (not from_reconcile) so the CR gets a suite-specific name and
+# does not collide with other suites' "dev" instance.
+cases:
+  - id: preserve-data-on-delete
+    fixture: tests/fixtures/neo4j-standalone.yaml
+    expect: success
+    cr_name: e2e-uninstall
