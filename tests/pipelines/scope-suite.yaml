@@ -1,0 +1,14 @@
+# Pipeline for namespace-scope tests. Unlike standalone-suite, the workload is
+# applied to an UNWATCHED namespace (scope/apply-unwatched) rather than the
+# default namespace, and cleanup deletes that whole namespace.
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - scope/apply-unwatched
+
+case_teardown:
+  - scope/cleanup-unwatched
