@@ -29,7 +29,7 @@ _require_e2e_cloud_ready() {
 _require_e2e_cloud_ready
 
 SUITE_FILE="${TESTS_DIR}/suites/${SUITE}.yaml"
-LEGACY_SCENARIO="${TESTS_DIR}/scenarios/${SUITE}.yaml"
+[[ -f "${SUITE_FILE}" ]] || die "e2e suite not found: tests/suites/${SUITE}.yaml"
 
 _run_e2e_suite() {
   export CLOUD CLOUD_ID OPERATOR_IMAGE STORAGE_CLASS_NAME \
@@ -39,23 +39,12 @@ _run_e2e_suite() {
   bash "${TESTS_DIR}/runner/run-suite.sh" "${SUITE}"
 }
 
-if [[ -f "${SUITE_FILE}" ]]; then
-  if [[ "${E2E_PROFILE}" == "matrix" ]]; then
-    export E2E_EXPAND_MATRIX=true
-    load_cloud_config "${CLOUD}"
-    _run_e2e_suite
-  else
-    reconcile_config "${E2E_PROFILE}" "${CLOUD}"
-    export E2E_EXPAND_MATRIX=false
-    _run_e2e_suite
-  fi
-elif [[ -f "${LEGACY_SCENARIO}" ]]; then
-  log "WARN: using legacy scenario ${SUITE} — migrate to tests/suites/${SUITE}.yaml"
-  export CLOUD CLOUD_ID OPERATOR_IMAGE STORAGE_CLASS_NAME \
-    OPERATOR_IMAGE_PULL_POLICY OPERATOR_LEADER_ELECT KIND_CLUSTER_NAME \
-    E2E_PROFILE E2E_CONFIG_SUMMARY NEO4J_CASE OPERATOR_CASE
-  reconcile_config "${E2E_PROFILE}" "${CLOUD}"
-  bash "${TESTS_DIR}/runner/run.sh" "${SUITE}"
+if [[ "${E2E_PROFILE}" == "matrix" ]]; then
+  export E2E_EXPAND_MATRIX=true
+  load_cloud_config "${CLOUD}"
+  _run_e2e_suite
 else
-  die "e2e target not found: tests/suites/${SUITE}.yaml or tests/scenarios/${SUITE}.yaml"
+  reconcile_config "${E2E_PROFILE}" "${CLOUD}"
+  export E2E_EXPAND_MATRIX=false
+  _run_e2e_suite
 fi
