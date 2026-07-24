@@ -1,9 +1,10 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches: [main]
+    branches: [main, test_automation]
+  pull_request:
+    branches: [main, test_automation]
   workflow_dispatch:
 
 concurrency:
@@ -44,6 +45,11 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Install kind
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
       - name: Prepare scripts
         run: find tests -name '*.sh' -exec chmod +x {} +
 
@@ -53,10 +59,32 @@ jobs:
       - name: Run e2e suite
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh
 
+      - name: Upload e2e results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-local-kind-${{ github.run_id }}
+          path: tests/results/
+          if-no-files-found: warn
+          retention-days: 14
+
   e2e-azure-aks:
     name: E2E — Azure AKS
-    needs: unit
+    # Runs only when the local kind e2e succeeds (which itself needs unit).
+    needs: e2e-local-kind
+    # Limit the costly Azure create/destroy cycle to the test_automation branch
+    # (push to it, or a PR targeting it). Skipped on main and other branches.
+    if: github.ref == 'refs/heads/test_automation' || github.base_ref == 'test_automation'
     runs-on: ubuntu-latest
+    env:
+      # Azure resource names — override via repository/environment Variables (Settings > Secrets and variables > Actions > Variables).
+      # If unset, the defaults in tests/config/cloud/azure-aks.sh are used.
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_AKS_NAME: ${{ vars.AZURE_AKS_NAME }}
+      AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+      AZURE_AKS_NODE_COUNT: ${{ vars.AZURE_AKS_NODE_COUNT }}
+      AZURE_AKS_NODE_VM_SIZE: ${{ vars.AZURE_AKS_NODE_VM_SIZE }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,17 +101,40 @@ jobs:
       - name: Prepare scripts
         run: find tests -name '*.sh' -exec chmod +x {} +
 
-      - name: Ensure AKS cluster
+      - name: Ensure AKS cluster and ACR
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          # Optional repository variables: AZURE_RESOURCE_GROUP, AZURE_AKS_NAME, AZURE_ACR_NAME, AZURE_LOCATION
+          # Creates the resource group, ACR and AKS cluster if missing, then wires kubectl.
           . tests/azure/ensure-aks.sh
           echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}" >> "${GITHUB_ENV}"
           echo "AZURE_ACR_NAME=${AZURE_ACR_NAME}" >> "${GITHUB_ENV}"
+          # Persist the resolved resource group (script default applies if the Variable is unset) for teardown.
+          echo "AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}" >> "${GITHUB_ENV}"
 
       - name: Push operator image to ACR
         run: bash tests/azure/push-operator-image.sh
 
       - name: Run e2e suite
         run: CLOUD=azure-aks ./tests/bin/run-e2e.sh
+
+      - name: Upload e2e results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-azure-aks-${{ github.run_id }}
+          path: tests/results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Teardown Azure resources
+        # Always tear down the platform (AKS + ACR + RG), even when the suite fails.
+        if: always()
+        run: |
+          rg="${AZURE_RESOURCE_GROUP:-neo4j-operator-ci-rg}"
+          if az group show --name "${rg}" >/dev/null 2>&1; then
+            echo "Deleting resource group ${rg}"
+            az group delete --name "${rg}" --yes --no-wait
+          else
+            echo "Resource group ${rg} not found — nothing to tear down"
+          fi
