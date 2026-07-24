@@ -23,6 +23,11 @@ fi
 log "Checking rendered operands (Standalone / pool server)"
 kubectl get "statefulset/${NEO4J_STS_NAME}" -n "${NEO4J_NAMESPACE}" >/dev/null \
   || die "StatefulSet ${NEO4J_STS_NAME} not found"
+# AC-NEO-STANDALONE-001: exactly one Neo4j server is deployed.
+sts_replicas=$(kubectl get "statefulset/${NEO4J_STS_NAME}" -n "${NEO4J_NAMESPACE}" \
+  -o jsonpath='{.spec.replicas}' 2>/dev/null || true)
+[[ "${sts_replicas}" == "1" ]] \
+  || die "StatefulSet ${NEO4J_STS_NAME} has replicas=${sts_replicas:-none}, expected 1 (Standalone)"
 kubectl get svc "${NEO4J_CLIENT_SVC}" -n "${NEO4J_NAMESPACE}" >/dev/null \
   || die "client Service ${NEO4J_CLIENT_SVC} not found"
 kubectl get svc "${NEO4J_STS_NAME}" -n "${NEO4J_NAMESPACE}" >/dev/null \
