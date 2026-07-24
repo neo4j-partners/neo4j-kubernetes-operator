@@ -9,17 +9,34 @@ fixture="${REPO_ROOT}/${NEO4J_STANDALONE_FIXTURE}"
 rendered="$(mktemp)"
 stderr_file="$(mktemp)"
 
+# Optional additionalMounts placeholders (only the storage additionalMounts fixture
+# carries __MOUNT_NAME__/__MOUNT_PATH__). A fresh random name proves the operator honors
+# an arbitrary user-chosen mount; the substitutions are no-ops for other fixtures.
+MOUNT_NAME="${STORAGE_MOUNT_NAME:-e2e-extra-${RANDOM}${RANDOM}}"
+MOUNT_PATH="${STORAGE_MOUNT_PATH:-/mnt/${MOUNT_NAME}}"
+
 if [[ "${NEO4J_USE_STORAGE_CLASS:-false}" == "true" && -n "${STORAGE_CLASS_NAME:-}" ]]; then
   sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
       -e "s|size: __DATA_SIZE__|size: ${NEO4J_DATA_SIZE:-10Gi}|" \
       -e "s|storageClassName: __STORAGE_CLASS__|storageClassName: ${STORAGE_CLASS_NAME}|g" \
+      -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
+      -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
     "${fixture}" >"${rendered}"
 else
   sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
       -e "s|size: __DATA_SIZE__|size: ${NEO4J_DATA_SIZE:-10Gi}|" \
       -e '/storageClassName: __STORAGE_CLASS__/d' \
+      -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
+      -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
     "${fixture}" >"${rendered}"
 fi
+
+# Persist the resolved mount name/path so assert/storage-additional (a separate
+# subprocess) can verify the exact point inside the neo4j container.
+_deploy_state_dir="$(_apply_state_dir)"
+mkdir -p "${_deploy_state_dir}"
+printf '%s' "${MOUNT_NAME}" >"${_deploy_state_dir}/${SUITE_CASE_ID:-case}.mount-name"
+printf '%s' "${MOUNT_PATH}" >"${_deploy_state_dir}/${SUITE_CASE_ID:-case}.mount-path"
 
 log "Applying ${NEO4J_KIND} CR ${NEO4J_CR_NAME} in namespace ${NEO4J_NAMESPACE} (expect=${CASE_EXPECT:-success})"
 
