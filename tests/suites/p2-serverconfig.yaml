@@ -1,0 +1,28 @@
+name: p2-serverconfig
+description: Neo4j server config surface (spec.config) — passthrough and invalid-setting handling
+brief_ref: neo4j-config-surface
+use_pipeline: standalone-suite
+on_case_failure: continue
+clouds: [local-kind]
+
+pipeline:
+  case_assert:
+    - assert/{{assert}}
+
+cases:
+  # AC-NEO-CONFIG-001: a valid setting is rendered verbatim into <cr>-config.
+  - id: passthrough
+    fixture: tests/fixtures/neo4j-config-valid.yaml
+    assert: config-rendered
+    expect: success
+    cr_name: e2e-cfg-ok
+
+  # AC-NEO-CONFIG-002: an unknown setting is admitted but rejected by Neo4j at startup.
+  - id: unknown-key
+    fixture: tests/fixtures/neo4j-config-unknown.yaml
+    assert: config-startup-error
+    expect: success
+    # expect_contains is a single token (suite parser splits on whitespace);
+    # 'Unrecognized' is enough to match Neo4j's strict-validation error.
+    expect_contains: Unrecognized
+    cr_name: e2e-cfg-unknown
