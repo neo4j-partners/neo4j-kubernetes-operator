@@ -25,4 +25,22 @@ cd "${REPO_ROOT}"
 docker build -t "${OPERATOR_IMAGE}" .
 kind load docker-image "${OPERATOR_IMAGE}" --name "${KIND_CLUSTER_NAME}"
 
+# Pre-pull the Neo4j image once and load it into the node, so the FIRST Neo4j pod does not
+# pay a cold Docker Hub pull (often rate-limited on CI runners) that can exceed the Ready
+# wait. The image tag is not "latest", so pods use imagePullPolicy=IfNotPresent and reuse
+# the cached node image. Best-effort: on failure, pods fall back to pulling on demand.
+NEO4J_VERSION="${NEO4J_VERSION:-2026.05.0}"
+NEO4J_EDITION="${NEO4J_EDITION:-enterprise}"
+if [[ "${NEO4J_EDITION}" == "enterprise" ]]; then
+  NEO4J_IMAGE="neo4j:${NEO4J_VERSION}-enterprise"
+else
+  NEO4J_IMAGE="neo4j:${NEO4J_VERSION}"
+fi
+log "Pre-loading Neo4j image ${NEO4J_IMAGE} into kind (avoids per-pod Docker Hub pulls)"
+if docker pull "${NEO4J_IMAGE}"; then
+  kind load docker-image "${NEO4J_IMAGE}" --name "${KIND_CLUSTER_NAME}"
+else
+  log "WARN: could not pre-pull ${NEO4J_IMAGE}; Neo4j pods will pull it on demand"
+fi
+
 log "kind cluster ready"
