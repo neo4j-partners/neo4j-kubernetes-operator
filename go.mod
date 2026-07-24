@@ -1,6 +1,6 @@
 module github.com/neo4j/neo4j-kubernetes-operator
 
-go 1.22.0
+go 1.24.0
 
 require (
 	k8s.io/api v0.31.0
