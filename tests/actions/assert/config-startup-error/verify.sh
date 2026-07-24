@@ -24,11 +24,11 @@ found=0
 reason=""
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
   # Neo4j logs the error, then the container restarts (CrashLoopBackOff) — read both
-  # the current and previous container logs.
-  logs="$(
-    kubectl logs "${POD}" -c neo4j -n "${NEO4J_NAMESPACE}" --tail=-1 2>/dev/null
-    kubectl logs "${POD}" -c neo4j -n "${NEO4J_NAMESPACE}" --previous --tail=-1 2>/dev/null
-  )"
+  # the current and previous container logs. Each `|| true` keeps set -e from aborting
+  # when a stream is not available yet (e.g. no previous container before the first crash).
+  cur="$(kubectl logs "${POD}" -c neo4j -n "${NEO4J_NAMESPACE}" --tail=-1 2>/dev/null || true)"
+  prev="$(kubectl logs "${POD}" -c neo4j -n "${NEO4J_NAMESPACE}" --previous --tail=-1 2>/dev/null || true)"
+  logs="${cur}"$'\n'"${prev}"
   if grep -qiF -- "${MARKER}" <<<"${logs}"; then
     found=1
     break
