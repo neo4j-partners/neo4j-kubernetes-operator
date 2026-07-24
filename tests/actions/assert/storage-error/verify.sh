@@ -18,9 +18,10 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 source "${SCRIPT_DIR}/../../../lib/storage.sh"
 
 RES="neo4j/${NEO4J_CR_NAME}"
-# Window we allow the operator to detect the stuck PVC and give up. Should be >= the
-# operator's (future) storage timeout; override with STORAGE_ERROR_TIMEOUT.
-TIMEOUT="${STORAGE_ERROR_TIMEOUT:-180}"
+# Window we allow the operator to detect the stuck PVC and give up. Kept short so the
+# (currently expected-fail) cases don't stall the suite; once the operator's storage
+# timeout is implemented, bump this to match it via STORAGE_ERROR_TIMEOUT.
+TIMEOUT="${STORAGE_ERROR_TIMEOUT:-45}"
 
 log "Expecting the operator to time out and mark ${RES} Failed (PVC cannot be created) within ${TIMEOUT}s"
 

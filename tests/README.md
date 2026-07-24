@@ -70,6 +70,8 @@ verified from inside the `neo4j` container via `/proc/mounts` (no write permissi
 > message that mentions the PVC. That timeout/failure status is **not implemented yet**, so
 > these cases (and therefore the `p4-storage` suite / CI step) currently **fail on purpose**.
 > Do not patch operator code to make them pass — that work is tracked separately.
+> Each fail-case waits `STORAGE_ERROR_TIMEOUT` (default 45s) before giving up; raise it to
+> match the operator's storage timeout once that is implemented.
 
 | Case | Fixture | Assertion |
 |------|---------|-----------|
