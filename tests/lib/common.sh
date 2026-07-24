@@ -75,12 +75,20 @@ run_phase() {
 
   [[ "$#" -gt 0 ]] || return 0
 
+  # NOTE: run_phase is called as `if ! run_phase ...`, which disables `set -e`
+  # inside this function. We must therefore check each action's exit code
+  # explicitly — otherwise a failing action (e.g. an assert that calls die)
+  # in any position but the last would be swallowed and the phase would report
+  # the last action's status. Stop on the first failure (fail-fast per phase).
   log "PHASE ${label}"
   for step in "$@"; do
     [[ -n "${step}" ]] || continue
     resolved="$(resolve_action_template "${step}")"
-    run_action "${resolved}" "${mode}"
+    if ! run_action "${resolved}" "${mode}"; then
+      return 1
+    fi
   done
+  return 0
 }
 
 run_cleanup_phase() {
