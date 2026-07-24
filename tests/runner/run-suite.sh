@@ -68,7 +68,8 @@ suite_build_case_rows() {
     local op neo4j
     while read -r op neo4j; do
       [[ -n "${op}" ]] || continue
-      printf 'matrix-%s-%s\t\t%s\tsuccess\t\t\t%s\t%s\t\tfalse\n' \
+      # US-delimited (\037) row matching suite_parse_cases field order.
+      printf 'matrix-%s-%s\037\037%s\037success\037\037\037%s\037%s\037\037false\n' \
         "${op}" "${neo4j}" "${assert_name}" "${neo4j}" "${op}"
     done < <(reconcile_list_combinations "${CLOUD}" "${SUITE_NAME}")
   else

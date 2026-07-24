@@ -104,15 +104,17 @@ suite_load_merged_pipeline() {
   export SUITE_PIPELINE_FILE
 }
 
-# Emit one TSV row per case: id, fixture, assert, expect, expect_contains, cr_name,
-# neo4j_case, operator_case, clouds, from_reconcile
+# Emit one row per case, delimited by ASCII Unit Separator (\037), in field order:
+# id, fixture, assert, expect, expect_contains, cr_name, neo4j_case, operator_case,
+# clouds, from_reconcile. US (a non-whitespace char) is used instead of tab so that
+# `read` preserves empty fields — tab collapses under IFS-whitespace splitting.
 suite_parse_cases() {
   local file=$1
   awk '
     { sub(/\r$/, "") }
     function emit() {
       if (id == "") return
-      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+      printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\n",
         id, fixture, assert, expect, expect_contains, cr_name,
         neo4j_case, operator_case, clouds, from_reconcile
     }
@@ -164,7 +166,8 @@ apply_suite_case_row() {
   local row=$1
 
   local id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile
-  IFS=$'\t' read -r id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile <<<"${row}"
+  # Split on US (\037); non-whitespace IFS keeps empty fields (tab would collapse them).
+  IFS=$'\037' read -r id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile <<<"${row}"
 
   if ! suite_case_allowed_on_cloud "${clouds}"; then
     log "SKIP case ${id} (cloud ${CLOUD_ID:-unset} not in [${clouds}])"

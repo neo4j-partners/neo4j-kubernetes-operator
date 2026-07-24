@@ -21,8 +21,10 @@ spec:
         runAsNonRoot: true
       containers:
       - name: manager
-        image: "neo4joperatoracr.azurecr.io/neo4j-operator:latest"
-        imagePullPolicy: Always
+        # Placeholder image/pull policy; e2e install (tests/actions/operator/install/run.sh)
+        # rewrites both per cloud (local-kind -> neo4j-operator:local/Never, azure-aks -> ACR/IfNotPresent).
+        image: controller:latest
+        imagePullPolicy: IfNotPresent
         command:
         - /manager
         args:
@@ -31,7 +33,7 @@ spec:
         env:
         # Must match Role/RoleBinding namespaces in config/rbac/. Comma-separated list.
         - name: WATCH_NAMESPACE
-          value: "default,neo4j-operator-system,restricted"
+          value: "default,neo4j-operator-system"
         ports:
         - containerPort: 8081
           name: health
