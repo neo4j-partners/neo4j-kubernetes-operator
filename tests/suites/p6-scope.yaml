@@ -1,0 +1,22 @@
+name: p6-scope
+description: >
+  OP-2-001-SCOPE-01 — the namespace-scoped operator reconciles CRs in a watched
+  namespace and ignores CRs outside WATCH_NAMESPACE, and its RBAC is namespaced
+  with no cluster-wide grant. Covers AC-OP-SCOPE-SINGLE-002/003/004.
+brief_ref: slice-scope
+use_pipeline: scope-suite
+on_case_failure: stop
+clouds: [local-kind]
+
+pipeline:
+  case_assert:
+    # -004 least-privilege RBAC, -002 positive control, -003 negative control.
+    - assert/rbac-namespaced
+    - assert/reconciled-in-namespace
+    - assert/scope-ignored
+
+# Single case; the CR name/namespace come from the scope action defaults
+# (E2E_SCOPE_CR / E2E_SCOPE_NAMESPACE), not from case fields.
+cases:
+  - id: unwatched-namespace-ignored
+    expect: success

@@ -1,0 +1,16 @@
+# Pipeline for namespace-scope tests. Applies a CR to BOTH a watched namespace
+# (positive control) and an unwatched namespace (negative control), so a single
+# case can prove the operator acts inside its scope and only inside it.
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - scope/apply-watched
+  - scope/apply-unwatched
+
+case_teardown:
+  - scope/cleanup-watched
+  - scope/cleanup-unwatched
