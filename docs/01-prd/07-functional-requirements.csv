@@ -31,7 +31,7 @@ NEO-2-016,,NEO-3-016-LOG-01; NEO-3-016-LOG-02,Logging,,Configure Neo4j logging,"
 NEO-2-017,,NEO-3-017-JOB-01; NEO-3-017-JOB-02; NEO-3-017-JOB-03; NEO-3-017-MNT-01,Maintenance,,Run maintenance operations,"Support offline maintenance mode and maintenance jobs such as dump/load, consistency checks, and backup verification.",AC-NEO-MAINTENANCE-OFFLINE; AC-NEO-MAINTENANCE-JOBS,No,Deferred — maintenance jobs post-MVP.
 NEO-2-018,,,Uninstallation,,Uninstall Neo4j workload,Delete Neo4j Kubernetes resources while preserving PVCs by default and optionally cleaning up services/jobs/PVCs.,AC-NEO-UNINSTALL,Yes,MVP — CR delete preserves data PVCs by default.
 OP-2-001-PKG-01,OP-1-001,,Installation,Packaging,YAML,"Install, upgrade, and uninstall operator using Kubernetes manifests.",AC-OP-INSTALL,Yes,MVP packaging path.
-OP-2-001-PKG-02,OP-1-001,,Installation,Packaging,Helm,"Install, upgrade, and uninstall operator using Helm chart.",AC-OP-INSTALL; AC-PACKAGING-HELM,No,Deferred — operator Helm chart post-MVP.
+OP-2-001-PKG-02,OP-1-001,,Installation,Packaging,Helm,"Install, upgrade, and uninstall operator using Helm chart.",AC-OP-INSTALL; AC-PACKAGING-HELM,Yes,MVP — charts/neo4j-operator; CRD via server-side apply (make install / make helm-install).
 OP-2-001-SCOPE-01,OP-1-001,,Installation,Operator Scope,Single namespace,Operator watches and reconciles resources only in its own namespace.,AC-OP-SCOPE-SINGLE,Yes,MVP only supported scope ([BDR-003]).
 OP-2-001-SCOPE-02,OP-1-001,,Installation,Operator Scope,Multiple namespaces,Operator watches a configured list of namespaces.,AC-OP-SCOPE-MULTI,No,Deferred V1.1+.
 OP-2-001-SCOPE-03,OP-1-001,,Installation,Operator Scope,Cluster-wide,Operator watches resources across all namespaces.,AC-OP-SCOPE-CLUSTER,No,Deferred V1.1+.

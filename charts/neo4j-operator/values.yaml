@@ -1,0 +1,60 @@
+# Neo4j Operator Helm values (OP-2-001-PKG-02).
+# Install CRDs first (server-side apply) — see chart README / make helm-install.
+
+image:
+  repository: neo4joperatoracr.azurecr.io/neo4j-operator
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecrets: []
+
+# Namespaces the operator reconciles (WATCH_NAMESPACE). One Role+RoleBinding each.
+watchNamespaces:
+  - default
+
+replicaCount: 1
+
+# Extra args appended after --leader-elect / health probe bind.
+extraArgs: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+nodeSelector: {}
+
+tolerations: []
+# Example (AKS dedicated pool):
+# tolerations:
+#   - key: dedicated
+#     operator: Equal
+#     value: neo4j
+#     effect: NoSchedule
+
+affinity: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+serviceAccount:
+  create: true
+  # Defaults to neo4j-operator-controller-manager
+  name: ""
+  annotations: {}
+
+nameOverride: ""
+fullnameOverride: ""
+
+# When true, NOTES remind you to install the CRD via server-side apply.
+crd:
+  installHint: true

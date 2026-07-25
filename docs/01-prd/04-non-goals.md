@@ -56,8 +56,7 @@ Source of truth for engineering: [`../02-technical-design/13-v1-scope-lock.md`](
 
 | Non-goal | Rationale |
 |----------|-----------|
-| **Operator Helm chart** | YAML install only |
-| **Multi-namespace / cluster-wide** operator scope | Single namespace ([BDR-003](../02-technical-design/decision-records/business/003-operator-install-scope.md)) |
+| **Multi-namespace / cluster-wide** operator scope | Single namespace watch list via Roles ([BDR-003](../02-technical-design/decision-records/business/003-operator-install-scope.md)); cluster-wide ClusterRole post-V1 |
 | **Operator self-upgrade** workflow | Post-V1 |
 | **CRD conversion webhook** | V1.1+ |
 

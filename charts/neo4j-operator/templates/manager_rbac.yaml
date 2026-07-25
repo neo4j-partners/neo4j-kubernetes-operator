@@ -1,0 +1,27 @@
+{{- range $ns := .Values.watchNamespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: neo4j-operator-manager-role
+  namespace: {{ $ns }}
+  labels:
+    {{- include "neo4j-operator.labels" $ | nindent 4 }}
+{{ include "neo4j-operator.managerRoleRules" $ }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: neo4j-operator-manager-rolebinding
+  namespace: {{ $ns }}
+  labels:
+    {{- include "neo4j-operator.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: neo4j-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}

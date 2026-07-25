@@ -1,0 +1,20 @@
+1. CRD (required — large OpenAPI schema needs server-side apply):
+
+   kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+
+   Or from the repo:  make install
+
+2. Verify the controller:
+
+   kubectl get deployment neo4j-operator-controller-manager -n {{ .Release.Namespace }}
+   kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager \
+     -n {{ .Release.Namespace }} --timeout=120s
+
+3. Watch namespaces (WATCH_NAMESPACE): {{ include "neo4j-operator.watchNamespacesCSV" . }}
+
+4. Apply a Neo4j CR in a watched namespace, e.g. examples/standalone/01-minimal.yaml
+
+{{- if .Values.crd.installHint }}
+
+Note: this chart does not embed the Neo4j CRD (annotation size / upgrade). Always install or upgrade the CRD with server-side apply before relying on new API fields.
+{{- end }}

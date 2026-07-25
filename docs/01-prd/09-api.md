@@ -74,7 +74,7 @@ Items from the external PRD and operator proposal. **Post-V1** — see BDR-012 f
 | `Neo4jRole` | Declarative roles | Option C — inline `privileges[]` |
 | `Neo4jGrant` | Fine-grained grants | Option C — `statements[]`, `whenNotMatched` |
 | Web UI | Wizards for cluster / backup / security | Product roadmap — not in BDR-012 |
-| Operator Helm chart | `helm install neo4j-operator` | OP-2-001-PKG-02 deferred |
+| Operator Helm chart | `helm install` / `make helm-install` (`charts/neo4j-operator`) | OP-2-001-PKG-02 |
 
 ---
 

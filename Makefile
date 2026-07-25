@@ -78,6 +78,39 @@ undeploy: ## Remove operator deployment (keeps CRD and Neo4j workloads)
 	kubectl delete -k config/manager --ignore-not-found
 	kubectl delete -k config/rbac --ignore-not-found
 
+##@ Helm (OP-2-001-PKG-02)
+
+HELM_RELEASE ?= neo4j-operator
+HELM_NAMESPACE ?= neo4j-operator-system
+# Split IMG=repo:tag for --set (default tag latest if IMG has no colon).
+HELM_IMAGE_REPO ?= $(shell echo "$(IMG)" | sed 's/:.*//')
+HELM_IMAGE_TAG ?= $(shell echo "$(IMG)" | sed -n 's/.*:\(.*\)/\1/p')
+ifeq ($(HELM_IMAGE_TAG),)
+HELM_IMAGE_TAG := latest
+endif
+
+.PHONY: helm-lint
+helm-lint: ## Lint charts/neo4j-operator
+	helm lint ./charts/neo4j-operator
+
+.PHONY: helm-template
+helm-template: ## Render chart manifests to stdout
+	helm template $(HELM_RELEASE) ./charts/neo4j-operator \
+		--namespace $(HELM_NAMESPACE) \
+		--set image.repository=$(HELM_IMAGE_REPO) \
+		--set image.tag=$(HELM_IMAGE_TAG)
+
+.PHONY: helm-install
+helm-install: install helm-lint ## SSA-install CRDs then helm upgrade --install the operator
+	helm upgrade --install $(HELM_RELEASE) ./charts/neo4j-operator \
+		--namespace $(HELM_NAMESPACE) --create-namespace \
+		--set image.repository=$(HELM_IMAGE_REPO) \
+		--set image.tag=$(HELM_IMAGE_TAG)
+
+.PHONY: helm-uninstall
+helm-uninstall: ## helm uninstall operator (keeps CRD and Neo4j workloads)
+	helm uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE) --ignore-not-found
+
 .PHONY: sample-standalone
 sample-standalone: install ## Apply Standalone sample (default namespace)
 	kubectl apply -f config/samples/neo4j_v1beta1_neo4j.yaml

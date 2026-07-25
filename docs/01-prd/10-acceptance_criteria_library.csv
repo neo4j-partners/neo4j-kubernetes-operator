@@ -3,8 +3,8 @@ AC-OP-INSTALL,AC-OP-INSTALL-001,Operator CRDs are installed and available throug
 AC-OP-INSTALL,AC-OP-INSTALL-002,Operator deployment is created in the target namespace.,OP-1-001; OP-2-001-PKG-01,Yes,"MVP — verifies V1 FR(s): OP-1-001, OP-2-001-PKG-01"
 AC-OP-INSTALL,AC-OP-INSTALL-003,Operator pod reaches Running and Ready state.,OP-1-001; OP-2-001-PKG-01,Yes,"MVP — verifies V1 FR(s): OP-1-001, OP-2-001-PKG-01"
 AC-OP-INSTALL,AC-OP-INSTALL-004,Operator status reports Success / Installed.,OP-1-001; OP-2-001-PKG-01,Yes,"MVP — verifies V1 FR(s): OP-1-001, OP-2-001-PKG-01"
-AC-PACKAGING-HELM,AC-PACKAGING-HELM-001,Helm install succeeds with default values.,OP-2-001-PKG-02,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
-AC-PACKAGING-HELM,AC-PACKAGING-HELM-002,Helm upgrade preserves existing configuration and running workloads.,OP-2-001-PKG-02; OP-1-004,No,Deferred / out of V1 MVP scope (see 01-functional_requirements.csv)
+AC-PACKAGING-HELM,AC-PACKAGING-HELM-001,Helm install succeeds with default values.,OP-2-001-PKG-02,Yes,MVP — verifies V1 FR(s): OP-2-001-PKG-02
+AC-PACKAGING-HELM,AC-PACKAGING-HELM-002,Helm upgrade preserves existing configuration and running workloads.,OP-2-001-PKG-02; OP-1-004,Yes,MVP — helm upgrade rolls controller only; Neo4j CRs/PVCs untouched
 AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-001,Operator watches only its own namespace.,OP-2-001-SCOPE-01,Yes,MVP — verifies V1 FR(s): OP-2-001-SCOPE-01
 AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-002,Operator reconciles Neo4j CRs created in its namespace.,OP-2-001-SCOPE-01; OP-1-002,Yes,"MVP — verifies V1 FR(s): OP-2-001-SCOPE-01, OP-1-002"
 AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-003,Operator does not reconcile Neo4j CRs created in another namespace.,OP-2-001-SCOPE-01; OP-1-002,Yes,"MVP — verifies V1 FR(s): OP-2-001-SCOPE-01, OP-1-002"

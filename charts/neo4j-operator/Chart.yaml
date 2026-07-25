@@ -1,0 +1,20 @@
+apiVersion: v2
+name: neo4j-operator
+description: Neo4j Kubernetes Operator controller (CRDs, RBAC, Deployment)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - neo4j
+  - operator
+  - kubernetes
+home: https://github.com/neo4j-partners/neo4j-kubernetes-operator
+sources:
+  - https://github.com/neo4j-partners/neo4j-kubernetes-operator
+maintainers:
+  - name: Marouane Gazanayi
+    email: marouane.gazanayi@neo4j.com
+  - name: Charles Boudry
+    email: charles.boudry@neo4j.com
+  - name: Alfredo Rubin
+    email: alfredo.rubin@neo4j.com

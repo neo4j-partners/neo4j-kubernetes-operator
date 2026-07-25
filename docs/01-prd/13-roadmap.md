@@ -54,7 +54,6 @@ Tests: `V1=Yes` in [`../02-technical-design/04-test_catalog.csv`](../02-technica
 | **`Neo4jDatabase`** | Logical databases (reference F-13) |
 | **Helm migration** | `11-helm-mapping.md` as supported path |
 | **Maintenance jobs** | dump/load, consistency check |
-| **Operator Helm chart** | `OP-2-001-PKG-02` |
 | **Observability** | Prometheus metrics, OTEL traces (reference F-10, NFR-OBS) |
 
 ---

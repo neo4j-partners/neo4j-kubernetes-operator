@@ -24,6 +24,8 @@ Before deploying the operator you also need:
 
 ## Install
 
+### Option A — YAML / Make (PKG-01)
+
 From the **repository root**:
 
 ```bash
@@ -47,6 +49,27 @@ kubectl apply -k config/manager
 ```
 
 > Plain `kubectl apply -f` on the CRD fails with annotation size limits. Always use `make install`.
+
+### Option B — Helm (PKG-02)
+
+Chart: [`charts/neo4j-operator`](../../../charts/neo4j-operator/). CRD still needs server-side apply first.
+
+```bash
+make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
+```
+
+Or:
+
+```bash
+make install
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system --create-namespace \
+  --set image.repository=YOUR_REGISTRY/neo4j-operator \
+  --set image.tag=YOUR_TAG \
+  --set watchNamespaces={default}
+```
+
+See the [chart README](../../../charts/neo4j-operator/README.md) for values (`watchNamespaces`, tolerations, resources).
 
 ### Operator scheduling (tainted AKS pools)
 

@@ -1,0 +1,5 @@
+# Common Helm / VCS noise
+.DS_Store
+*.tgz
+charts/
+tmp/

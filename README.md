@@ -63,18 +63,22 @@ More apply-ready manifests: `[examples/README.md](examples/README.md)`.
 export IMG=<registry>/neo4j-kubernetes-operator:<tag>
 make docker-build
 make deploy IMG=$IMG
+# or Helm (CRD via server-side apply + chart):
+# make helm-install IMG=$IMG
 ```
 
 Useful Make targets:
 
 
-| Target          | Action                                          |
-| --------------- | ----------------------------------------------- |
-| `make install`  | Apply CRDs                                      |
-| `make deploy`   | CRDs + RBAC + manager Deployment                |
-| `make undeploy` | Remove operator (keeps CRDs / Neo4j data)       |
-| `make run`      | Run controller locally (`--leader-elect=false`) |
-| `make test`     | Unit tests                                      |
+| Target              | Action                                          |
+| ------------------- | ----------------------------------------------- |
+| `make install`      | Apply CRDs (server-side)                        |
+| `make deploy`       | CRDs + RBAC + manager Deployment (YAML)         |
+| `make helm-install` | CRDs + Helm upgrade --install (`charts/neo4j-operator`) |
+| `make helm-uninstall` | Remove Helm release (keeps CRD / Neo4j data)  |
+| `make undeploy`     | Remove YAML operator (keeps CRDs / Neo4j data)  |
+| `make run`          | Run controller locally (`--leader-elect=false`) |
+| `make test`         | Unit tests                                      |
 
 
 Default watch scope is **single namespace** (see operator install docs). The manager Deployment includes a default toleration for `dedicated=neo4j:NoSchedule` so the operator can schedule on tainted AKS node pools used for Neo4j.

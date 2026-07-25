@@ -60,7 +60,7 @@ Frozen commitment for **V1**: minimal `Neo4j` CRD operator — deploy Standalone
 | **cert-manager / TLS reload** | NEO-3-005-TLS-04 | BYO Secrets only in V1 |
 | **Logging customization** | NEO-2-016, NEO-3-016-* | In V1: image defaults + optional `spec.logging.*Xml`; `volumes.logs` mount |
 | **Maintenance jobs** | NEO-2-017, NEO-3-017-* | post-V1 |
-| **Operator Helm / multi-scope / upgrade** | OP-1-004, OP-1-007, OP-2-001-PKG-02, SCOPE-02/03 | post-V1 |
+| **Operator Helm / multi-scope / upgrade** | OP-1-004, OP-1-007, OP-2-001-SCOPE-02/03 | Helm chart in V1 (`OP-2-001-PKG-02`); multi-scope / upgrade extras post-V1 |
 
 ---
 

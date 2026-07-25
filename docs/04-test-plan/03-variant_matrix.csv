@@ -1,6 +1,6 @@
 Variant Group,Variant,Applies To Requirement IDs,Configuration FR ID,Description,Test Impact,Acceptance Criteria Group,V1
 Packaging,YAML,OP-1-001; OP-1-004; OP-1-005,OP-2-001-PKG-01,"Install, upgrade, and uninstall operator using Kubernetes manifests.",Shared installation AC,AC-OP-INSTALL,Yes
-Packaging,Helm,OP-1-001; OP-1-004; OP-1-005,OP-2-001-PKG-02,"Install, upgrade, and uninstall operator using Helm chart.",Shared installation AC + Helm packaging checks,AC-OP-INSTALL; AC-PACKAGING-HELM,No
+Packaging,Helm,OP-1-001; OP-1-004; OP-1-005,OP-2-001-PKG-02,"Install, upgrade, and uninstall operator using Helm chart.",Shared installation AC + Helm packaging checks,AC-OP-INSTALL; AC-PACKAGING-HELM,Yes
 Operator Scope,Single namespace,OP-1-001; OP-1-002; OP-1-006,OP-2-001-SCOPE-01,Operator watches and reconciles resources only in its own namespace.,Specific topology AC,AC-OP-SCOPE-SINGLE,Yes
 Operator Scope,Multiple namespaces,OP-1-001; OP-1-002; OP-1-006,OP-2-001-SCOPE-02,Operator watches a configured list of namespaces.,Specific topology AC,AC-OP-SCOPE-MULTI,No
 Operator Scope,Cluster-wide,OP-1-001; OP-1-002; OP-1-006,OP-2-001-SCOPE-03,Operator watches resources across all namespaces.,Specific topology AC,AC-OP-SCOPE-CLUSTER,No
