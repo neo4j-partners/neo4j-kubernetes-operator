@@ -1,0 +1,28 @@
+# Cluster mode with a single primary — lab topology (no quorum, not HA).
+# Mirrors examples/cluster/02-lab-single-primary.yaml.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 1
+    minimumMembers: 1
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
