@@ -69,6 +69,9 @@ _config_neo4j_cases_for_scenario() {
 _config_reset_case_vars() {
   unset NEO4J_CR_NAME NEO4J_DATA_SIZE NEO4J_USE_STORAGE_CLASS NEO4J_CASE_NAME
   unset OPERATOR_CASE_NAME OPERATOR_IMAGE_PULL_POLICY
+  # Cluster-only knobs — cleared so a Cluster case never leaks its pool/member
+  # count into a later Standalone case (derive.sh then falls back to "server").
+  unset NEO4J_POOL CLUSTER_EXPECTED_MEMBERS
 }
 
 load_cloud_config() {
