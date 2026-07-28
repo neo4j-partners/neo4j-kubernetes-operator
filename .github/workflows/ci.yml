@@ -102,6 +102,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh p7-config-change
 
+      # Cluster mode (NEO-2-002): members created, cluster actually forms
+      # (SHOW SERVERS Enabled+Available), routing works over neo4j://.
+      # Heaviest suite — runs 1-primary then 3-primary Neo4j Enterprise pods.
+      - name: "Scenario: p8-cluster"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p8-cluster
+
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
