@@ -1,0 +1,29 @@
+name: p9-scale
+description: >
+  NEO-2-011 / NEO-3-011-CSZ-01 / NEO-3-011-SRV-01 — a secondary pool scales out and
+  back in, with the operator enabling the new member and draining the removed one
+  (AC-NEO-SCALE-001/002/003).
+brief_ref: slice-scale
+use_pipeline: standalone-suite
+on_case_failure: stop
+clouds: [local-kind]
+
+# Baseline, then out, then in — all against the SAME cluster. The pipeline deploys
+# once; each assert's run.sh patches the topology and its verify.sh waits for the
+# operator to converge. Splitting the directions into separate cases would redeploy
+# a 4-pod cluster each time.
+pipeline:
+  case_assert:
+    - assert/cluster-formed
+    - assert/scale-out
+    - assert/scale-in
+
+cases:
+  # 3 primaries + read:1 -> read:2 -> read:1. Secondaries are the only supported
+  # scale unit (BDR-009); the cluster asserts still target the primary pool because
+  # SHOW SERVERS must run against a system-hosting member.
+  - id: secondary-scale-out-in
+    fixture: tests/fixtures/neo4j-cluster-scale.yaml
+    neo4j_case: cluster-scale
+    expect: success
+    cr_name: e2e-scale
