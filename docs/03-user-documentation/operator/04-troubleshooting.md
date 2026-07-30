@@ -82,6 +82,61 @@ kubectl get secret dev-auth -n default -o jsonpath='{.data.NEO4J_AUTH}' | base64
 
 See [Quickstart — Standalone](../neo4j/01-quickstart-standalone.md#connect).
 
+## Scale-out ENABLE fails: server deallocated or dropped
+
+**Symptom:** Operator log / `Error` condition contains
+`can't be enabled because it has been deallocated or dropped`, and `SHOW SERVERS` shows the
+new ordinal’s address still in state `Dropped`.
+
+**Cause:** That Neo4j server UUID was `DROP`ped on a prior scale-in. The pod remounted the
+**same** data store (typical with **Existing** PVCs, or Dynamic PVCs that were not wiped).
+
+**Fix:**
+
+- Prefer **Dynamic** data for elastic pools — after scale-in the operator deletes drained
+  ordinal PVCs so the next join gets a new UUID.
+- With **Existing** claims, wipe or replace the volume data (or bind a fresh claim) for that
+  ordinal, then delete the pod so it restarts empty. The operator will not delete
+  `Existing.claimName` PVCs.
+
+Details: [Scaling members](../neo4j/02-quickstart-cluster.md#scaling-members).
+
+## Scale-in stuck: UnsupportedSinglePrimary / multiple primaries to one primary
+
+**Symptom:** `ServersPendingDrain` reason `UnsupportedSinglePrimary`, or Neo4j error
+`Can't go from multiple primaries to one primary`.
+
+**Cause:** Neo4j forbids `ALTER DATABASE SET TOPOLOGY` from a multi-primary topology to
+**1** primary. The operator will not drain further in that case.
+
+**Fix:** Set `topology.primaries.members` back to an odd count ≥ 3 (and matching
+`minimumMembers`). Scaling primaries down to 1 is not supported — recreate if needed.
+
+## Scale-out stuck: UnsupportedSystemScaleUp (1 → N primaries)
+
+**Symptom:** `ClusterFormed` reason `UnsupportedSystemScaleUp` after raising `primaries.members`
+from 1.
+
+**Cause:** A single system primary cannot grow via `ENABLE SERVER` alone. The operator does
+not automate Neo4j single-to-cluster dump/load. Deploying at 1 primary is fine; changing
+primary count is not.
+
+**Fix:** Set `primaries.members` (and `minimumMembers`) back to 1, or recreate the CR at the
+target primary count (typically 3). Scaling analytics/read secondaries only is supported.
+
+## Cluster with secondaries never Ready (Bolt refused)
+
+**Symptom:** Fresh `primaries.members: 3` plus analytics/read secondaries — all pods `Running`
+but `0/1`, Bolt refused, debug.log shows `SELECTED_BOOTSTRAPPER_OTHER` with empty
+`raftMemberIdSet` on every primary.
+
+**Cause:** Primaries were discovering secondary internals during system Raft bootstrap.
+Operator labels primary internals `neo4j.com/clustering=true` and scopes primary discovery
+to that label (Helm parity).
+
+**Fix:** Redeploy an operator that includes that discovery fix, delete the Neo4j CR and
+Dynamic PVCs, recreate. Do not reuse poisoned data volumes from a failed bootstrap.
+
 ## Ready condition false
 
 Wait for StatefulSet rollout and PVC binding:

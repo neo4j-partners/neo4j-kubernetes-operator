@@ -30,6 +30,34 @@ Expect one StatefulSet per pool, headless + client Services, and `status.conditi
 
 Storage variants (Existing, aux volumes): [`examples/storage/`](../../../examples/storage/).
 
+## Scaling members
+
+Edit `topology.primaries.members` (or a secondary pool’s `members`). The operator:
+
+1. **Scale-out** — grows the pool StatefulSet, then runs `ENABLE SERVER` for each new Free member, then `ALTER DATABASE` so topologies match pool sizes (primaries + analytics/read secondaries).
+2. **Scale-in** — shrinks database topologies to fit, then `DEALLOCATE` → `DROP` for tail ordinals, then allows StatefulSet scale-down (gated by `neo4j.com/drain-ok`).
+
+Watch `ClusterFormed` and `ServersPendingDrain` on the CR. Example: [`examples/cluster/13-scale-out.yaml`](../../../examples/cluster/13-scale-out.yaml). Analytics/read members only host user databases after topology requests secondaries — the operator sets that automatically for standard databases (not `system`).
+
+### Multi-primary → one primary
+
+Neo4j **cannot** use `ALTER DATABASE … SET TOPOLOGY` to go from multiple primaries to **one** primary (Raft quorum). The operator detects this on scale-in and sets `ServersPendingDrain` / `ClusterFormed` reason `UnsupportedSinglePrimary` without draining. Keep `topology.primaries.members` at **3+** (odd), or recreate the cluster at the desired size.
+
+### One system primary → many
+
+Deploying with **`primaries.members: 1`** (analytics-style, with or without secondaries) is supported. **Scaling that cluster’s primaries** (1→3, or later N→1) is **not** — the operator sets `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` and holds the primary pool. Bootstrap with `primaries.members` / `minimumMembers` at the final size when you need HA primaries. Scaling **secondaries** only is fine.
+
+### Storage and re-scaling the same ordinal
+
+A Neo4j server UUID that has been `DROP`ped **cannot be enabled again**. Scale-in therefore must not remount the old store when that ordinal comes back.
+
+| Data mode | After scale-in | Scale-out of the same ordinal |
+|-----------|----------------|-------------------------------|
+| **Dynamic** | Operator deletes the drained ordinal’s Dynamic PVCs | New empty volume → new server UUID → `ENABLE SERVER` works |
+| **Existing** (`claimName` / pre-bound claims) | Operator **never** deletes those PVCs | Same store remounts → UUID stays `Dropped` → `ENABLE` fails until **you** wipe or replace the claim’s data (or point the ordinal at a fresh claim) |
+
+Prefer **Dynamic** (or Existing `volumeClaimTemplate` that provisions a new claim per ordinal) for clusters that scale members down and later back up. Existing `claimName` remains Standalone-oriented and a poor fit for elastic cluster pools.
+
 ## Clean up
 
 ```bash

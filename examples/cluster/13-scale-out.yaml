@@ -1,26 +1,25 @@
-# Purpose: Same shape as 01-minimal-3-primaries.yaml but scaled to primaries.members: 5.
+# Purpose: Scale a cluster by editing topology.primaries.members (here: 5).
 #
-# ############################################################################################
-# # IMPORTANT — ENABLE SERVER is NOT automatic yet (tracked as NEO-3-011-SRV-01).
-# #
-# # Editing topology.primaries.members (or a secondary pool's members) makes the operator scale
-# # the underlying StatefulSet, but it does NOT run `ENABLE SERVER` against the Neo4j cluster for
-# # the newly-created members. A new pod joins Kubernetes and becomes Ready, but Neo4j will NOT
-# # route data to it (it will not show as Enabled in `SHOW SERVERS`) until you manually run, via
-# # cypher-shell against an existing primary:
-# #
-# #   SHOW SERVERS;
-# #   ENABLE SERVER "<serverId-of-the-new-member>";
-# #
-# # Do this for every newly added ordinal after applying this file. Scale-in (removing members)
-# # similarly needs a manual `DEALLOCATE DATABASES FROM SERVER ...` / `DROP SERVER ...` sequence
-# # before deleting the pod, to avoid orphaning database replicas.
-# ############################################################################################
+# The operator automates Neo4j membership (NEO-3-011-SRV-01 / BDR-009):
+#   Scale-out — STS grows, then ENABLE SERVER (PRIMARY) for each new Free member.
+#   Scale-in  — ALTER DATABASE SET TOPOLOGY down to fit remaining members, then
+#               DEALLOCATE → DROP for tail ordinals, wipe Dynamic PVCs for those
+#               ordinals (Dropped UUIDs cannot rejoin), then STS shrinks (gated by
+#               neo4j.com/drain-ok).
 #
-# Prerequisites: none (or apply after examples/cluster/01-minimal-3-primaries.yaml to see the
-#   scale-out in place; note the two files use different metadata.name values).
+# Storage caveat (scale-in then scale-out of the same ordinal):
+#   Dynamic — operator wipes drained ordinal PVCs so the next join gets a new UUID.
+#   Existing (claimName / pre-bound claims) — operator never deletes those volumes;
+#   remounting the old store keeps the Dropped UUID and ENABLE SERVER fails until you
+#   wipe/replace the claim data (or use a fresh claim). Prefer Dynamic for elastic pools.
+#   Full note: docs/03-user-documentation/neo4j/02-quickstart-cluster.md#storage-and-re-scaling-the-same-ordinal
+#
+# Watch: kubectl get neo4j prod-scale -o jsonpath='{range .status.conditions[*]}{.type}={.status} ({.reason}){"\n"}{end}'
+#   ClusterFormed=True when desired members are Enabled; ServersPendingDrain while draining.
+#
+# Prerequisites: none (or apply after examples/cluster/01-minimal-3-primaries.yaml; note
+#   different metadata.name). Enterprise image + license accept required.
 # Apply: kubectl apply -f examples/cluster/13-scale-out.yaml
-# Related README: ../README.md#what-is-not-demonstrated-yet
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:

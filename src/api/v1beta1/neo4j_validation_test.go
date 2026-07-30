@@ -46,8 +46,8 @@ func TestSampleClusterUnmarshals(t *testing.T) {
 	if neo4j.Spec.Topology.Mode != TopologyModeCluster {
 		t.Fatalf("mode = %q, want Cluster", neo4j.Spec.Topology.Mode)
 	}
-	if neo4j.Spec.Topology.Primaries == nil || neo4j.Spec.Topology.Primaries.Members != 1 {
-		t.Fatal("expected primaries.members: 1 in cluster sample")
+	if neo4j.Spec.Topology.Primaries == nil || neo4j.Spec.Topology.Primaries.Members != 3 {
+		t.Fatal("expected primaries.members: 3 in cluster sample")
 	}
 	if neo4j.Spec.Topology.Secondaries == nil || neo4j.Spec.Topology.Secondaries.Read == nil {
 		t.Fatal("expected read pool in cluster sample for scale subresource")

@@ -8,17 +8,18 @@ import (
 )
 
 const (
-	LabelName      = "app.kubernetes.io/name"
-	LabelInstance  = "app.kubernetes.io/instance"
-	LabelManagedBy = "app.kubernetes.io/managed-by"
-	LabelPool      = "neo4j.com/pool"
-	LabelComponent  = "neo4j.com/component"
+	LabelName        = "app.kubernetes.io/name"
+	LabelInstance    = "app.kubernetes.io/instance"
+	LabelManagedBy   = "app.kubernetes.io/managed-by"
+	LabelPool        = "neo4j.com/pool"
+	LabelComponent   = "neo4j.com/component"
 	LabelServiceRole = "neo4j.com/service"
+	LabelClustering  = "neo4j.com/clustering"
 
-	ManagedByValue = "neo4j-operator"
+	ManagedByValue       = "neo4j-operator"
 	ServiceRoleInternals = "internals"
 	ServiceRoleAdmin     = "admin"
-	AppNameValue   = "neo4j"
+	AppNameValue         = "neo4j"
 )
 
 // PoolID identifies a workload pool for naming and labels (ADR-005, BDR-009).
@@ -112,12 +113,19 @@ func (c Context) HeadlessServiceDomain() string {
 	return fmt.Sprintf("%s.%s.svc.%s", c.HeadlessServiceName(), c.Namespace(), c.ClusterDomain())
 }
 
-// ClusterDiscoveryLabelSelector matches cluster internals Services (Helm: helm.neo4j.com/service=internals).
+// ClusterDiscoveryLabelSelector matches internals Services for K8S discovery (Helm parity).
+// Primaries restrict to neo4j.com/clustering=true so system Raft bootstrap does not see
+// analytics/read secondaries (those have lower ServerIds and steal SELECTED_BOOTSTRAPPER).
+// Secondaries omit the filter so they still discover primaries.
 func (c Context) ClusterDiscoveryLabelSelector() string {
-	return fmt.Sprintf("%s=%s,%s=%s,%s=%s",
+	base := fmt.Sprintf("%s=%s,%s=%s,%s=%s",
 		LabelName, AppNameValue,
 		LabelInstance, c.Name(),
 		LabelServiceRole, ServiceRoleInternals)
+	if c.Pool == PoolPrimary || c.Pool == PoolServer {
+		return base + "," + LabelClustering + "=true"
+	}
+	return base
 }
 
 // ClusterMemberSelectorLabels selects every Neo4j pod in the deployment (all pools).

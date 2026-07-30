@@ -3,6 +3,7 @@ module github.com/neo4j/neo4j-kubernetes-operator
 go 1.22.0
 
 require (
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.0
 	k8s.io/api v0.31.0
 	k8s.io/apimachinery v0.31.0
 	k8s.io/client-go v0.31.0

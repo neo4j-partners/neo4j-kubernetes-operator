@@ -62,8 +62,7 @@ func clusterNeo4jConfKeys(ctx render.Context) map[string]string {
 	keys["server.cluster.advertised_address"] = "$(bash -c 'echo ${SERVICE_NEO4J_INTERNALS}')"
 	keys["server.routing.advertised_address"] = "$(bash -c 'echo ${SERVICE_NEO4J_INTERNALS}')"
 
-	// Read/analytics pools must not bootstrap system/neo4j as primaries when
-	// minimum_initial_system_primaries_count is 1 (race with the primary pool).
+	// Read/analytics pools must not bootstrap system/neo4j as primaries.
 	if ctx.Pool == render.PoolAnalytics || ctx.Pool == render.PoolRead {
 		keys["server.cluster.system_database_mode"] = "SECONDARY"
 		keys["initial.server.mode_constraint"] = "SECONDARY"

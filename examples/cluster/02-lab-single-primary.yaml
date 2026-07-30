@@ -1,12 +1,10 @@
-# Purpose: Single-primary "cluster" for local lab/dev only — there is no quorum with 1 member,
-#   so this is NOT highly available. Use examples/cluster/01-minimal-3-primaries.yaml for HA.
-# Prerequisites: none.
+# Purpose: single-primary analytics-style cluster (1 primary + secondaries). Valid for deploy.
+#   Scaling primaries 1→N or N→1 is NOT supported — recreate at the target size instead.
 # Apply: kubectl apply -f examples/cluster/02-lab-single-primary.yaml
-# Related README: ../README.md#cluster
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
-  name: prod-lab
+  name: analytics-lab
 spec:
   edition: enterprise
   version: "2026.05.0"
@@ -16,12 +14,24 @@ spec:
     mode: Cluster
     primaries:
       members: 1
+      plugins: [apoc]
+    secondaries:
+      analytics:
+        members: 1
+        plugins: [gds, bloom]
+      read:
+        members: 1
+        plugins: [apoc]
     minimumMembers: 1
+  pluginDefinitions:
+    apoc: {}
+    gds:
+      licenseSecretRef: gds-license
+    bloom:
+      licenseSecretRef: bloom-license
   storage:
     volumes:
       data:
         mode: Dynamic
         dynamic:
           size: 10Gi
-  auth:
-    generatePassword: true

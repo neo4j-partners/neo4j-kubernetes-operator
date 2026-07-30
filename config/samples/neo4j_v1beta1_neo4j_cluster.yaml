@@ -10,7 +10,7 @@ spec:
   topology:
     mode: Cluster
     primaries:
-      members: 1
+      members: 3
       plugins: [apoc]
     secondaries:
       analytics:
@@ -19,7 +19,7 @@ spec:
       read:
         members: 1
         plugins: [apoc]
-    minimumMembers: 1
+    minimumMembers: 3
   pluginDefinitions:
     apoc: {}
     gds:

@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
@@ -84,6 +85,14 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	setCondition(neo4j, ConditionStorageReady, boolCondition(storageReady), storageReason(storageReady), "")
 
 	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady
+	if render.IsClusterMode(neo4j) && allReady {
+		if c := meta.FindStatusCondition(neo4j.Status.Conditions, formation.ConditionClusterFormed); c == nil || c.Status != metav1.ConditionTrue {
+			allReady = false
+		}
+		if c := meta.FindStatusCondition(neo4j.Status.Conditions, formation.ConditionServersPendingDrain); c != nil && c.Status == metav1.ConditionTrue {
+			allReady = false
+		}
+	}
 	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Completed", "")
 	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
 

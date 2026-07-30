@@ -30,6 +30,9 @@ func TestMemberInternalsService(t *testing.T) {
 	if svc.Labels[render.LabelServiceRole] != render.ServiceRoleInternals {
 		t.Fatalf("internals service role label = %q", svc.Labels[render.LabelServiceRole])
 	}
+	if svc.Labels[render.LabelClustering] != "true" {
+		t.Fatalf("primary internals clustering label = %q, want true", svc.Labels[render.LabelClustering])
+	}
 	ports := map[string]int32{}
 	for _, p := range svc.Spec.Ports {
 		ports[p.Name] = p.Port
@@ -41,6 +44,11 @@ func TestMemberInternalsService(t *testing.T) {
 		if ports[name] != port {
 			t.Fatalf("port %s = %d, want %d", name, ports[name], port)
 		}
+	}
+
+	analytics := MemberInternalsService(render.ContextForPool(neo4j, render.PoolAnalytics), "prod-analytics-0")
+	if analytics.Labels[render.LabelClustering] != "false" {
+		t.Fatalf("analytics internals clustering label = %q, want false", analytics.Labels[render.LabelClustering])
 	}
 }
 

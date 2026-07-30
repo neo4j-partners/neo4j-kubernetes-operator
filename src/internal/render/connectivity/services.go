@@ -95,6 +95,12 @@ func MemberClientService(ctx render.Context, podName string) *corev1.Service {
 func MemberInternalsService(ctx render.Context, podName string) *corev1.Service {
 	labels := ctx.CommonLabels("connectivity")
 	labels[render.LabelServiceRole] = render.ServiceRoleInternals
+	// Helm: helm.neo4j.com/clustering — only primaries are in the primary discovery set.
+	if ctx.Pool == render.PoolPrimary {
+		labels[render.LabelClustering] = "true"
+	} else {
+		labels[render.LabelClustering] = "false"
+	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.MemberInternalsServiceName(podName),

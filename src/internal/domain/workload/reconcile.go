@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
@@ -96,7 +97,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 				sts.Spec = stsDesired.Spec
 				return nil
 			}
-			sts.Spec.Replicas = stsDesired.Spec.Replicas
+			desired := int32(1)
+			if stsDesired.Spec.Replicas != nil {
+				desired = *stsDesired.Spec.Replicas
+			}
+			current := desired
+			if sts.Spec.Replicas != nil {
+				current = *sts.Spec.Replicas
+			}
+			effective := formation.EffectiveReplicas(neo4j, pool, desired, current)
+			sts.Spec.Replicas = &effective
 			sts.Spec.Template = stsDesired.Spec.Template
 			sts.Spec.UpdateStrategy = stsDesired.Spec.UpdateStrategy
 			sts.Spec.PersistentVolumeClaimRetentionPolicy = stsDesired.Spec.PersistentVolumeClaimRetentionPolicy

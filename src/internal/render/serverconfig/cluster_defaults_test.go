@@ -34,10 +34,10 @@ func TestClusterNeo4jConfInjected(t *testing.T) {
 		"dbms.cluster.minimum_initial_system_primaries_count": "3",
 		"dbms.cluster.discovery.resolver_type":       "K8S",
 		"dbms.kubernetes.discovery.service_port_name": "tcp-tx",
-		"dbms.kubernetes.label_selector":             "app.kubernetes.io/name=neo4j,app.kubernetes.io/instance=prod,neo4j.com/service=internals",
-		"dbms.routing.enabled":                       "true",
-		"server.bolt.advertised_address":             "$(bash -c 'echo ${SERVICE_NEO4J}')",
-		"server.cluster.raft.advertised_address":     "$(bash -c 'echo ${SERVICE_NEO4J_INTERNALS}')",
+		"dbms.kubernetes.label_selector": "app.kubernetes.io/name=neo4j,app.kubernetes.io/instance=prod,neo4j.com/service=internals,neo4j.com/clustering=true",
+		"dbms.routing.enabled":           "true",
+		"server.bolt.advertised_address": "$(bash -c 'echo ${SERVICE_NEO4J}')",
+		"server.cluster.raft.advertised_address": "$(bash -c 'echo ${SERVICE_NEO4J_INTERNALS}')",
 	} {
 		if data[key] != want {
 			t.Fatalf("primary config key %q = %q, want %q", key, data[key], want)
@@ -50,6 +50,11 @@ func TestClusterNeo4jConfInjected(t *testing.T) {
 	}
 	if analyticsData["initial.server.mode_constraint"] != "SECONDARY" {
 		t.Fatalf("analytics config missing mode_constraint: %#v", analyticsData)
+	}
+	// Secondaries discover all internals (no clustering=true) so they can find primaries.
+	wantSec := "app.kubernetes.io/name=neo4j,app.kubernetes.io/instance=prod,neo4j.com/service=internals"
+	if analyticsData["dbms.kubernetes.label_selector"] != wantSec {
+		t.Fatalf("analytics discovery selector = %q, want %q", analyticsData["dbms.kubernetes.label_selector"], wantSec)
 	}
 }
 
@@ -75,20 +80,20 @@ func TestMinimumMembersDrivesFormationConf(t *testing.T) {
 }
 
 func TestMinimumMembersClampedToPrimaries(t *testing.T) {
-	min := int32(2)
+	min := int32(5)
 	neo4j := &neo4jv1beta1.Neo4j{
-		ObjectMeta: metav1.ObjectMeta{Name: "analytics", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Topology: neo4jv1beta1.TopologySpec{
 				Mode:           neo4jv1beta1.TopologyModeCluster,
-				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 1},
+				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
 				MinimumMembers: &min,
 			},
 		},
 	}
 	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
-	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "1" {
-		t.Fatalf("expected clamp to primaries.members=1, got %q", data["dbms.cluster.minimum_initial_system_primaries_count"])
+	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "3" {
+		t.Fatalf("expected clamp to primaries.members=3, got %q", data["dbms.cluster.minimum_initial_system_primaries_count"])
 	}
 }
 
@@ -98,7 +103,7 @@ func TestReadPoolCannotBootstrapAsPrimary(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Topology: neo4jv1beta1.TopologySpec{
 				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 1},
+				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
 				Secondaries: &neo4jv1beta1.SecondariesSpec{
 					Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1, Plugins: []string{"gds"}},
 					Read:      &neo4jv1beta1.SecondaryPoolSpec{Members: 1, Plugins: []string{"apoc"}},

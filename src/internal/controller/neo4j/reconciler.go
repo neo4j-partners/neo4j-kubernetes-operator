@@ -12,6 +12,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/connectivity"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
@@ -32,6 +33,7 @@ type Neo4jReconciler struct {
 	ServerConfig *serverconfig.Reconciler
 	Workload     *workload.Reconciler
 	Connectivity *connectivity.Reconciler
+	Formation    *formation.Reconciler
 	StatusWriter *status.Writer
 }
 
@@ -104,6 +106,7 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 		r.ServerConfig,
 		r.Workload,
 		r.Connectivity,
+		r.Formation,
 	}
 	for _, step := range steps {
 		out := step.Reconcile(ctx, neo4j)
@@ -160,6 +163,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		ServerConfig: serverconfig.New(c, scheme),
 		Workload:     workload.New(c, scheme),
 		Connectivity: connectivity.New(c, scheme),
+		Formation:    formation.New(c, scheme),
 		StatusWriter: status.NewWriter(c),
 	}
 }

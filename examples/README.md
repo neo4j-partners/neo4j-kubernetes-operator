@@ -58,8 +58,8 @@ apply companion PVCs/Secrets before CRs that reference them).
 | File | Demonstrates |
 |------|--------------|
 | [`cluster/01-minimal-3-primaries.yaml`](cluster/01-minimal-3-primaries.yaml) | Minimal real HA Cluster — 3 primaries |
-| [`cluster/02-lab-single-primary.yaml`](cluster/02-lab-single-primary.yaml) | 1 primary — lab only, **not HA** |
-| [`cluster/03-pools-analytics-read.yaml`](cluster/03-pools-analytics-read.yaml) | `secondaries.analytics` (GDS+Bloom) + `secondaries.read` (APOC) |
+| [`cluster/02-lab-single-primary.yaml`](cluster/02-lab-single-primary.yaml) | 1 primary + secondaries — deploy OK; **do not scale primaries** |
+| [`cluster/03-pools-analytics-read.yaml`](cluster/03-pools-analytics-read.yaml) | 3 primaries + `secondaries.analytics` (GDS+Bloom) + `secondaries.read` (APOC) |
 | [`cluster/04-service-loadbalancer.yaml`](cluster/04-service-loadbalancer.yaml) | `connectivity.service.type: LoadBalancer` |
 | [`cluster/05-service-nodeport.yaml`](cluster/05-service-nodeport.yaml) | `connectivity.service.type: NodePort` |
 | [`cluster/06-tls-full.yaml`](cluster/06-tls-full.yaml) | Cluster mTLS + HTTPS + Bolt TLS + backup (`prod-tls`) |
@@ -69,7 +69,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`cluster/10-config-jvm.yaml`](cluster/10-config-jvm.yaml) | `config.neo4j`, `config.jvm`, `config.apoc` |
 | [`cluster/11-plugins-apoc.yaml`](cluster/11-plugins-apoc.yaml) | `topology.primaries.plugins` (APOC only — GDS/Bloom forbidden on primaries) |
 | [`cluster/12-backup-and-metrics.yaml`](cluster/12-backup-and-metrics.yaml) | Backup + Prometheus metrics listeners |
-| [`cluster/13-scale-out.yaml`](cluster/13-scale-out.yaml) | `primaries.members` scale-out — **manual `ENABLE SERVER` required**, see file |
+| [`cluster/13-scale-out.yaml`](cluster/13-scale-out.yaml) | `primaries.members` scale-out/in — automatic ENABLE / drain+DROP (use Dynamic data; see file header) |
 | [`cluster/14-full.yaml`](cluster/14-full.yaml) | Kitchen sink — everything above combined (`prod-full`) |
 | [`cluster/15-pdb.yaml`](cluster/15-pdb.yaml) | `podDisruptionBudget.enabled` — instance-wide PDB |
 
@@ -139,7 +139,14 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
   GDS and Bloom may only be installed on `secondaries.analytics` in Cluster mode (CRD-enforced);
   APOC may go on primaries, analytics, read, or (Standalone) `spec.plugins`.
 - **Primary count parity:** `topology.primaries.members` must be odd (quorum) and
-  `topology.minimumMembers` must be `<= primaries.members`.
+  `topology.minimumMembers` must be `<= primaries.members`. Scale-in from multi-primary
+  DBs down to **1** primary is **not** supported by Neo4j `ALTER DATABASE` — keep ≥ 3 or
+  recreate the DB manually ([docs](../docs/03-user-documentation/neo4j/02-quickstart-cluster.md#multi-primary--one-primary)).
+- **Scale + storage:** After scale-in, Neo4j `DROP`ped server UUIDs cannot be re-enabled.
+  With **Dynamic** data the operator wipes drained ordinal PVCs so scale-out gets a new
+  identity. With **Existing** claims the operator never deletes your volumes — remounting
+  the old store leaves the member `Dropped` until you wipe/replace the data. Details:
+  [cluster quickstart — Scaling](../docs/03-user-documentation/neo4j/02-quickstart-cluster.md#scaling-members).
 
 ## What is NOT demonstrated yet
 
@@ -159,7 +166,6 @@ workload. They are intentionally left out of every example above:
 | `auth.ldap` | schema-only |
 | `features.monitoring.csv` / `.jmx` / `.graphite` | schema-only — not wired |
 | `features.monitoring.serviceMonitor` | wired — creates ServiceMonitor when CRD present; requires prometheus + metrics listener |
-| Automatic `ENABLE SERVER` on scale-out/in | not implemented — see the big comment in [`cluster/13-scale-out.yaml`](cluster/13-scale-out.yaml) (tracked as `NEO-3-011-SRV-01`) |
 | Rolling Neo4j version upgrade | deferred — `spec.version` is applied at install time only |
 
 ## Quick test commands

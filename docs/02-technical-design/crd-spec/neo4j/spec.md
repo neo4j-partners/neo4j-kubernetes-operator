@@ -159,7 +159,8 @@ Ordinals are **per pool** (`0 .. members-1`). Example pod: `prod-read-2`.
 | Dev / CI single server | `mode: Standalone` |
 | Standalone + GDS | `mode: Standalone`, `spec.plugins: [apoc, gds]` + `pluginDefinitions` |
 | Production HA writes | `mode: Cluster`, `primaries.members: 3`, omit `secondaries` or zero members |
-| Primary + analytics / GDS | `mode: Cluster`, `primaries.members: 1`, `secondaries.analytics: { members: 1, plugins: [gds] }` |
+| HA + analytics / GDS | `mode: Cluster`, `primaries.members: 3`, `secondaries.analytics: { members: 1, plugins: [gds] }` |
+| Single-primary analytics (no primary scale) | `mode: Cluster`, `primaries.members: 1`, `secondaries.analytics` / `read` — deploy only; do not scale primaries |
 | HA + read scaling | `mode: Cluster`, `primaries.members: 3`, `secondaries.read: { members: N, plugins: [apoc] }` |
 | GDS + Bloom on analytics | `secondaries.analytics.plugins: [gds, bloom]` + `pluginDefinitions` |
 
@@ -169,7 +170,7 @@ Ordinals are **per pool** (`0 .. members-1`). Example pod: `prod-read-2`.
 |------|-----------------|
 | `minimumClusterSize: 1`, no analytics | `mode: Standalone` |
 | `minimumClusterSize: 3` | `mode: Cluster`, `primaries.members: 3`, `minimumMembers: 3` |
-| analytics primary + N secondaries | `primaries.members: 1`, `secondaries.analytics.members: N` |
+| analytics + N secondaries | `primaries.members: 3`, `secondaries.analytics.members: N` |
 | Read replica scaling | `primaries.members: 3`, `secondaries.read.members: N` |
 | `operations.enableServer: true` | scale / enable-server flow (`NEO-2-011`) |
 
@@ -754,27 +755,27 @@ spec:
     minAvailable: 2
 ```
 
-### Primary + analytics (GDS on secondary pool)
+### HA + analytics (GDS on secondary pool)
 
 ```yaml
 spec:
   topology:
     mode: Cluster
     primaries:
-      members: 1
+      members: 3
       plugins: [apoc]
     secondaries:
       analytics:
         members: 1
         plugins: [gds]
-    minimumMembers: 1
+    minimumMembers: 3
   pluginDefinitions:
     apoc: {}
     gds:
       licenseSecretRef: gds-license
 ```
 
-Expect `status.conditions` entry `TopologyWarning` / `NonHA` — valid for dev/analytics, not production HA writes.
+Single-primary analytics clusters (`primaries.members: 1`) are not supported — use Standalone for a single server, or Cluster with ≥ 3 primaries.
 
 ---
 

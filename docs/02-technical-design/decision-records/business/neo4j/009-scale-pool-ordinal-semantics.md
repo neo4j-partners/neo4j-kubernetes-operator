@@ -166,6 +166,8 @@ Replaces the Helm operations Job (`neo4j.operations.enableServer`) with reconcil
 | Member removed from spec (scale-in) | Drain before deletion; set `ServersPendingDrain` | `DEALLOCATE DATABASE ... FROM '<id>'`, then `DROP SERVER` |
 | Primary scale-in below quorum | Reject at admission | — (TOPO-010) |
 
+After `DROP SERVER`, that UUID **cannot** be enabled again. For **Dynamic** data the operator deletes drained ordinal PVCs so a later scale-out of the same ordinal starts with a new identity. **Existing** claims are never deleted — remounting the old store leaves `ENABLE` stuck on `Dropped` until the operator of the volume refreshes it. User-facing note: [Scaling members](../../../03-user-documentation/neo4j/02-quickstart-cluster.md#scaling-members).
+
 `NEO-3-011-SRV-01` and the `ServersPendingDrain` status condition (status.md) are the contract this satisfies.
 
 ## Pool reassignment

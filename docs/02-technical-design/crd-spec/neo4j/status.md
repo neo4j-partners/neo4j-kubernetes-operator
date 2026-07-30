@@ -156,8 +156,8 @@ Future (day-2 / V2): conditions for restore in progress, sharding migration, etc
 
 | Reason | Trigger | Example message |
 |--------|---------|-----------------|
-| `NonHA` | `mode: Cluster`, `primaries.members < 3`, any secondary pool with `members ≥ 1` | `primaries.members < 3 — not suitable for production HA writes` |
-| `LowPrimaryCount` | `mode: Cluster`, `primaries.members: 1`, no secondary pools | Dev/single-writer — informational |
+| `NonHA` | _(removed)_ | Cluster admission requires `primaries.members >= 3` |
+| `LowPrimaryCount` | _(removed)_ | Cluster admission requires `primaries.members >= 3` |
 
 `TopologyWarning=True` does **not** set `Ready=False` unless members are actually unhealthy.
 

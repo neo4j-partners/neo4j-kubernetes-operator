@@ -20,7 +20,7 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
 | TOPO-001 | `mode: Standalone` → `primaries`, `secondaries`, `minimumMembers` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
-| TOPO-002 | `mode: Cluster` → `primaries.members` required | Error | CEL | `primaries.members` is required when `mode` is `Cluster` |
+| TOPO-002 | `mode: Cluster` → `primaries.members` required (≥ 1) | Error | CEL | `primaries.members` is required when `mode` is `Cluster` |
 | TOPO-003 | `secondaries` without `primaries` | Error | CEL | `primaries.members` must be set before secondaries |
 | TOPO-004 | `secondaries` when `mode: Standalone` | Error | CEL | Secondaries require `mode: Cluster` |
 | TOPO-005 | `gds` or `bloom` in `secondaries.read.plugins` | Error | CEL | GDS/Bloom must use secondaries.analytics pool |
@@ -29,8 +29,7 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 | TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
 | TOPO-009 | `minimumMembers > total members` | Error | Webhook | `minimumMembers` cannot exceed total member count |
 | TOPO-010 | Primary scale-in below quorum / unsafe pool scale-in | Error | Webhook | Scale-in would break primary quorum or remove members before drain completes |
-| TOPO-011 | `primaries.members: 1` + any secondary pool | Warning | Reconciler | Non-HA topology |
-| TOPO-012 | `primaries.members < 3` | Warning | Reconciler | For HA production use `primaries.members ≥ 3` |
+| TOPO-011 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
 
 ### CEL sketches (topology)
