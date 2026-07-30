@@ -109,6 +109,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh p8-cluster
 
+      # Secondary pool scale-out/in with ENABLE SERVER + drain (NEO-2-011).
+      - name: "Scenario: p9-scale"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p9-scale
+
+      # Unsupported primary 1->N scale-up is refused in status (NEO-3-011-CSZ-01).
+      - name: "Scenario: p10-scale-limits"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh p10-scale-limits
+
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
