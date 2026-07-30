@@ -1,0 +1,24 @@
+name: p10-scale-limits
+description: >
+  NEO-3-011-CSZ-01 boundary — growing a single-primary cluster to multiple system
+  primaries is NOT supported. The operator must refuse it in status
+  (ClusterFormed=False / UnsupportedSystemScaleUp) and hold the primary pool at 1,
+  rather than creating pods that could never join the system database.
+brief_ref: slice-scale-limits
+use_pipeline: standalone-suite
+on_case_failure: stop
+clouds: [local-kind]
+
+pipeline:
+  case_assert:
+    # Confirm the 1-primary cluster is healthy first, so a refusal later is
+    # attributable to the scale request and not to a broken deployment.
+    - assert/cluster-formed
+    - assert/primary-scale-blocked
+
+cases:
+  - id: primary-scale-up-refused
+    fixture: tests/fixtures/neo4j-cluster-single.yaml
+    neo4j_case: cluster-single
+    expect: success
+    cr_name: e2e-scale-limit
