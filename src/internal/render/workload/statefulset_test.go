@@ -8,6 +8,7 @@ import (
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -407,5 +408,42 @@ func TestStatefulSetLoggingConfigMapRefMounts(t *testing.T) {
 	}
 	if !mountOK || !volOK {
 		t.Fatalf("configmap ref mounts: mount=%v vol=%v", mountOK, volOK)
+	}
+}
+
+func TestStatefulSetAppliesResources(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	c := StandaloneStatefulSet(render.StandaloneContext(neo4j)).Spec.Template.Spec.Containers[0]
+	if got := c.Resources.Requests.Cpu().String(); got != "500m" {
+		t.Fatalf("cpu request = %q", got)
+	}
+	if got := c.Resources.Limits.Memory().String(); got != "2Gi" {
+		t.Fatalf("memory limit = %q", got)
 	}
 }

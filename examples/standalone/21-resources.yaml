@@ -1,0 +1,30 @@
+# Purpose: CPU/memory requests and limits on the Neo4j container (spec.resources).
+#   Memory limit should match request (Neo4j heap stability).
+# Apply: kubectl apply -f examples/standalone/21-resources.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-resources
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

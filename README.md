@@ -154,6 +154,7 @@ Also under `[config/samples/](config/samples/)` for kubebuilder scaffolding (sub
 | Cluster mTLS                                   | —          | yes     |
 | Backup / Prometheus listeners + ServiceMonitor | yes        | yes     |
 | Scheduling / custom probes                     | yes        | yes     |
+| Container CPU/memory (`spec.resources`)        | yes        | yes     |
 | Config / JVM / APOC conf                       | yes        | yes     |
 | Plugins (APOC / GDS / Bloom)                   | yes        | yes†    |
 | Status conditions / endpoints                  | yes        | yes     |
@@ -239,9 +240,8 @@ Tracked product gaps / schema fields that are **not** wired (do not rely on them
 
 | Item                               | Notes                                                                                                                                        |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resources`                        | No requests/limits from CR                                                                                                                   |
 | `security.*`                       | SA annotations / securityContext / NetworkPolicy not applied from CR                                                                         |
-| PDB, Ingress, cert-manager         | PDB wired (`spec.podDisruptionBudget`); Ingress / cert-manager deferred                                                                     |
+| Ingress, cert-manager              | PDB wired (`spec.podDisruptionBudget`); Ingress / cert-manager deferred                                                                     |
 | CSV / JMX / Graphite monitoring    | Deferred (`features.monitoring.prometheus` + `serviceMonitor` are wired)                                                                     |
 | LDAP, reverse proxy, multi-cluster | Deferred                                                                                                                                     |
 | Neo4j version upgrade workflow     | Deferred                                                                                                                                     |
