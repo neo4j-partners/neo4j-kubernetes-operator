@@ -41,7 +41,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		Ports:           neo4jContainerPorts(ctx),
 		Env:             neo4jContainerEnv(ctx),
 		Resources:       *ctx.Neo4j.Spec.Resources.DeepCopy(),
-		SecurityContext: defaultContainerSecurityContext(),
+		SecurityContext: containerSecurityContext(ctx),
 		VolumeMounts: []corev1.VolumeMount{
 			// Helm mounts projected config fragments at /config/neo4j.conf (directory).
 			{Name: neo4jConfVolumeName, MountPath: "/config/neo4j.conf"},
@@ -59,7 +59,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: ctx.OperandServiceAccountName(),
-		SecurityContext:    defaultPodSecurityContext(),
+		SecurityContext:    podSecurityContext(ctx),
 		Containers:         []corev1.Container{container},
 		Volumes:            volumes,
 		ImagePullSecrets:   imagePullSecrets(ctx),
@@ -169,6 +169,20 @@ func appendLoggingVolumes(ctx render.Context, container *corev1.Container, volum
 			},
 		})
 	}
+}
+
+func podSecurityContext(ctx render.Context) *corev1.PodSecurityContext {
+	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.PodSecurityContext != nil {
+		return ctx.Neo4j.Spec.Security.PodSecurityContext.DeepCopy()
+	}
+	return defaultPodSecurityContext()
+}
+
+func containerSecurityContext(ctx render.Context) *corev1.SecurityContext {
+	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.ContainerSecurityContext != nil {
+		return ctx.Neo4j.Spec.Security.ContainerSecurityContext.DeepCopy()
+	}
+	return defaultContainerSecurityContext()
 }
 
 func defaultPodSecurityContext() *corev1.PodSecurityContext {

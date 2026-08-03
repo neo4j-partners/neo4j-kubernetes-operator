@@ -639,11 +639,11 @@ Empty → operator applies Neo4j-tuned defaults (`NEO-3-009-PROBE-01`).
 
 | Field | Description |
 |-------|-------------|
-| `podSecurityContext` | `runAsUser: 7474`, `fsGroup: 7474`, etc. |
-| `containerSecurityContext` | `runAsNonRoot`, `capabilities.drop: [ALL]`. |
-| `serviceAccount.create` | Create dedicated SA (`NEO-3-008-SCH-06`). |
-| `serviceAccount.annotations` | IRSA / Workload Identity annotations. |
-| `networkPolicy.enabled` | Opt-in NetworkPolicy (V1 default `false`). |
+| `podSecurityContext` | Override pod SC; omit for Neo4j defaults (`runAsUser`/`fsGroup` 7474). |
+| `containerSecurityContext` | Override container SC; omit for defaults (`drop: [ALL]`). |
+| `serviceAccount.annotations` | IRSA / Workload Identity annotations on the operand SA. |
+| `serviceAccount.create` | Reserved — operator always creates the workload SA. |
+| `networkPolicy.enabled` | Opt-in NetworkPolicy (default off). Client ports open; cluster ports same-namespace only. |
 
 ---
 

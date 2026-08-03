@@ -118,6 +118,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - neo4j.com
   resources:
   - neo4js

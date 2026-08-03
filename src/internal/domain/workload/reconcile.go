@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -119,6 +120,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	if out := r.reconcilePDB(ctx, neo4j, baseCtx); out.Err != nil {
 		return out
 	}
+	if out := r.reconcileNetworkPolicy(ctx, neo4j, baseCtx); out.Err != nil {
+		return out
+	}
 
 	r.recordCredentials(neo4j, baseCtx.AuthSecretName(), generated)
 	return shared.Done()
@@ -153,6 +157,39 @@ func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1beta1
 	}
 	if err := r.Client.Delete(ctx, pdb); err != nil && client.IgnoreNotFound(err) != nil {
 		return shared.Failed(fmt.Errorf("delete PodDisruptionBudget: %w", err))
+	}
+	return shared.Done()
+}
+
+func (r *Reconciler) reconcileNetworkPolicy(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+	if !renderwl.NetworkPolicyEnabled(neo4j) {
+		return r.deleteNetworkPolicyIfPresent(ctx, neo4j, baseCtx)
+	}
+	desired := renderwl.NetworkPolicy(baseCtx)
+	np := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
+	}
+	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, np, func() error {
+		np.Labels = desired.Labels
+		np.Spec = desired.Spec
+		return nil
+	}); err != nil {
+		return shared.Failed(fmt.Errorf("apply NetworkPolicy: %w", err))
+	}
+	return shared.Done()
+}
+
+func (r *Reconciler) deleteNetworkPolicyIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+	np := &networkingv1.NetworkPolicy{}
+	key := types.NamespacedName{Name: renderwl.NetworkPolicyName(baseCtx), Namespace: neo4j.Namespace}
+	if err := r.Client.Get(ctx, key, np); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return shared.Done()
+		}
+		return shared.Failed(fmt.Errorf("get NetworkPolicy for delete: %w", err))
+	}
+	if err := r.Client.Delete(ctx, np); err != nil && client.IgnoreNotFound(err) != nil {
+		return shared.Failed(fmt.Errorf("delete NetworkPolicy: %w", err))
 	}
 	return shared.Done()
 }
@@ -243,5 +280,6 @@ func OwnedTypes() []client.Object {
 		&rbacv1.Role{},
 		&rbacv1.RoleBinding{},
 		&policyv1.PodDisruptionBudget{},
+		&networkingv1.NetworkPolicy{},
 	}
 }

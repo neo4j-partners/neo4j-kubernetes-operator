@@ -53,6 +53,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/19-custom-logging.yaml`](standalone/19-custom-logging.yaml) | `logging.serverLogsXml` / `userLogsXml` (inline) |
 | [`standalone/20-logging-configmap-ref.yaml`](standalone/20-logging-configmap-ref.yaml) | `logging.*ConfigMapRef` (existing ConfigMaps) |
 | [`standalone/21-resources.yaml`](standalone/21-resources.yaml) | `spec.resources` — CPU/memory requests and limits |
+| [`standalone/22-security.yaml`](standalone/22-security.yaml) | `security.serviceAccount.annotations` + opt-in NetworkPolicy |
 
 ## Cluster
 
@@ -114,6 +115,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Prometheus metrics listener/feature | [`standalone/09`](standalone/09-listeners-backup-metrics.yaml) | [`cluster/12`](cluster/12-backup-and-metrics.yaml) |
 | Scheduling (affinity/tolerations/spread) | [`standalone/10`](standalone/10-scheduling.yaml) | [`cluster/08`](cluster/08-scheduling.yaml) |
 | `resources` (CPU/memory) | [`standalone/21`](standalone/21-resources.yaml) | same field on Cluster CR |
+| `security` (SA annotations / contexts / NetworkPolicy) | [`standalone/22`](standalone/22-security.yaml) | same fields on Cluster CR |
 | PodDisruptionBudget | *(works on Standalone too)* | [`cluster/15`](cluster/15-pdb.yaml) |
 | Custom probes | [`standalone/11`](standalone/11-probes-custom.yaml) | [`cluster/09`](cluster/09-probes-custom.yaml) |
 | `config.neo4j` / `config.jvm` / `config.apoc` | [`standalone/12`](standalone/12-config-jvm.yaml) | [`cluster/10`](cluster/10-config-jvm.yaml) |
@@ -158,7 +160,6 @@ workload. They are intentionally left out of every example above:
 
 | Field | Status |
 |-------|--------|
-| `security.podSecurityContext` / `containerSecurityContext` / `networkPolicy` | schema-only |
 | `podTemplate` (initContainers, sidecars, env) | schema-only |
 | `trust.certManager` | schema-only — only BYO Secret TLS (`privateKey`/`publicCertificate`) is wired |
 | `connectivity.ingress.enabled: true` | schema-only — no Ingress object is created |

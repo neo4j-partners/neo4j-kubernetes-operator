@@ -1,0 +1,30 @@
+# Purpose: security contexts, workload SA annotations (e.g. AKS Workload Identity),
+#   and opt-in NetworkPolicy for Neo4j pods.
+# Apply: kubectl apply -f examples/standalone/22-security.yaml
+# Related README: ../README.md#standalone
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-security
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  security:
+    # Omit pod/container securityContext to keep Neo4j defaults (uid/gid 7474, drop ALL).
+    serviceAccount:
+      annotations:
+        azure.workload.identity/client-id: "REPLACE_WITH_MANAGED_IDENTITY_CLIENT_ID"
+    networkPolicy:
+      enabled: true
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

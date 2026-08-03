@@ -308,6 +308,48 @@ func TestOperandServiceAccountAnnotations(t *testing.T) {
 	}
 }
 
+func TestSecurityContextOverrides(t *testing.T) {
+	uid := int64(1000)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Security: &neo4jv1beta1.SecuritySpec{
+				PodSecurityContext: &corev1.PodSecurityContext{RunAsUser: &uid, FSGroup: &uid},
+				ContainerSecurityContext: &corev1.SecurityContext{
+					RunAsUser: &uid,
+					Capabilities: &corev1.Capabilities{
+						Drop: []corev1.Capability{"ALL"},
+						Add:  []corev1.Capability{"NET_BIND_SERVICE"},
+					},
+				},
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	if sts.Spec.Template.Spec.SecurityContext.RunAsUser == nil || *sts.Spec.Template.Spec.SecurityContext.RunAsUser != 1000 {
+		t.Fatalf("pod sc = %#v", sts.Spec.Template.Spec.SecurityContext)
+	}
+	csc := sts.Spec.Template.Spec.Containers[0].SecurityContext
+	if csc.RunAsUser == nil || *csc.RunAsUser != 1000 {
+		t.Fatalf("container sc = %#v", csc)
+	}
+	if len(csc.Capabilities.Add) != 1 || csc.Capabilities.Add[0] != "NET_BIND_SERVICE" {
+		t.Fatalf("capabilities = %#v", csc.Capabilities)
+	}
+}
+
 func TestImagePullSecrets(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
