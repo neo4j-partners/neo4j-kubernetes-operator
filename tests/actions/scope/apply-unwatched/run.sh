@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scope/apply-unwatched — create a namespace the operator does NOT watch and apply
-# a valid Neo4j CR into it. Used by the p6-scope suite to prove single-namespace
+# a valid Neo4j CR into it. Used by the operator-scope suite to prove single-namespace
 # scope (OP-2-001-SCOPE-01): the operator watches only WATCH_NAMESPACE
 # ("default,neo4j-operator-system"), so a CR here must be left untouched.
 #

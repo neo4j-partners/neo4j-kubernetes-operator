@@ -122,7 +122,7 @@ sample-standalone: install ## Apply Standalone sample (default namespace)
 .PHONY: test-e2e
 test-e2e: ## Run e2e suite (CLOUD, E2E_PROFILE=happy-path|matrix|explicit, SUITE=)
 	chmod +x tests/bin/*.sh tests/runner/*.sh tests/actions/*/*/*.sh tests/config/**/*.sh tests/lib/*.sh 2>/dev/null || true
-	CLOUD=$${CLOUD:-local-kind} E2E_PROFILE=$${E2E_PROFILE:-happy-path} ./tests/bin/run-e2e.sh $${SUITE:-$${SCENARIO:-p0-standalone}}
+	CLOUD=$${CLOUD:-local-kind} E2E_PROFILE=$${E2E_PROFILE:-happy-path} ./tests/bin/run-e2e.sh $${SUITE:-$${SCENARIO:-workload-standalone}}
 
 .PHONY: test-e2e-matrix
 test-e2e-matrix: ## Run all reconciled e2e combinations on local-kind
@@ -132,12 +132,12 @@ test-e2e-matrix: ## Run all reconciled e2e combinations on local-kind
 .PHONY: test-e2e-combinations
 test-e2e-combinations: ## List e2e matrix combinations (CLOUD, SCENARIO)
 	chmod +x tests/bin/list-e2e-combinations.sh 2>/dev/null || true
-	CLOUD=$${CLOUD:-local-kind} SCENARIO=$${SCENARIO:-p0-standalone} ./tests/bin/list-e2e-combinations.sh
+	CLOUD=$${CLOUD:-local-kind} SCENARIO=$${SCENARIO:-workload-standalone} ./tests/bin/list-e2e-combinations.sh
 
 .PHONY: test-e2e-admission
-test-e2e-admission: ## Run neo4j-admission suite on local-kind (shared operator setup)
+test-e2e-admission: ## Run operator-admission suite on local-kind (shared operator setup)
 	bash tests/bin/setup-local-kind.sh
-	CLOUD=local-kind E2E_PROFILE=happy-path ./tests/bin/run-e2e.sh neo4j-admission
+	CLOUD=local-kind E2E_PROFILE=happy-path ./tests/bin/run-e2e.sh operator-admission
 
 .PHONY: test-e2e-local
 test-e2e-local: ## Prepare kind + run e2e on local-kind

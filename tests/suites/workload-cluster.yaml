@@ -1,4 +1,4 @@
-name: p8-cluster
+name: workload-cluster
 description: >
   NEO-2-002 Cluster mode — members are created, the cluster actually forms
   (SHOW SERVERS: Enabled + Available), and routing works through the client

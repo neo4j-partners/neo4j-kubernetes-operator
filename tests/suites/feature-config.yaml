@@ -1,4 +1,4 @@
-name: p2-serverconfig
+name: feature-config
 description: Neo4j server config surface (spec.config) — passthrough and invalid-setting handling
 brief_ref: neo4j-config-surface
 use_pipeline: standalone-suite

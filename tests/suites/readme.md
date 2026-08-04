@@ -9,8 +9,8 @@ tests/
   pipelines/          reusable phase definitions
     standalone-suite.yaml
   suites/               test tables + pipeline overrides
-    p0-standalone.yaml
-    neo4j-admission.yaml
+    workload-standalone.yaml
+    operator-admission.yaml
   fixtures/             CR manifests (valid and invalid)
 ```
 
@@ -27,7 +27,7 @@ tests/
 ## Suite example
 
 ```yaml
-name: neo4j-admission
+name: operator-admission
 use_pipeline: standalone-suite
 on_case_failure: continue
 
@@ -46,9 +46,9 @@ cases:
 ## Run
 
 ```bash
-make test-e2e-local                              # p0-standalone (happy path)
-E2E_PROFILE=matrix make test-e2e-local           # p0 matrix, setup once
-./tests/bin/run-e2e.sh neo4j-admission           # admission suite
+make test-e2e-local                              # workload-standalone (happy path)
+E2E_PROFILE=matrix make test-e2e-local           # workload-standalone matrix, setup once
+./tests/bin/run-e2e.sh operator-admission        # admission suite
 ```
 
 ## Case fields

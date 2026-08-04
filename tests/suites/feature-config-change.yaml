@@ -1,4 +1,4 @@
-name: p7-config-change
+name: feature-config-change
 description: >
   NEO-2-010 / NEO-3-010-RSTR-01 — a change to spec.config on a running Neo4j is
   detected, rendered into the ConfigMap, and applied via a controlled restart

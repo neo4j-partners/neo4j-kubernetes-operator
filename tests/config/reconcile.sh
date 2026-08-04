@@ -54,9 +54,9 @@ _config_operator_cases_for_cloud() {
 
 # Neo4j cases compatible with a scenario (extend when cluster scenarios land).
 _config_neo4j_cases_for_scenario() {
-  local scenario=${1:-p0-standalone}
+  local scenario=${1:-workload-standalone}
   case "${scenario}" in
-    p0-standalone)
+    workload-standalone)
       printf '%s\n' standalone-minimal standalone-storage-class standalone-named-cr
       ;;
     *)
@@ -119,7 +119,7 @@ _reconcile_apply() {
 # Print one line per combination: "<operator-case> <neo4j-case>".
 reconcile_list_combinations() {
   local cloud=${1:-}
-  local scenario=${2:-p0-standalone}
+  local scenario=${2:-workload-standalone}
 
   load_cloud_config "${cloud}"
 

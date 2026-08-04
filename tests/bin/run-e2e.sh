@@ -9,7 +9,7 @@ TESTS_DIR="$(cd "${BIN_DIR}/.." && pwd)"
 
 CLOUD="${CLOUD:-local-kind}"
 E2E_PROFILE="${E2E_PROFILE:-happy-path}"
-SUITE="${1:-p0-standalone}"
+SUITE="${1:-workload-standalone}"
 
 # shellcheck source=../lib/common.sh
 source "${TESTS_DIR}/lib/common.sh"

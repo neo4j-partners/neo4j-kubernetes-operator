@@ -12,7 +12,7 @@ source "${TESTS_DIR}/lib/suite.sh"
 # shellcheck source=../config/load.sh
 source "${TESTS_DIR}/config/load.sh"
 
-SUITE_NAME="${1:-p0-standalone}"
+SUITE_NAME="${1:-workload-standalone}"
 SUITE_FILE="${TESTS_DIR}/suites/${SUITE_NAME}.yaml"
 
 [[ -f "${SUITE_FILE}" ]] || die "suite not found: ${SUITE_FILE}"

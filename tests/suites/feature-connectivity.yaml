@@ -1,4 +1,4 @@
-name: p1-connectivity
+name: feature-connectivity
 description: Deploy Standalone Neo4j (no TLS) and probe connectors from the pod and a client pod
 brief_ref: slice-1-connectivity
 use_pipeline: standalone-suite

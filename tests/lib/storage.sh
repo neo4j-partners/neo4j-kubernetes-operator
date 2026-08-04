@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Storage assertion helpers (BDR-005 / render/storage).
 #
-# Shared by the p4-storage asserts: wait for the operator to reconcile / Neo4j to be
+# Shared by the feature-storage asserts: wait for the operator to reconcile / Neo4j to be
 # Ready, verify a mount is actually present inside the neo4j container (via /proc/mounts,
 # which needs no write permission), and confirm the expected failure surface for
 # invalid storage (PVC/pod stuck Pending, CR never Ready).
