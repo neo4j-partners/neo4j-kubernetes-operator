@@ -1,0 +1,28 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # APOC assigned as a plugin; apoc.* keys must render into the dedicated
+  # <cr>-apoc-config ConfigMap (key apoc.conf), separate from neo4j.conf.
+  plugins: [apoc]
+  pluginDefinitions:
+    apoc: {}
+  config:
+    apoc:
+      apoc.export.file.enabled: "true"

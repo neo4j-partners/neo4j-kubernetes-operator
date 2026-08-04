@@ -16,6 +16,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
 | `feature-config-change` | [suites/feature-config-change.yaml](suites/feature-config-change.yaml) | `spec.config` change applied via a controlled restart (NEO-2-010) |
+| `feature-plugins` | _(planned — no suite file yet)_ | Plugin runtime — APOC procedures, GDS, and Bloom available on assigned pools (BDR-004) |
 | `operator-admission` | [suites/operator-admission.yaml](suites/operator-admission.yaml) | Admission rejections + one happy case |
 | `operator-scope` | [suites/operator-scope.yaml](suites/operator-scope.yaml) | Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE + namespaced RBAC |
 
@@ -47,10 +48,22 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Single-cluster only (multiCluster disabled) — NEO-3-007-MULTI-01
 
 ### `feature-config` — NEO-2-003
-- [x] Valid `spec.config` rendered verbatim into ConfigMap — NEO-3-003-CFG-01 · AC-NEO-CONFIG-001
+- [x] Valid `spec.config.neo4j` rendered verbatim into `<cr>-config` — NEO-3-003-CFG-01 · AC-NEO-CONFIG-001
 - [x] Unknown setting admitted but rejected by Neo4j at startup — AC-NEO-CONFIG-002
-- [ ] Assert default JVM arguments applied — NEO-3-003-JVM-01
-- [ ] APOC configuration — NEO-3-003-APOC-01/02
+- [x] JVM `additionalArguments` rendered into `server.jvm.additional` — NEO-3-003-JVM-02
+- [x] APOC `apoc.*` config rendered into `<cr>-apoc-config` (`apoc.conf`) — NEO-3-003-APOC-01 · AC-NEO-APOC-001
+- [ ] JVM `useDefaults: true` prepends Neo4j default JVM args into `server.jvm.additional` — NEO-3-003-JVM-01 (test **postponed**: render ignores `useDefaults` today, and the assert depends on how defaults are sourced — vendored `.conf` vs hardcoded list vs image; see the jvm.useDefaults implementation issue)
+- [ ] APOC credentials mounted from secret — NEO-3-003-APOC-02 · AC-NEO-APOC-CREDS-001 (`pluginDefinitions.apoc.credentials`)
+
+### `feature-plugins` — plugins (BDR-004) — planned
+
+Runtime plugin behavior (procedures actually callable), distinct from `feature-config` which
+only checks that `apoc.*` config renders into `apoc.conf`. Needs Neo4j Ready + a bolt query.
+
+- [ ] APOC assigned: `apoc.*` procedures callable at runtime (e.g. `RETURN apoc.version()`) — NEO-3-003-APOC-01
+- [ ] GDS assigned: `gds.*` procedures available (e.g. `RETURN gds.version()`) — BDR-004 (no dedicated FR)
+- [ ] Bloom assigned: Bloom server/license available on the workload — BDR-004 (no dedicated FR)
+- [ ] Procedure allowlists injected into neo4j.conf (`dbms.security.procedures.unrestricted`/`allowlist`) for assigned plugins — BDR-004
 
 ### `feature-credentials` — NEO-2-004
 - [x] Operator-generated password authenticates over bolt — NEO-3-004-CRED-01 · AC-NEO-SECRETS

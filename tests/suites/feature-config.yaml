@@ -26,3 +26,23 @@ cases:
     # 'Unrecognized' is enough to match Neo4j's strict-validation error.
     expect_contains: Unrecognized
     cr_name: e2e-cfg-unknown
+
+  # NEO-3-003-JVM-02: spec.config.jvm.additionalArguments render into the neo4j.conf key
+  # server.jvm.additional (config-file check, no pod readiness required).
+  # NOTE: useDefaults (NEO-3-003-JVM-01) is intentionally NOT tested yet — its assertion
+  # depends on how defaults get sourced (vendored .conf vs hardcoded list vs image), which
+  # is undecided. See coverage.md and the jvm.useDefaults implementation issue.
+  - id: jvm-additional-args
+    fixture: tests/fixtures/neo4j-config-jvm.yaml
+    assert: config-jvm-rendered
+    expect: success
+    cr_name: e2e-cfg-jvm
+
+  # NEO-3-003-APOC-01: apoc.* config renders into the dedicated <cr>-apoc-config (apoc.conf)
+  # when APOC is assigned via spec.plugins. This is the config-integrated APOC surface —
+  # runtime procedure availability belongs to the planned feature-plugins suite.
+  - id: apoc-config
+    fixture: tests/fixtures/neo4j-config-apoc.yaml
+    assert: config-apoc-rendered
+    expect: success
+    cr_name: e2e-cfg-apoc
