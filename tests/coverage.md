@@ -10,6 +10,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 |-------|------|-------------|
 | `workload-standalone` | [suites/workload-standalone.yaml](suites/workload-standalone.yaml) | Positive Standalone (happy path / matrix) |
 | `workload-cluster` | [suites/workload-cluster.yaml](suites/workload-cluster.yaml) | Cluster mode — members created, cluster forms, routing works (1-primary lab + 3-primary HA) |
+| `workload-scale` | [suites/workload-scale.yaml](suites/workload-scale.yaml) | Secondary pool scaled out and back in, with `ENABLE SERVER` / drain verified through Neo4j |
 | `feature-connectivity` | [suites/feature-connectivity.yaml](suites/feature-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
 | `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010) |
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
@@ -39,8 +40,26 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
 - [ ] Cluster TLS material (`spec.trust`) — NEO-3-005-TLS-03 · AC-NEO-TLS (no TLS case yet)
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
-- [ ] Scale out/in cluster members after deploy (`topology.*.members`) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
-- [ ] Added servers auto-enabled: operator runs `ENABLE SERVER` so a scaled-out member reaches `Enabled` in `SHOW SERVERS` and hosts databases — NEO-3-011-SRV-01 · AC-NEO-SCALE
+- Scale out/in after deploy — NEO-2-011 · AC-NEO-SCALE: see `workload-scale`
+
+### `workload-scale` — NEO-2-011
+
+Scales a **secondary** pool on a live cluster (3 primaries + `read`), `1 → 2 → 1`, in a single
+case. Secondary pools are the supported scale unit per BDR-009.
+
+- [x] Scale out a pool after deploy (`topology.secondaries.read.members`) — NEO-3-011-CSZ-01 · AC-NEO-SCALE-001
+- [x] Added server auto-enabled: Neo4j reports the new member `Enabled`+`Available` in `SHOW SERVERS`, proving the operator ran `ENABLE SERVER` rather than only resizing the StatefulSet — NEO-3-011-SRV-01 · AC-NEO-SCALE-002
+- [x] Scale in: the removed member is drained and the cluster stays formed — AC-NEO-SCALE-003
+- [x] `ClusterFormed` stays `True` across both topology changes
+- [ ] Scale the **primary** pool (1 → N) — NEO-3-011-CSZ-01 (primary half). Not covered: on
+  `main@ebb9fc0` this neither succeeds nor is cleanly refused. The StatefulSet grows, all
+  servers are enabled and the *system* database reaches 3 primaries
+  (`requestedPrimariesCount=3, currentPrimariesCount=3`), but the `neo4j` database never comes
+  back online — stuck `starting`/`unknown`, `statusMessage="Server is unavailable"`, still
+  broken after 12+ min. `ClusterFormed=UnsupportedSystemScaleUp` appears only **transiently**
+  (~30s) before the operator moves on to `EnablingServer`, so a naive assert on that reason
+  passes while the cluster is actually broken. Add a case once the behaviour is settled.
+- [ ] Scale a primary pool **in** — same reason as above
 
 ### `feature-connectivity` — NEO-2-007
 - [x] Bolt (7687) reachable from the Neo4j pod — NEO-3-007-PRT-03 · AC-NEO-NETWORKING-PORTS-BOLT
