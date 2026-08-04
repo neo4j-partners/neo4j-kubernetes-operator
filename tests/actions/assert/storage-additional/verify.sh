@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # assert/storage-additional — a caller-defined additionalMounts entry (random volume
 # name) is mounted at its mountPath inside the neo4j container. The resolved name/path
-# are persisted by deploy/standalone (random per run) and read back here.
+# are persisted by deploy/neo4j (random per run) and read back here.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

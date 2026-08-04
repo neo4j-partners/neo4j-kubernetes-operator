@@ -1,7 +1,7 @@
 name: feature-config
 description: Neo4j server config surface (spec.config) — passthrough and invalid-setting handling
 brief_ref: neo4j-config-surface
-use_pipeline: standalone-suite
+use_pipeline: neo4j-suite
 on_case_failure: continue
 clouds: [local-kind]
 

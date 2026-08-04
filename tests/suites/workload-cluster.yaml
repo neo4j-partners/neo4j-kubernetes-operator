@@ -4,7 +4,7 @@ description: >
   (SHOW SERVERS: Enabled + Available), and routing works through the client
   Service. Covers AC-NEO-CLUSTER-001/002/003.
 brief_ref: slice-cluster
-use_pipeline: standalone-suite
+use_pipeline: neo4j-suite
 on_case_failure: continue
 clouds: [local-kind]
 
