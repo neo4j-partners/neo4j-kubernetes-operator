@@ -29,5 +29,15 @@ spec:
   connectivity:
     service:
       type: ClusterIP
+  # This suite runs the most Neo4j JVMs of any suite — 4 at peak (3 primaries + the
+  # scaled-out read secondary). A GitHub runner has ~7 GB, and Neo4j sizes heap and
+  # page cache from available memory by default, so four unconstrained instances
+  # crash-loop there (they are fine on a developer machine). Pin small values so the
+  # suite fits CI; the scale behaviour under test does not depend on them.
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 512m
+      server.memory.heap.max_size: 512m
+      server.memory.pagecache.size: 256m
   auth:
     generatePassword: true
