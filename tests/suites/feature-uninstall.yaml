@@ -1,4 +1,4 @@
-name: p5-uninstall
+name: feature-uninstall
 description: >
   NEO-2-018 — deleting the Neo4j CR preserves the data PVC by default, so
   uninstalling the workload never destroys data.

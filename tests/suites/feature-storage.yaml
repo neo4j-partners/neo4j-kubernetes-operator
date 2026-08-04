@@ -1,4 +1,4 @@
-name: p4-storage
+name: feature-storage
 description: Storage surface (spec.storage) — data modes, aux Share, additionalMounts, and invalid-storage failures
 brief_ref: neo4j-storage-surface
 use_pipeline: storage-suite

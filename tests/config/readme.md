@@ -53,7 +53,7 @@ final config = operator/base
 
 ### Matrix per cloud
 
-| Cloud | Operator cases | Neo4j cases (`p0-standalone`) | Total |
+| Cloud | Operator cases | Neo4j cases (`workload-standalone`) | Total |
 |-------|----------------|----------------------------------|-------|
 | `local-kind` | `default`, `local-image` | `standalone-minimal`, `standalone-storage-class`, `standalone-named-cr` | 6 |
 | `azure-aks` | `default`, `registry-image` | same | 6 |
@@ -79,7 +79,7 @@ E2E_PROFILE=explicit OPERATOR_CASE=local-image NEO4J_CASE=standalone-storage-cla
 Log line example:
 
 ```
-E2E profile=happy-path cloud=local-kind operator=local-image neo4j=standalone-minimal cr=dev scenario=p0-standalone
+E2E profile=happy-path cloud=local-kind operator=local-image neo4j=standalone-minimal cr=dev scenario=workload-standalone
 ```
 
 ## Operator vs tests/old

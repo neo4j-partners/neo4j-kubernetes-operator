@@ -1,4 +1,4 @@
-name: p6-scope
+name: operator-scope
 description: >
   OP-2-001-SCOPE-01 — the namespace-scoped operator reconciles CRs in a watched
   namespace and ignores CRs outside WATCH_NAMESPACE, and its RBAC is namespaced

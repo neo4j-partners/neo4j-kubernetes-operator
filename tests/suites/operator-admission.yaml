@@ -1,4 +1,4 @@
-name: neo4j-admission
+name: operator-admission
 description: Admission validation — rejected invalid CRs, accepted valid standalone
 brief_ref: admission-validation
 use_pipeline: standalone-suite
