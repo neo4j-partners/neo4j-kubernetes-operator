@@ -44,16 +44,30 @@ applied, and StatefulSet, Services, Secret, and ConfigMap exist. Set
 
 ## Config suite mechanics (`feature-config`)
 
-Config cases are render checks: the assert waits for `Installed` (base objects created) and
-reads the rendered ConfigMap, without needing the pod Ready. `neo4j.conf` keys land in
-`<cr>-config` (one data key per setting, JVM under `server.jvm.additional`); `apoc.*` keys
-land in the dedicated `<cr>-apoc-config` (key `apoc.conf`) only when APOC is assigned via
-`spec.plugins`.
+`neo4j.conf` cases are runtime checks: the assert waits for the CR `Ready`, then connects
+over bolt with `cypher-shell` from inside the `neo4j` container and runs `SHOW SETTINGS` to
+read the *effective* value Neo4j resolved — the same check a user would do by hand. It asserts
+containment (not equality) because Neo4j normalises some values (memory to bytes, lists as
+`[..]`). `spec.config.neo4j` maps to a plain setting (`db.transaction.timeout`), and
+`spec.config.jvm.additionalArguments` maps to `server.jvm.additional`.
+
+The APOC case stays a render check (assert waits for `Installed` and reads the ConfigMap):
+`apoc.*` keys land in the dedicated `<cr>-apoc-config` (key `apoc.conf`) only when APOC is
+assigned via `spec.plugins`, and `SHOW SETTINGS` does not expose APOC config — runtime APOC
+behaviour belongs to `feature-plugins`.
 
 JVM coverage is `additionalArguments` only. `jvm.useDefaults` (NEO-3-003-JVM-01) is **not
 tested yet** — it is a no-op in render today, and the right assertion depends on how the
 defaults get sourced (vendored `.conf` vs hardcoded list vs relying on the image). The test
 is postponed until that implementation decision lands (see the jvm.useDefaults issue).
+
+The live config-change case (`config-restart`, NEO-2-010, formerly the separate
+`feature-config-change` suite) deploys a plain Standalone, waits for `Ready`, patches
+`spec.config.neo4j['db.transaction.timeout']`, then asserts three levels in order:
+**render** (the ConfigMap fragment carries the new value), **rollout** (the StatefulSet
+`updateRevision` changes → a controlled restart was triggered), and **runtime** (after the
+pod comes back `Ready`, `SHOW SETTINGS` over bolt reports the new value). It is the only
+config case that mutates a running CR, so it is heavier than the deploy-once cases.
 
 ## Storage suite mechanics (`feature-storage`)
 

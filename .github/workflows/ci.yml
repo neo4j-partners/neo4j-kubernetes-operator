@@ -71,7 +71,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh feature-connectivity
 
-      # spec.config passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002).
+      # spec.config passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error
+      # (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010).
       - name: "Scenario: feature-config"
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh feature-config
@@ -96,11 +97,6 @@ jobs:
       - name: "Scenario: operator-scope"
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-scope
-
-      # spec.config change is applied via a controlled restart (NEO-2-010).
-      - name: "Scenario: feature-config-change"
-        if: ${{ !cancelled() }}
-        run: CLOUD=local-kind ./tests/bin/run-e2e.sh feature-config-change
 
       # Cluster mode (NEO-2-002): members created, cluster actually forms
       # (SHOW SERVERS Enabled+Available), routing works over neo4j://.
