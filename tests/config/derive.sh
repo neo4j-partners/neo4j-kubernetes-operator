@@ -2,7 +2,12 @@
 # Recompute derived Neo4j resource names after case reconciliation.
 
 neo4j_derive_names() {
-  export NEO4J_STS_NAME="${NEO4J_CR_NAME}-server"
+  # The operator names the workload StatefulSet <cr>-<pool>. Standalone renders a
+  # single "server" pool; Cluster renders one StatefulSet per pool (primary, and
+  # optionally analytics / read) per BDR-009. Cases that exercise Cluster mode set
+  # NEO4J_POOL (e.g. "primary"); everything else keeps the Standalone default.
+  export NEO4J_POOL="${NEO4J_POOL:-server}"
+  export NEO4J_STS_NAME="${NEO4J_CR_NAME}-${NEO4J_POOL}"
   export NEO4J_AUTH_SECRET="${NEO4J_CR_NAME}-auth"
   export NEO4J_CONFIGMAP="${NEO4J_CR_NAME}-config"
   export NEO4J_CLIENT_SVC="${NEO4J_CR_NAME}"
