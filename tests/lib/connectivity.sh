@@ -67,6 +67,36 @@ conn_probe() {
   "${CONN_EXEC_FN}" "${snippet}"
 }
 
+# conn_show_setting <host> <pw> <name> — print the effective value of a Neo4j setting via
+# SHOW SETTINGS over bolt, run inside CONN_EXEC_FN. Mirrors a manual cypher-shell check:
+# reads the *runtime* value Neo4j resolved, not the rendered ConfigMap fragment.
+conn_show_setting() {
+  local host=$1 pw=$2 name=$3 snippet
+  snippet="cypher-shell -a 'bolt://${host}:${CONN_BOLT_PORT}' -u neo4j -p '${pw}' --format plain \"SHOW SETTINGS YIELD name, value WHERE name = '${name}' RETURN value;\""
+  "${CONN_EXEC_FN}" "${snippet}"
+}
+
+# conn_assert_setting <host> <pw> <name> <expect-substring> <label> — SHOW SETTINGS the
+# setting and require the effective value to contain expect-substring. Containment (not
+# equality) because Neo4j normalises some values (memory to bytes, lists as [..]). Retries
+# because a freshly-Ready server may still be settling.
+conn_assert_setting() {
+  local host=$1 pw=$2 name=$3 want=$4 label=$5
+  local out ok=1 max="${CONN_RETRIES:-20}" i
+  for ((i = 1; i <= max; i++)); do
+    if out="$(conn_show_setting "${host}" "${pw}" "${name}" 2>&1)"; then
+      if grep -qF -- "${want}" <<<"${out}"; then
+        ok=0
+        break
+      fi
+    fi
+    [[ "${i}" -lt "${max}" ]] && sleep "${CONN_RETRY_DELAY:-3}"
+  done
+  [[ "${ok}" -eq 0 ]] \
+    || die "[${label}] SHOW SETTINGS '${name}' did not contain '${want}' after ${max} attempts; got: ${out}"
+  log "[${label}] ${name} effective value contains '${want}' (SHOW SETTINGS)"
+}
+
 # conn_assert_one <proto> <expect> <host> <password> <label> — probe and enforce expectation.
 # Expected-success probes retry (Neo4j may still be warming up); expected-failure is checked once.
 conn_assert_one() {
