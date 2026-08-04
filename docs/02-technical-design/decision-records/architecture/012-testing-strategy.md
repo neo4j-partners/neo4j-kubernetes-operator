@@ -179,7 +179,7 @@ results/         ← runs/<run-id>/, brief-results.csv
 An **action** is one atomic operation with a single assertion boundary:
 
 ```
-actions/deploy/standalone/
+actions/deploy/neo4j/
   run.sh      # apply fixture, create secrets if needed
   verify.sh   # pods Ready, CR status OK, no Error events
 ```
@@ -218,7 +218,7 @@ position:
   outcome: success
 
 steps:
-  - deploy/standalone
+  - deploy/neo4j
   - assert/standalone-ready
 
 cleanup:

@@ -1,7 +1,7 @@
 name: operator-admission
 description: Admission validation — rejected invalid CRs, accepted valid standalone
 brief_ref: admission-validation
-use_pipeline: standalone-suite
+use_pipeline: neo4j-suite
 on_case_failure: continue
 clouds: [local-kind]
 

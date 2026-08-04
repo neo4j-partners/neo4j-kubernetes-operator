@@ -1,7 +1,7 @@
 name: feature-connectivity
 description: Deploy Standalone Neo4j (no TLS) and probe connectors from the pod and a client pod
 brief_ref: slice-1-connectivity
-use_pipeline: standalone-suite
+use_pipeline: neo4j-suite
 on_case_failure: stop
 
 # case_assert order: wait for a running Neo4j, then probe from the pod itself,

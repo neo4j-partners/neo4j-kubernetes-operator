@@ -134,7 +134,7 @@ read_apply_stderr() {
 }
 
 # read_mount_name / read_mount_path — resolved additionalMounts values persisted by
-# deploy/standalone, consumed by assert/storage-additional in a separate subprocess.
+# deploy/neo4j, consumed by assert/storage-additional in a separate subprocess.
 read_mount_name() {
   cat "$(_apply_state_dir)/${SUITE_CASE_ID:-case}.mount-name" 2>/dev/null || printf ''
 }
