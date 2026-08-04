@@ -76,6 +76,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [ADR-011](architecture/011-implementation-language.md) | Operator implementation language — **Go** (kubebuilder / controller-runtime); Strimzi patterns in Go, not Java | proposed |
 | [ADR-012](architecture/012-testing-strategy.md) | Testing strategy — `src/` dev tests (Gate 1) vs `tests/` e2e matrix (Gate 2); TDD optional | proposed |
 | [ADR-013](architecture/013-neo4j-conf-directory-fragments.md) | `neo4j.conf` as a directory of ConfigMap fragments — per-key update & reconcile via the CR | proposed |
+| [ADR-014](architecture/014-operator-observability.md) | Operator observability — logs, metrics, Events, and Prometheus exposure | proposed |
 
 ---
 
