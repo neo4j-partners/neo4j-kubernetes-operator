@@ -81,6 +81,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh workload-cluster
 
+      # Secondary pool scale-out/in with ENABLE SERVER + drain (NEO-2-011).
+      # Heaviest suite by pod count — 4 Neo4j JVMs at peak, so the fixture pins heap.
+      - name: "Scenario: workload-scale"
+        if: ${{ !cancelled() }}
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh workload-scale
+
       # Boots Neo4j and probes connectors (bolt/neo4j/http succeed, https fails without TLS)
       # from the Neo4j pod and from a separate client pod.
       - name: "Scenario: feature-connectivity"
