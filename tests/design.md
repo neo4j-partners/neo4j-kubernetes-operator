@@ -42,6 +42,19 @@ Default (`E2E_ASSERT_NEO4J_READY=false`): verifies the operator is ready, the Ne
 applied, and StatefulSet, Services, Secret, and ConfigMap exist. Set
 `E2E_ASSERT_NEO4J_READY=true` for full Neo4j pod readiness (requires Enterprise image pull).
 
+## Config suite mechanics (`feature-config`)
+
+Config cases are render checks: the assert waits for `Installed` (base objects created) and
+reads the rendered ConfigMap, without needing the pod Ready. `neo4j.conf` keys land in
+`<cr>-config` (one data key per setting, JVM under `server.jvm.additional`); `apoc.*` keys
+land in the dedicated `<cr>-apoc-config` (key `apoc.conf`) only when APOC is assigned via
+`spec.plugins`.
+
+JVM coverage is `additionalArguments` only. `jvm.useDefaults` (NEO-3-003-JVM-01) is **not
+tested yet** — it is a no-op in render today, and the right assertion depends on how the
+defaults get sourced (vendored `.conf` vs hardcoded list vs relying on the image). The test
+is postponed until that implementation decision lands (see the jvm.useDefaults issue).
+
 ## Storage suite mechanics (`feature-storage`)
 
 Covers the `spec.storage` surface, one case per feature (all admitted). Mount points are
