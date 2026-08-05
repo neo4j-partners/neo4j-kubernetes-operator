@@ -116,3 +116,110 @@ func TestConfigChecksumChangesWithSpec(t *testing.T) {
 		t.Fatalf("checksum must not be empty")
 	}
 }
+
+func TestConfigMapRendersJVMDefaults(t *testing.T) {
+	trueVal, falseVal := true, false
+	cases := []struct {
+		name    string
+		jvm     *neo4jv1beta1.JVMSpec
+		wantKey bool
+		wantIn  []string
+		wantOut []string
+	}{
+		{
+			name:    "nil jvm uses defaults",
+			jvm:     nil,
+			wantKey: true,
+			wantIn:  []string{"-XX:+UseG1GC", "-Dlog4j2.disable.jmx=true"},
+		},
+		{
+			name:    "useDefaults true alone",
+			jvm:     &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal},
+			wantKey: true,
+			wantIn:  []string{"-XX:+UseG1GC"},
+		},
+		{
+			name: "defaults then additionalArguments",
+			jvm: &neo4jv1beta1.JVMSpec{
+				UseDefaults:         &trueVal,
+				AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"},
+			},
+			wantKey: true,
+			wantIn:  []string{"-XX:+UseG1GC", "-XX:+ExitOnOutOfMemoryError"},
+		},
+		{
+			name: "same key overrides default in place",
+			jvm: &neo4jv1beta1.JVMSpec{
+				UseDefaults: &trueVal,
+				AdditionalArguments: []string{
+					"-XX:MaxMetaspaceSize=1024m",
+					"-XX:-OmitStackTraceInFastThrow",
+					"-Djdk.nio.maxCachedBufferSize=1024",
+					"-Djdk.nio.maxCachedBufferSize=1026",
+					"-XX:-OmitStackTraceInFastThrow",
+				},
+			},
+			wantKey: true,
+			wantIn: []string{
+				"-XX:-OmitStackTraceInFastThrow",
+				"-Djdk.nio.maxCachedBufferSize=1026",
+				"-XX:MaxMetaspaceSize=1024m",
+			},
+			wantOut: []string{"-Djdk.nio.maxCachedBufferSize=1024"},
+		},
+		{
+			name: "useDefaults false only additional",
+			jvm: &neo4jv1beta1.JVMSpec{
+				UseDefaults:         &falseVal,
+				AdditionalArguments: []string{"-XX:MaxMetaspaceSize=1024m"},
+			},
+			wantKey: true,
+			wantIn:  []string{"-XX:MaxMetaspaceSize=1024m"},
+			wantOut: []string{"-XX:+UseG1GC"},
+		},
+		{
+			name:    "useDefaults false empty args omits key",
+			jvm:     &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal},
+			wantKey: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			neo4j := &neo4jv1beta1.Neo4j{
+				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jSpec{
+					Config: &neo4jv1beta1.ConfigSpec{JVM: tc.jvm},
+				},
+			}
+			data := ConfigMap(render.StandaloneContext(neo4j)).Data
+			got, ok := data["server.jvm.additional"]
+			if ok != tc.wantKey {
+				t.Fatalf("server.jvm.additional present=%v, want %v (value=%q)", ok, tc.wantKey, got)
+			}
+			for _, s := range tc.wantIn {
+				if !strings.Contains(got, s) {
+					t.Fatalf("server.jvm.additional missing %q:\n%s", s, got)
+				}
+			}
+			for _, s := range tc.wantOut {
+				if strings.Contains(got, s) {
+					t.Fatalf("server.jvm.additional unexpectedly contains %q:\n%s", s, got)
+				}
+			}
+			if tc.name == "same key overrides default in place" {
+				if n := strings.Count(got, "-XX:-OmitStackTraceInFastThrow"); n != 1 {
+					t.Fatalf("expected OmitStackTrace once, got %d:\n%s", n, got)
+				}
+				if n := strings.Count(got, "maxCachedBufferSize"); n != 1 {
+					t.Fatalf("expected maxCachedBufferSize once, got %d:\n%s", n, got)
+				}
+				// New keys append after defaults; overrides keep default position.
+				meta := strings.Index(got, "-XX:MaxMetaspaceSize=1024m")
+				buf := strings.Index(got, "-Djdk.nio.maxCachedBufferSize=1026")
+				if meta < 0 || buf < 0 || !(buf < meta) {
+					t.Fatalf("override should keep default position before new keys:\n%s", got)
+				}
+			}
+		})
+	}
+}

@@ -1,7 +1,6 @@
 package serverconfig
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -110,20 +109,108 @@ func ConfigChecksum(ctx render.Context) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// neo4jDefaultJVMAdditional matches uncommented server.jvm.additional lines from
+// helm-charts/neo4j/neo4j-enterprise.conf (same active set as community).
+// Helm: neo4j.configJvmAdditionalYaml when jvm.useNeo4jDefaultJvmArguments is true.
+var neo4jDefaultJVMAdditional = []string{
+	"-XX:+UseG1GC",
+	"-XX:-OmitStackTraceInFastThrow",
+	"-XX:+AlwaysPreTouch",
+	"-XX:+UnlockExperimentalVMOptions",
+	"-XX:+TrustFinalNonStaticFields",
+	"-XX:+DisableExplicitGC",
+	"-Djdk.nio.maxCachedBufferSize=1024",
+	"-Dio.netty.tryReflectionSetAccessible=true",
+	"-Djdk.tls.ephemeralDHKeySize=2048",
+	"-Djdk.tls.rejectClientInitiatedRenegotiation=true",
+	"-XX:FlightRecorderOptions=stackdepth=256",
+	"-XX:+UnlockDiagnosticVMOptions",
+	"-XX:+DebugNonSafepoints",
+	"--add-opens=java.base/java.nio=ALL-UNNAMED",
+	"--add-opens=java.base/java.io=ALL-UNNAMED",
+	"--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+	"-Dlog4j2.disable.jmx=true",
+}
+
 func renderJVMConf(ctx render.Context) string {
-	if ctx.Neo4j.Spec.Config == nil || ctx.Neo4j.Spec.Config.JVM == nil {
+	var jvm *neo4jv1beta1.JVMSpec
+	if ctx.Neo4j.Spec.Config != nil {
+		jvm = ctx.Neo4j.Spec.Config.JVM
+	}
+	// CRD / Helm default: useDefaults is true when unset.
+	useDefaults := jvm == nil || jvm.UseDefaults == nil || *jvm.UseDefaults
+	var args []string
+	if jvm != nil {
+		args = jvm.AdditionalArguments
+	}
+	if !useDefaults && len(args) == 0 {
 		return ""
 	}
-	jvm := ctx.Neo4j.Spec.Config.JVM
-	if len(jvm.AdditionalArguments) == 0 {
+
+	var ordered []string
+	indexByKey := map[string]int{}
+	put := func(raw string) {
+		arg := normalizeJVMArg(raw)
+		if arg == "" {
+			return
+		}
+		key := jvmArgKey(arg)
+		if i, ok := indexByKey[key]; ok {
+			ordered[i] = arg // later value wins; keep first-seen position
+			return
+		}
+		indexByKey[key] = len(ordered)
+		ordered = append(ordered, arg)
+	}
+	if useDefaults {
+		for _, arg := range neo4jDefaultJVMAdditional {
+			put(arg)
+		}
+	}
+	for _, arg := range args {
+		put(arg)
+	}
+	if len(ordered) == 0 {
 		return ""
 	}
-	var buf bytes.Buffer
-	for _, arg := range jvm.AdditionalArguments {
-		buf.WriteString(arg)
-		buf.WriteByte('\n')
+	return strings.Join(ordered, "\n") + "\n"
+}
+
+func normalizeJVMArg(arg string) string {
+	arg = strings.TrimSpace(arg)
+	arg = strings.TrimSpace(strings.TrimPrefix(arg, "server.jvm.additional="))
+	return strings.TrimSpace(arg)
+}
+
+// jvmArgKey identifies a JVM flag for dedupe/override (value-agnostic).
+func jvmArgKey(arg string) string {
+	switch {
+	case strings.HasPrefix(arg, "-XX:+") || strings.HasPrefix(arg, "-XX:-"):
+		return "-XX:" + arg[len("-XX:+"):]
+	case strings.HasPrefix(arg, "-XX:"):
+		if i := strings.IndexByte(arg, '='); i >= 0 {
+			return arg[:i]
+		}
+		return arg
+	case strings.HasPrefix(arg, "-D"):
+		if i := strings.IndexByte(arg, '='); i >= 0 {
+			return arg[:i]
+		}
+		return arg
+	case strings.HasPrefix(arg, "--add-opens="),
+		strings.HasPrefix(arg, "--add-exports="),
+		strings.HasPrefix(arg, "--add-reads="):
+		// Keep module/package in the key so distinct opens don't collide.
+		if i := strings.LastIndexByte(arg, '='); i >= 0 {
+			return arg[:i]
+		}
+		return arg
+	default:
+		if i := strings.IndexByte(arg, '='); i >= 0 {
+			return arg[:i]
+		}
+		return arg
 	}
-	return buf.String()
 }
 
 func renderApocConf(ctx render.Context) string {
