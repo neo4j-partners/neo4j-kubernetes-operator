@@ -60,6 +60,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	var ready, desired int32
 	var anySTSFound bool
 	storageReady := true
+	storageReason, storageMsg := "PVCBound", ""
 
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
@@ -72,8 +73,12 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			desired += poolDesired
 			ready += sts.Status.ReadyReplicas
 		}
-		if !w.checkPoolStorageReady(ctx, ctxRender) {
+		if ok, reason, msg := w.observePoolStorageReady(ctx, ctxRender); !ok {
 			storageReady = false
+			// First failing pool wins — same pattern as TLS observation.
+			if storageMsg == "" {
+				storageReason, storageMsg = reason, msg
+			}
 		}
 	}
 
@@ -82,7 +87,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 
 	setCondition(neo4j, ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
 	neo4j.Status.ServerSummary = &neo4jv1beta1.ReplicaSummary{Servers: desired, Ready: ready}
-	setCondition(neo4j, ConditionStorageReady, boolCondition(storageReady), storageReason(storageReady), "")
+	setCondition(neo4j, ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
 
 	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady
 	if render.IsClusterMode(neo4j) && allReady {
@@ -119,17 +124,40 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	return w.Client.Status().Update(ctx, neo4j)
 }
 
-func (w *Writer) checkPoolStorageReady(ctx context.Context, ctxRender render.Context) bool {
-	pvcName, ok := renderstorage.DataPVCLookup(ctxRender)
-	if !ok {
+// observePoolStorageReady reports data-PVC readiness for one pool.
+// ponytail: no StorageClass Get — V1 RBAC is namespace Role only (cluster-scoped SC needs ClusterRole).
+// Surface storageClassName from the PVC/spec so describe shows why Pending.
+func (w *Writer) observePoolStorageReady(ctx context.Context, ctxRender render.Context) (ok bool, reason, message string) {
+	pvcName, lookupOK := renderstorage.DataPVCLookup(ctxRender)
+	if !lookupOK {
 		// Existing.volume (raw VolumeSource) — no PVC to observe.
-		return true
+		return true, "PVCBound", ""
 	}
 	var pvc corev1.PersistentVolumeClaim
 	if err := w.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: ctxRender.Namespace()}, &pvc); err != nil {
-		return false
+		if apierrors.IsNotFound(err) {
+			return false, "PVCPending", fmt.Sprintf("waiting for PVC %q", pvcName)
+		}
+		return false, "PVCPending", err.Error()
 	}
-	return pvc.Status.Phase == corev1.ClaimBound
+	if pvc.Status.Phase == corev1.ClaimBound {
+		return true, "PVCBound", ""
+	}
+	sc := storageClassNameOf(&pvc, ctxRender)
+	if sc != "" {
+		return false, "PVCPending", fmt.Sprintf(
+			"PVC %q is Pending (storageClassName=%q); ensure the StorageClass exists and the provisioner is healthy",
+			pvcName, sc)
+	}
+	return false, "PVCPending", fmt.Sprintf(
+		"PVC %q is Pending (no storageClassName set; waiting for a default StorageClass)", pvcName)
+}
+
+func storageClassNameOf(pvc *corev1.PersistentVolumeClaim, ctxRender render.Context) string {
+	if pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
+		return *pvc.Spec.StorageClassName
+	}
+	return ctxRender.DataStorageClassName()
 }
 
 func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ok bool, reason, message string) {
@@ -250,13 +278,6 @@ func installedReason(ok bool) string {
 		return "ObjectsCreated"
 	}
 	return "Pending"
-}
-
-func storageReason(ok bool) string {
-	if ok {
-		return "PVCBound"
-	}
-	return "PVCPending"
 }
 
 func readyReason(ok, tlsReady bool) string {

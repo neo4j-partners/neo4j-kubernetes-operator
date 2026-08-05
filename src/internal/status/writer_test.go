@@ -4,7 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -66,5 +69,98 @@ func TestBuildEndpointsBoltTLSAndHTTPS(t *testing.T) {
 	}
 	if ep.HTTPS != "https://prod.default.svc:7473" {
 		t.Fatalf("https = %q", ep.HTTPS)
+	}
+}
+
+func TestObservePoolStorageReadyPendingWithStorageClass(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	sc := "missing-sc"
+	neo4j := standaloneWithDynamicSC("dev", "default", sc)
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "data-dev-server-0", Namespace: "default"},
+		Spec:       corev1.PersistentVolumeClaimSpec{StorageClassName: &sc},
+		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimPending},
+	}
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	if ok || reason != "PVCPending" {
+		t.Fatalf("ok=%v reason=%q", ok, reason)
+	}
+	if !strings.Contains(msg, `storageClassName="missing-sc"`) || !strings.Contains(msg, "data-dev-server-0") {
+		t.Fatalf("msg = %q", msg)
+	}
+}
+
+func TestObservePoolStorageReadyPendingNoStorageClass(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := standaloneWithDynamicSC("dev", "default", "")
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "data-dev-server-0", Namespace: "default"},
+		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimPending},
+	}
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	if ok || reason != "PVCPending" {
+		t.Fatalf("ok=%v reason=%q", ok, reason)
+	}
+	if !strings.Contains(msg, "default StorageClass") {
+		t.Fatalf("msg = %q", msg)
+	}
+}
+
+func TestObservePoolStorageReadyBound(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := standaloneWithDynamicSC("dev", "default", "standard")
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "data-dev-server-0", Namespace: "default"},
+		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimBound},
+	}
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	if !ok || reason != "PVCBound" || msg != "" {
+		t.Fatalf("ok=%v reason=%q msg=%q", ok, reason, msg)
+	}
+}
+
+func TestObservePoolStorageReadyPVCMissing(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := standaloneWithDynamicSC("dev", "default", "standard")
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	if ok || reason != "PVCPending" {
+		t.Fatalf("ok=%v reason=%q", ok, reason)
+	}
+	if !strings.Contains(msg, `waiting for PVC "data-dev-server-0"`) {
+		t.Fatalf("msg = %q", msg)
+	}
+}
+
+func standaloneWithDynamicSC(name, ns, sc string) *neo4jv1beta1.Neo4j {
+	dyn := &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi", StorageClassName: sc}
+	return &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: dyn,
+					},
+				},
+			},
+		},
 	}
 }

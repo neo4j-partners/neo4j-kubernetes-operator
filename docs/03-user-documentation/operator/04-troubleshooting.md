@@ -67,10 +67,18 @@ kubectl get sts,svc,secret,pvc -n default -l app.kubernetes.io/instance=dev
 
 **Symptom:** Pod `Pending`, PVC `Pending`
 
+**Check:** `StorageReady=False` on the Neo4j CR — the condition message names the PVC and
+`storageClassName` (or that a default StorageClass is missing):
+
+```bash
+kubectl get neo4j <name> -o jsonpath='{.status.conditions[?(@.type=="StorageReady")]}{"\n"}'
+```
+
 **Fix:**
 
 - Ensure a StorageClass exists and is default, or set `spec.storage.volumes.data.dynamic.storageClassName`.
 - On kind, install a local path provisioner or use the default standard StorageClass.
+- `kubectl describe pvc <name>` for the provisioner/event detail behind the Pending phase.
 
 ## Auth Secret / password
 
