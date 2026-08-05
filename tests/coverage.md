@@ -30,6 +30,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Basic status condition `Ready` surfaced — OP-2-003-STATUS-01 · AC-OP-STATUS
 - [x] Reconcile-combination matrix (`E2E_PROFILE=matrix`, operator installed once)
 - [ ] Default startup/readiness/liveness probes present on the pod with expected config — NEO-2-009 / NEO-3-009-PROBE-01 · AC-NEO-PROBES (readiness is already validated implicitly by every `Ready` wait; only an explicit render check of the 3 probes is missing — one topology-agnostic check suffices)
+- [ ] Existing image pull secret honored: pod pulls the Neo4j image from a protected registry using a referenced pull Secret — NEO-3-004-IMG-01 · AC-NEO-IMAGE (install-time registry auth, not a Neo4j password)
 
 ### `workload-cluster` — NEO-1-002
 - [x] Deploy 1-primary lab topology: Cluster mode renders, boots, forms — AC-NEO-CLUSTER-001
@@ -73,7 +74,6 @@ Needs Neo4j Ready + a bolt query.
 ### `feature-credentials` — NEO-2-004
 - [x] Operator-generated password authenticates over bolt — NEO-3-004-CRED-01 · AC-NEO-SECRETS
 - [x] Password from referenced Secret authenticates over bolt — NEO-3-004-CRED-02 · AC-NEO-SECRETS
-- [ ] Image pull secret honored — NEO-3-004-IMG-01
 
 ### `feature-storage` — NEO-2-006
 - [x] Dynamic data via existing StorageClass — NEO-3-006-PVC-02 · AC-NEO-STORAGE-DYNAMIC
