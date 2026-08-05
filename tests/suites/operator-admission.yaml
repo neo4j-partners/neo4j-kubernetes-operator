@@ -24,6 +24,15 @@ cases:
     expect_contains: edition
     cr_name: e2e-bad-edition
 
+  # minimumMembers (3) exceeds primaries.members (1): only primaries form the
+  # system quorum, so this is refused at admission (TOPO-009, CEL).
+  - id: min-members-exceeds-primaries
+    fixture: tests/fixtures/neo4j-cluster-bad-minmembers.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: minimumMembers
+    cr_name: e2e-bad-minmembers
+
   - id: happy-minimal
     fixture: tests/fixtures/neo4j-standalone.yaml
     assert: standalone-ready
