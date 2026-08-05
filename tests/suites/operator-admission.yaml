@@ -1,0 +1,40 @@
+name: operator-admission
+description: Admission validation — rejected invalid CRs, accepted valid standalone
+brief_ref: admission-validation
+use_pipeline: neo4j-suite
+on_case_failure: continue
+clouds: [local-kind]
+
+pipeline:
+  case_assert:
+    - assert/{{assert}}
+
+cases:
+  - id: no-license
+    fixture: tests/fixtures/neo4j-no-license.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: license
+    cr_name: e2e-no-license
+
+  - id: community-cluster
+    fixture: tests/fixtures/neo4j-cluster-on-community.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: edition
+    cr_name: e2e-bad-edition
+
+  # minimumMembers (3) exceeds primaries.members (1): only primaries form the
+  # system quorum, so this is refused at admission (TOPO-009, CEL).
+  - id: min-members-exceeds-primaries
+    fixture: tests/fixtures/neo4j-cluster-bad-minmembers.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: minimumMembers
+    cr_name: e2e-bad-minmembers
+
+  - id: happy-minimal
+    fixture: tests/fixtures/neo4j-standalone.yaml
+    assert: standalone-ready
+    expect: success
+    cr_name: dev

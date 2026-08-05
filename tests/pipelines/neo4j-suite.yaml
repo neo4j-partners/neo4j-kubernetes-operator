@@ -1,0 +1,14 @@
+# Generic single-CR lifecycle, topology-agnostic: install operator once, then per case
+# apply the CR fixture (Standalone or Cluster — the case picks it) and clean it up.
+# Suites override case_assert with topology/feature-specific checks.
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - deploy/neo4j
+
+case_teardown:
+  - cleanup/standalone

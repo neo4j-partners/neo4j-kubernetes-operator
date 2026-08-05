@@ -203,6 +203,8 @@ apoc.conf   ← catalog defaults → spec.apoc (user) → pluginDefinitions.apoc
 
 ---
 
+**Triggers:** [ADR-013](../../architecture/013-neo4j-conf-directory-fragments.md) — `neo4j.conf` rendered as per-setting ConfigMap fragments.
+
 ## References
 
 - `design/analysis/helm-fields/fields/config.md`, `jvm.md`, `apoc_config.md`, `apoc_credentials.md`

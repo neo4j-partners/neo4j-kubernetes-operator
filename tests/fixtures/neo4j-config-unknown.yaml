@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # The CR is valid at admission (arbitrary keys are allowed), but Neo4j strict
+  # validation rejects the unknown setting at startup, so the pod fails to boot.
+  # strict_validation is Neo4j's default; set explicitly so the test is deterministic.
+  config:
+    neo4j:
+      server.config.strict_validation.enabled: "true"
+      dbms.this_setting_does_not_exist: "true"

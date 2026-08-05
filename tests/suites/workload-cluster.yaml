@@ -1,0 +1,35 @@
+name: workload-cluster
+description: >
+  NEO-2-002 Cluster mode — members are created, the cluster actually forms
+  (SHOW SERVERS: Enabled + Available), and routing works through the client
+  Service. Covers AC-NEO-CLUSTER-001/002/003.
+brief_ref: slice-cluster
+use_pipeline: neo4j-suite
+on_case_failure: continue
+clouds: [local-kind]
+
+# Members → formation → routing, cheapest check first so a failure reports the
+# most specific cause. Cluster pods are <cr>-primary-N (pool StatefulSets), which
+# the cluster-* cases select via NEO4J_POOL.
+pipeline:
+  case_assert:
+    - assert/cluster-members
+    - assert/cluster-formed
+    - assert/cluster-routing
+
+cases:
+  # Lab topology: 1 primary, no quorum. Cheap proof that Cluster mode renders,
+  # boots and forms — useful signal even on a resource-constrained runner.
+  - id: lab-single-primary
+    fixture: tests/fixtures/neo4j-cluster-single.yaml
+    neo4j_case: cluster-single
+    expect: success
+    cr_name: e2e-cluster-lab
+
+  # Smallest real HA topology: 3 primaries, quorum of 3. This is the case that
+  # proves genuine cluster formation rather than single-node Cluster rendering.
+  - id: ha-3-primaries
+    fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
+    neo4j_case: cluster-3primaries
+    expect: success
+    cr_name: e2e-cluster-ha

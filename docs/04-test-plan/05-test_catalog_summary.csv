@@ -6,10 +6,10 @@ OperatorUpgrade,6,3,2,4,1,2,In-place controller upgrade; CRD version migration
 OperatorUninstall,4,1,2,2,1,0,Operator removal; preserve managed workloads by default
 OperatorRBAC,4,1,0,4,0,1,Single/multi/cluster-wide RBAC generation
 OperatorObservability,2,0,0,2,0,0,Structured logs; Prometheus metrics for reconcile
-Neo4jDatabase,77,66,30,47,24,42,StatefulSet; standalone; cluster; scale; upgrade; scheduling; probes; uninstall
+Neo4jDatabase,80,69,31,49,25,44,StatefulSet; standalone; cluster; scale; upgrade; scheduling; probes; uninstall; image pull secret
 Neo4jPersistence,22,13,13,9,7,6,Storage modes; volume roles; cloud storage (WI / credentials)
 Neo4jConnectivity,8,5,5,3,3,2,Service types; port combinations; admin/internals; ServiceMonitor
-Neo4jTrust,19,16,10,9,8,8,Credentials; TLS bolt/https/cluster; secret mounts; cert reload
+Neo4jTrust,16,13,9,7,7,6,Credentials; TLS bolt/https/cluster; secret mounts; cert reload
 Neo4jServerConfig,19,14,11,8,8,6,Neo4j config; JVM; APOC; logging; safe config-change restart
 Neo4jBackup,10,8,5,5,4,4,On-demand and scheduled backups; local/PVC storage
 Neo4jRestore,5,5,2,3,2,3,Restore from PVC and seed URI
