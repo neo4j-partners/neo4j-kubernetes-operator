@@ -155,4 +155,25 @@ collect_diagnostics() {
   kubectl logs -n "${OPERATOR_NAMESPACE}" -l "${OPERATOR_LABEL_SELECTOR}" --tail=200 >"${out}/operator-logs.txt" 2>&1 || true
   kubectl get neo4j,sts,svc,secret,configmap,pvc,pods -n "${NEO4J_NAMESPACE}" -o wide >"${out}/workload.txt" 2>&1 || true
   kubectl describe neo4j "${NEO4J_CR_NAME}" -n "${NEO4J_NAMESPACE}" >"${out}/neo4j-describe.txt" 2>&1 || true
+
+  # Pod-level evidence: the CR describe and operator logs don't show WHY a workload pod
+  # crashes (OOMKilled, failed probe, Neo4j fatal boot error). Capture pod describe
+  # (Events + Last State), current + previous container logs, and namespace events.
+  # collect_diagnostics runs before case_teardown (run-suite.sh), so the pod is still alive.
+  kubectl get events -n "${NEO4J_NAMESPACE}" --sort-by=.lastTimestamp \
+    >"${out}/events.txt" 2>&1 || true
+  if [[ -n "${NEO4J_CR_NAME:-}" ]]; then
+    local selector="app.kubernetes.io/instance=${NEO4J_CR_NAME}"
+    kubectl describe pod -n "${NEO4J_NAMESPACE}" -l "${selector}" \
+      >"${out}/workload-pods-describe.txt" 2>&1 || true
+    local pod base
+    for pod in $(kubectl get pods -n "${NEO4J_NAMESPACE}" -l "${selector}" -o name 2>/dev/null); do
+      base="${pod#pod/}"
+      kubectl logs "${pod}" -n "${NEO4J_NAMESPACE}" -c neo4j --tail=-1 \
+        >"${out}/${base}.log" 2>&1 || true
+      # --previous captures the crashed container before the CrashLoopBackOff restart.
+      kubectl logs "${pod}" -n "${NEO4J_NAMESPACE}" -c neo4j --previous --tail=-1 \
+        >"${out}/${base}.previous.log" 2>&1 || true
+    done
+  fi
 }
