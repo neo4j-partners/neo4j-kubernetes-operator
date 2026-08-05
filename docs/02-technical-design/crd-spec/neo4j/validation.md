@@ -27,7 +27,7 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 | TOPO-006 | `primaries.members` even and > 0 | Error | CEL | Primary count must be odd for quorum |
 | TOPO-007 | `secondaries.analytics` or `secondaries.read` present with `members < 1` | Error | CEL | pool members must be at least 1 when pool is configured |
 | TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
-| TOPO-009 | `minimumMembers > total members` | Error | Webhook | `minimumMembers` cannot exceed total member count |
+| TOPO-009 | `minimumMembers > primaries.members` | Error | CEL | `minimumMembers` cannot exceed `primaries.members` (only primaries form the system quorum; secondaries analytics/read do not count) |
 | TOPO-010 | Primary scale-in below quorum / unsafe pool scale-in | Error | Webhook | Scale-in would break primary quorum or remove members before drain completes |
 | TOPO-011 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
@@ -62,6 +62,13 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
     !has(self.topology.primaries) || self.topology.primaries.members == 0 ||
     self.topology.primaries.members % 2 == 1
   message: primary count must be odd for quorum
+
+# TOPO-009 — minimumMembers cannot exceed primaries (only primaries form the system quorum)
+- rule: |
+    !has(self.topology.minimumMembers) || !has(self.topology.primaries) ||
+    !has(self.topology.primaries.members) ||
+    self.topology.minimumMembers <= self.topology.primaries.members
+  message: minimumMembers cannot exceed primaries.members (only primaries can form system quorum)
 ```
 
 ---

@@ -23,6 +23,12 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 
 Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail pending a feature.
 
+### `operator-admission` — validation (ADR-001)
+- [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
+- [x] Reject Cluster on Community edition — NEO-2-001-EDT-01 · AC-NEO-LICENSE (edition guard)
+- [x] Reject `minimumMembers` > `primaries.members` (only primaries form the system quorum) — NEO-2-002-CSZ-01 · TOPO-009 (CEL)
+- [x] Accept a valid minimal Standalone CR (sanity)
+
 ### `workload-standalone` — NEO-1-001
 - [x] Deploy single-member Standalone and reach `Ready` — NEO-2-001-MODE-01 · AC-NEO-STANDALONE / AC-NEO-INSTALL
 - [x] Enterprise edition + accepted license (fixture) — NEO-2-001-EDT-01 / NEO-2-001-LIC-01 · AC-NEO-LICENSE
@@ -91,11 +97,6 @@ Needs Neo4j Ready + a bolt query.
 - [x] CR delete preserves data PVC by default — OP-2-005-UNINST-01 · AC-NEO-UNINSTALL-PRESERVE
 - [ ] Optional cleanup of services/jobs/PVCs on request — NEO-2-018 (optional path)
 - [ ] Operator control-plane uninstall — OP-1-005 / OP-2-005-UNINST-02 (different scope)
-
-### `operator-admission` — validation (ADR-001)
-- [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
-- [x] Reject Cluster on Community edition — NEO-2-001-EDT-01 · AC-NEO-LICENSE (edition guard)
-- [x] Accept a valid minimal Standalone CR (sanity)
 
 ### `operator-scope` — OP-1-001
 - [x] RBAC is namespaced, least-privilege, no cluster-wide grant — OP-1-006 · AC-OP-RBAC / AC-OP-SCOPE-SINGLE-004

@@ -58,12 +58,22 @@ jobs:
 
       # One step per suite so each scenario shows its own pass/fail in the job view.
       # `!cancelled()` lets every scenario run (and report) even if a previous one failed.
+      # Order: admission (fast, no workload) → standalone → cluster → feature-* suites.
+
+      # Admission validation — invalid CRs rejected, valid Standalone accepted.
+      - name: "Scenario: operator-admission"
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-admission
+
       - name: "Scenario: workload-standalone"
+        if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh workload-standalone
 
-      - name: "Scenario: operator-admission"
+      # Cluster mode (NEO-2-002): members created, cluster actually forms
+      # (SHOW SERVERS Enabled+Available), routing works over neo4j://.
+      # Heaviest suite — runs 1-primary then 3-primary Neo4j Enterprise pods.
+      - name: "Scenario: workload-cluster"
         if: ${{ !cancelled() }}
-        run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-admission
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh workload-cluster
 
       # Boots Neo4j and probes connectors (bolt/neo4j/http succeed, https fails without TLS)
       # from the Neo4j pod and from a separate client pod.
@@ -97,13 +107,6 @@ jobs:
       - name: "Scenario: operator-scope"
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-scope
-
-      # Cluster mode (NEO-2-002): members created, cluster actually forms
-      # (SHOW SERVERS Enabled+Available), routing works over neo4j://.
-      # Heaviest suite — runs 1-primary then 3-primary Neo4j Enterprise pods.
-      - name: "Scenario: workload-cluster"
-        if: ${{ !cancelled() }}
-        run: CLOUD=local-kind ./tests/bin/run-e2e.sh workload-cluster
 
       - name: Upload e2e results (on failure)
         if: failure()
