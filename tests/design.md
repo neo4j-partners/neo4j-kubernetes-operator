@@ -98,6 +98,32 @@ The additionalMounts volume name/path are generated per run by `deploy/neo4j` (r
 read back by `assert/storage-additional`. The `claimname-ok` fixture bundles the PVC as a second
 document; `storage/cleanup-extra` removes it (label `app.kubernetes.io/managed-by=neo4j-e2e`).
 
+## Scale suite mechanics (`workload-scale`)
+
+Deploys a cluster **once** (3 primaries + a `read` secondary pool) and then mutates it twice
+in the same case: `read` `1 → 2`, then back to `1`. Each direction is an action whose `run.sh`
+patches `topology.secondaries.read.members` and whose `verify.sh` waits for the operator to
+converge — splitting the directions into separate cases would redeploy a 4-pod cluster each
+time.
+
+Secondary pools are the scale unit (BDR-009). The shared cluster asserts still target the
+**primary** pool because `SHOW SERVERS` must run against a member hosting `system`; the pool
+under test is named separately via `SCALE_POOL` (see `config/neo4j/cases/cluster-scale.sh`).
+
+`lib/scale.sh` checks each step three ways, because a StatefulSet resize alone proves nothing:
+
+| # | Check | Why |
+|---|-------|-----|
+| 1 | pool StatefulSet reaches the requested replica count | the render happened |
+| 2 | Neo4j reports that many pool members `Enabled`+`Available` | the operator actually ran `ENABLE SERVER` / drain |
+| 3 | `ClusterFormed` still `True` | the topology change did not break quorum |
+
+> **Not covered — primary scale-out (1 → N).** On `main@ebb9fc0` it neither succeeds nor is
+> cleanly refused: pods and servers come up and the *system* database reaches 3 primaries, but
+> the `neo4j` database stays `starting`/`unknown` ("Server is unavailable") indefinitely.
+> `UnsupportedSystemScaleUp` shows up only transiently (~30s), so asserting that reason yields
+> a green test over a broken cluster. Left out deliberately rather than kept as false signal.
+
 ## Connectivity suite mechanics (`feature-connectivity`)
 
 Boots a real Neo4j (`E2E_ASSERT_NEO4J_READY=true`) and probes each connector both from the
