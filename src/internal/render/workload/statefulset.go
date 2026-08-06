@@ -171,20 +171,6 @@ func appendLoggingVolumes(ctx render.Context, container *corev1.Container, volum
 	}
 }
 
-func podSecurityContext(ctx render.Context) *corev1.PodSecurityContext {
-	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.PodSecurityContext != nil {
-		return ctx.Neo4j.Spec.Security.PodSecurityContext.DeepCopy()
-	}
-	return defaultPodSecurityContext()
-}
-
-func containerSecurityContext(ctx render.Context) *corev1.SecurityContext {
-	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.ContainerSecurityContext != nil {
-		return ctx.Neo4j.Spec.Security.ContainerSecurityContext.DeepCopy()
-	}
-	return defaultContainerSecurityContext()
-}
-
 func defaultPodSecurityContext() *corev1.PodSecurityContext {
 	runAsNonRoot := true
 	runAsUser := int64(7474)

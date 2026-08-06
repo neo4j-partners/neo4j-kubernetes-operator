@@ -3,6 +3,8 @@ package storage
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
@@ -26,6 +28,9 @@ func Validate(neo4j *neo4jv1beta1.Neo4j) error {
 	for _, m := range neo4j.Spec.Storage.AdditionalMounts {
 		if m.Name == "" || m.MountPath == "" {
 			return fmt.Errorf("storage.additionalMounts require name and mountPath")
+		}
+		if err := rejectHostPath(fmt.Sprintf("storage.additionalMounts[%q]", m.Name), m.Volume.VolumeSource); err != nil {
+			return err
 		}
 	}
 	for name, sm := range neo4j.Spec.Storage.SecretMounts {
@@ -85,12 +90,23 @@ func validateExisting(role string, existing *neo4jv1beta1.ExistingVolumeSpec) er
 	}
 	if existing.Volume != nil {
 		n++
+		if err := rejectHostPath(fmt.Sprintf("storage.volumes.%s.existing.volume", role), existing.Volume.VolumeSource); err != nil {
+			return err
+		}
 	}
 	if existing.VolumeClaimTemplate != nil {
 		n++
 	}
 	if n != 1 {
 		return fmt.Errorf("storage.volumes.%s.existing requires exactly one of claimName, volume, or volumeClaimTemplate", role)
+	}
+	return nil
+}
+
+// rejectHostPath blocks hostPath volume sources (NEO-001 node filesystem access).
+func rejectHostPath(field string, src corev1.VolumeSource) error {
+	if src.HostPath != nil {
+		return fmt.Errorf("%s: hostPath volumes are not allowed", field)
 	}
 	return nil
 }

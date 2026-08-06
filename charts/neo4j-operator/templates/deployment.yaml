@@ -31,6 +31,10 @@ spec:
         args:
         - --leader-elect
         - --health-probe-bind-address=:8081
+        {{- if .Values.webhook.enabled }}
+        - --enable-webhooks
+        - --webhook-cert-dir=/tmp/k8s-webhook-server/serving-certs
+        {{- end }}
         {{- with .Values.extraArgs }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -40,6 +44,11 @@ spec:
         ports:
         - containerPort: 8081
           name: health
+        {{- if .Values.webhook.enabled }}
+        - containerPort: 9443
+          name: webhook
+          protocol: TCP
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -56,6 +65,19 @@ spec:
           {{- toYaml .Values.resources | nindent 10 }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- if .Values.webhook.enabled }}
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+        {{- end }}
+      {{- if .Values.webhook.enabled }}
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: {{ .Values.webhook.secretName }}
+          defaultMode: 420
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

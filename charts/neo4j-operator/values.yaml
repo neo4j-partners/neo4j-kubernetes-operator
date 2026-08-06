@@ -59,3 +59,21 @@ fullnameOverride: ""
 # When true, NOTES remind you to install the CRD via server-side apply.
 crd:
   installHint: true
+
+# Validating admission webhook (NEO-001). Off by default — enable with cert-manager
+# (or supply webhook.caBundle + a TLS Secret named webhook.secretName).
+webhook:
+  enabled: false
+  failurePolicy: Fail
+  timeoutSeconds: 10
+  secretName: neo4j-operator-webhook-certs
+  # Base64 CA when certManager.enabled is false (required in that mode).
+  caBundle: ""
+  certManager:
+    enabled: true
+    # Create a namespaced self-signed Issuer named issuerRef.name (skip for ClusterIssuer).
+    createIssuer: true
+    issuerRef:
+      name: selfsigned-issuer
+      kind: Issuer
+      # group: cert-manager.io

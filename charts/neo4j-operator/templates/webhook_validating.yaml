@@ -1,0 +1,38 @@
+{{- if .Values.webhook.enabled }}
+{{- if and (not .Values.webhook.certManager.enabled) (not .Values.webhook.caBundle) }}
+{{- fail "webhook.caBundle is required when webhook.enabled=true and webhook.certManager.enabled=false" }}
+{{- end }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: neo4j-operator-validating-webhook
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+  {{- if .Values.webhook.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/neo4j-operator-serving-cert
+  {{- end }}
+webhooks:
+- name: vneo4j.kb.io
+  admissionReviewVersions: ["v1"]
+  clientConfig:
+    service:
+      name: neo4j-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-neo4j-com-v1beta1-neo4j
+    {{- if .Values.webhook.certManager.enabled }}
+    # Placeholder until cert-manager cainjector writes the real CA.
+    caBundle: Cg==
+    {{- else }}
+    caBundle: {{ .Values.webhook.caBundle | quote }}
+    {{- end }}
+  failurePolicy: {{ .Values.webhook.failurePolicy }}
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+  rules:
+  - apiGroups: ["neo4j.com"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["neo4js"]
+    scope: Namespaced
+{{- end }}

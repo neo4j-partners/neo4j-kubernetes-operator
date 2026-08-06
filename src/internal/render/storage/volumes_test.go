@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -117,6 +118,32 @@ func TestApplyExistingClaimName(t *testing.T) {
 	name, ok := DataPVCLookup(ctx)
 	if !ok || name != "my-data-pvc" {
 		t.Fatalf("lookup = %q %v", name, ok)
+	}
+}
+
+func TestValidateRejectsHostPathAdditionalMount(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"},
+					},
+				},
+				AdditionalMounts: []neo4jv1beta1.AdditionalMount{{
+					Name:      "host",
+					MountPath: "/host",
+					Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{
+						HostPath: &corev1.HostPathVolumeSource{Path: "/"},
+					}},
+				}},
+			},
+		},
+	}
+	err := Validate(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "hostPath") {
+		t.Fatalf("got %v", err)
 	}
 }
 

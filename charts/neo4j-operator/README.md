@@ -37,6 +37,8 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 | `image.repository` / `tag` | ACR `…/neo4j-operator:latest` | Controller image |
 | `watchNamespaces` | `[default]` | Namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each) |
 | `serviceAccount.create` / `name` | `true` / `""` | When `create: false`, `name` is **required** (no silent fallback to `default`) |
+| `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
+| `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |
 | `replicaCount` | `1` | Controller replicas |
 | `resources` / `tolerations` / `nodeSelector` | see `values.yaml` | Scheduling |
 
@@ -48,13 +50,17 @@ helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --set watchNamespaces={default,team-a,team-b}
 ```
 
-## Upgrade
+## Validating webhook (optional)
+
+Rejects privileged containers / `hostPath` at `kubectl apply` (NEO-001). Requires cert-manager:
 
 ```bash
-helm upgrade neo4j-operator ./charts/neo4j-operator -n neo4j-operator-system
-# After API changes, also refresh the CRD:
-make install
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  -n neo4j-operator-system --create-namespace \
+  --set webhook.enabled=true
 ```
+
+Without the webhook, the same checks still run at reconcile time.
 
 `helm upgrade` rolls the controller only; Neo4j CRs and PVCs are not deleted.
 
