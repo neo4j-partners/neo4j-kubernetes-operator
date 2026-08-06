@@ -58,6 +58,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [BDR-010](business/neo4j/010-neo4j-features-catalog.md) | `spec.features` — **Option C accepted**: gates + colocated neo4j.conf mirrors; CFG-FEAT coherence with `config` | accepted |
 | [BDR-011](business/neo4j/011-https-connector-tls-coupling.md) | HTTPS connector ↔ Service exposure ↔ TLS/mTLS coupling rules — **Option A accepted** | accepted |
 | [BDR-012](business/identity-user-roles/012-identity-management.md) | Neo4j identity — **Option C proposed**: `Neo4jUser` + `Neo4jRole` + `Neo4jGrant`; reconcile Role → Grant → User; **post-V1** | proposed |
+| [BDR-013](business/database/013-database.md) | Logical database — **Option A proposed**: no declarative `Neo4jDatabase` CR; databases by name; priority to backup / restore; post-install task CR (`Neo4jDatabaseTask`) still under reflection | proposed |
 
 ### Architecture (`architecture/`)
 
