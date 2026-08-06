@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# assert/storage-error — DESIRED contract (not yet implemented): when the data PVC can
-# never be created/bound (missing StorageClass, or claimName pointing at a missing PVC),
-# the operator must TIME OUT and mark the CR as failed:
-#   - status.phase = Failed (or an Error condition with status=True)
-#   - the failure message explains the problem and mentions the PVC ("pvc")
+# assert/storage-error — when the data PVC cannot bind (missing StorageClass, or a
+# claimName pointing at a missing PVC), the operator keeps the CR PENDING (not Failed)
+# and surfaces the cause on the StorageReady condition:
+#   - StorageReady = False, reason = PVCPending
+#   - the message explains the problem and mentions the PVC ("pvc")
+#   - status.phase is NOT Failed and the CR never becomes Ready
 #
-# EXPECTED TO FAIL for now: the operator currently stays in Bootstrapping forever
-# (StorageReady=False/PVCPending, Error=False/NoError) with no storage timeout. This test
-# encodes the target behavior; do NOT patch operator code to make it pass — that work is
-# tracked separately.
+# NOTE: the message currently lives ONLY on the StorageReady status condition — the
+# operator does not emit a Kubernetes Event for it yet (no EventRecorder is wired). This
+# asserts against the condition; revisit to also check Events once a `make doc error`
+# catalog / event emission lands. Source of truth: src/internal/status/writer.go
+# (observePoolStorageReady, reason "PVCPending").
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,42 +20,48 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 source "${SCRIPT_DIR}/../../../lib/storage.sh"
 
 RES="neo4j/${NEO4J_CR_NAME}"
-# Window we allow the operator to detect the stuck PVC and give up. Kept short so the
-# (currently expected-fail) cases don't stall the suite; once the operator's storage
-# timeout is implemented, bump this to match it via STORAGE_ERROR_TIMEOUT.
-TIMEOUT="${STORAGE_ERROR_TIMEOUT:-45}"
+# Time we allow the operator to observe the stuck PVC and set StorageReady=False/PVCPending.
+TIMEOUT="${STORAGE_ERROR_TIMEOUT:-120}"
 
-log "Expecting the operator to time out and mark ${RES} Failed (PVC cannot be created) within ${TIMEOUT}s"
+log "Expecting ${RES} to stay Pending with StorageReady=False/PVCPending (PVC cannot bind) within ${TIMEOUT}s"
 
-phase=""
-err_status=""
+sr_status="" sr_reason=""
 deadline=$((SECONDS + TIMEOUT))
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
-  phase="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
-    -o jsonpath='{.status.phase}' 2>/dev/null || true)"
-  err_status="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
-    -o jsonpath='{.status.conditions[?(@.type=="Error")].status}' 2>/dev/null || true)"
-  if [[ "${phase}" == "Failed" || "${err_status}" == "True" ]]; then
+  sr_status="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
+    -o jsonpath='{.status.conditions[?(@.type=="StorageReady")].status}' 2>/dev/null || true)"
+  sr_reason="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
+    -o jsonpath='{.status.conditions[?(@.type=="StorageReady")].reason}' 2>/dev/null || true)"
+  if [[ "${sr_status}" == "False" && "${sr_reason}" == "PVCPending" ]]; then
     break
   fi
   sleep 5
 done
 
-if [[ "${phase}" != "Failed" && "${err_status}" != "True" ]]; then
+phase="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
+  -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+ready_status="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
+  -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+
+if [[ "${sr_status}" != "False" || "${sr_reason}" != "PVCPending" ]]; then
   kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status}' >&2 2>/dev/null || true
   echo >&2
-  die "expected the operator to time out and set a Failed/Error status within ${TIMEOUT}s, but phase='${phase:-unknown}' Error='${err_status:-False}' (storage failure timeout not implemented yet)"
+  die "expected StorageReady=False/PVCPending within ${TIMEOUT}s, got status='${sr_status:-<none>}' reason='${sr_reason:-<none>}'"
 fi
 
-# Pull the failure message from the Error condition, falling back to the Ready condition.
-err_msg="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
-  -o jsonpath='{.status.conditions[?(@.type=="Error")].message}' 2>/dev/null || true)"
-[[ -n "${err_msg}" ]] || err_msg="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
-  -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || true)"
+# Decision: a stuck PVC keeps the CR Pending — it must NOT be marked Failed, and must NOT
+# report Ready.
+[[ "${phase}" != "Failed" ]] \
+  || die "operator marked the CR Failed; the decision is to stay Pending on a stuck PVC (phase='${phase}')"
+[[ "${ready_status}" != "True" ]] \
+  || die "operator reported Ready despite an unbound PVC"
 
-log "Operator reported failure (phase='${phase}', Error='${err_status}'): ${err_msg}"
+sr_msg="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
+  -o jsonpath='{.status.conditions[?(@.type=="StorageReady")].message}' 2>/dev/null || true)"
 
-grep -qi 'pvc' <<<"${err_msg}" \
-  || die "failure message must explain the PVC problem (expected 'pvc' in: '${err_msg}')"
+log "Operator kept ${RES} Pending (phase='${phase:-unknown}', Ready='${ready_status:-False}') with StorageReady message: ${sr_msg}"
 
-log "Operator timed out and reported a PVC failure with an explanatory message, as required"
+grep -qi 'pvc' <<<"${sr_msg}" \
+  || die "StorageReady message must explain the PVC problem (expected 'pvc' in: '${sr_msg}')"
+
+log "Operator surfaced the PVC-pending cause on StorageReady while staying Pending, as required"

@@ -8,10 +8,11 @@ clouds: [local-kind]
 # Each case picks its own assertion; apply always succeeds at admission, so the
 # "fail" cases (bad StorageClass / missing PVC) are asserted at runtime.
 #
-# NOTE: the three PVC-impossible cases use assert/storage-error, which encodes the
-# DESIRED (not yet implemented) contract — the operator should time out and mark the CR
-# Failed with a message that mentions the PVC. Those cases are EXPECTED TO FAIL until that
-# behavior is coded (today the operator stays Bootstrapping / not Ready with no timeout).
+# NOTE: the three PVC-impossible cases use assert/storage-error. Decision: on a PVC that
+# cannot bind, the operator stays PENDING (not Failed) and surfaces the cause on the
+# StorageReady condition (StorageReady=False/PVCPending, message mentions the PVC and
+# storageClassName). The message currently lives on the condition only — the operator does
+# not emit a Kubernetes Event for it yet.
 pipeline:
   case_assert:
     - assert/{{assert}}
@@ -24,8 +25,8 @@ cases:
     expect: success
     cr_name: st-dyn-sc
 
-  # Dynamic data with a non-existent storageClassName — operator should time out and
-  # mark the CR Failed with a PVC error (EXPECTED-FAIL until implemented).
+  # Dynamic data with a non-existent storageClassName — operator stays Pending with
+  # StorageReady=False/PVCPending (message mentions the PVC), never Failed nor Ready.
   - id: dynamic-sc-fail
     fixture: tests/fixtures/neo4j-storage-dynamic-sc-bad.yaml
     assert: storage-error
@@ -39,8 +40,8 @@ cases:
     expect: success
     cr_name: st-claim
 
-  # Existing claimName pointing at a PVC that does not exist — operator should time out and
-  # mark the CR Failed with a PVC error (EXPECTED-FAIL until implemented).
+  # Existing claimName pointing at a PVC that does not exist — operator stays Pending with
+  # StorageReady=False/PVCPending (message mentions the PVC), never Failed nor Ready.
   - id: claimname-fail
     fixture: tests/fixtures/neo4j-storage-claimname-missing.yaml
     assert: storage-error
@@ -54,8 +55,8 @@ cases:
     expect: success
     cr_name: st-vct
 
-  # volumeClaimTemplate with a non-existent storageClassName — operator should time out and
-  # mark the CR Failed with a PVC error (EXPECTED-FAIL until implemented).
+  # volumeClaimTemplate with a non-existent storageClassName — operator stays Pending with
+  # StorageReady=False/PVCPending (message mentions the PVC), never Failed nor Ready.
   - id: vct-fail
     fixture: tests/fixtures/neo4j-storage-vct-bad.yaml
     assert: storage-error

@@ -58,10 +58,16 @@ jobs:
 
       # One step per suite so each scenario shows its own pass/fail in the job view.
       # `!cancelled()` lets every scenario run (and report) even if a previous one failed.
-      # Order: admission (fast, no workload) → standalone → cluster → feature-* suites.
+      # Order: scope (namespace watch) → admission → standalone → cluster → feature-* suites.
+
+      # Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE (OP-2-001-SCOPE-01).
+      # Runs first — the logical entry point before any workload scenario.
+      - name: "Scenario: operator-scope"
+        run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-scope
 
       # Admission validation — invalid CRs rejected, valid Standalone accepted.
       - name: "Scenario: operator-admission"
+        if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-admission
 
       - name: "Scenario: workload-standalone"
@@ -102,11 +108,6 @@ jobs:
       - name: "Scenario: feature-uninstall"
         if: ${{ !cancelled() }}
         run: CLOUD=local-kind ./tests/bin/run-e2e.sh feature-uninstall
-
-      # Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE (OP-2-001-SCOPE-01).
-      - name: "Scenario: operator-scope"
-        if: ${{ !cancelled() }}
-        run: CLOUD=local-kind ./tests/bin/run-e2e.sh operator-scope
 
       - name: Upload e2e results (on failure)
         if: failure()
