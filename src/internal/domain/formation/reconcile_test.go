@@ -192,6 +192,7 @@ func TestReconcileDrainsTail(t *testing.T) {
 
 func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 	neo4j := testClusterCR(3)
+	// defaultPrimariesCount stays 1; scale-in must shrink hosting to pool size (3), not to 1.
 	scheme := runtime.NewScheme()
 	_ = neo4jv1beta1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
@@ -249,6 +250,7 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 
 func TestReconcileGrowsSecondariesForAnalytics(t *testing.T) {
 	neo4j := testClusterCR(3)
+	// defaultPrimariesCount unset → 1; do not expand neo4j onto all primary servers.
 	neo4j.Spec.Topology.Secondaries = &neo4jv1beta1.SecondariesSpec{
 		Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
 		Read:      &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
@@ -274,6 +276,53 @@ func TestReconcileGrowsSecondariesForAnalytics(t *testing.T) {
 		},
 		dbs: []intneo4j.DatabaseTopology{{
 			Name: "neo4j", Type: "standard", HasTopology: true,
+			RequestedPrimaries: 1, RequestedSecondaries: 0,
+			CurrentPrimaries: 1, CurrentSecondaries: 0,
+		}},
+	}
+	r := &Reconciler{
+		Client: c,
+		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			return admin, nil
+		},
+	}
+
+	out := r.Reconcile(t.Context(), neo4j)
+	if out.Err != nil {
+		t.Fatal(out.Err)
+	}
+	if admin.dbs[0].RequestedPrimaries != 1 {
+		t.Fatalf("expected primaries to stay at defaultPrimariesCount=1, got %#v", admin.dbs[0])
+	}
+	if admin.dbs[0].RequestedSecondaries != 2 {
+		t.Fatalf("expected 2 secondaries, got %#v", admin.dbs[0])
+	}
+}
+
+func TestReconcileScaleInLeavesFittingTopologyAlone(t *testing.T) {
+	// User ALTER'd neo4j to 3 primaries with defaultPrimariesCount=1; scaling servers 5→3
+	// must drain without trying to shrink the DB to 1.
+	neo4j := testClusterCR(3)
+	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(1))
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	replicas := int32(5)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		neo4j.DeepCopy(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
+	).Build()
+
+	admin := &fakeAdmin{
+		servers: []intneo4j.Server{
+			{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s3", Address: "prod-primary-3.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s4", Address: "prod-primary-4.default.svc.cluster.local:7687", State: "Enabled"},
+		},
+		dbs: []intneo4j.DatabaseTopology{{
+			Name: "neo4j", Type: "standard", HasTopology: true,
 			RequestedPrimaries: 3, RequestedSecondaries: 0,
 			CurrentPrimaries: 3, CurrentSecondaries: 0,
 		}},
@@ -289,8 +338,62 @@ func TestReconcileGrowsSecondariesForAnalytics(t *testing.T) {
 	if out.Err != nil {
 		t.Fatal(out.Err)
 	}
-	if admin.dbs[0].RequestedSecondaries != 2 {
-		t.Fatalf("expected 2 secondaries, got %#v", admin.dbs[0])
+	if admin.dbs[0].RequestedPrimaries != 3 {
+		t.Fatalf("must not shrink fitting topology toward defaultPrimariesCount: %#v", admin.dbs[0])
+	}
+	for i := 0; i < 8; i++ {
+		out = r.Reconcile(t.Context(), neo4j)
+		if out.Err != nil {
+			t.Fatalf("pass %d: %v", i, out.Err)
+		}
+		if ParseDrainOK(neo4j)["primary"] == 3 {
+			break
+		}
+		_ = c.Get(t.Context(), types.NamespacedName{Name: "prod", Namespace: "default"}, neo4j)
+	}
+	if ParseDrainOK(neo4j)["primary"] != 3 {
+		t.Fatalf("expected drain of tails with DB still at 3 primaries; drain-ok=%v cond=%v",
+			neo4j.Annotations, neo4j.Status.Conditions)
+	}
+}
+
+func TestReconcileDoesNotExpandPrimariesBeyondDefault(t *testing.T) {
+	neo4j := testClusterCR(3)
+	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(1))
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	replicas := int32(3)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		neo4j.DeepCopy(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
+	).Build()
+
+	admin := &fakeAdmin{
+		servers: []intneo4j.Server{
+			{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+		},
+		dbs: []intneo4j.DatabaseTopology{{
+			Name: "neo4j", Type: "standard", HasTopology: true,
+			RequestedPrimaries: 1, RequestedSecondaries: 0,
+			CurrentPrimaries: 1, CurrentSecondaries: 0,
+		}},
+	}
+	r := &Reconciler{
+		Client: c,
+		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			return admin, nil
+		},
+	}
+
+	out := r.Reconcile(t.Context(), neo4j)
+	if out.Err != nil {
+		t.Fatal(out.Err)
+	}
+	if admin.dbs[0].RequestedPrimaries != 1 {
+		t.Fatalf("must not expand to primaries.members; got %#v", admin.dbs[0])
 	}
 }
 

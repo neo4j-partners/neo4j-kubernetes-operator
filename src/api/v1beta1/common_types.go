@@ -549,9 +549,20 @@ type PrimariesSpec struct {
 type TopologySpec struct {
 	// +kubebuilder:validation:Required
 	Mode TopologyMode `json:"mode"`
-	Primaries       *PrimariesSpec  `json:"primaries,omitempty"`
-	Secondaries     *SecondariesSpec `json:"secondaries,omitempty"`
-	MinimumMembers  *int32          `json:"minimumMembers,omitempty"`
+	Primaries   *PrimariesSpec   `json:"primaries,omitempty"`
+	Secondaries *SecondariesSpec `json:"secondaries,omitempty"`
+	// MinimumMembers is the system formation gate (enabled primaries before Ready)
+	// and maps to dbms.cluster.minimum_initial_system_primaries_count.
+	// Defaults to primaries.members when unset.
+	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
+	// DefaultPrimariesCount is the desired primary count for standard databases
+	// (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE
+	// SET TOPOLOGY). Defaults to 1 when unset. Clamped to primaries.members.
+	// System Raft size stays on minimumMembers. Cypher CREATE DATABASE can still
+	// request an explicit TOPOLOGY; the operator does not force every DB onto
+	// all primary servers.
+	// +kubebuilder:validation:Minimum=1
+	DefaultPrimariesCount *int32 `json:"defaultPrimariesCount,omitempty"`
 }
 
 // PluginDefinitionSpec holds per-plugin install configuration (BDR-004 Option E).

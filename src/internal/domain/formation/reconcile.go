@@ -91,7 +91,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	// Shrink DB topologies to fit remaining servers before DEALLOCATE (else Neo4j ArgumentError).
 	if scalingIn {
-		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j)
+		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j, true)
 		if err != nil {
 			if isUnsupportedSinglePrimary(err) {
 				setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "UnsupportedSinglePrimary",
@@ -208,9 +208,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Requeue(5 * time.Minute)
 	}
 
-	// Grow/shrink standard DB topologies to match pool capacity (e.g. analytics/read secondaries).
+	// Align standard DB topologies to defaultPrimariesCount + secondary pools.
 	if !scalingIn {
-		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j)
+		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j, false)
 		if err != nil {
 			if isUnsupportedSinglePrimary(err) {
 				setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "UnsupportedSinglePrimary", err.Error())
@@ -344,11 +344,13 @@ func (r *Reconciler) ensureDropped(ctx context.Context, admin intneo4j.Admin, se
 	return false, nil
 }
 
-// ensureDatabaseTopologies aligns standard databases to pool capacity:
-// primaries.members → requested primaries, analytics+read members → requested secondaries.
-// Skips system/composite. Shrinks on scale-in; grows so new secondaries actually host data.
-func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1beta1.Neo4j) (bool, error) {
-	targetP, targetS := desiredHostingCapacity(neo4j)
+// ensureDatabaseTopologies aligns standard databases to topology.defaultPrimariesCount
+// (not primaries.members) and analytics+read pool sizes for secondaries.
+// On scale-in, only shrinks primaries when they exceed the remaining primary pool
+// (so defaultPrimariesCount=1 does not block draining servers after a manual ALTER to 3).
+// Skips system/composite.
+func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1beta1.Neo4j, scalingIn bool) (bool, error) {
+	targetP, targetS, poolP := desiredHostingCapacity(neo4j)
 	dbs, err := admin.ShowDatabaseTopologies(ctx)
 	if err != nil {
 		return false, err
@@ -363,12 +365,25 @@ func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4
 			continue
 		}
 		wantP, wantS := targetP, targetS
+		if scalingIn {
+			// Fit remaining servers only — do not force toward defaultPrimariesCount.
+			if db.RequestedPrimaries > poolP {
+				wantP = poolP
+			} else {
+				wantP = db.RequestedPrimaries
+			}
+			if db.RequestedSecondaries > targetS {
+				wantS = targetS
+			} else {
+				wantS = db.RequestedSecondaries
+			}
+		}
 		if wantP < 1 {
 			wantP = 1
 		}
 		// Neo4j forbids ALTER DATABASE from multiple primaries → 1 primary (Raft quorum).
 		if wantP < 2 && db.RequestedPrimaries > 1 {
-			return false, fmt.Errorf("%w: database %q has %d primaries; keep topology.primaries.members >= 3, or recreate the database manually (dbms.cluster.recreateDatabase)",
+			return false, fmt.Errorf("%w: database %q has %d primaries; set topology.defaultPrimariesCount >= 3 before shrinking hosting, or recreate the database manually (dbms.cluster.recreateDatabase)",
 				errUnsupportedSinglePrimary, db.Name, db.RequestedPrimaries)
 		}
 		if wantP != db.RequestedPrimaries || wantS != db.RequestedSecondaries {
@@ -395,10 +410,21 @@ func isUnsupportedSinglePrimary(err error) bool {
 		strings.Contains(err.Error(), "multiple primaries to one primary"))
 }
 
-func desiredHostingCapacity(neo4j *neo4jv1beta1.Neo4j) (primaries, secondaries int64) {
-	primaries = int64(render.ContextForPool(neo4j, render.PoolPrimary).PoolReplicas())
-	if cap, ok := PrimaryReplicasCap(neo4j); ok && int64(cap) < primaries {
-		primaries = int64(cap)
+// desiredHostingCapacity returns steady-state ALTER DATABASE targets for standard DBs.
+// Primaries follow topology.defaultPrimariesCount (default 1), clamped to the primary
+// pool size. Secondaries follow analytics+read pool members. poolP is the primary
+// pool ceiling used on scale-in to fit remaining servers.
+func desiredHostingCapacity(neo4j *neo4jv1beta1.Neo4j) (primaries, secondaries, poolP int64) {
+	poolP = int64(render.ContextForPool(neo4j, render.PoolPrimary).PoolReplicas())
+	if cap, ok := PrimaryReplicasCap(neo4j); ok && int64(cap) < poolP {
+		poolP = int64(cap)
+	}
+	primaries = int64(render.ClientServiceContext(neo4j).DefaultPrimariesCount())
+	if primaries > poolP {
+		primaries = poolP
+	}
+	if primaries < 1 {
+		primaries = 1
 	}
 	for _, pool := range []render.PoolID{render.PoolAnalytics, render.PoolRead} {
 		secondaries += int64(render.ContextForPool(neo4j, pool).PoolReplicas())

@@ -255,6 +255,27 @@ func (c Context) MinimumMembers() int32 {
 	return min
 }
 
+// DefaultPrimariesCount returns initial.dbms.default_primaries_count.
+// Defaults to 1 when unset (decoupled from minimumMembers / HA formation size).
+// Clamped to [1, primaries.members].
+func (c Context) DefaultPrimariesCount() int32 {
+	primaries := int32(1)
+	if c.Neo4j.Spec.Topology.Primaries != nil && c.Neo4j.Spec.Topology.Primaries.Members > 0 {
+		primaries = c.Neo4j.Spec.Topology.Primaries.Members
+	}
+	n := int32(1)
+	if c.Neo4j.Spec.Topology.DefaultPrimariesCount != nil {
+		n = *c.Neo4j.Spec.Topology.DefaultPrimariesCount
+	}
+	if n > primaries {
+		return primaries
+	}
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
 // BoltPort returns the Bolt listen port (default 7687).
 func (c Context) BoltPort() int32 {
 	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.Listeners != nil &&
