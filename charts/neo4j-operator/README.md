@@ -36,6 +36,7 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 |-----|---------|---------|
 | `image.repository` / `tag` | ACR `…/neo4j-operator:latest` | Controller image |
 | `watchNamespaces` | `[default]` | Namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each) |
+| `serviceAccount.create` / `name` | `true` / `""` | When `create: false`, `name` is **required** (no silent fallback to `default`) |
 | `replicaCount` | `1` | Controller replicas |
 | `resources` / `tolerations` / `nodeSelector` | see `values.yaml` | Scheduling |
 

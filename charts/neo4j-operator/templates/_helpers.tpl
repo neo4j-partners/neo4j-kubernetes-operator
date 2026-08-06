@@ -43,7 +43,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Values.serviceAccount.create }}
 {{- default "neo4j-operator-controller-manager" .Values.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- required "serviceAccount.name is required when serviceAccount.create is false" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
 

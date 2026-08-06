@@ -48,7 +48,8 @@ securityContext:
 
 serviceAccount:
   create: true
-  # Defaults to neo4j-operator-controller-manager
+  # Defaults to neo4j-operator-controller-manager when create is true.
+  # Required when create is false (chart fails render if unset — do not bind to "default").
   name: ""
   annotations: {}
 
