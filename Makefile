@@ -55,6 +55,10 @@ fmt: ## Run go fmt
 vet: ## Run go vet
 	go vet ./src/...
 
+.PHONY: govulncheck
+govulncheck: ## Fail on known Go vulnerabilities in this module
+	GOTOOLCHAIN=go1.26.5 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 .PHONY: lint-reconcile
 lint-reconcile: ## Lint controller reconcile anti-patterns
 	python3 .cursor/skills/kubernetes-operator/scripts/reconcile_lint.py --controller src/internal/controller/

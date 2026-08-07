@@ -3,8 +3,11 @@
 
 image:
   repository: neo4joperatoracr.azurecr.io/neo4j-operator
-  tag: latest
-  pullPolicy: Always
+  # Empty → Chart.appVersion (immutable semver). Avoid latest in production.
+  tag: ""
+  # Optional sha256:... — when set, rendered as repository@digest (ignores tag).
+  digest: ""
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 

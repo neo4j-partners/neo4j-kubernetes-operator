@@ -34,7 +34,8 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `image.repository` / `tag` | ACR `…/neo4j-operator:latest` | Controller image |
+| `image.repository` / `tag` / `digest` | ACR repo; tag defaults to `Chart.appVersion`; optional `digest` (`sha256:…`) | Prefer digest or semver — not `latest` |
+| `image.pullPolicy` | `IfNotPresent` | Use `Always` only for mutable tags |
 | `watchNamespaces` | `[default]` | Namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each) |
 | `serviceAccount.create` / `name` | `true` / `""` | When `create: false`, `name` is **required** (no silent fallback to `default`) |
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
@@ -48,6 +49,15 @@ Watch multiple namespaces:
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   -n neo4j-operator-system --create-namespace \
   --set watchNamespaces={default,team-a,team-b}
+```
+
+Pin an immutable image (recommended for production):
+
+```bash
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  -n neo4j-operator-system \
+  --set image.digest=sha256:YOUR_DIGEST
+# or: --set image.tag=0.1.0
 ```
 
 ## Validating webhook (optional)

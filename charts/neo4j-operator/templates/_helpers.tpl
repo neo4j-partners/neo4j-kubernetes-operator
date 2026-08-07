@@ -52,6 +52,22 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Controller image reference. Prefer digest when set (immutable); else tag
+(defaults to Chart.AppVersion when image.tag is empty).
+*/}}
+{{- define "neo4j-operator.image" -}}
+{{- $tag := .Values.image.tag -}}
+{{- if not $tag -}}
+{{- $tag = .Chart.AppVersion -}}
+{{- end -}}
+{{- if .Values.image.digest -}}
+{{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.image.repository $tag -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Manager Role rules — keep in sync with config/rbac/role.yaml
 */}}
 {{- define "neo4j-operator.managerRoleRules" -}}
