@@ -19,6 +19,26 @@ automatically. `hack/gen-cluster-tls.sh` labels the TLS Secrets it creates.
 
 `storage.secretMounts` and `trustedCerts.sources` must also list `items` (named keys only).
 
+## BYO auth Secret delegation (ADD-01)
+
+`auth.passwordSecretRef` is stronger than a mount: the operator may read `NEO4J_AUTH` to dial
+Bolt (Cluster formation). A BYO auth Secret must also be delegated to **one** Neo4j CR:
+
+```yaml
+metadata:
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    neo4j.com/allowed-for: "<Neo4j.metadata.name>"   # e.g. dev-auth-secret
+```
+
+Operator-managed `{name}-auth` Secrets (from `generatePassword: true`) are already labeled
+`app.kubernetes.io/managed-by=neo4j-operator` + `app.kubernetes.io/instance=<name>` and need no
+`allowed-for`.
+
+`connectivity.clusterDomain` only affects Neo4j-advertised DNS / `CLUSTER_DOMAIN`. The operator
+always dials the short in-cluster Service name (`<svc>.<ns>.svc`) and never appends the CR's
+`clusterDomain` to that URI.
+
 ## Static Secrets
 
 | File | Creates | Used by |

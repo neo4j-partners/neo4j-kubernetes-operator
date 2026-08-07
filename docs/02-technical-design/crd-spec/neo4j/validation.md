@@ -179,7 +179,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | AUTH-001 | `generatePassword: true` XOR valid `passwordSecretRef` | Error | CEL | provide generatePassword or passwordSecretRef, not both |
 | AUTH-002 | `passwordSecretRef` must reference existing Secret | Error | Webhook | password secret not found |
 | AUTH-002b | `passwordSecretRef` Secret must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
+| AUTH-002c | `passwordSecretRef` Secret must be delegated (`neo4j.com/allowed-for=<CR name>` or operator-managed for this instance) | Error | Webhook / Reconciler | auth secret not delegated (ADD-01) |
 | AUTH-003 | `ldap.enabled: true` requires `ldap.passwordSecretRef` | Error | CEL | LDAP requires password secret (V2 — NEO-3-004-SEC-02) |
+| AUTH-004 | Operator admin Bolt dial uses short Service DNS only (ignores `connectivity.clusterDomain`) | — | Reconciler | (hard-coded; ADD-01) |
 
 ---
 

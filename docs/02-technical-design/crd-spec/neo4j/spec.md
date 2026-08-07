@@ -442,7 +442,9 @@ CEL: `backend: reverseProxy` ⇒ `reverseProxy.enabled` (NET-006).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| *(scalar)* | string | `cluster.local` | Kubernetes DNS suffix for operator-built FQDNs. |
+| *(scalar)* | string | `cluster.local` | Kubernetes DNS suffix for **Neo4j-advertised** FQDNs (`CLUSTER_DOMAIN`, discovery, `dbms.routing.client_side.enforce_for_domains`). |
+
+**ADD-01:** This value is **not** used when the operator dials Bolt with admin credentials. The operator always connects to `<client-service>.<namespace>.svc` (cluster DNS search path). Do not treat `clusterDomain` as a way to point the operator at an external Bolt endpoint.
 
 ### `spec.connectivity.multiCluster`
 

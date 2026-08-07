@@ -132,6 +132,9 @@ type ImageSpec struct {
 }
 
 // PasswordSecretRef references an existing auth Secret (key NEO4J_AUTH).
+// The Secret must be labeled neo4j.com/mountable-by-operator=true (NEO-005) and
+// neo4j.com/allowed-for=<Neo4j.metadata.name> (ADD-01), unless it is
+// operator-managed for this instance.
 type PasswordSecretRef struct {
 	Name string `json:"name"`
 }
@@ -461,12 +464,14 @@ type MultiClusterSpec struct {
 
 // ConnectivitySpec groups listen ports, Service, Ingress, and cluster DNS (BDR-007).
 type ConnectivitySpec struct {
-	Listeners     *ConnectivityListenersSpec `json:"listeners,omitempty"`
-	Service       *ConnectivityServiceSpec   `json:"service,omitempty"`
-	ReverseProxy  *ReverseProxySpec          `json:"reverseProxy,omitempty"`
-	Ingress       *IngressSpec               `json:"ingress,omitempty"`
-	ClusterDomain string                     `json:"clusterDomain,omitempty"`
-	MultiCluster  *MultiClusterSpec          `json:"multiCluster,omitempty"`
+	Listeners    *ConnectivityListenersSpec `json:"listeners,omitempty"`
+	Service      *ConnectivityServiceSpec   `json:"service,omitempty"`
+	ReverseProxy *ReverseProxySpec          `json:"reverseProxy,omitempty"`
+	Ingress      *IngressSpec               `json:"ingress,omitempty"`
+	// ClusterDomain is the Kubernetes DNS suffix for Neo4j-advertised FQDNs
+	// (CLUSTER_DOMAIN / routing). It is not used for the operator's admin Bolt dial (ADD-01).
+	ClusterDomain string            `json:"clusterDomain,omitempty"`
+	MultiCluster  *MultiClusterSpec `json:"multiCluster,omitempty"`
 }
 
 // IssuerRef references a cert-manager Issuer or ClusterIssuer.

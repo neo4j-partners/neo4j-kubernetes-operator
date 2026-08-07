@@ -108,6 +108,22 @@ kubectl label secret <name> neo4j.com/mountable-by-operator=true
 Ensure `spec.storage.secretMounts.*.items` (and `trustedCerts.sources[].secret.items`) list
 each key. Details: [examples/secrets/README.md](../../../examples/secrets/README.md#mountable-secrets-neo-005).
 
+## BYO auth Secret rejected: not delegated (ADD-01)
+
+**Symptom:** Error mentioning `neo4j.com/allowed-for` or “auth secret … is not delegated”.
+
+**Cause:** `passwordSecretRef` Secrets must be delegated to this CR name (in addition to the
+mountable label). Operator-generated `{name}-auth` Secrets are already instance-scoped.
+
+**Fix:**
+
+```bash
+kubectl label secret <auth-secret> neo4j.com/allowed-for=<neo4j-cr-name>
+```
+
+`connectivity.clusterDomain` does not change where the operator dials Bolt; it only affects
+Neo4j-advertised DNS.
+
 ## Scale-out ENABLE fails: server deallocated or dropped
 
 **Symptom:** Operator log / `Error` condition contains

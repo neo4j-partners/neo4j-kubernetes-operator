@@ -76,8 +76,21 @@ func TestEffectiveReplicasPrimaryCap(t *testing.T) {
 func TestAdminBoltURIUsesRouting(t *testing.T) {
 	neo4j := testClusterCR(3)
 	got := AdminBoltURI(neo4j)
-	want := "neo4j://prod.default.svc.cluster.local:7687"
+	want := "neo4j://prod.default.svc:7687"
 	if got != want {
 		t.Fatalf("AdminBoltURI = %q want %q", got, want)
+	}
+}
+
+func TestClientBoltURIIgnoresAttackerClusterDomain(t *testing.T) {
+	neo4j := testClusterCR(3)
+	neo4j.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{ClusterDomain: "evil.example.com"}
+	got := ClientBoltURI(neo4j)
+	want := "bolt://prod.default.svc:7687"
+	if got != want {
+		t.Fatalf("ClientBoltURI = %q want %q (must not use CR clusterDomain)", got, want)
+	}
+	if AdminBoltURI(neo4j) != "neo4j://prod.default.svc:7687" {
+		t.Fatalf("AdminBoltURI still embeds clusterDomain: %q", AdminBoltURI(neo4j))
 	}
 }

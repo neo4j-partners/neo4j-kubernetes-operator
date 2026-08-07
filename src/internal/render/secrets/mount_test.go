@@ -60,6 +60,33 @@ func TestRequireMountable(t *testing.T) {
 	}
 }
 
+func TestRequireAuthSecretDelegated(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "orders"}}
+	s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "orders-auth"}}
+	if err := RequireAuthSecretDelegated(s, neo4j); err == nil {
+		t.Fatal("expected rejection without labels")
+	}
+	s.Labels = map[string]string{MountableLabel: MountableLabelValue}
+	if err := RequireAuthSecretDelegated(s, neo4j); err == nil {
+		t.Fatal("mountable alone must not authorize auth use")
+	}
+	s.Labels[AllowedForLabel] = "orders"
+	if err := RequireAuthSecretDelegated(s, neo4j); err != nil {
+		t.Fatal(err)
+	}
+	s.Labels = map[string]string{
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+		"app.kubernetes.io/instance":   "orders",
+	}
+	if err := RequireAuthSecretDelegated(s, neo4j); err != nil {
+		t.Fatal(err)
+	}
+	s.Labels["app.kubernetes.io/instance"] = "other"
+	if err := RequireAuthSecretDelegated(s, neo4j); err == nil {
+		t.Fatal("managed-by for another instance must fail")
+	}
+}
+
 func TestValidateSpecAllowsSecretAndConfigMapWithItems(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		Spec: neo4jv1beta1.Neo4jSpec{

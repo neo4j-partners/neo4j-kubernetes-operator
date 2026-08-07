@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
@@ -19,6 +20,10 @@ import (
 const MountableLabel = "neo4j.com/mountable-by-operator"
 
 const MountableLabelValue = "true"
+
+// AllowedForLabel delegates a BYO auth Secret to one Neo4j CR name (ADD-01).
+// Operator-managed auth Secrets use app.kubernetes.io/managed-by + instance instead.
+const AllowedForLabel = "neo4j.com/allowed-for"
 
 // ValidateSpec checks CR-only mount policy (no API reads): trustedCert projection
 // allowlist and required items for secret mounts (NEO-005 §1, §3).
@@ -124,7 +129,12 @@ func ReferencedMountSecrets(neo4j *neo4jv1beta1.Neo4j) []string {
 }
 
 // EnsureMountable verifies each referenced mount Secret exists and carries MountableLabel.
+// BYO auth Secrets (passwordSecretRef) must also be delegated to this CR (ADD-01).
 func EnsureMountable(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j) error {
+	authRef := ""
+	if neo4j.Spec.Auth != nil && neo4j.Spec.Auth.PasswordSecretRef != nil {
+		authRef = neo4j.Spec.Auth.PasswordSecretRef.Name
+	}
 	for _, name := range ReferencedMountSecrets(neo4j) {
 		var secret corev1.Secret
 		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: neo4j.Namespace}, &secret); err != nil {
@@ -135,6 +145,11 @@ func EnsureMountable(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.N
 		}
 		if err := RequireMountable(&secret); err != nil {
 			return err
+		}
+		if name == authRef {
+			if err := RequireAuthSecretDelegated(&secret, neo4j); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -147,6 +162,22 @@ func RequireMountable(secret *corev1.Secret) error {
 	}
 	return fmt.Errorf("secret %q is missing label %s=%s (namespace owner must opt in before the operator mounts it; NEO-005)",
 		secret.Name, MountableLabel, MountableLabelValue)
+}
+
+// RequireAuthSecretDelegated fails unless the Secret is operator-managed for this CR
+// or the namespace owner labeled it AllowedForLabel=<neo4j.Name> (ADD-01).
+func RequireAuthSecretDelegated(secret *corev1.Secret, neo4j *neo4jv1beta1.Neo4j) error {
+	if secret.Labels != nil {
+		if secret.Labels[render.LabelManagedBy] == render.ManagedByValue &&
+			secret.Labels[render.LabelInstance] == neo4j.Name {
+			return nil
+		}
+		if secret.Labels[AllowedForLabel] == neo4j.Name {
+			return nil
+		}
+	}
+	return fmt.Errorf("auth secret %q is not delegated to Neo4j %q (need label %s=%s, or an operator-managed auth Secret; ADD-01)",
+		secret.Name, neo4j.Name, AllowedForLabel, neo4j.Name)
 }
 
 // WithMountableLabel copies labels and ensures the opt-in label is set (operator-created Secrets).

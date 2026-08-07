@@ -159,7 +159,10 @@ func (c Context) PoolReplicas() int32 {
 	return 0
 }
 
-// ClusterDomain returns the Kubernetes cluster DNS suffix for discovery FQDNs.
+// ClusterDomain returns the Kubernetes cluster DNS suffix for Neo4j-advertised
+// FQDNs (CLUSTER_DOMAIN, discovery, routing enforce_for_domains). It must not be
+// used when the operator dials Bolt with admin credentials (ADD-01) — see
+// formation.ClientBoltURI.
 func (c Context) ClusterDomain() string {
 	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.ClusterDomain != "" {
 		return c.Neo4j.Spec.Connectivity.ClusterDomain

@@ -55,8 +55,8 @@ spec:
 | `config.neo4j` | `neo4j.conf` drop-in keys |
 | `config.apoc` | `apoc.conf` drop-in keys |
 | `config.jvm` | JVM arguments |
-| `auth` | Generated or referenced password Secret (BYO refs need mountable label) |
-| `connectivity` | Listen ports, Services, Ingress (Ingress deferred) |
+| `auth` | Generated or referenced password Secret (BYO: mountable + `allowed-for=<CR name>`) |
+| `connectivity` | Listen ports, Services, Ingress (Ingress deferred); `clusterDomain` for advertised DNS only (ADD-01) |
 | `trust` | BYO TLS for bolt / https / cluster (`trustedCerts.items` + mountable Secrets — NEO-005) |
 | `scheduling` | nodeSelector, affinity, tolerations, … |
 | `features` | Backup connector, monitoring prometheus + ServiceMonitor (CSV/JMX/Graphite deferred) |

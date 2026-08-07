@@ -20,6 +20,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 )
 
 const requeueAfter = 15 * time.Second
@@ -457,6 +458,9 @@ func (r *Reconciler) defaultConnect(ctx context.Context, neo4j *neo4jv1beta1.Neo
 	key := types.NamespacedName{Name: ctxRender.AuthSecretName(), Namespace: ctxRender.Namespace()}
 	if err := r.Client.Get(ctx, key, &secret); err != nil {
 		return nil, fmt.Errorf("auth secret: %w", err)
+	}
+	if err := rendersecrets.RequireAuthSecretDelegated(&secret, neo4j); err != nil {
+		return nil, err
 	}
 	raw := string(secret.Data["NEO4J_AUTH"])
 	user, pass, err := intneo4j.ParseAuthSecret(raw)

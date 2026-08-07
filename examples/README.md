@@ -137,8 +137,9 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
   must list `items` (named keys). Details: [`secrets/README.md`](secrets/README.md).
 - **Auth:** `generatePassword: true` (default across most examples) needs nothing extra —
   the operator labels the generated auth Secret. Using `auth.passwordSecretRef` needs the
-  Secret applied first **with the mountable label** — see
-  [`secrets/auth-password.yaml`](secrets/auth-password.yaml).
+  Secret applied first **with** `neo4j.com/mountable-by-operator=true` **and**
+  `neo4j.com/allowed-for: <Neo4j.metadata.name>` — see
+  [`secrets/auth-password.yaml`](secrets/auth-password.yaml) (delegated to `dev-auth-secret`).
 - **TLS:** generated on demand with `./hack/gen-cluster-tls.sh <namespace> <name> <primary-count>`
   (script labels the three Secrets). Full walkthrough, `EXTRA_DNS` for LoadBalancer/Browser HTTPS,
   and `bolt+s://` vs `neo4j+s://` notes: [`secrets/README.md`](secrets/README.md).

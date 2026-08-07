@@ -187,10 +187,13 @@ func AdminBoltURI(neo4j *neo4jv1beta1.Neo4j) string {
 	return strings.Replace(ClientBoltURI(neo4j), "bolt://", "neo4j://", 1)
 }
 
-// ClientBoltURI is the aggregate client Service bolt URI (north-south clients).
+// ClientBoltURI is the in-cluster Bolt URI the operator dials (and clients may use).
+// Host is the short Service DNS name only — never CR connectivity.clusterDomain.
+// That field is for Neo4j-advertised FQDNs / CLUSTER_DOMAIN; feeding it into the
+// operator dial would let a CR author redirect admin credentials (ADD-01).
 func ClientBoltURI(neo4j *neo4jv1beta1.Neo4j) string {
 	ctx := render.ClientServiceContext(neo4j)
-	host := fmt.Sprintf("%s.%s.svc.%s", ctx.ClientServiceName(), ctx.Namespace(), ctx.ClusterDomain())
+	host := fmt.Sprintf("%s.%s.svc", ctx.ClientServiceName(), ctx.Namespace())
 	return "bolt://" + host + ":7687"
 }
 
