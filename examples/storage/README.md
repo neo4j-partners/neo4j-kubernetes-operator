@@ -20,8 +20,8 @@ Every CR uses `edition: enterprise`, `version: "2026.05.0"`, `license.accept: "y
 | [`07-aux-dynamic-backups.yaml`](07-aux-dynamic-backups.yaml) | Dynamic data + backups Dynamic 20Gi + backup feature/listener |
 | [`08-aux-existing-import.yaml`](08-aux-existing-import.yaml) | Dynamic data + import Existing emptyDir (lab) |
 | [`09-additional-mounts.yaml`](09-additional-mounts.yaml) | Dynamic data + `additionalMounts` emptyDir at `/extra-data` |
-| [`10-secret-mounts-secret.yaml`](10-secret-mounts-secret.yaml) | Companion Opaque Secret `dev-storage-secret-creds` (`config.txt`) |
-| [`10-secret-mounts.yaml`](10-secret-mounts.yaml) | Dynamic data + `secretMounts` |
+| [`10-secret-mounts-secret.yaml`](10-secret-mounts-secret.yaml) | Companion Opaque Secret `dev-storage-secret-creds` (`config.txt`, mountable label) |
+| [`10-secret-mounts.yaml`](10-secret-mounts.yaml) | Dynamic data + `secretMounts` with required `items` |
 | [`11-full.yaml`](11-full.yaml) | Kitchen sink (`dev-storage-full`) |
 | [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml) | `volumes.plugins` Share + APOC + `config.neo4j` procedure overrides |
 
@@ -36,7 +36,7 @@ kubectl get neo4j dev-storage-dynamic -w
 kubectl apply -f examples/storage/03-existing-claimname-pvc.yaml
 kubectl apply -f examples/storage/03-existing-claimname.yaml
 
-# Secret mounts — Secret first, then CR
+# Secret mounts — labeled Secret first (NEO-005), then CR
 kubectl apply -f examples/storage/10-secret-mounts-secret.yaml
 kubectl apply -f examples/storage/10-secret-mounts.yaml
 
@@ -56,6 +56,9 @@ kubectl apply -f examples/storage/
 - **Share** mounts reuse the data volume with `subPathExpr` such as `logs/$(POD_NAME)`
   (and `metrics/$(POD_NAME)`). `volumes.plugins` Share uses subPath `plugins` so
   `NEO4J_PLUGINS` downloads persist; see [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml).
+- **secretMounts (NEO-005):** companion Secrets need
+  `neo4j.com/mountable-by-operator: "true"`, and each mount must list `items`
+  (`key` → file under `mountPath`). See [`../secrets/README.md`](../secrets/README.md).
 - **Dynamic PVC naming:** the operator creates a StatefulSet volumeClaimTemplate named `data`;
   Kubernetes names the pod-0 claim `data-<sts>-0` (Standalone STS is `<cr-name>-server`, e.g.
   `data-dev-storage-dynamic-server-0`).

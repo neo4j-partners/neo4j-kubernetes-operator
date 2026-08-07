@@ -252,7 +252,7 @@ spec:
 | Helm `secretMounts` map shape preserved at root | |
 | Typed `secretMounts` — better than raw Secret in `additionalMounts` | |
 
-**Validation (V1):** webhook rejects `mountPath` prefixes `/data`, `/var/lib/neo4j/certificates/`; optional allowlist on `additionalMounts[].volume` types; Secret existence check for `secretMounts`.
+**Validation (V1):** webhook rejects `mountPath` prefixes `/data`, `/var/lib/neo4j/certificates/`; optional allowlist on `additionalMounts[].volume` types; Secret existence check for `secretMounts`. **NEO-005:** `secretMounts.*.items` required; Secrets the operator mounts must carry `neo4j.com/mountable-by-operator: "true"` (see [examples/secrets/README.md](../../../../../examples/secrets/README.md)).
 
 ### Option F — Helm split lists at spec root
 

@@ -165,7 +165,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | STO-007 | `mode: Share` on aux requires `shareFrom: data` (V1) | Error | CEL | invalid shareFrom |
 | STO-008 | `additionalMounts[].name` unique in pod | Error | CEL | duplicate additional mount name |
 | STO-009 | `mountPath` must not overlap reserved paths (`/data`, `/var/lib/neo4j/certificates/`) | Error | Webhook | reserved mount path |
-| STO-010 | `secretMounts.*.secretName` must exist | Error | Webhook | secretMounts secret not found |
+| STO-010 | `secretMounts.*.secretName` must exist | Error | Webhook / Reconciler | secretMounts secret not found |
+| STO-011 | `secretMounts.*.items` required (named keys only) | Error | Webhook / Reconciler | items is required (NEO-005) |
+| STO-012 | Secret referenced by `secretMounts` / auth / TLS / plugin license must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
 | STO-005 | `accessMode` must be `ReadWriteOnce` for data (V1) | Error | CEL | V1 data volume supports ReadWriteOnce only |
 
 ---
@@ -176,6 +178,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 |----|------|----------|-----------|---------|
 | AUTH-001 | `generatePassword: true` XOR valid `passwordSecretRef` | Error | CEL | provide generatePassword or passwordSecretRef, not both |
 | AUTH-002 | `passwordSecretRef` must reference existing Secret | Error | Webhook | password secret not found |
+| AUTH-002b | `passwordSecretRef` Secret must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
 | AUTH-003 | `ldap.enabled: true` requires `ldap.passwordSecretRef` | Error | CEL | LDAP requires password secret (V2 — NEO-3-004-SEC-02) |
 
 ---
@@ -194,6 +197,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | TLS-005 | `mode: Cluster` + cluster policy enabled → `clientAuth` cannot be `None` | Error | CEL | cluster mTLS requires clientAuth Require |
 | TLS-006 | `clientAuth` set on a policy requires that policy's TLS material (key/cert or cert-manager secretName) | Error | CEL | clientAuth requires enabled TLS policy |
 | TLS-007 | `certManager.includeIngressHosts: true` requires at least one `connectivity.ingress.rules[].host` | Error | CEL | includeIngressHosts requires ingress rule hosts |
+| TLS-008 | `trustedCerts.sources` allow only `secret` or `configMap` (no `serviceAccountToken` / `downwardAPI` / `clusterTrustBundle`) | Error | Webhook / Reconciler | projection type not allowed (NEO-005) |
+| TLS-009 | `trustedCerts.sources[].secret|configMap.items` required | Error | Webhook / Reconciler | items is required (NEO-005) |
+| TLS-010 | BYO TLS Secrets must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
 
 ---
 

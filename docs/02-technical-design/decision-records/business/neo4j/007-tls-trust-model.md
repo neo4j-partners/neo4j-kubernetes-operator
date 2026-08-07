@@ -491,6 +491,7 @@ Options A, C, and D are rejected or deferred. Option A residual (`revokedCerts`)
 5. **mTLS in V1:** `clientAuth` + `trustedCerts` (Helm projected-volume shape); **`revokedCerts` deferred V1.1**.
 6. **cert-manager SANs:** `includeIngressHosts` merges hosts from `spec.connectivity.ingress.rules[].host` into bolt/https `Certificate` `dnsNames`; optional `certManager.dnsNames` and per-policy `certificates.{policy}.dnsNames`.
 7. Reserve TLS-related `neo4j.conf` keys (`dbms.ssl.policy.*`, `server.bolt.tls_level`, …) in BDR-008 denylist — including `*.client_auth`.
+8. **NEO-005:** `trustedCerts.sources` allow only `secret` / `configMap` with required `items`; BYO TLS Secrets require label `neo4j.com/mountable-by-operator: "true"`.
 
 ---
 

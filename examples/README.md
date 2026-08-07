@@ -131,15 +131,21 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 
 ## TLS / auth / plugin prerequisites
 
-- **Auth:** `generatePassword: true` (default across most examples) needs nothing extra. Using
-  `auth.passwordSecretRef` needs the Secret applied first — see
+- **Mountable Secrets (NEO-005):** any Secret the operator mounts into Neo4j pods
+  (`secretMounts`, BYO TLS, `passwordSecretRef`, plugin licenses) must carry
+  `neo4j.com/mountable-by-operator: "true"`, and `secretMounts` / `trustedCerts.sources`
+  must list `items` (named keys). Details: [`secrets/README.md`](secrets/README.md).
+- **Auth:** `generatePassword: true` (default across most examples) needs nothing extra —
+  the operator labels the generated auth Secret. Using `auth.passwordSecretRef` needs the
+  Secret applied first **with the mountable label** — see
   [`secrets/auth-password.yaml`](secrets/auth-password.yaml).
-- **TLS:** generated on demand with `./hack/gen-cluster-tls.sh <namespace> <name> <primary-count>`.
-  Full walkthrough, `EXTRA_DNS` for LoadBalancer/Browser HTTPS, and `bolt+s://` vs `neo4j+s://`
-  notes: [`secrets/README.md`](secrets/README.md).
+- **TLS:** generated on demand with `./hack/gen-cluster-tls.sh <namespace> <name> <primary-count>`
+  (script labels the three Secrets). Full walkthrough, `EXTRA_DNS` for LoadBalancer/Browser HTTPS,
+  and `bolt+s://` vs `neo4j+s://` notes: [`secrets/README.md`](secrets/README.md).
 - **Plugins:** APOC needs no license. GDS/Bloom Enterprise features need a real license file
   referenced via `pluginDefinitions.{gds,bloom}.licenseSecretRef` — placeholder Secrets (with a
-  dummy `REPLACE_ME` value) are in [`secrets/plugin-licenses.yaml`](secrets/plugin-licenses.yaml).
+  dummy `REPLACE_ME` value **and the mountable label**) are in
+  [`secrets/plugin-licenses.yaml`](secrets/plugin-licenses.yaml).
   GDS and Bloom may only be installed on `secondaries.analytics` in Cluster mode (CRD-enforced);
   APOC may go on primaries, analytics, read, or (Standalone) `spec.plugins`.
 - **Primary count parity:** `topology.primaries.members` must be odd (quorum) and

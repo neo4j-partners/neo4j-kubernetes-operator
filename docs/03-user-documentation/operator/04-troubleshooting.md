@@ -82,13 +82,31 @@ kubectl get neo4j <name> -o jsonpath='{.status.conditions[?(@.type=="StorageRead
 
 ## Auth Secret / password
 
-When `spec.auth.generatePassword: true`, the operator creates `{metadata.name}-auth`:
+When `spec.auth.generatePassword: true`, the operator creates `{metadata.name}-auth`
+(and labels it `neo4j.com/mountable-by-operator=true`):
 
 ```bash
 kubectl get secret dev-auth -n default -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d
 ```
 
 See [Quickstart — Standalone](../neo4j/01-quickstart-standalone.md#connect).
+
+## Secret mount / TLS rejected: missing mountable label or items
+
+**Symptom:** Webhook denies the CR, or reconcile fails with a message about
+`neo4j.com/mountable-by-operator` or `items is required`.
+
+**Cause:** NEO-005 — the operator only mounts Secrets the namespace owner opted in, and only
+named keys (`items`).
+
+**Fix:**
+
+```bash
+kubectl label secret <name> neo4j.com/mountable-by-operator=true
+```
+
+Ensure `spec.storage.secretMounts.*.items` (and `trustedCerts.sources[].secret.items`) list
+each key. Details: [examples/secrets/README.md](../../../examples/secrets/README.md#mountable-secrets-neo-005).
 
 ## Scale-out ENABLE fails: server deallocated or dropped
 

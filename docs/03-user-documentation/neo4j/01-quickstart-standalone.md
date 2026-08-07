@@ -118,8 +118,8 @@ kubectl port-forward -n default svc/dev 7474:7474
 | StorageClass | `spec.storage.volumes.data.dynamic.storageClassName` (omit = cluster default) |
 | Existing PVC | `spec.storage.volumes.data.mode: Existing` + `existing.claimName` |
 | Aux volumes | `spec.storage.volumes.{backups,logs,metrics,import,licenses}` |
-| Secret mounts | `spec.storage.secretMounts` |
-| Existing password Secret | `spec.auth.passwordSecretRef.name` (disable `generatePassword`) |
+| Secret mounts | `spec.storage.secretMounts` (Secret needs `neo4j.com/mountable-by-operator=true` + `items`; see [secrets README](../../../examples/secrets/README.md)) |
+| Existing password Secret | `spec.auth.passwordSecretRef.name` (disable `generatePassword`; same mountable label) |
 | Neo4j config | `spec.config.neo4j` (key-value → `neo4j.conf`) |
 | JVM flags | `spec.config.jvm.additionalArguments` |
 | Target namespace | `metadata.namespace` on the CR |

@@ -213,16 +213,20 @@ type AdditionalMount struct {
 	ReadOnly  bool   `json:"readOnly,omitempty"`
 }
 
-// SecretKeyToPath maps Secret keys to paths.
+// SecretKeyToPath maps a Secret key to a relative file path under mountPath
+// (Kubernetes SecretVolumeSource.items / KeyToPath).
 type SecretKeyToPath struct {
 	Key  string `json:"key"`
 	Path string `json:"path"`
 }
 
 // SecretMountSpec projects a Secret into the Neo4j container.
+// The referenced Secret must carry label neo4j.com/mountable-by-operator=true (NEO-005).
+// Items is required: only named keys are mounted (no whole-Secret projection).
 type SecretMountSpec struct {
 	SecretName  string            `json:"secretName"`
 	MountPath   string            `json:"mountPath"`
+	// Items maps Secret keys to filenames under MountPath (required; NEO-005).
 	Items       []SecretKeyToPath `json:"items,omitempty"`
 	DefaultMode *int32            `json:"defaultMode,omitempty"`
 }

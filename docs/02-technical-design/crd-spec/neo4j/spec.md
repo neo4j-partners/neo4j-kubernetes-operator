@@ -25,9 +25,9 @@ spec
 ├── plugins[]                          # Standalone only — catalog id refs at spec root
 ├── image
 ├── auth
-├── volumes                            # BDR-005 — mirrors helm values.yaml `volumes:` block
-├── additionalMounts[]                 # BDR-005 — paired helm additionalVolumes + additionalVolumeMounts
-├── secretMounts                       # BDR-005 — top-level like helm values.yaml
+├── volumes                            # BDR-005 — under spec.storage (mirrors helm `volumes:`)
+├── additionalMounts[]                 # BDR-005 — under spec.storage
+├── secretMounts                       # BDR-005 — under spec.storage; items + mountable label (NEO-005)
 ├── resources, jvm
 ├── features                           # BDR-007 — backup, monitoring (prometheus, serviceMonitor)
 ├── config
@@ -252,18 +252,20 @@ Top-level like Helm `additionalVolumes` + `additionalVolumeMounts` — **paired*
 
 ---
 
-## `spec.secretMounts`
+## `spec.storage.secretMounts`
 
-Top-level like Helm `secretMounts:` — map of mount id → Secret projection.
+Map of mount id → Secret projection into the Neo4j container (`spec.storage.secretMounts`, BDR-005).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `<id>.secretName` | string | Secret name. |
-| `<id>.mountPath` | string | Mount directory in Neo4j container. |
-| `<id>.items` | []KeyToPath | Optional key subset. |
-| `<id>.defaultMode` | int | File mode (default `0644`). |
+| `<id>.secretName` | string | Secret name in the Neo4j namespace. |
+| `<id>.mountPath` | string | Mount directory in the Neo4j container. |
+| `<id>.items` | []KeyToPath | **Required (NEO-005).** Named keys only (`key` = Secret key, `path` = filename under `mountPath`). |
+| `<id>.defaultMode` | int | File mode (operator default `0440` when unset). |
 
-**Reserved paths:** `/data`, `/var/lib/neo4j/certificates/*` — webhook rejects user mounts (operator-owned).
+**Mountable Secrets (NEO-005):** every Secret the operator mounts (this map, BYO TLS refs, `auth.passwordSecretRef`, plugin `licenseSecretRef`) must have label `neo4j.com/mountable-by-operator: "true"`. Namespace owners set the label; CR authors cannot escalate by naming arbitrary Secrets. Operator-generated auth Secrets (`generatePassword: true`) receive the label automatically. Successful mounts emit a `SecretMounted` Event on the Neo4j CR.
+
+**Reserved paths:** `/data`, `/var/lib/neo4j/certificates/*` — webhook/reconcile rejects user mounts (operator-owned).
 
 **vs other secrets:** TLS → `spec.trust`; auth password → `spec.auth`; restore Job creds → `Neo4jRestore.spec.source.credentials`.
 
@@ -673,7 +675,7 @@ Escape hatch for advanced customization.
 | `sidecars` | Sidecar containers. |
 | `env` | Additional environment variables (merged, not replaced). |
 
-Prefer `spec.additionalMounts` and `spec.secretMounts` for volumes — see [BDR-005](../../decision-records/business/005-storage-volume-mode.md). Raw `podTemplate` patches deferred V1 unless needed for container overrides.
+Prefer `spec.storage.additionalMounts` and `spec.storage.secretMounts` for volumes — see [BDR-005](../../decision-records/business/neo4j/005-storage-volume-mode.md). Raw `podTemplate` patches deferred V1 unless needed for container overrides.
 
 Operator-owned keys cannot be overridden.
 

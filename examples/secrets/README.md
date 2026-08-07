@@ -3,6 +3,22 @@
 Secrets used across the `examples/` tree: static auth/license Secrets checked in here, and
 TLS material generated on demand with `./hack/gen-cluster-tls.sh`.
 
+## Mountable Secrets (NEO-005)
+
+Any Secret the operator mounts into Neo4j pods must carry:
+
+```yaml
+metadata:
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+```
+
+This includes BYO TLS Secrets, `storage.secretMounts`, `auth.passwordSecretRef`, and plugin
+`licenseSecretRef`. Operator-generated auth Secrets (`generatePassword: true`) get the label
+automatically. `hack/gen-cluster-tls.sh` labels the TLS Secrets it creates.
+
+`storage.secretMounts` and `trustedCerts.sources` must also list `items` (named keys only).
+
 ## Static Secrets
 
 | File | Creates | Used by |

@@ -119,7 +119,7 @@ func main() {
 	if enableWebhooks {
 		if err := ctrl.NewWebhookManagedBy(mgr).
 			For(&neo4jv1beta1.Neo4j{}).
-			WithValidator(&validation.Neo4jValidator{}).
+			WithValidator(&validation.Neo4jValidator{Client: mgr.GetClient()}).
 			Complete(); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Neo4j")
 			os.Exit(1)

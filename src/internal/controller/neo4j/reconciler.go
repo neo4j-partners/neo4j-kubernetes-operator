@@ -4,8 +4,10 @@ import (
 	"context"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -19,6 +21,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
 )
 
@@ -27,7 +30,8 @@ const FinalizerName = "neo4j.com/finalizer"
 // Neo4jReconciler reconciles Neo4j custom resources (ADR-003 pipeline).
 type Neo4jReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 
 	Persistence  *persistence.Reconciler
 	Trust        *trust.Reconciler
@@ -113,6 +117,19 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
+	if err := rendersecrets.ValidateSpec(neo4j); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := rendersecrets.EnsureMountable(ctx, r.Client, neo4j); err != nil {
+		return ctrl.Result{}, err
+	}
+	if r.Recorder != nil {
+		for _, name := range rendersecrets.ReferencedMountSecrets(neo4j) {
+			r.Recorder.Eventf(neo4j, corev1.EventTypeNormal, "SecretMounted",
+				"Mounting Secret %q into Neo4j pods (label %s=%s)", name, rendersecrets.MountableLabel, rendersecrets.MountableLabelValue)
+		}
+	}
+
 	log := ctrllog.FromContext(ctx).WithName("pipeline")
 	steps := []struct {
 		name string
@@ -189,6 +206,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 	return &Neo4jReconciler{
 		Client:       c,
 		Scheme:       scheme,
+		Recorder:     mgr.GetEventRecorderFor("neo4j-controller"),
 		Persistence:  persistence.New(c),
 		Trust:        trust.New(c),
 		ServerConfig: serverconfig.New(c, scheme),

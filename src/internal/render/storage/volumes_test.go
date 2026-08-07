@@ -186,7 +186,11 @@ func TestApplySecretAndAdditionalMounts(t *testing.T) {
 					Volume:    corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 				}},
 				SecretMounts: map[string]neo4jv1beta1.SecretMountSpec{
-					"creds": {SecretName: "my-creds", MountPath: "/var/secrets/creds"},
+					"creds": {
+						SecretName: "my-creds",
+						MountPath:  "/var/secrets/creds",
+						Items:      []neo4jv1beta1.SecretKeyToPath{{Key: "token", Path: "token"}},
+					},
 				},
 			},
 		},
