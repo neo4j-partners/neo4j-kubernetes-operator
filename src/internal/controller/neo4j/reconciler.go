@@ -9,6 +9,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/connectivity"
@@ -49,21 +50,27 @@ type Neo4jReconciler struct {
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 
 func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := ctrllog.FromContext(ctx).WithName("neo4j")
+	log.V(1).Info("reconcile start")
+
 	var neo4j neo4jv1beta1.Neo4j
 	if err := r.Get(ctx, req.NamespacedName, &neo4j); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
+		log.Error(err, "get Neo4j failed")
 		return ctrl.Result{}, err
 	}
 
 	if !neo4j.DeletionTimestamp.IsZero() {
+		log.Info("reconcile delete")
 		return r.reconcileDelete(ctx, &neo4j)
 	}
 
 	if !controllerutil.ContainsFinalizer(&neo4j, FinalizerName) {
 		controllerutil.AddFinalizer(&neo4j, FinalizerName)
 		if err := r.Update(ctx, &neo4j); err != nil {
+			log.Error(err, "add finalizer failed")
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -73,8 +80,10 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		if apierrors.IsConflict(err) {
 			// Transient RV conflict (STS/CR updated concurrently) — retry, don't fail status.
+			log.V(1).Info("conflict, requeue")
 			return ctrl.Result{Requeue: true}, nil
 		}
+		log.Error(err, "pipeline failed")
 		r.StatusWriter.MarkPipelineError(&neo4j, err)
 		neo4j.Status.ObservedGeneration = neo4j.Generation
 		_ = r.Client.Status().Update(ctx, &neo4j)
@@ -83,8 +92,10 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	if err := r.StatusWriter.ObserveAndWrite(ctx, &neo4j); err != nil {
 		if apierrors.IsConflict(err) {
+			log.V(1).Info("status conflict, requeue")
 			return ctrl.Result{Requeue: true}, nil
 		}
+		log.Error(err, "status write failed")
 		return ctrl.Result{}, err
 	}
 
@@ -94,6 +105,7 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	if !status.IsReady(&neo4j) {
+		log.V(1).Info("not ready, requeue", "after", "30s")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -101,22 +113,33 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
-	steps := []shared.Reconciler{
-		r.Persistence,
-		r.Trust,
-		r.ServerConfig,
-		r.Workload,
-		r.Connectivity,
-		r.Formation,
+	log := ctrllog.FromContext(ctx).WithName("pipeline")
+	steps := []struct {
+		name string
+		step shared.Reconciler
+	}{
+		{"persistence", r.Persistence},
+		{"trust", r.Trust},
+		{"serverconfig", r.ServerConfig},
+		{"workload", r.Workload},
+		{"connectivity", r.Connectivity},
+		{"formation", r.Formation},
 	}
-	for _, step := range steps {
-		out := step.Reconcile(ctx, neo4j)
+	for _, s := range steps {
+		// Named logger + keys so Apply and domain code inherit domain/reconciler.
+		stepLog := log.WithName(s.name).WithValues("domain", s.name, "reconciler", s.name)
+		stepCtx := ctrllog.IntoContext(ctx, stepLog)
+		stepLog.V(1).Info("domain reconcile start")
+		out := s.step.Reconcile(stepCtx, neo4j)
 		if out.Err != nil {
+			stepLog.Error(out.Err, "domain reconcile failed")
 			return out.Result, out.Err
 		}
 		if out.Result.Requeue || out.Result.RequeueAfter > 0 {
+			stepLog.Info("domain reconcile requeue", "requeue", out.Result.Requeue, "after", out.Result.RequeueAfter)
 			return out.Result, nil
 		}
+		stepLog.V(1).Info("domain reconcile done")
 	}
 	return ctrl.Result{}, nil
 }
@@ -125,17 +148,24 @@ func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1bet
 	if !controllerutil.ContainsFinalizer(neo4j, FinalizerName) {
 		return ctrl.Result{}, nil
 	}
+	log := ctrllog.FromContext(ctx).WithName("pipeline").WithName("persistence").
+		WithValues("domain", "persistence", "reconciler", "persistence")
+	ctx = ctrllog.IntoContext(ctx, log)
 	// Default Retain (UNINST-01): GC removes owned objects; Dynamic PVCs stay.
 	// whenDeleted=Delete (UNINST-02): wipe STS then Dynamic PVCs before releasing the finalizer.
 	if pending, err := persistence.WipeOnUninstall(ctx, r.Client, neo4j); err != nil {
+		log.Error(err, "domain reconcile failed", "op", "wipeOnUninstall")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	} else if pending {
+		log.V(1).Info("domain reconcile requeue", "op", "wipeOnUninstall")
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 	controllerutil.RemoveFinalizer(neo4j, FinalizerName)
 	if err := r.Update(ctx, neo4j); err != nil {
+		log.Error(err, "remove finalizer failed")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
+	log.Info("domain reconcile done", "op", "delete")
 	return ctrl.Result{}, nil
 }
 
@@ -159,7 +189,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 	return &Neo4jReconciler{
 		Client:       c,
 		Scheme:       scheme,
-		Persistence:  persistence.New(),
+		Persistence:  persistence.New(c),
 		Trust:        trust.New(c),
 		ServerConfig: serverconfig.New(c, scheme),
 		Workload:     workload.New(c, scheme),

@@ -41,6 +41,10 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
 | `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |
 | `replicaCount` | `1` | Controller replicas |
+| `logging.level` | `info` | stderr verbosity (`debug` / `info` / `error`) |
+| `logging.devel` | `false` | Console encoder (local debug) |
+| `logging.file.enabled` | `false` | Tee verbose logs to emptyDir file |
+| `logging.file.level` | `debug` | File verbosity when enabled |
 | `resources` / `tolerations` / `nodeSelector` | see `values.yaml` | Scheduling |
 
 Watch multiple namespaces:

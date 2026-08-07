@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
@@ -36,7 +37,9 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	if !render.IsClusterMode(neo4j) || offlineMode(neo4j) {
+		log.V(1).Info("formation skip", "cluster", render.IsClusterMode(neo4j), "offline", offlineMode(neo4j))
 		clearFormationConditions(neo4j)
 		return shared.Done()
 	}
@@ -48,6 +51,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	admin, err := connect(ctx, neo4j)
 	if err != nil {
 		// Cluster not reachable yet (formation / auth lag).
+		log.Info("bolt unavailable, requeue", "err", err.Error())
 		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BoltUnavailable", err.Error())
 		return shared.Requeue(requeueAfter)
 	}
@@ -55,9 +59,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	servers, err := admin.ShowServers(ctx)
 	if err != nil {
+		log.Info("show servers failed, requeue", "err", err.Error())
 		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "ShowServersFailed", err.Error())
 		return shared.Requeue(requeueAfter)
 	}
+	log.V(1).Info("show servers", "count", len(servers))
 
 	pendingDrain := false
 	annotDirty := false
@@ -70,6 +76,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 	if capDirty {
 		annotDirty = true
+	}
+	if systemScaleBlocked {
+		log.Info("system primary scale-out blocked", "reason", "UnsupportedSystemScaleUp")
 	}
 
 	scalingIn := false
@@ -84,6 +93,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			current = *sts.Spec.Replicas
 		}
 		if current > ctxPool.PoolReplicas() {
+			log.Info("scale-in detected", "pool", string(pool), "stsReplicas", current, "desired", ctxPool.PoolReplicas())
 			scalingIn = true
 			break
 		}
@@ -94,6 +104,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j, true)
 		if err != nil {
 			if isUnsupportedSinglePrimary(err) {
+				log.Error(err, "scale-in blocked", "reason", "UnsupportedSinglePrimary")
 				setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "UnsupportedSinglePrimary",
 					err.Error())
 				setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "UnsupportedSinglePrimary",
@@ -104,6 +115,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			return adminErrResult(neo4j, err)
 		}
 		if !ok {
+			log.Info("shrinking database topologies for scale-in")
 			setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "ShrinkingTopology",
 				"reducing database topologies to fit scale-in")
 			return shared.Requeue(requeueAfter)
@@ -128,6 +140,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		if current > desired {
 			pendingDrain = true
 			for _, m := range TailMembers(neo4j, pool, current) {
+				log.Info("draining member", "pool", string(pool), "pod", m.PodName, "ordinal", m.Ordinal)
 				done, err := r.ensureDropped(ctx, admin, servers, m)
 				if err != nil {
 					return adminErrResult(neo4j, err)
@@ -137,6 +150,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 						fmt.Sprintf("draining %s", m.PodName))
 					return shared.Requeue(requeueAfter)
 				}
+				log.Info("member drained/dropped", "pool", string(pool), "pod", m.PodName)
 				// Refresh view after drop.
 				servers, err = admin.ShowServers(ctx)
 				if err != nil {
@@ -171,6 +185,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	if pendingDrain {
 		// All tails dropped and annotation written on prior pass; wait for STS shrink.
+		log.Info("drain complete, awaiting statefulset shrink")
 		setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "AwaitingSTSShrink",
 			"Neo4j drain complete; waiting for StatefulSet scale-down")
 	} else {
@@ -190,6 +205,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		}
 		if !ok {
 			pendingEnable = true
+			log.Info("enabling server", "pool", string(m.Pool), "pod", m.PodName, "ordinal", m.Ordinal)
 			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "EnablingServer",
 				fmt.Sprintf("enabling %s", m.PodName))
 		}
@@ -219,6 +235,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			return adminErrResult(neo4j, err)
 		}
 		if !ok {
+			log.Info("aligning database topologies")
 			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "AligningTopology",
 				"altering database topologies to match primary/secondary pool sizes")
 			return shared.Requeue(requeueAfter)
@@ -228,11 +245,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	min := render.ClientServiceContext(neo4j).MinimumMembers()
 	enabledPrimaries := countEnabledPrimaries(neo4j, servers)
 	if enabledPrimaries < min {
+		log.Info("waiting for primary quorum", "enabledPrimaries", enabledPrimaries, "minimumMembers", min)
 		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "WaitingQuorum",
 			fmt.Sprintf("enabled primaries %d < minimumMembers %d", enabledPrimaries, min))
 		return shared.Requeue(requeueAfter)
 	}
 
+	log.Info("cluster formed", "enabledPrimaries", enabledPrimaries, "minimumMembers", min)
 	setCondition(neo4j, ConditionClusterFormed, metav1.ConditionTrue, "Formed", "All desired servers enabled")
 	return shared.Done()
 }

@@ -17,8 +17,20 @@ watchNamespaces:
 
 replicaCount: 1
 
-# Extra args appended after --leader-elect / health probe bind.
+# Extra args appended after --leader-elect / health probe / logging args.
 extraArgs: []
+
+# Operator logging (ADR-014). stderr = essentials; optional file may be more verbose.
+logging:
+  # --zap-log-level: debug | info | error
+  level: info
+  # --zap-devel: console encoder + debug defaults
+  devel: false
+  file:
+    enabled: false
+    level: debug
+    mountPath: /var/log/neo4j-operator
+    filename: operator.log
 
 resources:
   limits:

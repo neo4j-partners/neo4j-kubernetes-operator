@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
@@ -35,7 +36,9 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	if err := renderwl.ValidateSecurity(neo4j); err != nil {
+		log.Error(err, "workload security validation failed")
 		return shared.Failed(err)
 	}
 
@@ -83,7 +86,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		_ = password
 		generated = true
 	} else if err := r.ensureReferencedAuthSecret(ctx, baseCtx); err != nil {
+		log.Error(err, "referenced auth secret missing", "secret", baseCtx.AuthSecretName())
 		return shared.Failed(err)
+	} else {
+		log.Info("auth secret referenced", "secret", baseCtx.AuthSecretName())
 	}
 
 	if err := r.ensurePluginLicenseSecrets(ctx, neo4j); err != nil {
@@ -94,6 +100,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		ctxRender := render.ContextForPool(neo4j, pool)
 		stsDesired := renderwl.PoolStatefulSet(ctxRender)
 		sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: stsDesired.Name, Namespace: stsDesired.Namespace}}
+		var existing appsv1.StatefulSet
+		exists := r.Client.Get(ctx, types.NamespacedName{Name: stsDesired.Name, Namespace: stsDesired.Namespace}, &existing) == nil
+		vcts := len(stsDesired.Spec.VolumeClaimTemplates)
+		log.Info("reconciling statefulset",
+			"pool", string(pool),
+			"name", stsDesired.Name,
+			"exists", exists,
+			"desiredReplicas", ctxRender.PoolReplicas(),
+			"volumeClaimTemplates", vcts,
+			"image", ctxRender.ImageRef(),
+		)
+		if exists {
+			log.V(1).Info("statefulset volumeClaimTemplates are immutable after create; PVC size/class changes require recreate",
+				"pool", string(pool), "name", stsDesired.Name)
+		}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sts, func() error {
 			sts.Labels = stsDesired.Labels
 			// StatefulSet forbids changing serviceName, selector, volumeClaimTemplates,
@@ -111,6 +132,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 				current = *sts.Spec.Replicas
 			}
 			effective := formation.EffectiveReplicas(neo4j, pool, desired, current)
+			if effective != current {
+				log.Info("statefulset replica change",
+					"pool", string(pool),
+					"name", stsDesired.Name,
+					"from", current,
+					"to", effective,
+					"specDesired", desired,
+				)
+			}
 			sts.Spec.Replicas = &effective
 			sts.Spec.Template = stsDesired.Spec.Template
 			sts.Spec.UpdateStrategy = stsDesired.Spec.UpdateStrategy
@@ -133,10 +163,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 }
 
 func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	if !renderwl.PDBEnabled(neo4j) {
+		log.V(1).Info("poddisruptionbudget disabled, ensure absent")
 		return r.deletePDBIfPresent(ctx, neo4j, baseCtx)
 	}
 	desired := renderwl.PodDisruptionBudget(baseCtx)
+	log.Info("reconciling poddisruptionbudget", "name", desired.Name)
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
@@ -162,14 +195,18 @@ func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1beta1
 	if err := r.Client.Delete(ctx, pdb); err != nil && client.IgnoreNotFound(err) != nil {
 		return shared.Failed(fmt.Errorf("delete PodDisruptionBudget: %w", err))
 	}
+	ctrllog.FromContext(ctx).Info("deleted poddisruptionbudget", "name", key.Name)
 	return shared.Done()
 }
 
 func (r *Reconciler) reconcileNetworkPolicy(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	if !renderwl.NetworkPolicyEnabled(neo4j) {
+		log.V(1).Info("networkpolicy disabled, ensure absent")
 		return r.deleteNetworkPolicyIfPresent(ctx, neo4j, baseCtx)
 	}
 	desired := renderwl.NetworkPolicy(baseCtx)
+	log.Info("reconciling networkpolicy", "name", desired.Name)
 	np := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
@@ -195,6 +232,7 @@ func (r *Reconciler) deleteNetworkPolicyIfPresent(ctx context.Context, neo4j *ne
 	if err := r.Client.Delete(ctx, np); err != nil && client.IgnoreNotFound(err) != nil {
 		return shared.Failed(fmt.Errorf("delete NetworkPolicy: %w", err))
 	}
+	ctrllog.FromContext(ctx).Info("deleted networkpolicy", "name", key.Name)
 	return shared.Done()
 }
 
@@ -224,10 +262,12 @@ func (r *Reconciler) ensurePluginLicenseSecrets(ctx context.Context, neo4j *neo4
 }
 
 func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, ctxRender render.Context) (string, error) {
+	log := ctrllog.FromContext(ctx)
 	secretName := ctxRender.AuthSecretName()
 	var existing corev1.Secret
 	err := r.Client.Get(ctx, types.NamespacedName{Name: secretName, Namespace: ctxRender.Namespace()}, &existing)
 	if err == nil {
+		log.Info("auth secret already exists", "secret", secretName, "action", "reuse")
 		return "", nil
 	}
 	if !apierrors.IsNotFound(err) {
@@ -238,6 +278,7 @@ func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1beta1.N
 	if err != nil {
 		return "", fmt.Errorf("generate auth password: %w", err)
 	}
+	log.Info("generating auth secret", "secret", secretName, "action", "create")
 	secretDesired := renderwl.AuthSecret(ctxRender, password)
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretDesired.Name, Namespace: secretDesired.Namespace}}
 	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, secret, func() error {

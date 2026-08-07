@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,12 +28,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	neo4jctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4j"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
 )
 
@@ -59,11 +60,18 @@ func main() {
 	flag.BoolVar(&secureMetrics, "metrics-secure", false, "If set, the metrics endpoint is served securely.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", false, "Register the Neo4j validating admission webhook (requires TLS certs).")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory with tls.crt and tls.key for the webhook server.")
-	opts := zap.Options{Development: true}
-	opts.BindFlags(flag.CommandLine)
+	// Production JSON by default (ADR-014); --zap-devel for console. Optional --log-file tees verbose logs.
+	logOpts := logging.Options{}
+	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	rootLog, closeLog, err := logging.New(logOpts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid logging config: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeLog()
+	ctrl.SetLogger(rootLog)
 
 	namespaces, err := watchNamespaces()
 	if err != nil {

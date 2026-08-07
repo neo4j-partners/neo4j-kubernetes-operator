@@ -7,6 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
@@ -25,9 +26,11 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		headlessDesired := renderconn.HeadlessService(ctxRender)
+		log.Info("reconciling service", "pool", string(pool), "role", "headless", "name", headlessDesired.Name)
 		headless := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: headlessDesired.Name, Namespace: headlessDesired.Namespace}}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, headless, func() error {
 			headless.Labels = headlessDesired.Labels
@@ -40,6 +43,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 		if render.IsClusterMode(neo4j) {
 			for _, memberSvc := range renderconn.ClusterMemberServices(ctxRender) {
+				log.Info("reconciling service", "pool", string(pool), "role", "internals", "name", memberSvc.Name)
 				svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: memberSvc.Name, Namespace: memberSvc.Namespace}}
 				if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, svc, func() error {
 					svc.Labels = memberSvc.Labels
@@ -55,6 +59,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	clientCtx := render.ClientServiceContext(neo4j)
 	clientDesired := renderconn.ClientService(clientCtx)
+	log.Info("reconciling service", "role", "client", "name", clientDesired.Name, "type", clientDesired.Spec.Type)
 	clientSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: clientDesired.Name, Namespace: clientDesired.Namespace}}
 	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, clientSvc, func() error {
 		clientSvc.Labels = clientDesired.Labels
@@ -67,6 +72,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	if clientCtx.ShouldCreateAdminService() {
 		adminDesired := renderconn.AdminService(clientCtx)
+		log.Info("reconciling service", "role", "admin", "name", adminDesired.Name)
 		adminSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: adminDesired.Name, Namespace: adminDesired.Namespace}}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, adminSvc, func() error {
 			adminSvc.Labels = adminDesired.Labels

@@ -155,3 +155,6 @@ kubectl get neo4j dev -n default -o jsonpath='{.status.conditions[?(@.type=="Rea
 ```
 
 Status semantics: [status model](../../02-technical-design/crd-spec/neo4j/status.md) (design reference).
+
+Condition **reasons** catalog (test oracle): [Error overview](../reference/error-overview.md).
+Operator log levels / file tee: [Logging](05-logging.md).
