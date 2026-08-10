@@ -713,6 +713,9 @@ spec:
                     anyOf:
                     - type: integer
                     - type: string
+                    description: |-
+                      MinAvailable must be satisfiable: integer form must be < total pool members;
+                      "100%" is rejected (ADD-03 — unsatisfiable budgets block node drains).
                     x-kubernetes-int-or-string: true
                 type: object
               podTemplate:
@@ -7653,21 +7656,26 @@ spec:
                   volumeClaimRetention:
                     description: |-
                       VolumeClaimRetention controls PVC lifecycle when the StatefulSet is deleted or scaled (OP-2-005-UNINST-*).
-                      Default Retain preserves data (UNINST-01). Set whenDeleted=Delete for ephemeral wipe (UNINST-02).
+                      Default Retain preserves data (UNINST-01). Set whenDeleted=Delete at create for ephemeral wipe (UNINST-02);
+                      the value is pinned into status.volumeClaimRetentionWhenDeleted (ADD-06).
                       Existing.claimName PVCs are never deleted by the operator.
                     properties:
                       whenDeleted:
                         default: Retain
-                        description: WhenDeleted is applied when the StatefulSet is
-                          deleted. Default Retain.
+                        description: |-
+                          WhenDeleted is applied when the StatefulSet is deleted. Default Retain.
+                          Pinned into status.volumeClaimRetentionWhenDeleted on first reconcile (ADD-06);
+                          uninstall wipe honors the pin, not a late flip of this field.
                         enum:
                         - Retain
                         - Delete
                         type: string
                       whenScaled:
                         default: Retain
-                        description: WhenScaled is applied when the StatefulSet scales
-                          down. Default Retain.
+                        description: |-
+                          WhenScaled is applied when the StatefulSet scales down. Default Retain.
+                          Bulk operator wipe of drained ordinals only runs when this is Delete (NEO-007).
+                          Dropped-store heal recycle on scale-out still runs under Retain.
                         enum:
                         - Retain
                         - Delete
@@ -23783,6 +23791,19 @@ spec:
               version:
                 description: Version is the effective Neo4j version running on members
                   (may lag spec during upgrade).
+                type: string
+              volumeClaimRetentionWhenDeleted:
+                allOf:
+                - enum:
+                  - Retain
+                  - Delete
+                - enum:
+                  - Retain
+                  - Delete
+                description: |-
+                  VolumeClaimRetentionWhenDeleted is the whenDeleted policy pinned on first reconcile
+                  (ADD-06). Uninstall wipe and STS whenDeleted honor this snapshot — a late spec flip
+                  to Delete cannot silently arm data destruction.
                 type: string
             type: object
         type: object

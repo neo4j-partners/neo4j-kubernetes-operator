@@ -240,7 +240,8 @@ type SecretMountSpec struct {
 type StorageSpec struct {
 	Volumes *VolumesSpec `json:"volumes,omitempty"`
 	// VolumeClaimRetention controls PVC lifecycle when the StatefulSet is deleted or scaled (OP-2-005-UNINST-*).
-	// Default Retain preserves data (UNINST-01). Set whenDeleted=Delete for ephemeral wipe (UNINST-02).
+	// Default Retain preserves data (UNINST-01). Set whenDeleted=Delete at create for ephemeral wipe (UNINST-02);
+	// the value is pinned into status.volumeClaimRetentionWhenDeleted (ADD-06).
 	// Existing.claimName PVCs are never deleted by the operator.
 	VolumeClaimRetention *VolumeClaimRetentionPolicySpec `json:"volumeClaimRetention,omitempty"`
 	AdditionalMounts     []AdditionalMount               `json:"additionalMounts,omitempty"`
@@ -259,6 +260,8 @@ const (
 // VolumeClaimRetentionPolicySpec maps to StatefulSet.spec.persistentVolumeClaimRetentionPolicy.
 type VolumeClaimRetentionPolicySpec struct {
 	// WhenDeleted is applied when the StatefulSet is deleted. Default Retain.
+	// Pinned into status.volumeClaimRetentionWhenDeleted on first reconcile (ADD-06);
+	// uninstall wipe honors the pin, not a late flip of this field.
 	// +kubebuilder:default=Retain
 	WhenDeleted VolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
 	// WhenScaled is applied when the StatefulSet scales down. Default Retain.

@@ -16,7 +16,7 @@ func TestRetentionPolicyDefaultsRetain(t *testing.T) {
 		t.Fatalf("defaults = %#v", p)
 	}
 	if DeleteDataOnUninstall(neo4j) {
-		t.Fatal("expected retain uninstall")
+		t.Fatal("expected retain uninstall (unpinned fail-safe)")
 	}
 	if DeleteDataOnScale(neo4j) {
 		t.Fatal("expected retain scale wipe")
@@ -34,16 +34,47 @@ func TestRetentionPolicyDelete(t *testing.T) {
 			},
 		},
 	}
+	// Pre-pin: STS follows live spec; wipe stays fail-safe until status is pinned.
 	p := RetentionPolicy(neo4j)
 	if p.WhenDeleted != appsv1.DeletePersistentVolumeClaimRetentionPolicyType ||
 		p.WhenScaled != appsv1.DeletePersistentVolumeClaimRetentionPolicyType {
 		t.Fatalf("delete policy = %#v", p)
 	}
+	if DeleteDataOnUninstall(neo4j) {
+		t.Fatal("expected no wipe until whenDeleted is pinned")
+	}
+	if !PinWhenDeleted(neo4j) {
+		t.Fatal("expected pin")
+	}
 	if !DeleteDataOnUninstall(neo4j) {
-		t.Fatal("expected delete uninstall")
+		t.Fatal("expected delete uninstall after pin")
 	}
 	if !DeleteDataOnScale(neo4j) {
 		t.Fatal("expected delete scale wipe")
+	}
+}
+
+func TestPinWhenDeletedIgnoresLateDelete(t *testing.T) {
+	retain := neo4jv1beta1.VolumeClaimRetentionRetain
+	neo4j := &neo4jv1beta1.Neo4j{
+		Status: neo4jv1beta1.Neo4jStatus{VolumeClaimRetentionWhenDeleted: &retain},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Storage: &neo4jv1beta1.StorageSpec{
+				VolumeClaimRetention: &neo4jv1beta1.VolumeClaimRetentionPolicySpec{
+					WhenDeleted: neo4jv1beta1.VolumeClaimRetentionDelete,
+				},
+			},
+		},
+	}
+	if PinWhenDeleted(neo4j) {
+		t.Fatal("must not re-pin")
+	}
+	if DeleteDataOnUninstall(neo4j) {
+		t.Fatal("late whenDeleted=Delete must not arm wipe")
+	}
+	p := RetentionPolicy(neo4j)
+	if p.WhenDeleted != appsv1.RetainPersistentVolumeClaimRetentionPolicyType {
+		t.Fatalf("STS whenDeleted must stay Retain after pin, got %#v", p.WhenDeleted)
 	}
 }
 

@@ -37,12 +37,13 @@ func TestWipeOnUninstallDeletesManagedPVCs(t *testing.T) {
 	_ = corev1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 
+	del := neo4jv1beta1.VolumeClaimRetentionDelete
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default", UID: "neo4j-uid"},
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Storage: &neo4jv1beta1.StorageSpec{
 				VolumeClaimRetention: &neo4jv1beta1.VolumeClaimRetentionPolicySpec{
-					WhenDeleted: neo4jv1beta1.VolumeClaimRetentionDelete,
+					WhenDeleted: del,
 				},
 				Volumes: &neo4jv1beta1.VolumesSpec{
 					Data: neo4jv1beta1.DataVolumeSpec{
@@ -52,6 +53,7 @@ func TestWipeOnUninstallDeletesManagedPVCs(t *testing.T) {
 				},
 			},
 		},
+		Status: neo4jv1beta1.Neo4jStatus{VolumeClaimRetentionWhenDeleted: &del},
 	}
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -114,15 +116,17 @@ func TestWipeOnUninstallSkipsForeignHelmSTS(t *testing.T) {
 	_ = neo4jv1beta1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 
+	del := neo4jv1beta1.VolumeClaimRetentionDelete
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "orders", Namespace: "default", UID: "neo4j-uid"},
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Storage: &neo4jv1beta1.StorageSpec{
 				VolumeClaimRetention: &neo4jv1beta1.VolumeClaimRetentionPolicySpec{
-					WhenDeleted: neo4jv1beta1.VolumeClaimRetentionDelete,
+					WhenDeleted: del,
 				},
 			},
 		},
+		Status: neo4jv1beta1.Neo4jStatus{VolumeClaimRetentionWhenDeleted: &del},
 	}
 	// Helm release also named "orders" — only shares app.kubernetes.io/instance.
 	foreign := &appsv1.StatefulSet{

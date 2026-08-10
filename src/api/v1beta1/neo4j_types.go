@@ -139,6 +139,11 @@ type Neo4jStatus struct {
 	// PrimaryReplicasCap holds the primary STS ceiling while system has a single primary
 	// (ADD-02 — was a forgeable annotation). Nil means no cap.
 	PrimaryReplicasCap *int32 `json:"primaryReplicasCap,omitempty"`
+	// VolumeClaimRetentionWhenDeleted is the whenDeleted policy pinned on first reconcile
+	// (ADD-06). Uninstall wipe and STS whenDeleted honor this snapshot — a late spec flip
+	// to Delete cannot silently arm data destruction.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	VolumeClaimRetentionWhenDeleted *VolumeClaimRetentionPolicyType `json:"volumeClaimRetentionWhenDeleted,omitempty"`
 }
 
 // +kubebuilder:object:root=true

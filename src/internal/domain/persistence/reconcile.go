@@ -33,6 +33,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Failed(err)
 	}
 
+	// ADD-06: pin whenDeleted at first reconcile so a late Delete cannot arm wipe-on-uninstall.
+	if renderstorage.PinWhenDeleted(neo4j) {
+		if r.Client != nil {
+			if err := r.Client.Status().Update(ctx, neo4j); err != nil {
+				return shared.Failed(fmt.Errorf("pin volumeClaimRetentionWhenDeleted: %w", err))
+			}
+		}
+		log.Info("pinned volumeClaimRetentionWhenDeleted",
+			"whenDeleted", string(*neo4j.Status.VolumeClaimRetentionWhenDeleted))
+	} else if neo4j.Status.VolumeClaimRetentionWhenDeleted != nil &&
+		renderstorage.SpecWhenDeleted(neo4j) == neo4jv1beta1.VolumeClaimRetentionDelete &&
+		*neo4j.Status.VolumeClaimRetentionWhenDeleted != neo4jv1beta1.VolumeClaimRetentionDelete {
+		log.Info("ignoring late whenDeleted=Delete; uninstall wipe remains pinned",
+			"pinned", string(*neo4j.Status.VolumeClaimRetentionWhenDeleted))
+	}
+
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		logDataPlan(log, ctxRender)

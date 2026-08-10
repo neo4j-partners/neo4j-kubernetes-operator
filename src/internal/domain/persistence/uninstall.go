@@ -16,8 +16,9 @@ import (
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 )
 
-// WipeOnUninstall deletes operator-managed Dynamic PVCs when volumeClaimRetention.whenDeleted=Delete.
-// Existing.claimName PVCs are never deleted. Returns pending=true while STS/PVCs still exist.
+// WipeOnUninstall deletes operator-managed Dynamic PVCs when status.volumeClaimRetentionWhenDeleted=Delete
+// (ADD-06 pin of spec whenDeleted). Existing.claimName PVCs are never deleted.
+// Returns pending=true while STS/PVCs still exist.
 // ADD-04: only delete objects labeled as ours and (for STS) controlled by this Neo4j CR —
 // app.kubernetes.io/instance alone is a shared Helm label and must not select foreign workloads.
 func WipeOnUninstall(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j) (pending bool, err error) {
