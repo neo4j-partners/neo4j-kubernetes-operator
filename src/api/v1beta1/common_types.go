@@ -205,6 +205,7 @@ type VolumesSpec struct {
 }
 
 // AdditionalMount pairs volume source with mount (BDR-005 Option E).
+// Name and mountPath must not collide with operator-owned volumes/paths (STO-008/009, ADD-07).
 type AdditionalMount struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`

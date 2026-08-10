@@ -2,11 +2,41 @@ package storage
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
+
+// Operator-owned mount roots (STO-009 / ADD-07). Overlap wedges STS apply and every later reconcile.
+var reservedMountPaths = []string{
+	"/data",
+	"/backups",
+	"/config",
+	"/plugins",
+	"/logs",
+	"/metrics",
+	"/import",
+	"/licenses",
+	"/var/lib/neo4j/certificates",
+}
+
+// Operator-owned volume names that collide in PodSpec.volumes (STO-008 / ADD-07).
+var reservedVolumeNames = map[string]struct{}{
+	"data":              {},
+	"backups":           {},
+	"logs":              {},
+	"metrics":           {},
+	"import":            {},
+	"licenses":          {},
+	"plugins":           {},
+	"neo4j-conf":        {},
+	"apoc-conf":         {},
+	"neo4j-server-logs": {},
+	"neo4j-user-logs":   {},
+}
 
 // Validate checks storage modes and Existing oneOf shapes (BDR-005).
 func Validate(neo4j *neo4jv1beta1.Neo4j) error {
@@ -25,9 +55,20 @@ func Validate(neo4j *neo4jv1beta1.Neo4j) error {
 			return err
 		}
 	}
+	seen := map[string]struct{}{}
 	for _, m := range neo4j.Spec.Storage.AdditionalMounts {
 		if m.Name == "" || m.MountPath == "" {
 			return fmt.Errorf("storage.additionalMounts require name and mountPath")
+		}
+		if _, dup := seen[m.Name]; dup {
+			return fmt.Errorf("storage.additionalMounts[%q]: duplicate name", m.Name)
+		}
+		seen[m.Name] = struct{}{}
+		if _, bad := reservedVolumeNames[m.Name]; bad {
+			return fmt.Errorf("storage.additionalMounts[%q]: name is reserved by the operator", m.Name)
+		}
+		if err := rejectReservedMountPath(fmt.Sprintf("storage.additionalMounts[%q]", m.Name), m.MountPath); err != nil {
+			return err
 		}
 		if err := rejectHostPath(fmt.Sprintf("storage.additionalMounts[%q]", m.Name), m.Volume.VolumeSource); err != nil {
 			return err
@@ -36,6 +77,19 @@ func Validate(neo4j *neo4jv1beta1.Neo4j) error {
 	for name, sm := range neo4j.Spec.Storage.SecretMounts {
 		if sm.MountPath == "" {
 			return fmt.Errorf("storage.secretMounts[%q].mountPath is required", name)
+		}
+		if err := rejectReservedMountPath(fmt.Sprintf("storage.secretMounts[%q]", name), sm.MountPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rejectReservedMountPath(field, mountPath string) error {
+	clean := filepath.Clean(mountPath)
+	for _, r := range reservedMountPaths {
+		if clean == r || strings.HasPrefix(clean, r+"/") {
+			return fmt.Errorf("%s.mountPath %q overlaps reserved path %q", field, mountPath, r)
 		}
 	}
 	return nil
