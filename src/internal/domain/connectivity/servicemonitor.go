@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,6 +68,10 @@ func (r *Reconciler) deleteServiceMonitorIfPresent(ctx context.Context, neo4j *n
 			return shared.Done()
 		}
 		return shared.Failed(fmt.Errorf("get ServiceMonitor for delete: %w", err))
+	}
+	// ADD-05: name collision must not delete a foreign ServiceMonitor.
+	if !metav1.IsControlledBy(u, neo4j) {
+		return shared.Done()
 	}
 	if err := r.Client.Delete(ctx, u); err != nil && client.IgnoreNotFound(err) != nil {
 		if meta.IsNoMatchError(err) {

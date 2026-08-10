@@ -195,6 +195,11 @@ func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1beta1
 		}
 		return shared.Failed(fmt.Errorf("get PodDisruptionBudget for delete: %w", err))
 	}
+	// ADD-05: name collision must not delete a foreign PDB.
+	if !metav1.IsControlledBy(pdb, neo4j) {
+		ctrllog.FromContext(ctx).V(1).Info("skip delete: PodDisruptionBudget not owned by this Neo4j", "name", key.Name)
+		return shared.Done()
+	}
 	if err := r.Client.Delete(ctx, pdb); err != nil && client.IgnoreNotFound(err) != nil {
 		return shared.Failed(fmt.Errorf("delete PodDisruptionBudget: %w", err))
 	}
@@ -231,6 +236,11 @@ func (r *Reconciler) deleteNetworkPolicyIfPresent(ctx context.Context, neo4j *ne
 			return shared.Done()
 		}
 		return shared.Failed(fmt.Errorf("get NetworkPolicy for delete: %w", err))
+	}
+	// ADD-05: name collision must not delete a foreign NetworkPolicy.
+	if !metav1.IsControlledBy(np, neo4j) {
+		ctrllog.FromContext(ctx).V(1).Info("skip delete: NetworkPolicy not owned by this Neo4j", "name", key.Name)
+		return shared.Done()
 	}
 	if err := r.Client.Delete(ctx, np); err != nil && client.IgnoreNotFound(err) != nil {
 		return shared.Failed(fmt.Errorf("delete NetworkPolicy: %w", err))

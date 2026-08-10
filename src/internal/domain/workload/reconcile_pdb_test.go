@@ -3,6 +3,7 @@ package workload
 import (
 	"testing"
 
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,5 +71,65 @@ func TestReconcilePDBCreateAndDelete(t *testing.T) {
 	}
 	if err := c.Get(t.Context(), client.ObjectKey{Name: "prod-pdb", Namespace: "default"}, pdb); err == nil {
 		t.Fatal("expected PDB deleted when disabled")
+	}
+}
+
+func TestReconcileSkipsForeignPDBAndNetworkPolicy(t *testing.T) {
+	s := runtime.NewScheme()
+	if err := scheme.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := policyv1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := networkingv1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "analytics", Namespace: "default", UID: "cr-uid"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition: neo4jv1beta1.EditionEnterprise,
+			Version: "2026.05.0",
+			License: neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:      neo4jv1beta1.TopologyModeCluster,
+				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+			},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+			// PDB and NetworkPolicy disabled — delete-if-present paths run.
+		},
+	}
+	foreignPDB := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{Name: "analytics-pdb", Namespace: "default"},
+		Spec:       policyv1.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}},
+	}
+	foreignNP := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "analytics-network-policy", Namespace: "default"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		},
+	}
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(neo4j, foreignPDB, foreignNP).WithStatusSubresource(neo4j).Build()
+	r := New(c, s)
+	if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
+		t.Fatalf("reconcile: %v", out.Err)
+	}
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(foreignPDB), foreignPDB); err != nil {
+		t.Fatalf("foreign PDB must remain: %v", err)
+	}
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(foreignNP), foreignNP); err != nil {
+		t.Fatalf("foreign NetworkPolicy must remain: %v", err)
 	}
 }
