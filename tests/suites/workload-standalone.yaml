@@ -5,8 +5,16 @@ use_pipeline: neo4j-suite
 on_case_failure: stop
 
 pipeline:
+  # probes-default (NEO-3-009-PROBE-01) and status-conditions (OP-2-003-STATUS-01) are
+  # render/status checks on the CR the case already deployed — no extra topology, no bolt
+  # session, no second Neo4j boot. Kept at pipeline level rather than as their own cases
+  # so they also cover every matrix combination.
+  # NOTE: no trailing "# ..." comments on these list items — the suite parser keeps the
+  # rest of the line, and the step would resolve to an unknown action.
   case_assert:
     - assert/standalone-ready
+    - assert/probes-default
+    - assert/status-conditions
 
 expand_matrix:
   assert: standalone-ready
