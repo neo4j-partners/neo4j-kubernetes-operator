@@ -607,7 +607,9 @@ type SchedulingSpec struct {
 
 // PodDisruptionBudgetSpec configures PDB for cluster workloads.
 type PodDisruptionBudgetSpec struct {
-	Enabled      bool                `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	// MinAvailable must be satisfiable: integer form must be < total pool members;
+	// "100%" is rejected (ADD-03 — unsatisfiable budgets block node drains).
 	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
 }
 

@@ -168,6 +168,9 @@ func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1beta1.Neo4j
 		log.V(1).Info("poddisruptionbudget disabled, ensure absent")
 		return r.deletePDBIfPresent(ctx, neo4j, baseCtx)
 	}
+	if err := renderwl.ValidatePDB(neo4j); err != nil {
+		return shared.Failed(err)
+	}
 	desired := renderwl.PodDisruptionBudget(baseCtx)
 	log.Info("reconciling poddisruptionbudget", "name", desired.Name)
 	pdb := &policyv1.PodDisruptionBudget{

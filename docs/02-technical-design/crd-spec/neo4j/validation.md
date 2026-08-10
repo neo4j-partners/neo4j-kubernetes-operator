@@ -312,7 +312,7 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| SCH-001 | `podDisruptionBudget.minAvailable` ≤ total replicas | Error | Webhook | PDB minAvailable exceeds member count |
+| SCH-001 | `podDisruptionBudget.minAvailable` must be < total members (int); `100%` rejected | Error | Webhook + reconciler | Unsatisfiable PDB blocks node drains (ADD-03) |
 | SCH-002 | `podDisruptionBudget.enabled: true` requires `mode: Cluster` with ≥2 members | Warning | Webhook | PDB has limited effect on single-member topology |
 
 ---

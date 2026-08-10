@@ -621,7 +621,7 @@ Pod placement (`NEO-2-008`).
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | bool | `true`* | Create PDB (`NEO-2-008`). |
-| `minAvailable` | int \| string | `2`* | Minimum available pods during disruption. |
+| `minAvailable` | int \| string | `2`* | Minimum available pods during disruption. Must be **strictly less** than total pool members (int); `100%` is rejected (ADD-03). |
 
 \*Default enabled when Cluster with ≥ 3 total members.
 

@@ -73,3 +73,32 @@ func TestPodDisruptionBudgetStandaloneDefault(t *testing.T) {
 		t.Fatalf("minAvailable = %#v", pdb.Spec.MinAvailable)
 	}
 }
+
+func TestValidatePDBRejectsUnsatisfiable(t *testing.T) {
+	min := intstr.FromInt32(3)
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:      neo4jv1beta1.TopologyModeCluster,
+				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+			},
+			PodDisruptionBudget: &neo4jv1beta1.PodDisruptionBudgetSpec{
+				Enabled:      true,
+				MinAvailable: &min,
+			},
+		},
+	}
+	if err := ValidatePDB(neo4j); err == nil {
+		t.Fatal("expected reject minAvailable >= members")
+	}
+	pct := intstr.FromString("100%")
+	neo4j.Spec.PodDisruptionBudget.MinAvailable = &pct
+	if err := ValidatePDB(neo4j); err == nil {
+		t.Fatal("expected reject 100%")
+	}
+	ok := intstr.FromInt32(2)
+	neo4j.Spec.PodDisruptionBudget.MinAvailable = &ok
+	if err := ValidatePDB(neo4j); err != nil {
+		t.Fatal(err)
+	}
+}
