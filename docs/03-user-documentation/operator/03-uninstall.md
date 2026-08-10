@@ -51,7 +51,8 @@ Example: [`examples/standalone/18-pvc-delete-on-uninstall.yaml`](../../examples/
 Manual reclaim when using Retain:
 
 ```bash
-kubectl delete pvc -n default -l app.kubernetes.io/instance=dev,app.kubernetes.io/component=storage
+kubectl delete pvc -n default \
+  -l app.kubernetes.io/instance=dev,neo4j.com/component=storage,app.kubernetes.io/managed-by=neo4j-operator
 ```
 
 ## Remove CRD (destructive)

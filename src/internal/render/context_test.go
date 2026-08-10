@@ -3,8 +3,10 @@ package render
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
 func TestStandaloneContextNaming(t *testing.T) {
@@ -87,5 +89,29 @@ func TestImageTag(t *testing.T) {
 	}
 	if got := imageTag("2026.05.0-enterprise", neo4jv1beta1.EditionEnterprise); got != "2026.05.0-enterprise" {
 		t.Fatalf("imageTag no double suffix = %q", got)
+	}
+}
+
+// ADD-09 — uninstall.md reclaim selector must match StoragePVCSelector keys
+// (not app.kubernetes.io/component).
+func TestStoragePVCSelectorMatchesUninstallDocs(t *testing.T) {
+	want := labels.Set{
+		LabelName:      AppNameValue,
+		LabelInstance:  "dev",
+		LabelManagedBy: ManagedByValue,
+		LabelComponent: "storage",
+	}
+	sel := StoragePVCSelector("dev")
+	if !sel.Matches(want) {
+		t.Fatalf("StoragePVCSelector must match %v; got %s", want, sel)
+	}
+	wrong := labels.Set{
+		LabelName:                 AppNameValue,
+		LabelInstance:             "dev",
+		LabelManagedBy:            ManagedByValue,
+		"app.kubernetes.io/component": "storage",
+	}
+	if sel.Matches(wrong) {
+		t.Fatal("must not match app.kubernetes.io/component in place of neo4j.com/component")
 	}
 }
