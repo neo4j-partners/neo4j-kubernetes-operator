@@ -54,6 +54,8 @@ func TestWipeStaleMemberPVCsRequiresWhenScaledDelete(t *testing.T) {
 	labels := map[string]string{
 		render.LabelInstance:  "namespaced",
 		render.LabelComponent: "storage",
+		render.LabelName:      render.AppNameValue,
+		render.LabelManagedBy: render.ManagedByValue,
 	}
 	objs := []runtime.Object{
 		&corev1.PersistentVolumeClaim{
@@ -98,8 +100,14 @@ func TestRecycleMemberStoreHealsUnderRetain(t *testing.T) {
 	labels := map[string]string{
 		render.LabelInstance:  "namespaced",
 		render.LabelComponent: "storage",
+		render.LabelName:      render.AppNameValue,
+		render.LabelManagedBy: render.ManagedByValue,
 	}
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "namespaced-primary-3", Namespace: "restricted"}}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name:      "namespaced-primary-3",
+		Namespace: "restricted",
+		Labels:    render.OperandInstanceLabels("namespaced"),
+	}}
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "data-namespaced-primary-3", Namespace: "restricted", Labels: labels},
 	}

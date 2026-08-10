@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
@@ -190,6 +193,35 @@ func (c Context) CommonLabels(component string) map[string]string {
 		LabelManagedBy: ManagedByValue,
 		LabelComponent: component,
 	}
+}
+
+// OperandInstanceLabels are provenance labels that must match before the operator
+// deletes instance-scoped objects (ADD-04). app.kubernetes.io/instance alone is
+// a shared Helm convention and is not sufficient.
+func OperandInstanceLabels(neo4jName string) map[string]string {
+	return map[string]string{
+		LabelName:      AppNameValue,
+		LabelInstance:  neo4jName,
+		LabelManagedBy: ManagedByValue,
+	}
+}
+
+// StoragePVCSelector lists Dynamic PVCs created for this Neo4j instance.
+func StoragePVCSelector(neo4jName string) labels.Selector {
+	m := OperandInstanceLabels(neo4jName)
+	m[LabelComponent] = "storage"
+	return labels.SelectorFromSet(m)
+}
+
+// HasOperandLabels reports whether obj carries operator provenance for neo4jName.
+func HasOperandLabels(obj metav1.Object, neo4jName string) bool {
+	l := obj.GetLabels()
+	if l == nil {
+		return false
+	}
+	return l[LabelName] == AppNameValue &&
+		l[LabelInstance] == neo4jName &&
+		l[LabelManagedBy] == ManagedByValue
 }
 
 // WorkloadLabels returns selector labels for StatefulSet pods and Services.

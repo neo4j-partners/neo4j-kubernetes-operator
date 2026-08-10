@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -28,10 +27,7 @@ func WipeStaleMemberPVCs(ctx context.Context, c client.Client, neo4j *neo4jv1bet
 	stsName := render.ContextForPool(neo4j, pool).STSName()
 	protected := renderstorage.ProtectedClaimNames(neo4j)
 
-	sel := labels.SelectorFromSet(map[string]string{
-		render.LabelInstance:  neo4j.Name,
-		render.LabelComponent: "storage",
-	})
+	sel := render.StoragePVCSelector(neo4j.Name)
 	var pvcList corev1.PersistentVolumeClaimList
 	if err := c.List(ctx, &pvcList, client.InNamespace(neo4j.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
 		return fmt.Errorf("list pvcs: %w", err)
@@ -61,6 +57,9 @@ func RecycleMemberStore(ctx context.Context, c client.Client, neo4j *neo4jv1beta
 	var pod corev1.Pod
 	key := types.NamespacedName{Name: podName, Namespace: neo4j.Namespace}
 	if err := c.Get(ctx, key, &pod); err == nil {
+		if !render.HasOperandLabels(&pod, neo4j.Name) {
+			return fmt.Errorf("refuse recycle of pod %s: missing operator provenance labels (ADD-04)", podName)
+		}
 		if err := c.Delete(ctx, &pod); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("delete pod %s: %w", podName, err)
 		}
@@ -73,10 +72,7 @@ func RecycleMemberStore(ctx context.Context, c client.Client, neo4j *neo4jv1beta
 	}
 	stsName := render.ContextForPool(neo4j, pool).STSName()
 	protected := renderstorage.ProtectedClaimNames(neo4j)
-	sel := labels.SelectorFromSet(map[string]string{
-		render.LabelInstance:  neo4j.Name,
-		render.LabelComponent: "storage",
-	})
+	sel := render.StoragePVCSelector(neo4j.Name)
 	var pvcList corev1.PersistentVolumeClaimList
 	if err := c.List(ctx, &pvcList, client.InNamespace(neo4j.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
 		return fmt.Errorf("list pvcs: %w", err)

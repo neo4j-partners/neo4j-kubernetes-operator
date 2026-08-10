@@ -42,7 +42,7 @@ spec:
       whenDeleted: Delete   # also set whenScaled: Delete to drop PVCs on scale-down
 ```
 
-That sets StatefulSet `persistentVolumeClaimRetentionPolicy` and, on CR delete, removes Dynamic PVCs labeled for the instance. **`whenScaled: Delete`** is also required for the operator to wipe drained ordinals after scale-in (default `Retain` keeps those PVCs — NEO-007). **`Existing.claimName` PVCs are never deleted.**
+That sets StatefulSet `persistentVolumeClaimRetentionPolicy` and, on CR delete, removes Dynamic PVCs labeled for the instance (`app.kubernetes.io/name=neo4j`, `managed-by=neo4j-operator`, plus storage component) — never a foreign Helm release that only shares `app.kubernetes.io/instance` (ADD-04). **`whenScaled: Delete`** is also required for the operator to wipe drained ordinals after scale-in (default `Retain` keeps those PVCs — NEO-007). **`Existing.claimName` PVCs are never deleted.**
 
 Example: [`examples/standalone/18-pvc-delete-on-uninstall.yaml`](../../examples/standalone/18-pvc-delete-on-uninstall.yaml).
 
