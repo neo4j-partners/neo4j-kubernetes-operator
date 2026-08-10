@@ -33,9 +33,9 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Deploy single-member Standalone and reach `Ready` — NEO-2-001-MODE-01 · AC-NEO-STANDALONE / AC-NEO-INSTALL
 - [x] Enterprise edition + accepted license (fixture) — NEO-2-001-EDT-01 / NEO-2-001-LIC-01 · AC-NEO-LICENSE
 - [x] Continuous reconcile to desired state — OP-1-002 · AC-OP-RECONCILE
-- [x] Basic status condition `Ready` surfaced — OP-2-003-STATUS-01 · AC-OP-STATUS
+- [x] Basic condition catalog surfaced — `Ready`, `Reconciling`, `Error`, `Installed`, each with the reason the status writer documents — OP-2-003-STATUS-01 · AC-OP-STATUS
 - [x] Reconcile-combination matrix (`E2E_PROFILE=matrix`, operator installed once)
-- [ ] Default startup/readiness/liveness probes present on the pod with expected config — NEO-2-009 / NEO-3-009-PROBE-01 · AC-NEO-PROBES (readiness is already validated implicitly by every `Ready` wait; only an explicit render check of the 3 probes is missing — one topology-agnostic check suffices)
+- [x] Default startup/readiness/liveness probes rendered on the pod: `tcpSocket` on the container's Bolt port, `failureThreshold` 1000/20/40, period 5s, timeout 10s — NEO-2-009 / NEO-3-009-PROBE-01 · AC-NEO-PROBES
 - [ ] Existing image pull secret honored: pod pulls the Neo4j image from a protected registry using a referenced pull Secret — NEO-3-004-IMG-01 · AC-NEO-IMAGE (install-time registry auth, not a Neo4j password)
 
 ### `workload-cluster` — NEO-1-002
