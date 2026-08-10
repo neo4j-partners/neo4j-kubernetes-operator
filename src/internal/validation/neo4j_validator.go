@@ -26,8 +26,31 @@ func (v *Neo4jValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 	return nil, v.validate(ctx, obj)
 }
 
-func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	if err := validateMinimumMembersImmutable(oldObj, newObj); err != nil {
+		return nil, err
+	}
 	return nil, v.validate(ctx, newObj)
+}
+
+// validateMinimumMembersImmutable rejects updates that change topology.minimumMembers
+// (CEL also enforces this when the CRD is current; webhook covers enable-webhooks installs).
+func validateMinimumMembersImmutable(oldObj, newObj runtime.Object) error {
+	oldN, okOld := oldObj.(*neo4jv1beta1.Neo4j)
+	newN, okNew := newObj.(*neo4jv1beta1.Neo4j)
+	if !okOld || !okNew {
+		return nil
+	}
+	oldM := oldN.Spec.Topology.MinimumMembers
+	newM := newN.Spec.Topology.MinimumMembers
+	switch {
+	case oldM == nil && newM == nil:
+		return nil
+	case oldM == nil || newM == nil || *oldM != *newM:
+		return fmt.Errorf("topology.minimumMembers cannot change after create (scale via topology.primaries.members)")
+	default:
+		return nil
+	}
 }
 
 func (v *Neo4jValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {

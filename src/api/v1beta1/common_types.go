@@ -562,7 +562,8 @@ type TopologySpec struct {
 	Secondaries *SecondariesSpec `json:"secondaries,omitempty"`
 	// MinimumMembers is the system formation gate (enabled primaries before Ready)
 	// and maps to dbms.cluster.minimum_initial_system_primaries_count.
-	// Defaults to primaries.members when unset.
+	// Defaults to primaries.members when unset. Immutable after create — changing it
+	// rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
 	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
 	// DefaultPrimariesCount is the desired primary count for standard databases
 	// (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE

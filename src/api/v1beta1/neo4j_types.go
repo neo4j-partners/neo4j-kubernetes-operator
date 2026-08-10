@@ -130,6 +130,15 @@ type Neo4jStatus struct {
 	ClusterInfo *ClusterInfoStatus `json:"clusterInfo,omitempty"`
 	// ReadPoolReplicas is the observed replica count of the read pool StatefulSet (scale subresource).
 	ReadPoolReplicas *int32 `json:"readPoolReplicas,omitempty"`
+	// DrainOK maps pool id → replica floor safe to shrink to after operator-verified
+	// DEALLOCATE/DROP (ADD-02). Operator-owned status only — never trust CR annotations.
+	DrainOK map[string]int32 `json:"drainOK,omitempty"`
+	// DrainOKGeneration is metadata.generation when DrainOK was last written.
+	// Shrink is allowed only when this equals the current Generation.
+	DrainOKGeneration int64 `json:"drainOKGeneration,omitempty"`
+	// PrimaryReplicasCap holds the primary STS ceiling while system has a single primary
+	// (ADD-02 — was a forgeable annotation). Nil means no cap.
+	PrimaryReplicasCap *int32 `json:"primaryReplicasCap,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -143,6 +152,7 @@ type Neo4jStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode",message="topology.mode cannot change"
+// +kubebuilder:validation:XValidation:rule="self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))",message="topology.minimumMembers cannot change after create"
 type Neo4j struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

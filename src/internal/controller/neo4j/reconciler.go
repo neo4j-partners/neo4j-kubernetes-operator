@@ -48,7 +48,7 @@ type Neo4jReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services;secrets;configmaps;serviceaccounts;persistentvolumeclaims;endpoints,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;secrets;configmaps;serviceaccounts;persistentvolumeclaims;endpoints;pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
@@ -80,7 +80,7 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	_, err := r.runPipeline(ctx, &neo4j)
+	pipeResult, err := r.runPipeline(ctx, &neo4j)
 	if err != nil {
 		if apierrors.IsConflict(err) {
 			// Transient RV conflict (STS/CR updated concurrently) — retry, don't fail status.
@@ -92,6 +92,11 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		neo4j.Status.ObservedGeneration = neo4j.Generation
 		_ = r.Client.Status().Update(ctx, &neo4j)
 		return ctrl.Result{}, err
+	}
+
+	// Domain asked to requeue (e.g. drainOK just written) — don't overwrite status or delay.
+	if pipeResult.Requeue || pipeResult.RequeueAfter > 0 {
+		return pipeResult, nil
 	}
 
 	if err := r.StatusWriter.ObserveAndWrite(ctx, &neo4j); err != nil {

@@ -122,6 +122,23 @@ Use for `kubectl` columns, simple waits (`ready == servers`), HPA-style automati
 
 ---
 
+## `status.drainOK` / `status.drainOKGeneration` (ADD-02)
+
+Operator-owned scale-in gate. After every departing member is `DEALLOCATE`d/`DROP`ped, the formation reconciler writes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `drainOK` | map[string]int32 | Pool id (`primary`, `analytics`, `read`) → replica floor safe to shrink to. |
+| `drainOKGeneration` | int64 | `metadata.generation` when `drainOK` was written. Shrink is allowed only when this equals the current generation. |
+
+The workload reconciler reads these fields (never CR annotations). Setting `neo4j.com/drain-ok` on the Neo4j object is ignored.
+
+## `status.primaryReplicasCap` (ADD-02)
+
+Optional primary STS ceiling while `system` still has a single primary (blocks unsupported 1→N system scale-out). Operator-owned; formerly a forgeable annotation.
+
+---
+
 ## Conditions
 
 Standard condition schema: `type`, `status` (`True` \| `False` \| `Unknown`), `reason`, `message`, `lastTransitionTime`, `observedGeneration`.

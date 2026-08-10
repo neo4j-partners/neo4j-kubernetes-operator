@@ -69,8 +69,11 @@ spec:
                       enabled:
                         type: boolean
                       passwordSecretRef:
-                        description: PasswordSecretRef references an existing auth
-                          Secret (key NEO4J_AUTH).
+                        description: |-
+                          PasswordSecretRef references an existing auth Secret (key NEO4J_AUTH).
+                          The Secret must be labeled neo4j.com/mountable-by-operator=true (NEO-005) and
+                          neo4j.com/allowed-for=<Neo4j.metadata.name> (ADD-01), unless it is
+                          operator-managed for this instance.
                         properties:
                           name:
                             type: string
@@ -79,8 +82,11 @@ spec:
                         type: object
                     type: object
                   passwordSecretRef:
-                    description: PasswordSecretRef references an existing auth Secret
-                      (key NEO4J_AUTH).
+                    description: |-
+                      PasswordSecretRef references an existing auth Secret (key NEO4J_AUTH).
+                      The Secret must be labeled neo4j.com/mountable-by-operator=true (NEO-005) and
+                      neo4j.com/allowed-for=<Neo4j.metadata.name> (ADD-01), unless it is
+                      operator-managed for this instance.
                     properties:
                       name:
                         type: string
@@ -137,6 +143,9 @@ spec:
                   and cluster DNS.
                 properties:
                   clusterDomain:
+                    description: |-
+                      ClusterDomain is the Kubernetes DNS suffix for Neo4j-advertised FQDNs
+                      (CLUSTER_DOMAIN / routing). It is not used for the operator's admin Bolt dial (ADD-01).
                     type: string
                   ingress:
                     description: IngressSpec configures Kubernetes Ingress (V1.1+
@@ -7607,15 +7616,21 @@ spec:
                     type: array
                   secretMounts:
                     additionalProperties:
-                      description: SecretMountSpec projects a Secret into the Neo4j
-                        container.
+                      description: |-
+                        SecretMountSpec projects a Secret into the Neo4j container.
+                        The referenced Secret must carry label neo4j.com/mountable-by-operator=true (NEO-005).
+                        Items is required: only named keys are mounted (no whole-Secret projection).
                       properties:
                         defaultMode:
                           format: int32
                           type: integer
                         items:
+                          description: Items maps Secret keys to filenames under MountPath
+                            (required; NEO-005).
                           items:
-                            description: SecretKeyToPath maps Secret keys to paths.
+                            description: |-
+                              SecretKeyToPath maps a Secret key to a relative file path under mountPath
+                              (Kubernetes SecretVolumeSource.items / KeyToPath).
                             properties:
                               key:
                                 type: string
@@ -22115,7 +22130,8 @@ spec:
                     description: |-
                       MinimumMembers is the system formation gate (enabled primaries before Ready)
                       and maps to dbms.cluster.minimum_initial_system_primaries_count.
-                      Defaults to primaries.members when unset.
+                      Defaults to primaries.members when unset. Immutable after create — changing it
+                      rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
                     format: int32
                     type: integer
                   mode:
@@ -23581,6 +23597,20 @@ spec:
                       type: object
                     type: array
                 type: object
+              drainOK:
+                additionalProperties:
+                  format: int32
+                  type: integer
+                description: |-
+                  DrainOK maps pool id → replica floor safe to shrink to after operator-verified
+                  DEALLOCATE/DROP (ADD-02). Operator-owned status only — never trust CR annotations.
+                type: object
+              drainOKGeneration:
+                description: |-
+                  DrainOKGeneration is metadata.generation when DrainOK was last written.
+                  Shrink is allowed only when this equals the current Generation.
+                format: int64
+                type: integer
               endpoints:
                 description: Endpoints publishes client URIs and onboarding connection
                   examples.
@@ -23689,6 +23719,12 @@ spec:
                 - Failed
                 - Maintenance
                 type: string
+              primaryReplicasCap:
+                description: |-
+                  PrimaryReplicasCap holds the primary STS ceiling while system has a single primary
+                  (ADD-02 — was a forgeable annotation). Nil means no cap.
+                format: int32
+                type: integer
               readPoolReplicas:
                 description: ReadPoolReplicas is the observed replica count of the
                   read pool StatefulSet (scale subresource).
@@ -23753,6 +23789,10 @@ spec:
         x-kubernetes-validations:
         - message: topology.mode cannot change
           rule: self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode
+        - message: topology.minimumMembers cannot change after create
+          rule: self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers))
+            || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers)
+            && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
     served: true
     storage: true
     subresources:

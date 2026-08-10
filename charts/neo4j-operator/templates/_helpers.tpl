@@ -78,6 +78,7 @@ rules:
   - configmaps
   - endpoints
   - persistentvolumeclaims
+  - pods
   - secrets
   - serviceaccounts
   - services

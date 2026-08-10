@@ -29,8 +29,10 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 | TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
 | TOPO-009 | `minimumMembers > primaries.members` | Error | CEL | `minimumMembers` cannot exceed `primaries.members` (only primaries form the system quorum; secondaries analytics/read do not count) |
 | TOPO-010 | Primary scale-in below quorum / unsafe pool scale-in | Error | Webhook | Scale-in would break primary quorum or remove members before drain completes |
-| TOPO-011 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
+| TOPO-011 | STS scale-down gated by `status.drainOK` + matching `drainOKGeneration` (not CR annotations) | — | Reconciler | (ADD-02; forgeable `neo4j.com/drain-ok` ignored) |
+| TOPO-012 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
+| TOPO-014 | `minimumMembers` immutable after create | Error | CEL (+ webhook) | `topology.minimumMembers cannot change after create` — scale via `primaries.members` only |
 
 ### CEL sketches (topology)
 
@@ -69,6 +71,14 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
     !has(self.topology.primaries.members) ||
     self.topology.minimumMembers <= self.topology.primaries.members
   message: minimumMembers cannot exceed primaries.members (only primaries can form system quorum)
+
+# TOPO-014 — minimumMembers immutable (bootstrap / system formation size only)
+- rule: |
+    self == oldSelf ||
+    ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) ||
+     (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) &&
+      self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
+  message: topology.minimumMembers cannot change after create
 ```
 
 ---

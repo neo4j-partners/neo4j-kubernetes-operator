@@ -135,7 +135,7 @@ pluginDefinitions:
 
 **Removed (do not implement):** `secondaries[]` list with `name` field; `secondaries[].serverRole`.
 
-| `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). |
+| `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). **Immutable after create** — scale via `primaries.members` only. |
 
 Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md), **Option E — accepted**). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
 

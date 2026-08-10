@@ -116,7 +116,7 @@ func TestReconcileEnablesAllFreeInOnePass(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{servers: []intneo4j.Server{
 		{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
@@ -156,7 +156,7 @@ func TestReconcileDrainsTail(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{servers: []intneo4j.Server{
 		{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
@@ -182,7 +182,7 @@ func TestReconcileDrainsTail(t *testing.T) {
 		}
 	}
 	if ParseDrainOK(neo4j)["primary"] != 1 {
-		t.Fatalf("drain-ok = %v", neo4j.Annotations)
+		t.Fatalf("drain-ok = %v gen=%d", neo4j.Status.DrainOK, neo4j.Status.DrainOKGeneration)
 	}
 	servers, _ := admin.ShowServers(t.Context())
 	if _, ok := intneo4j.FindByAddress(servers, "prod-primary-1.default.svc.cluster.local:7687"); ok {
@@ -201,7 +201,7 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{
 		servers: []intneo4j.Server{
@@ -244,7 +244,7 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 		_ = c.Get(t.Context(), types.NamespacedName{Name: "prod", Namespace: "default"}, neo4j)
 	}
 	if ParseDrainOK(neo4j)["primary"] != 3 {
-		t.Fatalf("drain-ok = %v", neo4j.Annotations)
+		t.Fatalf("drain-ok = %v gen=%d", neo4j.Status.DrainOK, neo4j.Status.DrainOKGeneration)
 	}
 }
 
@@ -259,7 +259,7 @@ func TestReconcileGrowsSecondariesForAnalytics(t *testing.T) {
 	_ = neo4jv1beta1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	r3, r1 := int32(3), int32(1)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &r3}},
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-analytics", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &r1}},
@@ -308,7 +308,7 @@ func TestReconcileScaleInLeavesFittingTopologyAlone(t *testing.T) {
 	_ = neo4jv1beta1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(5)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -352,8 +352,8 @@ func TestReconcileScaleInLeavesFittingTopologyAlone(t *testing.T) {
 		_ = c.Get(t.Context(), types.NamespacedName{Name: "prod", Namespace: "default"}, neo4j)
 	}
 	if ParseDrainOK(neo4j)["primary"] != 3 {
-		t.Fatalf("expected drain of tails with DB still at 3 primaries; drain-ok=%v cond=%v",
-			neo4j.Annotations, neo4j.Status.Conditions)
+		t.Fatalf("expected drain of tails with DB still at 3 primaries; drain-ok=%v gen=%d cond=%v",
+			neo4j.Status.DrainOK, neo4j.Status.DrainOKGeneration, neo4j.Status.Conditions)
 	}
 }
 
@@ -364,7 +364,7 @@ func TestReconcileDoesNotExpandPrimariesBeyondDefault(t *testing.T) {
 	_ = neo4jv1beta1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -407,7 +407,7 @@ func TestReconcileBlocksMultiPrimaryToOne(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{
 		servers: []intneo4j.Server{

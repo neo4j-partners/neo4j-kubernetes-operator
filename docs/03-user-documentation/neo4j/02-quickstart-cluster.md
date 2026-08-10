@@ -32,10 +32,12 @@ Storage variants (Existing, aux volumes): [`examples/storage/`](../../../example
 
 ## Scaling members
 
-Edit `topology.primaries.members` (or a secondary pool’s `members`). The operator:
+Edit `topology.primaries.members` (or a secondary pool’s `members`). **Do not change `topology.minimumMembers`** — it is immutable after create (bootstrap / system formation size only). Changing it rewrites `dbms.cluster.minimum_initial_system_primaries_count`, rolls every primary via the config checksum, and can strand scale-out members waiting on a system Raft snapshot.
+
+The operator:
 
 1. **Scale-out** — grows the pool StatefulSet, then runs `ENABLE SERVER` for each new Free member, then `ALTER DATABASE` so topologies match pool sizes (primaries + analytics/read secondaries).
-2. **Scale-in** — shrinks database topologies to fit, then `DEALLOCATE` → `DROP` for tail ordinals, then allows StatefulSet scale-down (gated by `neo4j.com/drain-ok`).
+2. **Scale-in** — shrinks database topologies to fit, then `DEALLOCATE` → `DROP` for tail ordinals, then allows StatefulSet scale-down (gated by operator-owned `status.drainOK` / `status.drainOKGeneration` — ADD-02; do not set `neo4j.com/drain-ok` on the CR).
 
 Watch `ClusterFormed` and `ServersPendingDrain` on the CR. Example: [`examples/cluster/13-scale-out.yaml`](../../../examples/cluster/13-scale-out.yaml). Analytics/read members only host user databases after topology requests secondaries — the operator sets that automatically for standard databases (not `system`).
 
