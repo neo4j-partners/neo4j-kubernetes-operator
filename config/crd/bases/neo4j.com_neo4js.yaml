@@ -352,6 +352,8 @@ spec:
                           type: string
                         type: array
                       loadBalancerSourceRanges:
+                        description: LoadBalancerSourceRanges restricts client access
+                          when type is LoadBalancer (ADD-08; required by CEL).
                         items:
                           type: string
                         type: array
@@ -5824,8 +5826,9 @@ spec:
                 properties:
                   additionalMounts:
                     items:
-                      description: AdditionalMount pairs volume source with mount
-                        (BDR-005 Option E).
+                      description: |-
+                        AdditionalMount pairs volume source with mount (BDR-005 Option E).
+                        Name and mountPath must not collide with operator-owned volumes/paths (STO-008/009, ADD-07).
                       properties:
                         mountPath:
                           type: string
@@ -23482,6 +23485,11 @@ spec:
               rule: '!has(self.config) || !has(self.config.neo4j) || !has(self.features)
                 || !has(self.features.backup) || !(''server.backup.listen_address''
                 in self.config.neo4j)'
+            - message: connectivity.service.loadBalancerSourceRanges is required when
+                service type is LoadBalancer
+              rule: '!has(self.connectivity) || !has(self.connectivity.service) ||
+                self.connectivity.service.type != ''LoadBalancer'' || (has(self.connectivity.service.loadBalancerSourceRanges)
+                && size(self.connectivity.service.loadBalancerSourceRanges) > 0)'
           status:
             description: Neo4jStatus defines the observed state of Neo4j (ADR-004).
             properties:

@@ -50,6 +50,7 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.listeners) || !has(self.connectivity.listeners.backup) || (has(self.features) && has(self.features.backup) && self.features.backup.enabled == true)",message="backup listener requires features.backup.enabled"
 // +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.listeners) || !has(self.connectivity.listeners.metrics) || (has(self.features) && has(self.features.monitoring) && has(self.features.monitoring.prometheus) && self.features.monitoring.prometheus.enabled == true)",message="metrics listener requires features.monitoring.prometheus.enabled"
 // +kubebuilder:validation:XValidation:rule="!has(self.config) || !has(self.config.neo4j) || !has(self.features) || !has(self.features.backup) || !('server.backup.listen_address' in self.config.neo4j)",message="use connectivity.listeners.backup for backup listen address"
+// +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.service) || self.connectivity.service.type != 'LoadBalancer' || (has(self.connectivity.service.loadBalancerSourceRanges) && size(self.connectivity.service.loadBalancerSourceRanges) > 0)",message="connectivity.service.loadBalancerSourceRanges is required when service type is LoadBalancer"
 type Neo4jSpec struct {
 	// Edition selects the Neo4j product tier (V1: enterprise only).
 	// +kubebuilder:validation:Required

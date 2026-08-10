@@ -412,10 +412,11 @@ type ServicePortsSpec struct {
 type ConnectivityServiceSpec struct {
 	// +kubebuilder:validation:Enum=ClusterIP;LoadBalancer;NodePort
 	// +kubebuilder:default=ClusterIP
-	Type                     ServiceType       `json:"type,omitempty"`
-	Annotations              map[string]string `json:"annotations,omitempty"`
-	LoadBalancerSourceRanges []string          `json:"loadBalancerSourceRanges,omitempty"`
-	Expose                   []string          `json:"expose,omitempty"`
+	Type        ServiceType       `json:"type,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// LoadBalancerSourceRanges restricts client access when type is LoadBalancer (ADD-08; required by CEL).
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
+	Expose                   []string `json:"expose,omitempty"`
 	Ports                    *ServicePortsSpec `json:"ports,omitempty"`
 }
 

@@ -399,7 +399,7 @@ Client Service — merges Helm `services.default` + `services.neo4j`. **No `neo4
 |-------|------|---------|-------------|
 | `type` | string | `ClusterIP` | `ClusterIP`, `LoadBalancer`, `NodePort`. |
 | `annotations` | map | `{}` | Service metadata. |
-| `loadBalancerSourceRanges` | []string | `[]` | When `type: LoadBalancer`. |
+| `loadBalancerSourceRanges` | []string | — | **Required** when `type: LoadBalancer` (ADD-08). CIDR allowlist for the cloud LB. |
 | `expose` | []string | `[bolt, http]` | Connector names published on this Service. |
 | `ports.{name}` | int | = `listeners.{name}` | Optional Service port (LB façade); `targetPort` = listen port. |
 

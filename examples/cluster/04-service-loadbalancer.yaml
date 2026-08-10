@@ -28,6 +28,8 @@ spec:
       http: 7474
     service:
       type: LoadBalancer
+      # Required when type is LoadBalancer (ADD-08) — replace with your allowlist CIDRs.
+      loadBalancerSourceRanges: ["10.0.0.0/8"]
       expose: [bolt, http]
   auth:
     generatePassword: true

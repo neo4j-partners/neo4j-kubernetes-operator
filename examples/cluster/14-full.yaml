@@ -74,6 +74,7 @@ spec:
       metrics: 2004
     service:
       type: LoadBalancer
+      loadBalancerSourceRanges: ["10.0.0.0/8"]  # required for LoadBalancer (ADD-08)
       expose: [bolt, http, https]
   trust:
     enabled: true
