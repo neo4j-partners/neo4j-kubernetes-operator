@@ -146,15 +146,20 @@ Neo4j-advertised DNS.
 new ordinal’s address still in state `Dropped`.
 
 **Cause:** That Neo4j server UUID was `DROP`ped on a prior scale-in. The pod remounted the
-**same** data store (typical with **Existing** PVCs, or Dynamic PVCs that were not wiped).
+**same** data store — typical with **Existing** PVCs, or **Dynamic** under
+`whenScaled: Retain` before the operator’s heal recycle runs (or on an older operator
+that gated recycle).
 
 **Fix:**
 
-- Prefer **Dynamic** data for elastic pools — after scale-in the operator deletes drained
-  ordinal PVCs so the next join gets a new UUID.
+- Redeploy an operator that recycles Dropped Dynamic stores on ENABLE failure (heal path).
+  It deletes that ordinal’s pod+PVC so STS recreates an empty volume and a new UUID.
+- Immediate unblock without waiting for a build: delete the stale ordinal PVCs and pods
+  (e.g. `data-<name>-primary-3`, `data-<name>-primary-4`), then let the STS recreate them.
+- For elastic pools that should wipe on scale-in (no retained disks), set
+  `storage.volumeClaimRetention.whenScaled: Delete`.
 - With **Existing** claims, wipe or replace the volume data (or bind a fresh claim) for that
-  ordinal, then delete the pod so it restarts empty. The operator will not delete
-  `Existing.claimName` PVCs.
+  ordinal, then delete the pod. The operator will not delete `Existing.claimName` PVCs.
 
 Details: [Scaling members](../neo4j/02-quickstart-cluster.md#scaling-members).
 

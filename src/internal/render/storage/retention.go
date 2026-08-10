@@ -34,6 +34,16 @@ func DeleteDataOnUninstall(neo4j *neo4jv1beta1.Neo4j) bool {
 		neo4j.Spec.Storage.VolumeClaimRetention.WhenDeleted == neo4jv1beta1.VolumeClaimRetentionDelete
 }
 
+// DeleteDataOnScale reports whether the operator may delete Dynamic member PVCs on
+// scale-in / Dropped-store recycle (NEO-007). Default is Retain — STS retention and
+// operator wipe must agree; otherwise whenScaled:Retain is a false promise.
+func DeleteDataOnScale(neo4j *neo4jv1beta1.Neo4j) bool {
+	return neo4j != nil &&
+		neo4j.Spec.Storage != nil &&
+		neo4j.Spec.Storage.VolumeClaimRetention != nil &&
+		neo4j.Spec.Storage.VolumeClaimRetention.WhenScaled == neo4jv1beta1.VolumeClaimRetentionDelete
+}
+
 // ProtectedClaimNames are Existing.claimName PVCs the operator must never delete.
 func ProtectedClaimNames(neo4j *neo4jv1beta1.Neo4j) map[string]struct{} {
 	out := map[string]struct{}{}

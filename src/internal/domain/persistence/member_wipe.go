@@ -18,10 +18,11 @@ import (
 )
 
 // WipeStaleMemberPVCs deletes Dynamic PVCs for pool ordinals >= keep.
-// Needed after scale-in: Dropped server IDs cannot be re-enabled, so retained
-// stores must not remount on the next scale-out (Neo4j: "once dropped, cannot rejoin").
+// Needed after scale-in when whenScaled=Delete: Dropped server IDs cannot be
+// re-enabled, so stores must not remount on the next scale-out.
+// No-op when volumeClaimRetention.whenScaled is Retain (default) — NEO-007.
 func WipeStaleMemberPVCs(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, keep int32) error {
-	if !hasDynamicData(neo4j) {
+	if !hasDynamicData(neo4j) || !renderstorage.DeleteDataOnScale(neo4j) {
 		return nil
 	}
 	stsName := render.ContextForPool(neo4j, pool).STSName()
@@ -52,6 +53,10 @@ func WipeStaleMemberPVCs(ctx context.Context, c client.Client, neo4j *neo4jv1bet
 }
 
 // RecycleMemberStore deletes the pod and its Dynamic PVCs so Neo4j starts a new server UUID.
+// Called only when formation sees a Dropped/Deallocated identity remount (ENABLE reject /
+// terminal SHOW SERVERS) — a heal, not scale-in wipe. Allowed under whenScaled:Retain
+// (NEO-007): Retain means "don't wipe on scale-in"; a Dropped store cannot rejoin, so
+// recycling that ordinal is recovery, not a false promise of reversible scale.
 func RecycleMemberStore(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, ordinal int32, podName string) error {
 	var pod corev1.Pod
 	key := types.NamespacedName{Name: podName, Namespace: neo4j.Namespace}

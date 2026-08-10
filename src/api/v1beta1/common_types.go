@@ -262,6 +262,8 @@ type VolumeClaimRetentionPolicySpec struct {
 	// +kubebuilder:default=Retain
 	WhenDeleted VolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
 	// WhenScaled is applied when the StatefulSet scales down. Default Retain.
+	// Bulk operator wipe of drained ordinals only runs when this is Delete (NEO-007).
+	// Dropped-store heal recycle on scale-out still runs under Retain.
 	// +kubebuilder:default=Retain
 	WhenScaled VolumeClaimRetentionPolicyType `json:"whenScaled,omitempty"`
 }

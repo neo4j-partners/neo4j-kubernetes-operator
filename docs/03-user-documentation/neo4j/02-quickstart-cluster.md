@@ -55,10 +55,19 @@ A Neo4j server UUID that has been `DROP`ped **cannot be enabled again**. Scale-i
 
 | Data mode | After scale-in | Scale-out of the same ordinal |
 |-----------|----------------|-------------------------------|
-| **Dynamic** | Operator deletes the drained ordinal’s Dynamic PVCs | New empty volume → new server UUID → `ENABLE SERVER` works |
+| **Dynamic** + `whenScaled: Delete` | Operator deletes the drained ordinal’s Dynamic PVCs | New empty volume → new server UUID → `ENABLE SERVER` works |
+| **Dynamic** + `whenScaled: Retain` (default) | PVCs are kept (NEO-007 — no bulk wipe on scale-in) | Remount hits a Dropped UUID → operator **recycles** that ordinal’s pod+PVC (heal), then ENABLE works |
 | **Existing** (`claimName` / pre-bound claims) | Operator **never** deletes those PVCs | Same store remounts → UUID stays `Dropped` → `ENABLE` fails until **you** wipe or replace the claim’s data (or point the ordinal at a fresh claim) |
 
-Prefer **Dynamic** (or Existing `volumeClaimTemplate` that provisions a new claim per ordinal) for clusters that scale members down and later back up. Existing `claimName` remains Standalone-oriented and a poor fit for elastic cluster pools.
+For elastic Dynamic pools that should drop claims as soon as members drain (no retained disks), set:
+
+```yaml
+storage:
+  volumeClaimRetention:
+    whenScaled: Delete
+```
+
+Prefer **Dynamic** (with either retention) or Existing `volumeClaimTemplate` that provisions a new claim per ordinal for clusters that scale members down and later back up. Existing `claimName` remains Standalone-oriented and a poor fit for elastic cluster pools.
 
 ## Clean up
 

@@ -174,7 +174,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 				SetDrainOK(neo4j, pool, 0, true)
 				statusDirty = true
 			}
-			// Dropped server UUIDs cannot rejoin — wipe retained Dynamic PVCs for ordinals >= desired.
+			// Dropped server UUIDs cannot rejoin — wipe Dynamic PVCs for ordinals >= desired
+			// only when whenScaled=Delete (NEO-007).
 			if err := persistence.WipeStaleMemberPVCs(ctx, r.Client, neo4j, pool, desired); err != nil {
 				return shared.Failed(err)
 			}

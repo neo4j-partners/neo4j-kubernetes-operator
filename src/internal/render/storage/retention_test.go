@@ -18,6 +18,9 @@ func TestRetentionPolicyDefaultsRetain(t *testing.T) {
 	if DeleteDataOnUninstall(neo4j) {
 		t.Fatal("expected retain uninstall")
 	}
+	if DeleteDataOnScale(neo4j) {
+		t.Fatal("expected retain scale wipe")
+	}
 }
 
 func TestRetentionPolicyDelete(t *testing.T) {
@@ -38,6 +41,9 @@ func TestRetentionPolicyDelete(t *testing.T) {
 	}
 	if !DeleteDataOnUninstall(neo4j) {
 		t.Fatal("expected delete uninstall")
+	}
+	if !DeleteDataOnScale(neo4j) {
+		t.Fatal("expected delete scale wipe")
 	}
 }
 
