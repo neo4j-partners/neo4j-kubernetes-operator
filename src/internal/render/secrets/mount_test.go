@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -51,8 +52,13 @@ func TestValidateSpecRequiresSecretMountItems(t *testing.T) {
 
 func TestRequireMountable(t *testing.T) {
 	s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "x"}}
-	if err := RequireMountable(s); err == nil {
+	err := RequireMountable(s)
+	if err == nil {
 		t.Fatal("expected missing label error")
+	}
+	// status.PipelineErrorReason maps this sentinel to a stable condition/Event reason.
+	if !errors.Is(err, ErrNotMountable) {
+		t.Fatalf("error must wrap ErrNotMountable, got %v", err)
 	}
 	s.Labels = map[string]string{MountableLabel: MountableLabelValue}
 	if err := RequireMountable(s); err != nil {
@@ -67,8 +73,12 @@ func TestRequireAuthSecretDelegated(t *testing.T) {
 		t.Fatal("expected rejection without labels")
 	}
 	s.Labels = map[string]string{MountableLabel: MountableLabelValue}
-	if err := RequireAuthSecretDelegated(s, neo4j); err == nil {
+	err := RequireAuthSecretDelegated(s, neo4j)
+	if err == nil {
 		t.Fatal("mountable alone must not authorize auth use")
+	}
+	if !errors.Is(err, ErrAuthNotDelegated) {
+		t.Fatalf("error must wrap ErrAuthNotDelegated, got %v", err)
 	}
 	s.Labels[AllowedForLabel] = "orders"
 	if err := RequireAuthSecretDelegated(s, neo4j); err != nil {

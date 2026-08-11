@@ -3,6 +3,12 @@
 Secrets used across the `examples/` tree: static auth/license Secrets checked in here, and
 TLS material generated on demand with `./hack/gen-cluster-tls.sh`.
 
+> **Why do I need these labels?** Helm required nothing like them, because `helm install` used *your*
+> credentials — naming a Secret granted you nothing you did not already have. An operator mounts
+> Secrets on your behalf with *its* ServiceAccount, which would otherwise turn "may create a Neo4j CR"
+> into "may read every Secret in the namespace". Full rationale, threat model and rejected
+> alternatives: [Security model — mounted Secrets and operator privilege](../../docs/02-technical-design/security.md).
+
 ## Mountable Secrets (NEO-005)
 
 Any Secret the operator mounts into Neo4j pods must carry:

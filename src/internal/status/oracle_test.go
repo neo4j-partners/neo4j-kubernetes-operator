@@ -1,10 +1,14 @@
 package status
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 )
 
 func TestErrorOracleDocumented(t *testing.T) {
@@ -19,6 +23,34 @@ func TestErrorOracleDocumented(t *testing.T) {
 			t.Errorf("error-overview.md missing reason %q (%s)", e.Reason, e.Condition)
 		}
 	}
+}
+
+// A mapped reason must exist in the oracle, otherwise e2e asserts on it while users find it
+// documented nowhere.
+func TestPipelineErrorReasonIsCatalogued(t *testing.T) {
+	cases := map[error]string{
+		fmt.Errorf("wrapped: %w", rendersecrets.ErrNotMountable):     ReasonSecretNotMountable,
+		fmt.Errorf("wrapped: %w", rendersecrets.ErrAuthNotDelegated): ReasonSecretNotDelegated,
+		errors.New("unrelated pipeline failure"):                     ReasonReconcileFailed,
+	}
+	for err, want := range cases {
+		got := PipelineErrorReason(err)
+		if got != want {
+			t.Errorf("PipelineErrorReason(%v) = %q, want %q", err, got, want)
+		}
+		if !oracleHasReason(ConditionError, got) {
+			t.Errorf("reason %q missing from ErrorOracle for condition %s", got, ConditionError)
+		}
+	}
+}
+
+func oracleHasReason(condition, reason string) bool {
+	for _, e := range ErrorOracle {
+		if e.Condition == condition && e.Reason == reason {
+			return true
+		}
+	}
+	return false
 }
 
 func moduleRoot(t *testing.T) string {

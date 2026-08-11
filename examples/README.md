@@ -135,6 +135,8 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
   (`secretMounts`, BYO TLS, `passwordSecretRef`, plugin licenses) must carry
   `neo4j.com/mountable-by-operator: "true"`, and `secretMounts` / `trustedCerts.sources`
   must list `items` (named keys). Details: [`secrets/README.md`](secrets/README.md).
+  Why this is needed with an operator but was not with Helm:
+  [security model](../docs/02-technical-design/security.md).
 - **Auth:** `generatePassword: true` (default across most examples) needs nothing extra —
   the operator labels the generated auth Secret. Using `auth.passwordSecretRef` needs the
   Secret applied first **with** `neo4j.com/mountable-by-operator=true` **and**

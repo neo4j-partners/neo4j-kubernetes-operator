@@ -22,7 +22,7 @@ Do **not** accept ADR-002 until benchmark synthesis has been reviewed (`operator
 | [layer.md](layer.md) | promoted into ADR-002 |
 | [file_structure.md](file_structure.md) | draft target tree |
 | [dependencies.md](../dependencies.md) | platform matrix draft |
-| [security.md](../security.md) | empty → fed by ADR-013/015 |
+| [security.md](../security.md) | Secret mount / delegation model (NEO-005, ADD-01); blast radius + PSS still fed by ADR-013/015 |
 
 ## Decision backlog
 

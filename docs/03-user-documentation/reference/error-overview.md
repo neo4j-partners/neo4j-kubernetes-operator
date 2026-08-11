@@ -9,8 +9,13 @@ Source of truth in code: `src/internal/status/oracle.go` (`ErrorOracle`).
 
 ```bash
 kubectl get neo4j <name> -n <ns> -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.reason}{"\t"}{.message}{"\n"}{end}'
+kubectl describe neo4j <name> -n <ns>   # Events carry the same Reason as the condition
 kubectl logs -n neo4j-operator-system deploy/neo4j-operator-controller-manager --tail=200
 ```
+
+Rejected Secrets (`SecretNotMountable`, `SecretNotDelegated`) also emit a `Warning` Event under
+the same reason — the operator stops before creating any StatefulSet, so `kubectl describe` is
+usually the fastest way to see why nothing was deployed.
 
 Structured logs use `msg`, `level`, and logger names (`neo4j`, `pipeline`, domain).
 See [Operator logging](../operator/05-logging.md).
@@ -20,6 +25,8 @@ See [Operator logging](../operator/05-logging.md).
 | Condition | Reason | Severity | Meaning |
 |-----------|--------|----------|---------|
 | Error | ReconcileFailed | error | A pipeline step returned an error |
+| Error | SecretNotMountable | error | Referenced Secret lacks the `neo4j.com/mountable-by-operator` opt-in label (NEO-005) |
+| Error | SecretNotDelegated | error | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
 | Ready | ReconcileError | error | Ready cleared because reconcile failed |
 | Reconciling | Failed | error | Reconciling stopped after failure |
 | TLSReady | SecretMissing | error | Required TLS/auth Secret is missing or incomplete |

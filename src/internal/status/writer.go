@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
@@ -45,9 +47,22 @@ func (w *Writer) MarkReconciling(neo4j *neo4jv1beta1.Neo4j) {
 	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
 }
 
+// PipelineErrorReason maps a pipeline error to a stable oracle reason (error-overview.md).
+// Callers use it for both the Error condition and the matching Warning Event.
+func PipelineErrorReason(err error) string {
+	switch {
+	case errors.Is(err, rendersecrets.ErrNotMountable):
+		return ReasonSecretNotMountable
+	case errors.Is(err, rendersecrets.ErrAuthNotDelegated):
+		return ReasonSecretNotDelegated
+	default:
+		return ReasonReconcileFailed
+	}
+}
+
 // MarkPipelineError records a reconcile failure.
 func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
-	setCondition(neo4j, ConditionError, metav1.ConditionTrue, "ReconcileFailed", err.Error())
+	setCondition(neo4j, ConditionError, metav1.ConditionTrue, PipelineErrorReason(err), err.Error())
 	setCondition(neo4j, ConditionReady, metav1.ConditionFalse, "ReconcileError", err.Error())
 	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Failed", err.Error())
 	if rendertrust.TrustEnabled(neo4j) && isTLSSecretError(err) {

@@ -93,8 +93,8 @@ See [Quickstart — Standalone](../neo4j/01-quickstart-standalone.md#connect).
 
 ## Secret mount / TLS rejected: missing mountable label or items
 
-**Symptom:** Webhook denies the CR, or reconcile fails with a message about
-`neo4j.com/mountable-by-operator` or `items is required`.
+**Symptom:** Webhook denies the CR, or reconcile fails with `Error=True` /
+`reason=SecretNotMountable` (plus a `Warning` Event under the same reason) and nothing is deployed.
 
 **Cause:** NEO-005 — the operator only mounts Secrets the namespace owner opted in, and only
 named keys (`items`).
@@ -107,6 +107,7 @@ kubectl label secret <name> neo4j.com/mountable-by-operator=true
 
 Ensure `spec.storage.secretMounts.*.items` (and `trustedCerts.sources[].secret.items`) list
 each key. Details: [examples/secrets/README.md](../../../examples/secrets/README.md#mountable-secrets-neo-005).
+Why the label exists at all: [security model](../../02-technical-design/security.md).
 
 ## Scale-in stuck despite setting neo4j.com/drain-ok
 
@@ -125,10 +126,13 @@ Wait for `ServersPendingDrain` to clear after formation finishes `DEALLOCATE`/`D
 
 ## BYO auth Secret rejected: not delegated (ADD-01)
 
-**Symptom:** Error mentioning `neo4j.com/allowed-for` or “auth secret … is not delegated”.
+**Symptom:** `Error=True` / `reason=SecretNotDelegated` (plus a `Warning` Event under the same
+reason), mentioning `neo4j.com/allowed-for` or “auth secret … is not delegated”.
 
 **Cause:** `passwordSecretRef` Secrets must be delegated to this CR name (in addition to the
-mountable label). Operator-generated `{name}-auth` Secrets are already instance-scoped.
+mountable label). Operator-generated `{name}-auth` Secrets are already instance-scoped. An auth
+Secret is read by the operator to dial admin Bolt, not just mounted — see
+[security model](../../02-technical-design/security.md) for the reasoning.
 
 **Fix:**
 

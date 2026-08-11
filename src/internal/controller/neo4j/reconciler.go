@@ -126,6 +126,11 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 		return ctrl.Result{}, err
 	}
 	if err := rendersecrets.EnsureMountable(ctx, r.Client, neo4j); err != nil {
+		// Same reason on the Event as on the Error condition, so `kubectl describe` and the
+		// status oracle agree on one identifier.
+		if r.Recorder != nil {
+			r.Recorder.Event(neo4j, corev1.EventTypeWarning, status.PipelineErrorReason(err), err.Error())
+		}
 		return ctrl.Result{}, err
 	}
 	if r.Recorder != nil {

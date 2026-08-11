@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -24,6 +25,13 @@ const MountableLabelValue = "true"
 // AllowedForLabel delegates a BYO auth Secret to one Neo4j CR name (ADD-01).
 // Operator-managed auth Secrets use app.kubernetes.io/managed-by + instance instead.
 const AllowedForLabel = "neo4j.com/allowed-for"
+
+// Refusal sentinels let status conditions and Events name the cause with a stable reason
+// instead of matching free-form message text (status.PipelineErrorReason).
+var (
+	ErrNotMountable     = errors.New("secret not mountable by the operator")
+	ErrAuthNotDelegated = errors.New("auth secret not delegated")
+)
 
 // ValidateSpec checks CR-only mount policy (no API reads): trustedCert projection
 // allowlist and required items for secret mounts (NEO-005 §1, §3).
@@ -160,8 +168,8 @@ func RequireMountable(secret *corev1.Secret) error {
 	if secret.Labels != nil && secret.Labels[MountableLabel] == MountableLabelValue {
 		return nil
 	}
-	return fmt.Errorf("secret %q is missing label %s=%s (namespace owner must opt in before the operator mounts it; NEO-005)",
-		secret.Name, MountableLabel, MountableLabelValue)
+	return fmt.Errorf("%w: %q is missing label %s=%s (namespace owner must opt in before the operator mounts it; NEO-005)",
+		ErrNotMountable, secret.Name, MountableLabel, MountableLabelValue)
 }
 
 // RequireAuthSecretDelegated fails unless the Secret is operator-managed for this CR
@@ -176,8 +184,8 @@ func RequireAuthSecretDelegated(secret *corev1.Secret, neo4j *neo4jv1beta1.Neo4j
 			return nil
 		}
 	}
-	return fmt.Errorf("auth secret %q is not delegated to Neo4j %q (need label %s=%s, or an operator-managed auth Secret; ADD-01)",
-		secret.Name, neo4j.Name, AllowedForLabel, neo4j.Name)
+	return fmt.Errorf("%w: %q is not delegated to Neo4j %q (need label %s=%s, or an operator-managed auth Secret; ADD-01)",
+		ErrAuthNotDelegated, secret.Name, neo4j.Name, AllowedForLabel, neo4j.Name)
 }
 
 // WithMountableLabel copies labels and ensures the opt-in label is set (operator-created Secrets).
