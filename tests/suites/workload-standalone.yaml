@@ -9,8 +9,6 @@ pipeline:
   # render/status checks on the CR the case already deployed — no extra topology, no bolt
   # session, no second Neo4j boot. Kept at pipeline level rather than as their own cases
   # so they also cover every matrix combination.
-  # NOTE: no trailing "# ..." comments on these list items — the suite parser keeps the
-  # rest of the line, and the step would resolve to an unknown action.
   case_assert:
     - assert/standalone-ready
     - assert/probes-default

@@ -17,6 +17,10 @@ parse_pipeline_phase() {
     in_phase && /^  - / {
       line=$0
       sub(/^  - /, "", line)
+      # A YAML inline comment is not part of the item; keeping it would make the step
+      # resolve to an unknown action. Requires a space before "#", as YAML does.
+      sub(/[[:space:]]+#.*$/, "", line)
+      sub(/[[:space:]]+$/, "", line)
       print line
     }
   ' "${file}"
@@ -35,6 +39,9 @@ parse_suite_pipeline_phase() {
     in_phase && /^    - / {
       line=$0
       sub(/^    - /, "", line)
+      # Same inline-comment handling as parse_pipeline_phase.
+      sub(/[[:space:]]+#.*$/, "", line)
+      sub(/[[:space:]]+$/, "", line)
       print line
     }
   ' "${file}"

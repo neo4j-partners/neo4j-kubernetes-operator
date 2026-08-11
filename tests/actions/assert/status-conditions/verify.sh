@@ -73,10 +73,12 @@ if [[ -z "${ready_status}" ]]; then
   log "FAIL Ready: condition absent from .status.conditions"
   failures=$((failures + 1))
 else
+  # readyReason() emits the first three; OfflineMaintenance and ReconcileError are set
+  # directly by the writer (maintenance mode and MarkPipelineError).
   case "${ready_reason}" in
-    AllMembersReady|MembersNotReady|TLSNotReady|OfflineMaintenance) ;;
+    AllMembersReady|MembersNotReady|TLSNotReady|OfflineMaintenance|ReconcileError) ;;
     *)
-      log "FAIL Ready: unknown reason ${ready_reason:-unset} (writer emits AllMembersReady/MembersNotReady/TLSNotReady/OfflineMaintenance)"
+      log "FAIL Ready: unknown reason ${ready_reason:-unset} (writer emits AllMembersReady/MembersNotReady/TLSNotReady/OfflineMaintenance/ReconcileError)"
       failures=$((failures + 1))
       ;;
   esac
