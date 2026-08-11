@@ -2,6 +2,7 @@ package workload
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -16,15 +17,54 @@ var allowedCapabilityAdds = map[corev1.Capability]struct{}{
 
 // ValidateSecurity rejects CR fields that would grant node-level privilege via the
 // operand StatefulSet (NEO-001): privileged containers, hostPath volumes are checked
-// in storage.Validate; here we cover security contexts.
+// in storage.Validate; here we cover security contexts. Also NEO-002: reserved CR
+// names and cloud workload-identity annotations on the operand ServiceAccount.
 func ValidateSecurity(neo4j *neo4jv1beta1.Neo4j) error {
+	if neo4j.Name == "default" {
+		return fmt.Errorf("metadata.name %q is not allowed (would collide with the namespace default ServiceAccount)", neo4j.Name)
+	}
 	if neo4j.Spec.Security == nil {
 		return nil
 	}
 	if err := validatePodSecurityContext(neo4j.Spec.Security.PodSecurityContext); err != nil {
 		return err
 	}
-	return validateContainerSecurityContext(neo4j.Spec.Security.ContainerSecurityContext)
+	if err := validateContainerSecurityContext(neo4j.Spec.Security.ContainerSecurityContext); err != nil {
+		return err
+	}
+	return validateServiceAccountSpec(neo4j.Spec.Security.ServiceAccount)
+}
+
+func validateServiceAccountSpec(sa *neo4jv1beta1.ServiceAccountSpec) error {
+	if sa == nil {
+		return nil
+	}
+	for k := range sa.Annotations {
+		if isCloudWorkloadIdentityAnnotation(k) {
+			return fmt.Errorf("spec.security.serviceAccount.annotations[%q] is not allowed (cloud IAM / workload identity; NEO-002)", k)
+		}
+	}
+	return nil
+}
+
+// isCloudWorkloadIdentityAnnotation matches keys that bind a K8s SA to cloud IAM.
+func isCloudWorkloadIdentityAnnotation(key string) bool {
+	switch {
+	case key == "eks.amazonaws.com/role-arn":
+		return true
+	case key == "eks.amazonaws.com/audience":
+		return true
+	case strings.HasPrefix(key, "eks.amazonaws.com/"):
+		return true
+	case key == "iam.gke.io/gcp-service-account":
+		return true
+	case strings.HasPrefix(key, "iam.gke.io/"):
+		return true
+	case strings.HasPrefix(key, "azure.workload.identity/"):
+		return true
+	default:
+		return false
+	}
 }
 
 func validatePodSecurityContext(psc *corev1.PodSecurityContext) error {

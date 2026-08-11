@@ -626,6 +626,7 @@ type ProbesSpec struct {
 }
 
 // ServiceAccountSpec configures workload ServiceAccount.
+// Cloud workload-identity annotations (EKS/GKE/AKS IAM bindings) are rejected (NEO-002).
 type ServiceAccountSpec struct {
 	Create      bool              `json:"create,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`

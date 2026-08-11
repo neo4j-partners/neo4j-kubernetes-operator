@@ -15,7 +15,7 @@ import (
 )
 
 // Neo4jValidator is the validating admission webhook for Neo4j (ADR-001).
-// Slice 1: NEO-001 security/hostPath; NEO-005 secret mount policy.
+// Slice 1: NEO-001 security/hostPath; NEO-002 SA IAM annotations; NEO-005 secret mounts.
 type Neo4jValidator struct {
 	Client client.Client // optional; when set, checks mountable Secret labels (NEO-005)
 }
