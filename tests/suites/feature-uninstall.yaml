@@ -18,6 +18,7 @@ pipeline:
 # does not collide with other suites' "dev" instance.
 cases:
   - id: preserve-data-on-delete
+    comment: NEO-2-018 — deleting the Neo4j CR leaves the bound data PVC in place, so uninstalling the workload never destroys data.
     fixture: tests/fixtures/neo4j-standalone.yaml
     expect: success
     cr_name: e2e-uninstall

@@ -68,9 +68,10 @@ suite_build_case_rows() {
     local op neo4j
     while read -r op neo4j; do
       [[ -n "${op}" ]] || continue
-      # US-delimited (\037) row matching suite_parse_cases field order.
-      printf 'matrix-%s-%s\037\037%s\037success\037\037\037%s\037%s\037\037false\n' \
-        "${op}" "${neo4j}" "${assert_name}" "${neo4j}" "${op}"
+      # US-delimited (\037) row matching suite_parse_cases field order; the last field is
+      # the log comment, synthesised here since matrix cases have no YAML entry.
+      printf 'matrix-%s-%s\037\037%s\037success\037\037\037%s\037%s\037\037false\037Matrix combination: operator install %s x Neo4j spec %s\n' \
+        "${op}" "${neo4j}" "${assert_name}" "${neo4j}" "${op}" "${op}" "${neo4j}"
     done < <(reconcile_list_combinations "${CLOUD}" "${SUITE_NAME}")
   else
     suite_parse_cases "${suite_file}"
@@ -109,7 +110,13 @@ while IFS= read -r case_row; do
     break
   fi
 
-  log "CASE [${case_idx}/${total_cases}] ${E2E_CONFIG_SUMMARY}"
+  log "######################## CASE [${case_idx}/${total_cases}] ${SUITE_CASE_ID} ########################"
+  if [[ -n "${SUITE_CASE_COMMENT:-}" ]]; then
+    log "  ${SUITE_CASE_COMMENT}"
+  else
+    log "  (no comment — add one to the case in suites/${SUITE_NAME}.yaml)"
+  fi
+  log "  ${E2E_CONFIG_SUMMARY}"
   case_failed=0
 
   if ! run_phase "case_run" full "${CASE_RUN_STEPS[@]}"; then
@@ -122,7 +129,10 @@ while IFS= read -r case_row; do
 
   if [[ "${case_failed}" -ne 0 ]]; then
     suite_failed=1
+    log "CASE [${case_idx}/${total_cases}] ${SUITE_CASE_ID}: FAILED"
     collect_diagnostics "${RUN_ID}-${SUITE_CASE_ID}"
+  else
+    log "CASE [${case_idx}/${total_cases}] ${SUITE_CASE_ID}: PASSED"
   fi
 
   run_cleanup_phase "case_teardown" "${CASE_TEARDOWN_STEPS[@]}"

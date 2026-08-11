@@ -19,6 +19,7 @@ expand_matrix:
 
 cases:
   - id: happy-minimal
+    comment: Baseline Standalone install — the CR reaches Ready with the default probes and status conditions.
     from_reconcile: true
     assert: standalone-ready
     expect: success

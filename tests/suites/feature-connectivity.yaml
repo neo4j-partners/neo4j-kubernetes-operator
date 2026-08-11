@@ -14,6 +14,7 @@ pipeline:
 
 cases:
   - id: no-tls
+    comment: Standalone without TLS — connectors answer from inside the pod and from a separate client pod through the client Service.
     neo4j_case: standalone-connectivity
     assert: standalone-ready
     expect: success

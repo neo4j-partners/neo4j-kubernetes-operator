@@ -11,6 +11,7 @@ pipeline:
 
 cases:
   - id: no-license
+    comment: A CR without license acceptance is rejected at admission.
     fixture: tests/fixtures/neo4j-no-license.yaml
     assert: admission-rejected
     expect: failure
@@ -18,15 +19,15 @@ cases:
     cr_name: e2e-no-license
 
   - id: community-cluster
+    comment: Cluster mode on the Community edition is rejected at admission.
     fixture: tests/fixtures/neo4j-cluster-on-community.yaml
     assert: admission-rejected
     expect: failure
     expect_contains: edition
     cr_name: e2e-bad-edition
 
-  # minimumMembers (3) exceeds primaries.members (1): only primaries form the
-  # system quorum, so this is refused at admission (TOPO-009, CEL).
   - id: min-members-exceeds-primaries
+    comment: TOPO-009 — minimumMembers (3) exceeds primaries.members (1), and since only primaries form the system quorum the CEL rule refuses it at admission.
     fixture: tests/fixtures/neo4j-cluster-bad-minmembers.yaml
     assert: admission-rejected
     expect: failure
@@ -34,6 +35,7 @@ cases:
     cr_name: e2e-bad-minmembers
 
   - id: happy-minimal
+    comment: Positive control — a valid minimal Standalone CR is admitted and becomes Ready.
     fixture: tests/fixtures/neo4j-standalone.yaml
     assert: standalone-ready
     expect: success

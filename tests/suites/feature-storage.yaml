@@ -18,67 +18,64 @@ pipeline:
     - assert/{{assert}}
 
 cases:
-  # Dynamic data with an explicit storageClassName — provisions the PVC and boots.
   - id: dynamic-sc-ok
+    comment: Dynamic data volume with an explicit storageClassName — the PVC is provisioned and the server boots.
     fixture: tests/fixtures/neo4j-storage-dynamic-sc.yaml
     assert: storage-sc
     expect: success
     cr_name: st-dyn-sc
 
-  # Dynamic data with a non-existent storageClassName — operator stays Pending with
-  # StorageReady=False/PVCPending (message mentions the PVC), never Failed nor Ready.
   - id: dynamic-sc-fail
+    comment: Dynamic data volume with a non-existent storageClassName — the operator stays Pending with StorageReady=False/PVCPending, never Failed nor Ready.
     fixture: tests/fixtures/neo4j-storage-dynamic-sc-bad.yaml
     assert: storage-error
     expect: success
     cr_name: st-dyn-scbad
 
-  # Existing data referencing a pre-created PVC by claimName (bundled in the fixture).
   - id: claimname-ok
+    comment: Existing data volume referencing a pre-created PVC by claimName, bundled in the fixture.
     fixture: tests/fixtures/neo4j-storage-claimname.yaml
     assert: storage-claimname
     expect: success
     cr_name: st-claim
 
-  # Existing claimName pointing at a PVC that does not exist — operator stays Pending with
-  # StorageReady=False/PVCPending (message mentions the PVC), never Failed nor Ready.
   - id: claimname-fail
+    comment: claimName pointing at a PVC that does not exist — the operator stays Pending with StorageReady=False/PVCPending, never Failed nor Ready.
     fixture: tests/fixtures/neo4j-storage-claimname-missing.yaml
     assert: storage-error
     expect: success
     cr_name: st-claimmiss
 
-  # Existing data via a raw volumeClaimTemplate — operator provisions data-<cr>-server-0.
   - id: vct-ok
+    comment: Existing data volume via a raw volumeClaimTemplate — the operator provisions data-<cr>-server-0.
     fixture: tests/fixtures/neo4j-storage-vct.yaml
     assert: storage-vct
     expect: success
     cr_name: st-vct
 
-  # volumeClaimTemplate with a non-existent storageClassName — operator stays Pending with
-  # StorageReady=False/PVCPending (message mentions the PVC), never Failed nor Ready.
   - id: vct-fail
+    comment: volumeClaimTemplate with a non-existent storageClassName — the operator stays Pending with StorageReady=False/PVCPending, never Failed nor Ready.
     fixture: tests/fixtures/neo4j-storage-vct-bad.yaml
     assert: storage-error
     expect: success
     cr_name: st-vctbad
 
-  # Existing data via an inline emptyDir (ephemeral) — /data mounted, no PVC.
   - id: emptydir
+    comment: Existing data volume via an inline emptyDir (ephemeral) — /data is mounted and no PVC is created.
     fixture: tests/fixtures/neo4j-storage-emptydir.yaml
     assert: storage-emptydir
     expect: success
     cr_name: st-empty
 
-  # logs + metrics Share the data volume — verified as real mounts at /logs and /metrics.
   - id: share-logs-metrics
+    comment: logs and metrics Share the data volume — verified as real mounts at /logs and /metrics.
     fixture: tests/fixtures/neo4j-storage-share.yaml
     assert: storage-share
     expect: success
     cr_name: st-share
 
-  # additionalMounts with a random volume name — verified as a mount at its mountPath.
   - id: additional-mounts
+    comment: additionalMounts with an arbitrary volume name — verified as a mount at its mountPath.
     fixture: tests/fixtures/neo4j-storage-additional.yaml
     assert: storage-additional
     expect: success

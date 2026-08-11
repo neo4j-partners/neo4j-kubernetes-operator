@@ -57,12 +57,35 @@ See [config/readme.md](config/readme.md) for classic cases per domain.
 
 1. Add `actions/<domain>/<name>/run.sh` and `verify.sh`
 2. Add fixtures under `fixtures/` if needed
-3. Add cases to a suite in `suites/<name>.yaml` (reuse a pipeline from `pipelines/`)
+3. Add cases to a suite in `suites/<name>.yaml` (reuse a pipeline from `pipelines/`), each with
+   a `comment:` — see [Case comments](#case-comments) below
 4. Run: `./tests/bin/run-e2e.sh <suite>`
 5. Update [coverage.md](coverage.md) — tick the box or add the row for what the case asserts
 
 Suite naming convention: `workload-*` (topology), `feature-*` (topology-agnostic domain),
 `operator-*` (operator behavior). See [design.md](design.md).
+
+### Case comments
+
+Every case carries a `comment:` stating what it proves. The runner echoes it under the case
+banner, so a CI log reads on its own instead of forcing the reader to map a `cr_name` back to
+the suite file:
+
+```
+[14:22:07] ######################## CASE [2/3] ha-3-primaries ########################
+[14:22:07]   Smallest real HA topology (3 primaries, quorum of 3) with defaultPrimariesCount=3, so the neo4j database spans every primary.
+[14:22:07]   suite=workload-cluster case=ha-3-primaries cloud=local-kind assert= cr=e2e-cluster-ha expect=success
+```
+
+Rules the parser imposes (`suite_parse_cases` in [lib/suite.sh](lib/suite.sh) is line-based awk,
+not a YAML library):
+
+- One physical line — no folded (`>`) or multi-line scalars.
+- Plain scalar or double-quoted; the quotes are stripped before logging.
+- Avoid `: ` and ` #` inside the text so the file stays valid YAML.
+
+Rationale that only matters when reading the suite file (undecided behaviour, pointers to a
+decision record) stays a `#` comment above the case.
 
 ## Azure CI setup (maintainers)
 

@@ -19,4 +19,5 @@ pipeline:
 # (E2E_SCOPE_CR / E2E_SCOPE_NAMESPACE), not from case fields.
 cases:
   - id: unwatched-namespace-ignored
+    comment: OP-2-001-SCOPE-01 — the namespace-scoped operator reconciles its watched namespace, ignores a CR outside WATCH_NAMESPACE, and holds no cluster-wide RBAC.
     expect: success

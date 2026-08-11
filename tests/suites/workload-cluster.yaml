@@ -28,27 +28,22 @@ pipeline:
     - assert/status-conditions
 
 cases:
-  # Lab topology: 1 primary, no quorum. Cheap proof that Cluster mode renders,
-  # boots and forms — useful signal even on a resource-constrained runner.
   - id: lab-single-primary
+    comment: Lab topology of 1 primary, no quorum — cheap proof that Cluster mode renders, boots and forms on a small runner.
     fixture: tests/fixtures/neo4j-cluster-single.yaml
     neo4j_case: cluster-single
     expect: success
     cr_name: e2e-cluster-lab
 
-  # Smallest real HA topology: 3 primaries, quorum of 3. This is the case that
-  # proves genuine cluster formation rather than single-node Cluster rendering.
-  # defaultPrimariesCount is set to 3, so the neo4j database spans every primary.
   - id: ha-3-primaries
+    comment: Smallest real HA topology (3 primaries, quorum of 3) with defaultPrimariesCount=3, so the neo4j database spans every primary.
     fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
     neo4j_case: cluster-3primaries
     expect: success
     cr_name: e2e-cluster-ha
 
-  # Same shape with defaultPrimariesCount omitted: pins the default (1), where the
-  # neo4j database sits on a single primary and is only reachable from the other two
-  # through routing.
   - id: ha-3-primaries-default-db
+    comment: Same 3-primary shape with defaultPrimariesCount omitted — pins the default of 1, the neo4j database sits on one primary and the other two reach it through routing.
     fixture: tests/fixtures/neo4j-cluster-3primaries-default-db.yaml
     neo4j_case: cluster-3primaries-default-db
     expect: success

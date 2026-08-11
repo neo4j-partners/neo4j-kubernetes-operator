@@ -113,17 +113,17 @@ suite_load_merged_pipeline() {
 
 # Emit one row per case, delimited by ASCII Unit Separator (\037), in field order:
 # id, fixture, assert, expect, expect_contains, cr_name, neo4j_case, operator_case,
-# clouds, from_reconcile. US (a non-whitespace char) is used instead of tab so that
-# `read` preserves empty fields — tab collapses under IFS-whitespace splitting.
+# clouds, from_reconcile, comment. US (a non-whitespace char) is used instead of tab so
+# that `read` preserves empty fields — tab collapses under IFS-whitespace splitting.
 suite_parse_cases() {
   local file=$1
   awk '
     { sub(/\r$/, "") }
     function emit() {
       if (id == "") return
-      printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\n",
+      printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\037%s\n",
         id, fixture, assert, expect, expect_contains, cr_name,
-        neo4j_case, operator_case, clouds, from_reconcile
+        neo4j_case, operator_case, clouds, from_reconcile, comment
     }
     /^cases:/ { in_cases=1; next }
     in_cases && /^[^[:space:]#-]/ { emit(); exit }
@@ -131,8 +131,17 @@ suite_parse_cases() {
       emit()
       id=$3
       fixture=assert=expect=expect_contains=cr_name=""
-      neo4j_case=operator_case=clouds=""
+      neo4j_case=operator_case=clouds=comment=""
       from_reconcile="false"
+      next
+    }
+    # Free text echoed in the run log so a CI reader knows what the case proves without
+    # opening this file. Takes the whole line, minus optional surrounding quotes.
+    in_cases && /^    comment:/ {
+      comment=$0
+      sub(/^    comment:[[:space:]]*/, "", comment)
+      sub(/[[:space:]]+$/, "", comment)
+      if (comment ~ /^".*"$/) { sub(/^"/, "", comment); sub(/"$/, "", comment) }
       next
     }
     in_cases && /^    fixture:/ { fixture=$2; next }
@@ -172,9 +181,9 @@ suite_case_allowed_on_cloud() {
 apply_suite_case_row() {
   local row=$1
 
-  local id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile
+  local id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile comment
   # Split on US (\037); non-whitespace IFS keeps empty fields (tab would collapse them).
-  IFS=$'\037' read -r id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile <<<"${row}"
+  IFS=$'\037' read -r id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile comment <<<"${row}"
 
   if ! suite_case_allowed_on_cloud "${clouds}"; then
     log "SKIP case ${id} (cloud ${CLOUD_ID:-unset} not in [${clouds}])"
@@ -183,6 +192,7 @@ apply_suite_case_row() {
 
   export SUITE_CASE_ID="${id}"
   export SUITE_CASE_ASSERT="${assert}"
+  export SUITE_CASE_COMMENT="${comment}"
   export EXPECT_CONTAINS="${expect_contains}"
 
   if [[ -n "${operator_case}" && -n "${neo4j_case}" ]]; then

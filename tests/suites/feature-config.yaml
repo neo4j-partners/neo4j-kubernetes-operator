@@ -13,16 +13,15 @@ pipeline:
     - assert/{{assert}}
 
 cases:
-  # AC-NEO-CONFIG-001: a valid setting reaches the running server — SHOW SETTINGS over bolt
-  # must report the effective value the fixture set in spec.config.neo4j.
   - id: passthrough
+    comment: AC-NEO-CONFIG-001 — a valid setting reaches the running server, SHOW SETTINGS over bolt reports the value the fixture set in spec.config.neo4j.
     fixture: tests/fixtures/neo4j-config-valid.yaml
     assert: config-runtime
     expect: success
     cr_name: e2e-cfg-ok
 
-  # AC-NEO-CONFIG-002: an unknown setting is admitted but rejected by Neo4j at startup.
   - id: unknown-key
+    comment: AC-NEO-CONFIG-002 — an unknown setting is admitted by the operator but rejected by Neo4j at startup.
     fixture: tests/fixtures/neo4j-config-unknown.yaml
     assert: config-startup-error
     expect: success
@@ -31,30 +30,26 @@ cases:
     expect_contains: Unrecognized
     cr_name: e2e-cfg-unknown
 
-  # NEO-3-003-JVM-02: spec.config.jvm.additionalArguments take effect on the running server —
-  # SHOW SETTINGS server.jvm.additional over bolt must contain the custom flag.
   # NOTE: useDefaults (NEO-3-003-JVM-01) is intentionally NOT tested yet — its assertion
   # depends on how defaults get sourced (vendored .conf vs hardcoded list vs image), which
   # is undecided. See coverage.md and the jvm.useDefaults implementation issue.
   - id: jvm-additional-args
+    comment: NEO-3-003-JVM-02 — spec.config.jvm.additionalArguments take effect, SHOW SETTINGS server.jvm.additional contains the custom flag.
     fixture: tests/fixtures/neo4j-config-jvm.yaml
     assert: config-jvm-runtime
     expect: success
     cr_name: e2e-cfg-jvm
 
-  # NEO-3-003-APOC-01: apoc.* config renders into the dedicated <cr>-apoc-config (apoc.conf)
-  # when APOC is assigned via spec.plugins. This is the config-integrated APOC surface —
-  # runtime procedure availability belongs to the planned feature-plugins suite.
+  # Runtime procedure availability belongs to the planned feature-plugins suite.
   - id: apoc-config
+    comment: NEO-3-003-APOC-01 — apoc.* config renders into the dedicated <cr>-apoc-config (apoc.conf) when APOC is assigned via spec.plugins.
     fixture: tests/fixtures/neo4j-config-apoc.yaml
     assert: config-apoc-rendered
     expect: success
     cr_name: e2e-cfg-apoc
 
-  # NEO-2-010 / NEO-3-010-RSTR-01: changing spec.config on a running Neo4j is applied
-  # end-to-end — render (ConfigMap), rollout (STS pod-template revised = controlled
-  # restart), and runtime (SHOW SETTINGS on the restarted server reports the new value).
   - id: config-change-restart
+    comment: NEO-2-010 / NEO-3-010-RSTR-01 — changing spec.config on a running Neo4j is applied end-to-end, from ConfigMap render to controlled restart to the new value reported by SHOW SETTINGS.
     fixture: tests/fixtures/neo4j-standalone.yaml
     assert: config-restart
     expect: success
