@@ -32,7 +32,13 @@ scale_patch_members() {
 # as Enabled+Available. Pool members are addressed <cr>-<pool>-N.<ns>.svc...
 scale_count_pool_servers() {
   local password=$1 out
-  out="$(conn_show_servers "${NEO4J_STS_NAME}-0" "${password}")"
+  # -d system is mandatory, same as assert/cluster-formed: a direct bolt:// session
+  # defaults to the `neo4j` database, which only a subset of members may host. On a pod
+  # that does not host it the session is refused and this returns 0 — indistinguishable
+  # from "the pool really has no members". 2>&1 keeps the reason for the failure dump.
+  out="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${NEO4J_STS_NAME}-0" -c neo4j -- bash -c \
+    "cypher-shell -a bolt://localhost:7687 -d system -u neo4j -p '${password}' --format plain \
+     'SHOW SERVERS YIELD name,address,state,health;'" 2>&1 || true)"
   grep -c "${NEO4J_CR_NAME}-${SCALE_POOL}-.*\"Enabled\".*\"Available\"" <<<"${out}" || true
 }
 
@@ -70,9 +76,11 @@ scale_assert_members() {
     sleep 10
   done
   if [[ "${count:-0}" -ne "${want}" ]]; then
-    log "last SHOW SERVERS output was:"
-    conn_show_servers "${NEO4J_STS_NAME}-0" "${password}" >&2 || true
-    conn_dump_last_error
+    # stdout+stderr: a bare count hides a refused session behind "0 members".
+    log "last SHOW SERVERS attempt (stdout+stderr) was:"
+    kubectl exec -n "${NEO4J_NAMESPACE}" "${NEO4J_STS_NAME}-0" -c neo4j -- bash -c \
+      "cypher-shell -a bolt://localhost:7687 -d system -u neo4j -p '${password}' --format plain \
+       'SHOW SERVERS YIELD name,address,state,health;'" >&2 || true
     die "Neo4j reports ${count:-0} '${SCALE_POOL}' member(s) Enabled+Available after ${timeout}s, expected ${want}"
   fi
   log "Neo4j reports ${count} '${SCALE_POOL}' member(s) Enabled+Available"

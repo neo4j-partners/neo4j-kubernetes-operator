@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # assert/cluster-formed — AC-NEO-CLUSTER-002: the cluster actually forms and reaches
 # the expected minimum size. Pods being Running is NOT the same as a formed cluster,
-# so this asks Neo4j itself via `SHOW SERVERS` and requires every expected member to
-# be both Enabled (admitted to the cluster) and Available (serving).
+# so this asks Neo4j itself via `SHOW SERVERS` on the system database and requires every
+# expected member to be both Enabled (admitted to the cluster) and Available (serving).
 #
 # Also asserts the operator's own view agrees: the CR reports Ready=True with
 # AllMembersReady, i.e. status is honest about formation.
@@ -60,7 +60,14 @@ deadline=$((SECONDS + TIMEOUT_SECS))
 ok=0
 servers_out=""
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
-  servers_out="$(conn_show_servers "${POD}" "${password}")"
+  # -d system is mandatory: a direct bolt:// session defaults to the `neo4j` database,
+  # which topology.defaultPrimariesCount may host on a subset of the primaries. On a pod
+  # that does not host it the session is refused and this loop sees no output at all —
+  # reported as "cluster not formed" while the DBMS is healthy. SHOW SERVERS is a
+  # system-database command, so pin the session there.
+  servers_out="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
+    "cypher-shell -a bolt://localhost:7687 -d system -u neo4j -p '${password}' --format plain \
+     'SHOW SERVERS YIELD name,address,state,health;'" 2>&1 || true)"
   # Count rows that are both Enabled and Available (header line never matches both).
   count="$(grep -c '"Enabled".*"Available"' <<<"${servers_out}" || true)"
   if [[ "${count:-0}" -ge "${WANT}" ]]; then
@@ -71,9 +78,9 @@ while [[ "${SECONDS}" -lt "${deadline}" ]]; do
 done
 
 if [[ "${ok}" -ne 1 ]]; then
-  log "SHOW SERVERS output was:"
-  printf '%s\n' "${servers_out}" >&2
-  conn_dump_last_error
+  # stdout+stderr: an empty dump used to hide the cypher-shell error behind a bare count.
+  log "last SHOW SERVERS attempt (stdout+stderr) was:"
+  printf '%s\n' "${servers_out:-<no output at all — cypher-shell did not run or was refused>}" >&2
   kubectl get pods -n "${NEO4J_NAMESPACE}" -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" -o wide >&2 || true
   die "only ${count:-0}/${WANT} server(s) Enabled+Available within ${TIMEOUT_SECS}s — cluster not formed"
 fi

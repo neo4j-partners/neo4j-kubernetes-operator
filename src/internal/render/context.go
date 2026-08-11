@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
@@ -159,7 +162,10 @@ func (c Context) PoolReplicas() int32 {
 	return 0
 }
 
-// ClusterDomain returns the Kubernetes cluster DNS suffix for discovery FQDNs.
+// ClusterDomain returns the Kubernetes cluster DNS suffix for Neo4j-advertised
+// FQDNs (CLUSTER_DOMAIN, discovery, routing enforce_for_domains). It must not be
+// used when the operator dials Bolt with admin credentials (ADD-01) — see
+// formation.ClientBoltURI.
 func (c Context) ClusterDomain() string {
 	if c.Neo4j.Spec.Connectivity != nil && c.Neo4j.Spec.Connectivity.ClusterDomain != "" {
 		return c.Neo4j.Spec.Connectivity.ClusterDomain
@@ -187,6 +193,35 @@ func (c Context) CommonLabels(component string) map[string]string {
 		LabelManagedBy: ManagedByValue,
 		LabelComponent: component,
 	}
+}
+
+// OperandInstanceLabels are provenance labels that must match before the operator
+// deletes instance-scoped objects (ADD-04). app.kubernetes.io/instance alone is
+// a shared Helm convention and is not sufficient.
+func OperandInstanceLabels(neo4jName string) map[string]string {
+	return map[string]string{
+		LabelName:      AppNameValue,
+		LabelInstance:  neo4jName,
+		LabelManagedBy: ManagedByValue,
+	}
+}
+
+// StoragePVCSelector lists Dynamic PVCs created for this Neo4j instance.
+func StoragePVCSelector(neo4jName string) labels.Selector {
+	m := OperandInstanceLabels(neo4jName)
+	m[LabelComponent] = "storage"
+	return labels.SelectorFromSet(m)
+}
+
+// HasOperandLabels reports whether obj carries operator provenance for neo4jName.
+func HasOperandLabels(obj metav1.Object, neo4jName string) bool {
+	l := obj.GetLabels()
+	if l == nil {
+		return false
+	}
+	return l[LabelName] == AppNameValue &&
+		l[LabelInstance] == neo4jName &&
+		l[LabelManagedBy] == ManagedByValue
 }
 
 // WorkloadLabels returns selector labels for StatefulSet pods and Services.
@@ -253,6 +288,27 @@ func (c Context) MinimumMembers() int32 {
 		return 1
 	}
 	return min
+}
+
+// DefaultPrimariesCount returns initial.dbms.default_primaries_count.
+// Defaults to 1 when unset (decoupled from minimumMembers / HA formation size).
+// Clamped to [1, primaries.members].
+func (c Context) DefaultPrimariesCount() int32 {
+	primaries := int32(1)
+	if c.Neo4j.Spec.Topology.Primaries != nil && c.Neo4j.Spec.Topology.Primaries.Members > 0 {
+		primaries = c.Neo4j.Spec.Topology.Primaries.Members
+	}
+	n := int32(1)
+	if c.Neo4j.Spec.Topology.DefaultPrimariesCount != nil {
+		n = *c.Neo4j.Spec.Topology.DefaultPrimariesCount
+	}
+	if n > primaries {
+		return primaries
+	}
+	if n < 1 {
+		return 1
+	}
+	return n
 }
 
 // BoltPort returns the Bolt listen port (default 7687).

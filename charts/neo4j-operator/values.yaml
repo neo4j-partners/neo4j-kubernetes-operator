@@ -3,8 +3,11 @@
 
 image:
   repository: neo4joperatoracr.azurecr.io/neo4j-operator
-  tag: latest
-  pullPolicy: Always
+  # Empty → Chart.appVersion (immutable semver). Avoid latest in production.
+  tag: ""
+  # Optional sha256:... — when set, rendered as repository@digest (ignores tag).
+  digest: ""
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
@@ -14,8 +17,20 @@ watchNamespaces:
 
 replicaCount: 1
 
-# Extra args appended after --leader-elect / health probe bind.
+# Extra args appended after --leader-elect / health probe / logging args.
 extraArgs: []
+
+# Operator logging (ADR-014). stderr = essentials; optional file may be more verbose.
+logging:
+  # --zap-log-level: debug | info | error
+  level: info
+  # --zap-devel: console encoder + debug defaults
+  devel: false
+  file:
+    enabled: false
+    level: debug
+    mountPath: /var/log/neo4j-operator
+    filename: operator.log
 
 resources:
   limits:
@@ -59,3 +74,21 @@ fullnameOverride: ""
 # When true, NOTES remind you to install the CRD via server-side apply.
 crd:
   installHint: true
+
+# Validating admission webhook (NEO-001). Off by default — enable with cert-manager
+# (or supply webhook.caBundle + a TLS Secret named webhook.secretName).
+webhook:
+  enabled: false
+  failurePolicy: Fail
+  timeoutSeconds: 10
+  secretName: neo4j-operator-webhook-certs
+  # Base64 CA when certManager.enabled is false (required in that mode).
+  caBundle: ""
+  certManager:
+    enabled: true
+    # Create a namespaced self-signed Issuer named issuerRef.name (skip for ClusterIssuer).
+    createIssuer: true
+    issuerRef:
+      name: selfsigned-issuer
+      kind: Issuer
+      # group: cert-manager.io

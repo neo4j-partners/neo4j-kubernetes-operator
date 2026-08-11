@@ -13,6 +13,8 @@ export E2E_ASSERT_NEO4J_READY=true
 export AUTH_SECRET_CREATE=true
 export AUTH_SECRET_NAME="${AUTH_SECRET_NAME:-neo4j-auth}"
 export AUTH_KNOWN_PASSWORD="${AUTH_KNOWN_PASSWORD:-ClientPass123}"
+# Set explicitly so a preceding negative case cannot leak its label mode into this one.
+export AUTH_SECRET_LABELS=full
 
 # assert/credentials expectations.
 export CRED_EXPECT_GENERATED=false

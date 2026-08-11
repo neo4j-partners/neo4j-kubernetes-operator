@@ -29,8 +29,10 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 | TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
 | TOPO-009 | `minimumMembers > primaries.members` | Error | CEL | `minimumMembers` cannot exceed `primaries.members` (only primaries form the system quorum; secondaries analytics/read do not count) |
 | TOPO-010 | Primary scale-in below quorum / unsafe pool scale-in | Error | Webhook | Scale-in would break primary quorum or remove members before drain completes |
-| TOPO-011 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
+| TOPO-011 | STS scale-down gated by `status.drainOK` + matching `drainOKGeneration` (not CR annotations) | — | Reconciler | (ADD-02; forgeable `neo4j.com/drain-ok` ignored) |
+| TOPO-012 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
+| TOPO-014 | `minimumMembers` immutable after create | Error | CEL (+ webhook) | `topology.minimumMembers cannot change after create` — scale via `primaries.members` only |
 
 ### CEL sketches (topology)
 
@@ -69,6 +71,14 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
     !has(self.topology.primaries.members) ||
     self.topology.minimumMembers <= self.topology.primaries.members
   message: minimumMembers cannot exceed primaries.members (only primaries can form system quorum)
+
+# TOPO-014 — minimumMembers immutable (bootstrap / system formation size only)
+- rule: |
+    self == oldSelf ||
+    ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) ||
+     (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) &&
+      self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
+  message: topology.minimumMembers cannot change after create
 ```
 
 ---
@@ -165,7 +175,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | STO-007 | `mode: Share` on aux requires `shareFrom: data` (V1) | Error | CEL | invalid shareFrom |
 | STO-008 | `additionalMounts[].name` unique in pod | Error | CEL | duplicate additional mount name |
 | STO-009 | `mountPath` must not overlap reserved paths (`/data`, `/var/lib/neo4j/certificates/`) | Error | Webhook | reserved mount path |
-| STO-010 | `secretMounts.*.secretName` must exist | Error | Webhook | secretMounts secret not found |
+| STO-010 | `secretMounts.*.secretName` must exist | Error | Webhook / Reconciler | secretMounts secret not found |
+| STO-011 | `secretMounts.*.items` required (named keys only) | Error | Webhook / Reconciler | items is required (NEO-005) |
+| STO-012 | Secret referenced by `secretMounts` / auth / TLS / plugin license must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
 | STO-005 | `accessMode` must be `ReadWriteOnce` for data (V1) | Error | CEL | V1 data volume supports ReadWriteOnce only |
 
 ---
@@ -176,7 +188,10 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 |----|------|----------|-----------|---------|
 | AUTH-001 | `generatePassword: true` XOR valid `passwordSecretRef` | Error | CEL | provide generatePassword or passwordSecretRef, not both |
 | AUTH-002 | `passwordSecretRef` must reference existing Secret | Error | Webhook | password secret not found |
+| AUTH-002b | `passwordSecretRef` Secret must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
+| AUTH-002c | `passwordSecretRef` Secret must be delegated (`neo4j.com/allowed-for=<CR name>` or operator-managed for this instance) | Error | Webhook / Reconciler | auth secret not delegated (ADD-01) |
 | AUTH-003 | `ldap.enabled: true` requires `ldap.passwordSecretRef` | Error | CEL | LDAP requires password secret (V2 — NEO-3-004-SEC-02) |
+| AUTH-004 | Operator admin Bolt dial uses short Service DNS only (ignores `connectivity.clusterDomain`) | — | Reconciler | (hard-coded; ADD-01) |
 
 ---
 
@@ -194,6 +209,9 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | TLS-005 | `mode: Cluster` + cluster policy enabled → `clientAuth` cannot be `None` | Error | CEL | cluster mTLS requires clientAuth Require |
 | TLS-006 | `clientAuth` set on a policy requires that policy's TLS material (key/cert or cert-manager secretName) | Error | CEL | clientAuth requires enabled TLS policy |
 | TLS-007 | `certManager.includeIngressHosts: true` requires at least one `connectivity.ingress.rules[].host` | Error | CEL | includeIngressHosts requires ingress rule hosts |
+| TLS-008 | `trustedCerts.sources` allow only `secret` or `configMap` (no `serviceAccountToken` / `downwardAPI` / `clusterTrustBundle`) | Error | Webhook / Reconciler | projection type not allowed (NEO-005) |
+| TLS-009 | `trustedCerts.sources[].secret|configMap.items` required | Error | Webhook / Reconciler | items is required (NEO-005) |
+| TLS-010 | BYO TLS Secrets must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
 
 ---
 
@@ -294,7 +312,7 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| SCH-001 | `podDisruptionBudget.minAvailable` ≤ total replicas | Error | Webhook | PDB minAvailable exceeds member count |
+| SCH-001 | `podDisruptionBudget.minAvailable` must be < total members (int); `100%` rejected | Error | Webhook + reconciler | Unsatisfiable PDB blocks node drains (ADD-03) |
 | SCH-002 | `podDisruptionBudget.enabled: true` requires `mode: Cluster` with ≥2 members | Warning | Webhook | PDB has limited effect on single-member topology |
 
 ---

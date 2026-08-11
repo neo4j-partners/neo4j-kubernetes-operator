@@ -13,6 +13,7 @@ rules:
   - configmaps
   - endpoints
   - persistentvolumeclaims
+  - pods
   - secrets
   - serviceaccounts
   - services
@@ -131,6 +132,7 @@ rules:
   - configmaps
   - endpoints
   - persistentvolumeclaims
+  - pods
   - secrets
   - serviceaccounts
   - services

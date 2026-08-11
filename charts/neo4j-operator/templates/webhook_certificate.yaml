@@ -1,0 +1,32 @@
+{{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+{{- if and .Values.webhook.certManager.createIssuer (eq .Values.webhook.certManager.issuerRef.kind "Issuer") }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.webhook.certManager.issuerRef.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+{{- end }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: neo4j-operator-serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.webhook.secretName }}
+  dnsNames:
+  - neo4j-operator-webhook-service.{{ .Release.Namespace }}.svc
+  - neo4j-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: {{ .Values.webhook.certManager.issuerRef.kind }}
+    name: {{ .Values.webhook.certManager.issuerRef.name }}
+    {{- if .Values.webhook.certManager.issuerRef.group }}
+    group: {{ .Values.webhook.certManager.issuerRef.group }}
+    {{- end }}
+{{- end }}

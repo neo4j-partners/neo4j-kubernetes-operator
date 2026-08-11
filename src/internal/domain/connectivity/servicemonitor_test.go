@@ -102,3 +102,32 @@ func TestReconcileServiceMonitorCreatesWhenEnabled(t *testing.T) {
 		t.Fatalf("get ServiceMonitor: %v", err)
 	}
 }
+
+func TestReconcileServiceMonitorSkipsForeign(t *testing.T) {
+	scheme := testScheme(t)
+	foreign := &unstructured.Unstructured{}
+	foreign.SetAPIVersion("monitoring.coreos.com/v1")
+	foreign.SetKind("ServiceMonitor")
+	foreign.SetName("dev-servicemonitor")
+	foreign.SetNamespace("default")
+	foreign.SetLabels(map[string]string{"app": "other"})
+	_ = unstructured.SetNestedMap(foreign.Object, map[string]any{"selector": map[string]any{}}, "spec")
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(foreign).Build()
+	r := connectivity.New(c, scheme)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default", UID: "cr-uid"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		},
+	}
+	out := r.Reconcile(t.Context(), neo4j)
+	if out.Err != nil {
+		t.Fatalf("reconcile: %v", out.Err)
+	}
+	got := &unstructured.Unstructured{}
+	got.SetGroupVersionKind(foreign.GroupVersionKind())
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(foreign), got); err != nil {
+		t.Fatalf("foreign ServiceMonitor must remain: %v", err)
+	}
+}

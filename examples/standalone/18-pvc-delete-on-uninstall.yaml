@@ -1,5 +1,5 @@
 # Ephemeral lab — wipe Dynamic PVCs when the Neo4j CR is deleted (OP-2-005-UNINST-02).
-# Purpose: volumeClaimRetention.whenDeleted=Delete. Default is Retain (production-safe).
+# Purpose: volumeClaimRetention.whenDeleted=Delete at create (pinned in status; late flip ignored — ADD-06).
 # Prerequisites: Dynamic data volume (Existing.claimName PVCs are never deleted).
 # Apply: kubectl apply -f examples/standalone/18-pvc-delete-on-uninstall.yaml
 # Delete: kubectl delete neo4j lab-ephemeral -n default  # STS + Dynamic PVCs go away

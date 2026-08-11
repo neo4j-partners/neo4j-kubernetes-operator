@@ -9,7 +9,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | Suite | File | Description |
 |-------|------|-------------|
 | `workload-standalone` | [suites/workload-standalone.yaml](suites/workload-standalone.yaml) | Positive Standalone (happy path / matrix) |
-| `workload-cluster` | [suites/workload-cluster.yaml](suites/workload-cluster.yaml) | Cluster mode — members created, cluster forms, routing works (1-primary lab + 3-primary HA) |
+| `workload-cluster` | [suites/workload-cluster.yaml](suites/workload-cluster.yaml) | Cluster mode — members created, cluster forms, default database allocated on the declared primaries, routing works (1-primary lab + 3-primary HA) |
 | `workload-scale` | [suites/workload-scale.yaml](suites/workload-scale.yaml) | Secondary pool scaled out and back in, with `ENABLE SERVER` / drain verified through Neo4j |
 | `feature-connectivity` | [suites/feature-connectivity.yaml](suites/feature-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
 | `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010) |
@@ -44,6 +44,9 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Deploy 3-primary HA topology: genuine quorum formation — NEO-2-002-MODE-01 · AC-NEO-CLUSTER-002
 - [x] Members created as pool StatefulSets (`<cr>-primary-N`) — NEO-2-002-CSZ-01
 - [x] Cluster forms (`SHOW SERVERS`: Enabled + Available) — AC-NEO-CLUSTER-002
+- [x] Default database allocated on `topology.defaultPrimariesCount` primaries (`SHOW DATABASES`: requested = current)
+- [x] `defaultPrimariesCount` omitted → the documented default of 1 primary, on a 3-primary cluster
+- [x] Default database reachable via `neo4j://` from members that do not host it (direct `bolt://` may be refused)
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
 - [ ] Cluster TLS material (`spec.trust`) — NEO-3-005-TLS-03 · AC-NEO-TLS (no TLS case yet)
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02

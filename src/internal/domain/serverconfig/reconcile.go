@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
@@ -26,10 +27,13 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	if err := rendercfg.ValidateConfig(neo4j); err != nil {
+		log.Error(err, "serverconfig validation failed")
 		return shared.Failed(err)
 	}
 	if err := rendercfg.ValidateLogging(neo4j); err != nil {
+		log.Error(err, "logging config validation failed")
 		return shared.Failed(err)
 	}
 	baseCtx := render.StandaloneContext(neo4j)
@@ -39,6 +43,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		desired := rendercfg.ConfigMap(ctxRender)
+		log.Info("reconciling neo4j.conf configmap", "pool", string(pool), "name", desired.Name)
 		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace}}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, cm, func() error {
 			cm.Labels = desired.Labels
@@ -49,6 +54,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		}
 
 		if apocDesired := rendercfg.ApocConfigMap(ctxRender); apocDesired != nil {
+			log.Info("reconciling apoc configmap", "pool", string(pool), "name", apocDesired.Name)
 			apocCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: apocDesired.Name, Namespace: apocDesired.Namespace}}
 			if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, apocCM, func() error {
 				apocCM.Labels = apocDesired.Labels

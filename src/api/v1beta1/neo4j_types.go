@@ -22,7 +22,7 @@ import (
 )
 
 // Neo4jSpec defines the desired state of Neo4j.
-// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries) && !has(self.topology.minimumMembers))",message="members fields are not allowed when mode is Standalone"
+// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries) && !has(self.topology.minimumMembers) && !has(self.topology.defaultPrimariesCount))",message="members fields are not allowed when mode is Standalone"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || (has(self.topology.primaries) && has(self.topology.primaries.members) && self.topology.primaries.members >= 1)",message="primaries.members is required when mode is Cluster"
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.secondaries) || (has(self.topology.primaries) && has(self.topology.primaries.members))",message="primaries.members must be set before secondaries"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || !has(self.topology.secondaries)",message="Secondaries require mode: Cluster"
@@ -32,6 +32,8 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.secondaries) || !has(self.topology.secondaries.read) || self.topology.secondaries.read.members >= 1",message="read pool members must be at least 1 when pool is configured"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || !has(self.topology.minimumMembers)",message="minimumMembers not allowed in Standalone"
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.minimumMembers) || !has(self.topology.primaries) || !has(self.topology.primaries.members) || self.topology.minimumMembers <= self.topology.primaries.members",message="minimumMembers cannot exceed primaries.members (only primaries can form system quorum)"
+// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || !has(self.topology.defaultPrimariesCount)",message="defaultPrimariesCount not allowed in Standalone"
+// +kubebuilder:validation:XValidation:rule="!has(self.topology.defaultPrimariesCount) || !has(self.topology.primaries) || !has(self.topology.primaries.members) || self.topology.defaultPrimariesCount <= self.topology.primaries.members",message="defaultPrimariesCount cannot exceed primaries.members"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.topology.primaries) || !has(self.topology.primaries.plugins) || self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')",message="GDS and Bloom cannot be installed on primary members in Cluster mode"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.plugins)",message="spec.plugins is not allowed when mode is Cluster"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries))",message="use spec.plugins in standalone mode"
@@ -48,6 +50,7 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.listeners) || !has(self.connectivity.listeners.backup) || (has(self.features) && has(self.features.backup) && self.features.backup.enabled == true)",message="backup listener requires features.backup.enabled"
 // +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.listeners) || !has(self.connectivity.listeners.metrics) || (has(self.features) && has(self.features.monitoring) && has(self.features.monitoring.prometheus) && self.features.monitoring.prometheus.enabled == true)",message="metrics listener requires features.monitoring.prometheus.enabled"
 // +kubebuilder:validation:XValidation:rule="!has(self.config) || !has(self.config.neo4j) || !has(self.features) || !has(self.features.backup) || !('server.backup.listen_address' in self.config.neo4j)",message="use connectivity.listeners.backup for backup listen address"
+// +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.service) || self.connectivity.service.type != 'LoadBalancer' || (has(self.connectivity.service.loadBalancerSourceRanges) && size(self.connectivity.service.loadBalancerSourceRanges) > 0)",message="connectivity.service.loadBalancerSourceRanges is required when service type is LoadBalancer"
 type Neo4jSpec struct {
 	// Edition selects the Neo4j product tier (V1: enterprise only).
 	// +kubebuilder:validation:Required
@@ -128,6 +131,20 @@ type Neo4jStatus struct {
 	ClusterInfo *ClusterInfoStatus `json:"clusterInfo,omitempty"`
 	// ReadPoolReplicas is the observed replica count of the read pool StatefulSet (scale subresource).
 	ReadPoolReplicas *int32 `json:"readPoolReplicas,omitempty"`
+	// DrainOK maps pool id → replica floor safe to shrink to after operator-verified
+	// DEALLOCATE/DROP (ADD-02). Operator-owned status only — never trust CR annotations.
+	DrainOK map[string]int32 `json:"drainOK,omitempty"`
+	// DrainOKGeneration is metadata.generation when DrainOK was last written.
+	// Shrink is allowed only when this equals the current Generation.
+	DrainOKGeneration int64 `json:"drainOKGeneration,omitempty"`
+	// PrimaryReplicasCap holds the primary STS ceiling while system has a single primary
+	// (ADD-02 — was a forgeable annotation). Nil means no cap.
+	PrimaryReplicasCap *int32 `json:"primaryReplicasCap,omitempty"`
+	// VolumeClaimRetentionWhenDeleted is the whenDeleted policy pinned on first reconcile
+	// (ADD-06). Uninstall wipe and STS whenDeleted honor this snapshot — a late spec flip
+	// to Delete cannot silently arm data destruction.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	VolumeClaimRetentionWhenDeleted *VolumeClaimRetentionPolicyType `json:"volumeClaimRetentionWhenDeleted,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -141,6 +158,7 @@ type Neo4jStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode",message="topology.mode cannot change"
+// +kubebuilder:validation:XValidation:rule="self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))",message="topology.minimumMembers cannot change after create"
 type Neo4j struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

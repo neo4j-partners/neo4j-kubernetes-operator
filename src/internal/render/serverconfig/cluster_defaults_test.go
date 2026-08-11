@@ -30,8 +30,8 @@ func TestClusterNeo4jConfInjected(t *testing.T) {
 		"server.http.listen_address":                 ":7474",
 		"server.http.enabled":                        "true",
 		"server.bolt.listen_address":                 ":7687",
-		"initial.dbms.default_primaries_count":       "3", // defaults to primaries.members
-		"dbms.cluster.minimum_initial_system_primaries_count": "3",
+		"initial.dbms.default_primaries_count":       "1", // defaultPrimariesCount unset → 1
+		"dbms.cluster.minimum_initial_system_primaries_count": "3", // minimumMembers unset → primaries.members
 		"dbms.cluster.discovery.resolver_type":       "K8S",
 		"dbms.kubernetes.discovery.service_port_name": "tcp-tx",
 		"dbms.kubernetes.label_selector": "app.kubernetes.io/name=neo4j,app.kubernetes.io/instance=prod,neo4j.com/service=internals,neo4j.com/clustering=true",
@@ -71,11 +71,52 @@ func TestMinimumMembersDrivesFormationConf(t *testing.T) {
 		},
 	}
 	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
-	if data["initial.dbms.default_primaries_count"] != "2" {
-		t.Fatalf("default_primaries_count = %q, want 2 from minimumMembers", data["initial.dbms.default_primaries_count"])
+	if data["initial.dbms.default_primaries_count"] != "1" {
+		t.Fatalf("default_primaries_count = %q, want 1 (unset defaultPrimariesCount)", data["initial.dbms.default_primaries_count"])
 	}
 	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "2" {
-		t.Fatalf("minimum_initial_system_primaries_count = %q, want 2", data["dbms.cluster.minimum_initial_system_primaries_count"])
+		t.Fatalf("minimum_initial_system_primaries_count = %q, want 2 from minimumMembers", data["dbms.cluster.minimum_initial_system_primaries_count"])
+	}
+}
+
+func TestDefaultPrimariesCountDrivesDefaultDBTopology(t *testing.T) {
+	def := int32(3)
+	min := int32(3)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:                  neo4jv1beta1.TopologyModeCluster,
+				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
+				MinimumMembers:        &min,
+				DefaultPrimariesCount: &def,
+			},
+		},
+	}
+	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
+	if data["initial.dbms.default_primaries_count"] != "3" {
+		t.Fatalf("default_primaries_count = %q, want 3 from defaultPrimariesCount", data["initial.dbms.default_primaries_count"])
+	}
+	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "3" {
+		t.Fatalf("minimum_initial_system_primaries_count = %q, want 3", data["dbms.cluster.minimum_initial_system_primaries_count"])
+	}
+}
+
+func TestDefaultPrimariesCountClampedToPrimaries(t *testing.T) {
+	def := int32(5)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:                  neo4jv1beta1.TopologyModeCluster,
+				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
+				DefaultPrimariesCount: &def,
+			},
+		},
+	}
+	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
+	if data["initial.dbms.default_primaries_count"] != "3" {
+		t.Fatalf("expected clamp to primaries.members=3, got %q", data["initial.dbms.default_primaries_count"])
 	}
 }
 

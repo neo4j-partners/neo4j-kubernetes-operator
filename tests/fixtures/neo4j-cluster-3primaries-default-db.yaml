@@ -1,0 +1,30 @@
+# Cluster mode with 3 primaries and NO defaultPrimariesCount — pins the documented
+# default (1), i.e. an HA DBMS whose default database lives on a single primary.
+# Identical to examples/cluster/01-minimal-3-primaries.yaml, which is what a user gets
+# when the field is omitted.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true

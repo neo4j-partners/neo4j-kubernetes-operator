@@ -51,13 +51,13 @@ spec:
 | `storage` | Volumes, extra mounts, secret mounts ([BDR-005](../../02-technical-design/decision-records/business/neo4j/005-storage-volume-mode.md)) |
 | `storage.volumes.data` | **Required** — `Dynamic` or `Existing` (`claimName` / `volume` / `volumeClaimTemplate`) |
 | `storage.volumes.*` | Aux: `backups`, `logs`, `metrics`, `import`, `licenses` — `Share` / `Dynamic` / `Existing` |
-| `storage.additionalMounts` / `secretMounts` | Escape-hatch mounts |
+| `storage.additionalMounts` / `secretMounts` | Escape-hatch mounts (`secretMounts` needs `items` + `neo4j.com/mountable-by-operator` — [NEO-005](../../../examples/secrets/README.md#mountable-secrets-neo-005)) |
 | `config.neo4j` | `neo4j.conf` drop-in keys |
 | `config.apoc` | `apoc.conf` drop-in keys |
 | `config.jvm` | JVM arguments |
-| `auth` | Generated or referenced password Secret |
-| `connectivity` | Listen ports, Services, Ingress (Ingress deferred) |
-| `trust` | BYO TLS for bolt / https / cluster |
+| `auth` | Generated or referenced password Secret (BYO: mountable + `allowed-for=<CR name>`) |
+| `connectivity` | Listen ports, Services, Ingress (Ingress deferred); `clusterDomain` for advertised DNS only (ADD-01) |
+| `trust` | BYO TLS for bolt / https / cluster (`trustedCerts.items` + mountable Secrets — NEO-005) |
 | `scheduling` | nodeSelector, affinity, tolerations, … |
 | `features` | Backup connector, monitoring prometheus + ServiceMonitor (CSV/JMX/Graphite deferred) |
 

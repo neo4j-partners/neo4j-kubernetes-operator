@@ -41,6 +41,7 @@ This estate is separate from product and design documentation:
 | [02-installation.md](operator/02-installation.md) | Install operator (generic — all platforms) |
 | [03-uninstall.md](operator/03-uninstall.md) | Remove operator |
 | [04-troubleshooting.md](operator/04-troubleshooting.md) | Common issues |
+| [05-logging.md](operator/05-logging.md) | Log levels, stdout vs file |
 
 ### Neo4j workload
 
@@ -55,6 +56,7 @@ This estate is separate from product and design documentation:
 | Doc | Description |
 |-----|-------------|
 | [api-cheatsheet.md](reference/api-cheatsheet.md) | Short API summary |
+| [error-overview.md](reference/error-overview.md) | Condition reasons (test oracle) |
 
 ---
 

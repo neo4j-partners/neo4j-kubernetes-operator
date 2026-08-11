@@ -5,6 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 )
 
 // AuthSecret builds the bootstrap auth Secret (NEO4J_AUTH).
@@ -13,7 +14,7 @@ func AuthSecret(ctx render.Context, password string) *corev1.Secret {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.AuthSecretName(),
 			Namespace: ctx.Namespace(),
-			Labels:    ctx.CommonLabels("workload"),
+			Labels:    rendersecrets.WithMountableLabel(ctx.CommonLabels("workload")),
 		},
 		Type: corev1.SecretTypeOpaque,
 		StringData: map[string]string{

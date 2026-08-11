@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,12 +28,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	neo4jctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4j"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
 )
 
 var (
@@ -50,15 +52,26 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var secureMetrics bool
+	var enableWebhooks bool
+	var webhookCertDir string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", false, "If set, the metrics endpoint is served securely.")
-	opts := zap.Options{Development: true}
-	opts.BindFlags(flag.CommandLine)
+	flag.BoolVar(&enableWebhooks, "enable-webhooks", false, "Register the Neo4j validating admission webhook (requires TLS certs).")
+	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory with tls.crt and tls.key for the webhook server.")
+	// Production JSON by default (ADR-014); --zap-devel for console. Optional --log-file tees verbose logs.
+	logOpts := logging.Options{}
+	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	rootLog, closeLog, err := logging.New(logOpts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid logging config: %v\n", err)
+		os.Exit(1)
+	}
+	defer closeLog()
+	ctrl.SetLogger(rootLog)
 
 	namespaces, err := watchNamespaces()
 	if err != nil {
@@ -71,7 +84,7 @@ func main() {
 	}
 	setupLog.Info("watching namespaces", "namespaces", namespaces)
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgrOpts := ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress:   metricsAddr,
@@ -80,12 +93,19 @@ func main() {
 				func(cfg *tls.Config) { cfg.MinVersion = tls.VersionTLS12 },
 			},
 		},
-		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "neo4j.com.neo4j-operator",
 		Cache:                  cache.Options{DefaultNamespaces: defaultNamespaces},
-	})
+	}
+	if enableWebhooks {
+		mgrOpts.WebhookServer = webhook.NewServer(webhook.Options{
+			Port:    9443,
+			CertDir: webhookCertDir,
+		})
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -94,6 +114,17 @@ func main() {
 	if err := neo4jctrl.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Neo4j")
 		os.Exit(1)
+	}
+
+	if enableWebhooks {
+		if err := ctrl.NewWebhookManagedBy(mgr).
+			For(&neo4jv1beta1.Neo4j{}).
+			WithValidator(&validation.Neo4jValidator{Client: mgr.GetClient()}).
+			Complete(); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Neo4j")
+			os.Exit(1)
+		}
+		setupLog.Info("neo4j validating webhook registered", "certDir", webhookCertDir)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

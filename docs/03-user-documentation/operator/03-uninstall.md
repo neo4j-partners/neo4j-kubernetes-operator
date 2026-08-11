@@ -33,7 +33,7 @@ kubectl delete neo4j dev -n default
 
 Default uninstall **preserves PersistentVolumeClaims** (`storage.volumeClaimRetention.whenDeleted` defaults to `Retain`, OP-2-005-UNINST-01).
 
-For ephemeral labs, opt into wipe:
+For ephemeral labs, opt into wipe **at create time**:
 
 ```yaml
 spec:
@@ -42,14 +42,17 @@ spec:
       whenDeleted: Delete   # also set whenScaled: Delete to drop PVCs on scale-down
 ```
 
-That sets StatefulSet `persistentVolumeClaimRetentionPolicy` and, on CR delete, removes Dynamic PVCs labeled for the instance. **`Existing.claimName` PVCs are never deleted.**
+The operator pins that choice into `status.volumeClaimRetentionWhenDeleted` on first reconcile (ADD-06). A later patch of `whenDeleted: Delete` does **not** arm wipe-on-uninstall or flip the StatefulSet retention — delete the CR and recreate if you need ephemeral semantics.
+
+That sets StatefulSet `persistentVolumeClaimRetentionPolicy` and, on CR delete, removes Dynamic PVCs labeled for the instance (`app.kubernetes.io/name=neo4j`, `managed-by=neo4j-operator`, plus storage component) — never a foreign Helm release that only shares `app.kubernetes.io/instance` (ADD-04). **`whenScaled: Delete`** is also required for the operator to wipe drained ordinals after scale-in (default `Retain` keeps those PVCs — NEO-007). **`Existing.claimName` PVCs are never deleted.**
 
 Example: [`examples/standalone/18-pvc-delete-on-uninstall.yaml`](../../examples/standalone/18-pvc-delete-on-uninstall.yaml).
 
 Manual reclaim when using Retain:
 
 ```bash
-kubectl delete pvc -n default -l app.kubernetes.io/instance=dev,app.kubernetes.io/component=storage
+kubectl delete pvc -n default \
+  -l app.kubernetes.io/instance=dev,neo4j.com/component=storage,app.kubernetes.io/managed-by=neo4j-operator
 ```
 
 ## Remove CRD (destructive)

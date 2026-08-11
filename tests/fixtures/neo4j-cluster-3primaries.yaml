@@ -1,5 +1,6 @@
 # Cluster mode with 3 primaries — smallest real HA topology (quorum of 3).
-# Mirrors examples/cluster/01-minimal-3-primaries.yaml.
+# Mirrors examples/cluster/01-minimal-3-primaries.yaml, except defaultPrimariesCount,
+# which the example leaves at its default of 1.
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
@@ -14,6 +15,9 @@ spec:
     primaries:
       members: 3
     minimumMembers: 3
+    # Explicit: the default is 1, which would host the `neo4j` database on a single
+    # primary — an HA DBMS with non-HA data. 3 keeps data on every primary.
+    defaultPrimariesCount: 3
   storage:
     volumes:
       data:

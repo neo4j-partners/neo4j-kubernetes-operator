@@ -348,6 +348,12 @@ func TestSecurityContextOverrides(t *testing.T) {
 	if len(csc.Capabilities.Add) != 1 || csc.Capabilities.Add[0] != "NET_BIND_SERVICE" {
 		t.Fatalf("capabilities = %#v", csc.Capabilities)
 	}
+	if csc.Privileged == nil || *csc.Privileged {
+		t.Fatalf("privileged must stay false after merge, got %#v", csc.Privileged)
+	}
+	if csc.RunAsNonRoot == nil || !*csc.RunAsNonRoot {
+		t.Fatalf("defaults must merge (runAsNonRoot), got %#v", csc)
+	}
 }
 
 func TestImagePullSecrets(t *testing.T) {

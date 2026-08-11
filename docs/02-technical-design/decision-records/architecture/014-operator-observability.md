@@ -20,8 +20,9 @@ uneven. This ADR defines the contract for **logs**, **metrics**, **Kubernetes Ev
 - **Metrics are disabled by default.** `cmd/manager/main.go` sets `--metrics-bind-address=0`
   and `--metrics-secure=false`; the controller-runtime metrics registry (reconcile totals,
   workqueue depth, client latency, leader election) is never served.
-- **Logging is dev-mode.** `zap.Options{Development: true}` → console encoder, no level flag
-  wired for production; only `setup` logs at startup.
+- **Logging is production JSON by default** (`internal/logging`); `--zap-devel` for console;
+  `--zap-log-level` for stderr verbosity; optional `--log-file` / `--log-file-level` tees a
+  more verbose sink. Domains log apply create/update via `shared.Apply`; pipeline steps are named.
 - **Domains are largely silent.** `internal/domain/{serverconfig,workload,connectivity}`
   apply operands via `shared.Apply` and **discard the `controllerutil.OperationResult`**
   ([ADR-006](006-apply-and-idempotency.md)); no create/update is logged. Only `formation` and `status/writer` log.
@@ -151,9 +152,12 @@ We will implement operator observability as **A2 + B2 + C3 + D**.
 ### Logs
 
 - Default to **production JSON** zap; `--zap-devel` for console; wire `--zap-log-level`.
+  Optional `--log-file` tees logs with `--log-file-level` (stderr stays at `--zap-log-level`).
 - Each domain uses a **named context logger** (`WithName("<domain>")`); level policy per the
-  A2 table. `shared.Apply` returns its `controllerutil.OperationResult` so callers log
-  create/update at `Info` and no-ops at `Debug` (this also resolves the [ADR-006](006-apply-and-idempotency.md) discard gap).
+  A2 table. `shared.Apply` logs create/update at `Info` and no-ops at `Debug` (this also
+  resolves the [ADR-006](006-apply-and-idempotency.md) discard gap at the shared layer).
+- Condition **reasons** are catalogued as a test oracle:
+  `src/internal/status/oracle.go` ↔ [error-overview.md](../../../03-user-documentation/reference/error-overview.md).
 
 ### Metrics
 

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -120,6 +121,75 @@ func TestApplyExistingClaimName(t *testing.T) {
 	}
 }
 
+func baseStorage() *neo4jv1beta1.StorageSpec {
+	return &neo4jv1beta1.StorageSpec{
+		Volumes: &neo4jv1beta1.VolumesSpec{
+			Data: neo4jv1beta1.DataVolumeSpec{
+				Mode:    neo4jv1beta1.VolumeModeDynamic,
+				Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"},
+			},
+		},
+	}
+}
+
+func TestValidateRejectsHostPathAdditionalMount(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: baseStorage()}}
+	neo4j.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+		Name:      "host",
+		MountPath: "/host",
+		Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{Path: "/"},
+		}},
+	}}
+	err := Validate(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "hostPath") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateRejectsReservedAdditionalMount(t *testing.T) {
+	cases := []struct {
+		name, mount, want string
+	}{
+		{name: "data", mount: "/extra", want: "reserved"},
+		{name: "wedge", mount: "/data", want: "reserved path"},
+		{name: "wedge", mount: "/data/sub", want: "reserved path"},
+		{name: "wedge", mount: "/var/lib/neo4j/certificates", want: "reserved path"},
+		{name: "wedge", mount: "/config/neo4j.conf", want: "reserved path"},
+	}
+	for _, tc := range cases {
+		s := baseStorage()
+		s.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+			Name: tc.name, MountPath: tc.mount,
+			Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		}}
+		err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s@%s: got %v want substring %q", tc.name, tc.mount, err, tc.want)
+		}
+	}
+	s := baseStorage()
+	s.AdditionalMounts = []neo4jv1beta1.AdditionalMount{
+		{Name: "a", MountPath: "/ok1", Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+		{Name: "a", MountPath: "/ok2", Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+	}
+	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("dup: got %v", err)
+	}
+}
+
+func TestValidateAllowsNonReservedAdditionalMount(t *testing.T) {
+	s := baseStorage()
+	s.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+		Name: "extra-data", MountPath: "/extra-data",
+		Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+	}}
+	if err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestValidateExistingOneOf(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		Spec: neo4jv1beta1.Neo4jSpec{
@@ -159,7 +229,11 @@ func TestApplySecretAndAdditionalMounts(t *testing.T) {
 					Volume:    corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 				}},
 				SecretMounts: map[string]neo4jv1beta1.SecretMountSpec{
-					"creds": {SecretName: "my-creds", MountPath: "/var/secrets/creds"},
+					"creds": {
+						SecretName: "my-creds",
+						MountPath:  "/var/secrets/creds",
+						Items:      []neo4jv1beta1.SecretKeyToPath{{Key: "token", Path: "token"}},
+					},
 				},
 			},
 		},

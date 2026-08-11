@@ -3,6 +3,48 @@
 Secrets used across the `examples/` tree: static auth/license Secrets checked in here, and
 TLS material generated on demand with `./hack/gen-cluster-tls.sh`.
 
+> **Why do I need these labels?** Helm required nothing like them, because `helm install` used *your*
+> credentials — naming a Secret granted you nothing you did not already have. An operator mounts
+> Secrets on your behalf with *its* ServiceAccount, which would otherwise turn "may create a Neo4j CR"
+> into "may read every Secret in the namespace". Full rationale, threat model and rejected
+> alternatives: [Security model — mounted Secrets and operator privilege](../../docs/02-technical-design/security.md).
+
+## Mountable Secrets (NEO-005)
+
+Any Secret the operator mounts into Neo4j pods must carry:
+
+```yaml
+metadata:
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+```
+
+This includes BYO TLS Secrets, `storage.secretMounts`, `auth.passwordSecretRef`, and plugin
+`licenseSecretRef`. Operator-generated auth Secrets (`generatePassword: true`) get the label
+automatically. `hack/gen-cluster-tls.sh` labels the TLS Secrets it creates.
+
+`storage.secretMounts` and `trustedCerts.sources` must also list `items` (named keys only).
+
+## BYO auth Secret delegation (ADD-01)
+
+`auth.passwordSecretRef` is stronger than a mount: the operator may read `NEO4J_AUTH` to dial
+Bolt (Cluster formation). A BYO auth Secret must also be delegated to **one** Neo4j CR:
+
+```yaml
+metadata:
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    neo4j.com/allowed-for: "<Neo4j.metadata.name>"   # e.g. dev-auth-secret
+```
+
+Operator-managed `{name}-auth` Secrets (from `generatePassword: true`) are already labeled
+`app.kubernetes.io/managed-by=neo4j-operator` + `app.kubernetes.io/instance=<name>` and need no
+`allowed-for`.
+
+`connectivity.clusterDomain` only affects Neo4j-advertised DNS / `CLUSTER_DOMAIN`. The operator
+always dials the short in-cluster Service name (`<svc>.<ns>.svc`) and never appends the CR's
+`clusterDomain` to that URI.
+
 ## Static Secrets
 
 | File | Creates | Used by |

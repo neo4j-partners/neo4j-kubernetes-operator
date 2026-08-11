@@ -1,14 +1,20 @@
 # Purpose: Scale a cluster by editing topology.primaries.members (here: 5).
+#   Leave topology.minimumMembers unchanged (immutable after create; usually 3).
 #
 # The operator automates Neo4j membership (NEO-3-011-SRV-01 / BDR-009):
 #   Scale-out — STS grows, then ENABLE SERVER (PRIMARY) for each new Free member.
 #   Scale-in  — ALTER DATABASE SET TOPOLOGY down to fit remaining members, then
 #               DEALLOCATE → DROP for tail ordinals, wipe Dynamic PVCs for those
-#               ordinals (Dropped UUIDs cannot rejoin), then STS shrinks (gated by
-#               neo4j.com/drain-ok).
+#               ordinals when storage.volumeClaimRetention.whenScaled=Delete (NEO-007;
+#               default Retain keeps PVCs — Dropped UUIDs cannot rejoin without a wipe),
+#               then STS shrinks (gated by status.drainOK — operator-owned; do not set
+#               neo4j.com/drain-ok on the CR).
 #
 # Storage caveat (scale-in then scale-out of the same ordinal):
-#   Dynamic — operator wipes drained ordinal PVCs so the next join gets a new UUID.
+#   Dynamic + whenScaled:Delete — operator wipes drained ordinal PVCs so the next join
+#   gets a new UUID.
+#   Dynamic + whenScaled:Retain (default) — PVCs kept on scale-in (NEO-007); on scale-out
+#   the operator recycles a remounted Dropped Dynamic store (pod+PVC) so ENABLE can succeed.
 #   Existing (claimName / pre-bound claims) — operator never deletes those volumes;
 #   remounting the old store keeps the Dropped UUID and ENABLE SERVER fails until you
 #   wipe/replace the claim data (or use a fresh claim). Prefer Dynamic for elastic pools.
@@ -35,6 +41,8 @@ spec:
       members: 5
     minimumMembers: 3
   storage:
+    volumeClaimRetention:
+      whenScaled: Delete # required for elastic scale-in then scale-out (NEO-007)
     volumes:
       data:
         mode: Dynamic

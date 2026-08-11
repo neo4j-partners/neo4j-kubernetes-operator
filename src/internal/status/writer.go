@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,10 +13,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
@@ -44,9 +47,22 @@ func (w *Writer) MarkReconciling(neo4j *neo4jv1beta1.Neo4j) {
 	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
 }
 
+// PipelineErrorReason maps a pipeline error to a stable oracle reason (error-overview.md).
+// Callers use it for both the Error condition and the matching Warning Event.
+func PipelineErrorReason(err error) string {
+	switch {
+	case errors.Is(err, rendersecrets.ErrNotMountable):
+		return ReasonSecretNotMountable
+	case errors.Is(err, rendersecrets.ErrAuthNotDelegated):
+		return ReasonSecretNotDelegated
+	default:
+		return ReasonReconcileFailed
+	}
+}
+
 // MarkPipelineError records a reconcile failure.
 func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
-	setCondition(neo4j, ConditionError, metav1.ConditionTrue, "ReconcileFailed", err.Error())
+	setCondition(neo4j, ConditionError, metav1.ConditionTrue, PipelineErrorReason(err), err.Error())
 	setCondition(neo4j, ConditionReady, metav1.ConditionFalse, "ReconcileError", err.Error())
 	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Failed", err.Error())
 	if rendertrust.TrustEnabled(neo4j) && isTLSSecretError(err) {
@@ -57,6 +73,7 @@ func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
 
 // ObserveAndWrite refreshes status from the API server and patches status subresource.
 func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) error {
+	log := ctrllog.FromContext(ctx).WithName("status").WithValues("domain", "status", "reconciler", "status")
 	var ready, desired int32
 	var anySTSFound bool
 	storageReady := true
@@ -72,12 +89,19 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			anySTSFound = true
 			desired += poolDesired
 			ready += sts.Status.ReadyReplicas
+			log.V(1).Info("observed statefulset",
+				"pool", string(pool),
+				"name", sts.Name,
+				"readyReplicas", sts.Status.ReadyReplicas,
+				"desiredReplicas", poolDesired,
+			)
 		}
 		if ok, reason, msg := w.observePoolStorageReady(ctx, ctxRender); !ok {
 			storageReady = false
 			// First failing pool wins — same pattern as TLS observation.
 			if storageMsg == "" {
 				storageReason, storageMsg = reason, msg
+				log.Info("storage not ready", "pool", string(pool), "reason", reason, "message", msg)
 			}
 		}
 	}
@@ -121,6 +145,15 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	neo4j.Status.Endpoints = buildEndpoints(render.ClientServiceContext(neo4j))
 	neo4j.Status.ObservedGeneration = neo4j.Generation
 
+	log.Info("status update",
+		"phase", neo4j.Status.Phase,
+		"readyReplicas", ready,
+		"desiredReplicas", desired,
+		"storageReady", storageReady,
+		"storageReason", storageReason,
+		"tlsReady", tlsReady,
+		"allReady", allReady,
+	)
 	return w.Client.Status().Update(ctx, neo4j)
 }
 

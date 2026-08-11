@@ -75,6 +75,11 @@ kubectl -n "$NS" create secret generic "${NAME}-cluster-cert" \
 kubectl -n "$NS" create secret generic "${NAME}-cluster-ca" \
   --from-file=ca.crt="$OUT/ca.crt" --dry-run=client -o yaml | kubectl apply -f -
 
+# NEO-005: operator only mounts Secrets opted in by the namespace owner.
+for s in "${NAME}-cluster-key" "${NAME}-cluster-cert" "${NAME}-cluster-ca"; do
+  kubectl -n "$NS" label secret "$s" neo4j.com/mountable-by-operator=true --overwrite
+done
+
 echo
 echo "Certificate SANs:"
 openssl x509 -in "$OUT/cluster.crt" -noout -ext subjectAltName

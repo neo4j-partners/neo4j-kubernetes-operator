@@ -24,13 +24,25 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
       - name: manager
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: "{{ include "neo4j-operator.image" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command:
         - /manager
         args:
         - --leader-elect
         - --health-probe-bind-address=:8081
+        - --zap-log-level={{ .Values.logging.level | default "info" }}
+        {{- if .Values.logging.devel }}
+        - --zap-devel=true
+        {{- end }}
+        {{- if .Values.logging.file.enabled }}
+        - --log-file={{ .Values.logging.file.mountPath }}/{{ .Values.logging.file.filename }}
+        - --log-file-level={{ .Values.logging.file.level | default "debug" }}
+        {{- end }}
+        {{- if .Values.webhook.enabled }}
+        - --enable-webhooks
+        - --webhook-cert-dir=/tmp/k8s-webhook-server/serving-certs
+        {{- end }}
         {{- with .Values.extraArgs }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -40,6 +52,11 @@ spec:
         ports:
         - containerPort: 8081
           name: health
+        {{- if .Values.webhook.enabled }}
+        - containerPort: 9443
+          name: webhook
+          protocol: TCP
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -56,6 +73,31 @@ spec:
           {{- toYaml .Values.resources | nindent 10 }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- if or .Values.webhook.enabled .Values.logging.file.enabled }}
+        volumeMounts:
+        {{- if .Values.webhook.enabled }}
+        - name: webhook-certs
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+        {{- end }}
+        {{- if .Values.logging.file.enabled }}
+        - name: operator-logs
+          mountPath: {{ .Values.logging.file.mountPath }}
+        {{- end }}
+        {{- end }}
+      {{- if or .Values.webhook.enabled .Values.logging.file.enabled }}
+      volumes:
+      {{- if .Values.webhook.enabled }}
+      - name: webhook-certs
+        secret:
+          secretName: {{ .Values.webhook.secretName }}
+          defaultMode: 420
+      {{- end }}
+      {{- if .Values.logging.file.enabled }}
+      - name: operator-logs
+        emptyDir: {}
+      {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

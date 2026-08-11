@@ -8,6 +8,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
@@ -25,25 +26,33 @@ func New(c client.Client) *Reconciler {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+	log := ctrllog.FromContext(ctx)
 	if err := rendertrust.ValidateBYO(neo4j); err != nil {
+		log.Error(err, "trust validation failed")
 		return shared.Failed(err)
 	}
 	if !rendertrust.TrustEnabled(neo4j) {
+		log.V(1).Info("trust disabled, skip secret checks")
 		return shared.Done()
 	}
 	for _, name := range rendertrust.BYOSecretNames(neo4j) {
 		if _, err := r.getSecret(ctx, neo4j.Namespace, name); err != nil {
+			log.Error(err, "trust secret missing", "secret", name)
 			return shared.Failed(err)
 		}
+		log.Info("trust secret present", "secret", name)
 	}
 	for _, need := range rendertrust.RequiredSecretKeys(neo4j) {
 		secret, err := r.getSecret(ctx, neo4j.Namespace, need.SecretName)
 		if err != nil {
+			log.Error(err, "trust secret key check failed", "secret", need.SecretName, "key", need.Key)
 			return shared.Failed(err)
 		}
 		if err := requireSecretKey(secret, need.Key); err != nil {
+			log.Error(err, "trust secret key invalid", "secret", need.SecretName, "key", need.Key)
 			return shared.Failed(err)
 		}
+		log.V(1).Info("trust secret key ok", "secret", need.SecretName, "key", need.Key)
 	}
 	return shared.Done()
 }

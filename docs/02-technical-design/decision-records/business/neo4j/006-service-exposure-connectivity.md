@@ -411,7 +411,7 @@ Ingress rules declare **which backend** receives traffic: the **client Service**
 | `ingress.rules[].paths[]` | `path`, `pathType` (`Prefix`, `Exact`, `ImplementationSpecific`) |
 | `ingress.rules[].paths[].backend` | `service` — client Service; `reverseProxy` — proxy Service |
 | `ingress.rules[].paths[].port` | Connector name (`bolt`, `http`, `https`) — resolves to port on chosen backend |
-| `clusterDomain` | DNS suffix for operator-built FQDNs (`SERVICE_*` env, routing) |
+| `clusterDomain` | DNS suffix for Neo4j-advertised FQDNs (`SERVICE_*` / routing). **Not** used for the operator admin Bolt dial (ADD-01 — short `*.svc` name only). |
 | `multiCluster.enabled` | Helm `services.neo4j.multiCluster` — expose cluster discovery ports on client Service |
 
 CEL: `paths[].backend: reverseProxy` ⇒ `reverseProxy.enabled`. `paths[].port` must be in `expose` of the chosen backend (NET-006). `ingress.tls.hosts` may merge into cert-manager SANs via `trust.certManager.includeIngressHosts`.

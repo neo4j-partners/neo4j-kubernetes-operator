@@ -50,10 +50,11 @@ security
 | `apoc_credentials` | `spec.pluginDefinitions` | APOC credentials |
 | `Neo4jRestore.spec.source.credentials` | Restore CRD | Job-scoped restore creds (V1) |
 
-## CRD mapping (draft)
+## CRD mapping
 
-- **Target**: `Neo4j.spec.secretMounts` (map, Helm-shaped)
-- **Notes**: [BDR-005](../../../decision-records/business/005-storage-volume-mode.md) § Escape hatches. Overlap with `Neo4jRestore` credentials — both may be needed (persistent pod mount vs one-shot Job).
+- **Target**: `Neo4j.spec.storage.secretMounts` (map, Helm-shaped; under `storage` per BDR-005 Option E layout on the CR)
+- **Notes**: [BDR-005](../../../decision-records/business/neo4j/005-storage-volume-mode.md) § Escape hatches. Overlap with `Neo4jRestore` credentials — both may be needed (persistent pod mount vs one-shot Job).
+- **NEO-005:** `items` required; Secret must be labeled `neo4j.com/mountable-by-operator: "true"`. See [examples/secrets/README.md](../../../../../examples/secrets/README.md).
 
 ## Aggregation
 
@@ -72,5 +73,6 @@ security
 
 ## Open questions
 
-- Webhook: reject `mountPath` under `/var/lib/neo4j/certificates/` (reserved for trust)?
+- ~~Webhook: reject `mountPath` under `/var/lib/neo4j/certificates/` (reserved for trust)?~~ Done (STO-009).
 - V1: allow `secret` volume type in `additionalMounts` or force secrets through `secretMounts` only?
+- ~~Opt-in label / require items?~~ Done (NEO-005 / STO-011 / STO-012).

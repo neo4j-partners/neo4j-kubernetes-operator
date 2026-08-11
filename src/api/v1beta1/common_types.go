@@ -132,6 +132,9 @@ type ImageSpec struct {
 }
 
 // PasswordSecretRef references an existing auth Secret (key NEO4J_AUTH).
+// The Secret must be labeled neo4j.com/mountable-by-operator=true (NEO-005) and
+// neo4j.com/allowed-for=<Neo4j.metadata.name> (ADD-01), unless it is
+// operator-managed for this instance.
 type PasswordSecretRef struct {
 	Name string `json:"name"`
 }
@@ -202,6 +205,7 @@ type VolumesSpec struct {
 }
 
 // AdditionalMount pairs volume source with mount (BDR-005 Option E).
+// Name and mountPath must not collide with operator-owned volumes/paths (STO-008/009, ADD-07).
 type AdditionalMount struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
@@ -213,16 +217,20 @@ type AdditionalMount struct {
 	ReadOnly  bool   `json:"readOnly,omitempty"`
 }
 
-// SecretKeyToPath maps Secret keys to paths.
+// SecretKeyToPath maps a Secret key to a relative file path under mountPath
+// (Kubernetes SecretVolumeSource.items / KeyToPath).
 type SecretKeyToPath struct {
 	Key  string `json:"key"`
 	Path string `json:"path"`
 }
 
 // SecretMountSpec projects a Secret into the Neo4j container.
+// The referenced Secret must carry label neo4j.com/mountable-by-operator=true (NEO-005).
+// Items is required: only named keys are mounted (no whole-Secret projection).
 type SecretMountSpec struct {
 	SecretName  string            `json:"secretName"`
 	MountPath   string            `json:"mountPath"`
+	// Items maps Secret keys to filenames under MountPath (required; NEO-005).
 	Items       []SecretKeyToPath `json:"items,omitempty"`
 	DefaultMode *int32            `json:"defaultMode,omitempty"`
 }
@@ -233,7 +241,8 @@ type SecretMountSpec struct {
 type StorageSpec struct {
 	Volumes *VolumesSpec `json:"volumes,omitempty"`
 	// VolumeClaimRetention controls PVC lifecycle when the StatefulSet is deleted or scaled (OP-2-005-UNINST-*).
-	// Default Retain preserves data (UNINST-01). Set whenDeleted=Delete for ephemeral wipe (UNINST-02).
+	// Default Retain preserves data (UNINST-01). Set whenDeleted=Delete at create for ephemeral wipe (UNINST-02);
+	// the value is pinned into status.volumeClaimRetentionWhenDeleted (ADD-06).
 	// Existing.claimName PVCs are never deleted by the operator.
 	VolumeClaimRetention *VolumeClaimRetentionPolicySpec `json:"volumeClaimRetention,omitempty"`
 	AdditionalMounts     []AdditionalMount               `json:"additionalMounts,omitempty"`
@@ -252,9 +261,13 @@ const (
 // VolumeClaimRetentionPolicySpec maps to StatefulSet.spec.persistentVolumeClaimRetentionPolicy.
 type VolumeClaimRetentionPolicySpec struct {
 	// WhenDeleted is applied when the StatefulSet is deleted. Default Retain.
+	// Pinned into status.volumeClaimRetentionWhenDeleted on first reconcile (ADD-06);
+	// uninstall wipe honors the pin, not a late flip of this field.
 	// +kubebuilder:default=Retain
 	WhenDeleted VolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
 	// WhenScaled is applied when the StatefulSet scales down. Default Retain.
+	// Bulk operator wipe of drained ordinals only runs when this is Delete (NEO-007).
+	// Dropped-store heal recycle on scale-out still runs under Retain.
 	// +kubebuilder:default=Retain
 	WhenScaled VolumeClaimRetentionPolicyType `json:"whenScaled,omitempty"`
 }
@@ -399,10 +412,11 @@ type ServicePortsSpec struct {
 type ConnectivityServiceSpec struct {
 	// +kubebuilder:validation:Enum=ClusterIP;LoadBalancer;NodePort
 	// +kubebuilder:default=ClusterIP
-	Type                     ServiceType       `json:"type,omitempty"`
-	Annotations              map[string]string `json:"annotations,omitempty"`
-	LoadBalancerSourceRanges []string          `json:"loadBalancerSourceRanges,omitempty"`
-	Expose                   []string          `json:"expose,omitempty"`
+	Type        ServiceType       `json:"type,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// LoadBalancerSourceRanges restricts client access when type is LoadBalancer (ADD-08; required by CEL).
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
+	Expose                   []string `json:"expose,omitempty"`
 	Ports                    *ServicePortsSpec `json:"ports,omitempty"`
 }
 
@@ -457,12 +471,14 @@ type MultiClusterSpec struct {
 
 // ConnectivitySpec groups listen ports, Service, Ingress, and cluster DNS (BDR-007).
 type ConnectivitySpec struct {
-	Listeners     *ConnectivityListenersSpec `json:"listeners,omitempty"`
-	Service       *ConnectivityServiceSpec   `json:"service,omitempty"`
-	ReverseProxy  *ReverseProxySpec          `json:"reverseProxy,omitempty"`
-	Ingress       *IngressSpec               `json:"ingress,omitempty"`
-	ClusterDomain string                     `json:"clusterDomain,omitempty"`
-	MultiCluster  *MultiClusterSpec          `json:"multiCluster,omitempty"`
+	Listeners    *ConnectivityListenersSpec `json:"listeners,omitempty"`
+	Service      *ConnectivityServiceSpec   `json:"service,omitempty"`
+	ReverseProxy *ReverseProxySpec          `json:"reverseProxy,omitempty"`
+	Ingress      *IngressSpec               `json:"ingress,omitempty"`
+	// ClusterDomain is the Kubernetes DNS suffix for Neo4j-advertised FQDNs
+	// (CLUSTER_DOMAIN / routing). It is not used for the operator's admin Bolt dial (ADD-01).
+	ClusterDomain string            `json:"clusterDomain,omitempty"`
+	MultiCluster  *MultiClusterSpec `json:"multiCluster,omitempty"`
 }
 
 // IssuerRef references a cert-manager Issuer or ClusterIssuer.
@@ -549,9 +565,21 @@ type PrimariesSpec struct {
 type TopologySpec struct {
 	// +kubebuilder:validation:Required
 	Mode TopologyMode `json:"mode"`
-	Primaries       *PrimariesSpec  `json:"primaries,omitempty"`
-	Secondaries     *SecondariesSpec `json:"secondaries,omitempty"`
-	MinimumMembers  *int32          `json:"minimumMembers,omitempty"`
+	Primaries   *PrimariesSpec   `json:"primaries,omitempty"`
+	Secondaries *SecondariesSpec `json:"secondaries,omitempty"`
+	// MinimumMembers is the system formation gate (enabled primaries before Ready)
+	// and maps to dbms.cluster.minimum_initial_system_primaries_count.
+	// Defaults to primaries.members when unset. Immutable after create — changing it
+	// rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
+	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
+	// DefaultPrimariesCount is the desired primary count for standard databases
+	// (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE
+	// SET TOPOLOGY). Defaults to 1 when unset. Clamped to primaries.members.
+	// System Raft size stays on minimumMembers. Cypher CREATE DATABASE can still
+	// request an explicit TOPOLOGY; the operator does not force every DB onto
+	// all primary servers.
+	// +kubebuilder:validation:Minimum=1
+	DefaultPrimariesCount *int32 `json:"defaultPrimariesCount,omitempty"`
 }
 
 // PluginDefinitionSpec holds per-plugin install configuration (BDR-004 Option E).
@@ -584,7 +612,9 @@ type SchedulingSpec struct {
 
 // PodDisruptionBudgetSpec configures PDB for cluster workloads.
 type PodDisruptionBudgetSpec struct {
-	Enabled      bool                `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	// MinAvailable must be satisfiable: integer form must be < total pool members;
+	// "100%" is rejected (ADD-03 — unsatisfiable budgets block node drains).
 	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
 }
 

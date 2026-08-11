@@ -25,9 +25,9 @@ spec
 ├── plugins[]                          # Standalone only — catalog id refs at spec root
 ├── image
 ├── auth
-├── volumes                            # BDR-005 — mirrors helm values.yaml `volumes:` block
-├── additionalMounts[]                 # BDR-005 — paired helm additionalVolumes + additionalVolumeMounts
-├── secretMounts                       # BDR-005 — top-level like helm values.yaml
+├── volumes                            # BDR-005 — under spec.storage (mirrors helm `volumes:`)
+├── additionalMounts[]                 # BDR-005 — under spec.storage
+├── secretMounts                       # BDR-005 — under spec.storage; items + mountable label (NEO-005)
 ├── resources, jvm
 ├── features                           # BDR-007 — backup, monitoring (prometheus, serviceMonitor)
 ├── config
@@ -135,7 +135,7 @@ pluginDefinitions:
 
 **Removed (do not implement):** `secondaries[]` list with `name` field; `secondaries[].serverRole`.
 
-| `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). |
+| `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). **Immutable after create** — scale via `primaries.members` only. |
 
 Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md), **Option E — accepted**). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
 
@@ -252,18 +252,20 @@ Top-level like Helm `additionalVolumes` + `additionalVolumeMounts` — **paired*
 
 ---
 
-## `spec.secretMounts`
+## `spec.storage.secretMounts`
 
-Top-level like Helm `secretMounts:` — map of mount id → Secret projection.
+Map of mount id → Secret projection into the Neo4j container (`spec.storage.secretMounts`, BDR-005).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `<id>.secretName` | string | Secret name. |
-| `<id>.mountPath` | string | Mount directory in Neo4j container. |
-| `<id>.items` | []KeyToPath | Optional key subset. |
-| `<id>.defaultMode` | int | File mode (default `0644`). |
+| `<id>.secretName` | string | Secret name in the Neo4j namespace. |
+| `<id>.mountPath` | string | Mount directory in the Neo4j container. |
+| `<id>.items` | []KeyToPath | **Required (NEO-005).** Named keys only (`key` = Secret key, `path` = filename under `mountPath`). |
+| `<id>.defaultMode` | int | File mode (operator default `0440` when unset). |
 
-**Reserved paths:** `/data`, `/var/lib/neo4j/certificates/*` — webhook rejects user mounts (operator-owned).
+**Mountable Secrets (NEO-005):** every Secret the operator mounts (this map, BYO TLS refs, `auth.passwordSecretRef`, plugin `licenseSecretRef`) must have label `neo4j.com/mountable-by-operator: "true"`. Namespace owners set the label; CR authors cannot escalate by naming arbitrary Secrets. Operator-generated auth Secrets (`generatePassword: true`) receive the label automatically. Successful mounts emit a `SecretMounted` Event on the Neo4j CR.
+
+**Reserved paths:** `/data`, `/var/lib/neo4j/certificates/*` — webhook/reconcile rejects user mounts (operator-owned).
 
 **vs other secrets:** TLS → `spec.trust`; auth password → `spec.auth`; restore Job creds → `Neo4jRestore.spec.source.credentials`.
 
@@ -397,7 +399,7 @@ Client Service — merges Helm `services.default` + `services.neo4j`. **No `neo4
 |-------|------|---------|-------------|
 | `type` | string | `ClusterIP` | `ClusterIP`, `LoadBalancer`, `NodePort`. |
 | `annotations` | map | `{}` | Service metadata. |
-| `loadBalancerSourceRanges` | []string | `[]` | When `type: LoadBalancer`. |
+| `loadBalancerSourceRanges` | []string | — | **Required** when `type: LoadBalancer` (ADD-08). CIDR allowlist for the cloud LB. |
 | `expose` | []string | `[bolt, http]` | Connector names published on this Service. |
 | `ports.{name}` | int | = `listeners.{name}` | Optional Service port (LB façade); `targetPort` = listen port. |
 
@@ -440,7 +442,9 @@ CEL: `backend: reverseProxy` ⇒ `reverseProxy.enabled` (NET-006).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| *(scalar)* | string | `cluster.local` | Kubernetes DNS suffix for operator-built FQDNs. |
+| *(scalar)* | string | `cluster.local` | Kubernetes DNS suffix for **Neo4j-advertised** FQDNs (`CLUSTER_DOMAIN`, discovery, `dbms.routing.client_side.enforce_for_domains`). |
+
+**ADD-01:** This value is **not** used when the operator dials Bolt with admin credentials. The operator always connects to `<client-service>.<namespace>.svc` (cluster DNS search path). Do not treat `clusterDomain` as a way to point the operator at an external Bolt endpoint.
 
 ### `spec.connectivity.multiCluster`
 
@@ -617,7 +621,7 @@ Pod placement (`NEO-2-008`).
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | bool | `true`* | Create PDB (`NEO-2-008`). |
-| `minAvailable` | int \| string | `2`* | Minimum available pods during disruption. |
+| `minAvailable` | int \| string | `2`* | Minimum available pods during disruption. Must be **strictly less** than total pool members (int); `100%` is rejected (ADD-03). |
 
 \*Default enabled when Cluster with ≥ 3 total members.
 
@@ -673,7 +677,7 @@ Escape hatch for advanced customization.
 | `sidecars` | Sidecar containers. |
 | `env` | Additional environment variables (merged, not replaced). |
 
-Prefer `spec.additionalMounts` and `spec.secretMounts` for volumes — see [BDR-005](../../decision-records/business/005-storage-volume-mode.md). Raw `podTemplate` patches deferred V1 unless needed for container overrides.
+Prefer `spec.storage.additionalMounts` and `spec.storage.secretMounts` for volumes — see [BDR-005](../../decision-records/business/neo4j/005-storage-volume-mode.md). Raw `podTemplate` patches deferred V1 unless needed for container overrides.
 
 Operator-owned keys cannot be overridden.
 

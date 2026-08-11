@@ -5,6 +5,8 @@
 #
 # Creates policy/v1 PodDisruptionBudget "prod-pdb" selecting all pods for this CR
 # (all pools). Default minAvailable is 2 when Cluster has ≥3 members.
+# minAvailable must stay < total members (and not 100%) or admission/reconcile
+# rejects it — otherwise node drains block forever (ADD-03).
 # Verify: kubectl get pdb prod-pdb -o yaml
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j

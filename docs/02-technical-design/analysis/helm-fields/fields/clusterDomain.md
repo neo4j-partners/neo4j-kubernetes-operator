@@ -27,10 +27,10 @@ network
 | CONCERN-EXPOSURE | DNS domain for services | services.* |
 | CONCERN-TOPOLOGY | K8s discovery FQDNs | services.internals, neo4j.minimumClusterSize |
 
-## CRD mapping (draft)
+## CRD mapping
 
 - **Target**: `Neo4j.spec.connectivity.clusterDomain`
-- **Notes**: Draft mapping from Helm analysis.
+- **Notes**: Used for Neo4j-advertised FQDNs / `CLUSTER_DOMAIN` / routing enforce domains. **ADD-01:** the operator admin Bolt dial uses short `<svc>.<ns>.svc` only and ignores this field.
 
 ## Aggregation
 

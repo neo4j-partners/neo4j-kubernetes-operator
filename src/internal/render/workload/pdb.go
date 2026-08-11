@@ -1,6 +1,8 @@
 package workload
 
 import (
+	"fmt"
+
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -17,6 +19,31 @@ func PDBEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
 // PDBName is the owned PodDisruptionBudget name.
 func PDBName(ctx render.Context) string {
 	return ctx.Neo4j.Name + "-pdb"
+}
+
+// ValidatePDB rejects minAvailable that can never be satisfied (ADD-03).
+// An unsatisfiable budget permanently blocks voluntary node drains / evictions.
+func ValidatePDB(neo4j *neo4jv1beta1.Neo4j) error {
+	pdb := neo4j.Spec.PodDisruptionBudget
+	if pdb == nil || !pdb.Enabled || pdb.MinAvailable == nil {
+		return nil
+	}
+	total := totalDesiredMembers(neo4j)
+	if total < 1 {
+		total = 1
+	}
+	switch pdb.MinAvailable.Type {
+	case intstr.Int:
+		if int32(pdb.MinAvailable.IntVal) >= total {
+			return fmt.Errorf("podDisruptionBudget.minAvailable (%d) must be less than total members (%d)",
+				pdb.MinAvailable.IntVal, total)
+		}
+	case intstr.String:
+		if pdb.MinAvailable.StrVal == "100%" {
+			return fmt.Errorf("podDisruptionBudget.minAvailable cannot be 100%% — it blocks all voluntary eviction")
+		}
+	}
+	return nil
 }
 
 // PodDisruptionBudget builds a policy/v1 PDB selecting all pods for this Neo4j
