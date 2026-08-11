@@ -32,9 +32,7 @@ scale_patch_members() {
 # as Enabled+Available. Pool members are addressed <cr>-<pool>-N.<ns>.svc...
 scale_count_pool_servers() {
   local password=$1 out
-  out="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${NEO4J_STS_NAME}-0" -c neo4j -- bash -c \
-    "cypher-shell -a bolt://localhost:7687 -u neo4j -p '${password}' --format plain \
-     'SHOW SERVERS YIELD name,address,state,health;'" 2>/dev/null || true)"
+  out="$(conn_show_servers "${NEO4J_STS_NAME}-0" "${password}")"
   grep -c "${NEO4J_CR_NAME}-${SCALE_POOL}-.*\"Enabled\".*\"Available\"" <<<"${out}" || true
 }
 
@@ -71,8 +69,12 @@ scale_assert_members() {
     [[ "${count:-0}" -eq "${want}" ]] && break
     sleep 10
   done
-  [[ "${count:-0}" -eq "${want}" ]] \
-    || die "Neo4j reports ${count:-0} '${SCALE_POOL}' member(s) Enabled+Available after ${timeout}s, expected ${want}"
+  if [[ "${count:-0}" -ne "${want}" ]]; then
+    log "last SHOW SERVERS output was:"
+    conn_show_servers "${NEO4J_STS_NAME}-0" "${password}" >&2 || true
+    conn_dump_last_error
+    die "Neo4j reports ${count:-0} '${SCALE_POOL}' member(s) Enabled+Available after ${timeout}s, expected ${want}"
+  fi
   log "Neo4j reports ${count} '${SCALE_POOL}' member(s) Enabled+Available"
 
   # 3. The cluster must still be formed after the topology change.

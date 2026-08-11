@@ -60,9 +60,7 @@ deadline=$((SECONDS + TIMEOUT_SECS))
 ok=0
 servers_out=""
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
-  servers_out="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
-    "cypher-shell -a bolt://localhost:7687 -u neo4j -p '${password}' --format plain \
-     'SHOW SERVERS YIELD name,address,state,health;'" 2>/dev/null || true)"
+  servers_out="$(conn_show_servers "${POD}" "${password}")"
   # Count rows that are both Enabled and Available (header line never matches both).
   count="$(grep -c '"Enabled".*"Available"' <<<"${servers_out}" || true)"
   if [[ "${count:-0}" -ge "${WANT}" ]]; then
@@ -75,6 +73,7 @@ done
 if [[ "${ok}" -ne 1 ]]; then
   log "SHOW SERVERS output was:"
   printf '%s\n' "${servers_out}" >&2
+  conn_dump_last_error
   kubectl get pods -n "${NEO4J_NAMESPACE}" -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" -o wide >&2 || true
   die "only ${count:-0}/${WANT} server(s) Enabled+Available within ${TIMEOUT_SECS}s — cluster not formed"
 fi
