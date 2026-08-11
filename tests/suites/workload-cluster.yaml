@@ -1,20 +1,24 @@
 name: workload-cluster
 description: >
   NEO-2-002 Cluster mode — members are created, the cluster actually forms
-  (SHOW SERVERS: Enabled + Available), and routing works through the client
-  Service. Covers AC-NEO-CLUSTER-001/002/003.
+  (SHOW SERVERS: Enabled + Available), the default database is allocated on the
+  declared number of primaries and stays reachable through routing from members
+  that do not host it, and routing works through the client Service.
+  Covers AC-NEO-CLUSTER-001/002/003.
 brief_ref: slice-cluster
 use_pipeline: neo4j-suite
 on_case_failure: continue
 clouds: [local-kind]
 
-# Members → formation → routing, cheapest check first so a failure reports the
-# most specific cause. Cluster pods are <cr>-primary-N (pool StatefulSets), which
-# the cluster-* cases select via NEO4J_POOL.
+# Members → formation → database allocation → routing, cheapest check first so a
+# failure reports the most specific cause. Cluster pods are <cr>-primary-N (pool
+# StatefulSets), which the cluster-* cases select via NEO4J_POOL.
 pipeline:
   case_assert:
     - assert/cluster-members
     - assert/cluster-formed
+    - assert/cluster-db-topology
+    - assert/cluster-db-routing
     - assert/cluster-routing
 
 cases:
@@ -28,8 +32,18 @@ cases:
 
   # Smallest real HA topology: 3 primaries, quorum of 3. This is the case that
   # proves genuine cluster formation rather than single-node Cluster rendering.
+  # defaultPrimariesCount is set to 3, so the neo4j database spans every primary.
   - id: ha-3-primaries
     fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
     neo4j_case: cluster-3primaries
     expect: success
     cr_name: e2e-cluster-ha
+
+  # Same shape with defaultPrimariesCount omitted: pins the default (1), where the
+  # neo4j database sits on a single primary and is only reachable from the other two
+  # through routing.
+  - id: ha-3-primaries-default-db
+    fixture: tests/fixtures/neo4j-cluster-3primaries-default-db.yaml
+    neo4j_case: cluster-3primaries-default-db
+    expect: success
+    cr_name: e2e-cluster-defaultdb

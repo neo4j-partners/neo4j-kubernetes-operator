@@ -10,3 +10,5 @@ export NEO4J_TOPOLOGY_MODE=Cluster
 # Cluster StatefulSets are named <cr>-<pool>; primaries live in the "primary" pool.
 export NEO4J_POOL=primary
 export CLUSTER_EXPECTED_MEMBERS=1
+# One server, so the default database can only be single-primary.
+export CLUSTER_EXPECTED_DB_PRIMARIES=1
