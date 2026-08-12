@@ -1,7 +1,9 @@
 # Running & contributing to e2e tests
 
 How to run the suites locally, in CI, and how to add new tests. For the harness structure
-see [design.md](design.md); for what is covered see [coverage.md](coverage.md).
+see [design.md](design.md); for what is covered see [coverage.md](coverage.md). For the branch,
+pull request and merge rules see
+[docs/developer-guide/01-contributing.md](../docs/developer-guide/01-contributing.md).
 
 ## Run locally — kind
 
