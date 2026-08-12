@@ -47,7 +47,7 @@ func (w *Writer) MarkReconciling(neo4j *neo4jv1beta1.Neo4j) {
 	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
 }
 
-// PipelineErrorReason maps a pipeline error to a stable oracle reason (error-overview.md).
+// PipelineErrorReason maps a pipeline error to a stable oracle reason (user-guide errors.md).
 // Callers use it for both the Error condition and the matching Warning Event.
 func PipelineErrorReason(err error) string {
 	switch {

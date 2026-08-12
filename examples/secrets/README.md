@@ -7,7 +7,7 @@ TLS material generated on demand with `./hack/gen-cluster-tls.sh`.
 > credentials — naming a Secret granted you nothing you did not already have. An operator mounts
 > Secrets on your behalf with *its* ServiceAccount, which would otherwise turn "may create a Neo4j CR"
 > into "may read every Secret in the namespace". Full rationale, threat model and rejected
-> alternatives: [Security model — mounted Secrets and operator privilege](../../docs/02-technical-design/security.md).
+> alternatives: [Security — why the operator requires opt-in labels](../../docs/user-guide/03-neo4j/05-security.md#why-the-operator-requires-opt-in-labels).
 
 ## Mountable Secrets (NEO-005)
 

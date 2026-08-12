@@ -14,7 +14,7 @@ Minimal path from zero to a running Standalone Neo4j on [Azure Kubernetes Servic
 | `make`, Docker | Build and push operator image to ACR |
 | Neo4j Enterprise image | AKS nodes must pull `neo4j:<version>` — configure pull Secret if required |
 
-Shared requirements: [operator prerequisites](../../operator/01-prerequisites.md).
+Shared requirements: [operator prerequisites](../02-operator-installation/01-prerequisites.md).
 
 AKS provides StorageClass **`managed-csi`** (and `managed-csi-premium`). Set `storageClassName: managed-csi` on the Neo4j CR.
 
@@ -80,7 +80,8 @@ kubectl get pods -n neo4j-operator-system
 
 ### 4. Install Neo4j
 
-Deploy a Standalone `Neo4j` CR with Azure Disk storage. Full workload guide: [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md) · [neo4j documentation index](../../neo4j/readme.md).
+Deploy a Standalone `Neo4j` resource backed by Azure Disk. The manifest is explained field by
+field in [Your first Neo4j](first-neo4j.md).
 
 **4a. Apply the CR** (no `metadata.namespace` — deploys to **`default`**)
 
@@ -109,11 +110,8 @@ spec:
 EOF
 ```
 
-Alternative — patch [`config/samples/neo4j_v1beta1_neo4j.yaml`](../../../../config/samples/neo4j_v1beta1_neo4j.yaml) with `storageClassName: managed-csi`, then:
-
-```bash
-kubectl apply -f config/samples/neo4j_v1beta1_neo4j.yaml
-```
+Alternative — start from [`examples/standalone/01-minimal.yaml`](../../../examples/standalone/01-minimal.yaml)
+and add `storageClassName: managed-csi` under `spec.storage.volumes.data.dynamic`.
 
 **4b. Watch progress**
 
@@ -146,9 +144,12 @@ When ready:
 - `status.conditions[Ready]`: `True`
 - `status.credentials.secretName`: `dev-auth`
 
-If the Neo4j pod fails to pull the Enterprise image, create an image pull Secret and set `spec.image.pullSecrets` on the CR — see [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md).
+If the Neo4j pod fails to pull the Enterprise image, create an image pull Secret and set
+`spec.image.pullSecrets` on the resource — see
+[Operations](../03-neo4j/09-operations.md#pulling-images-from-a-private-registry).
 
-More detail (customization, troubleshooting): [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md).
+How to read those conditions, and what to do when one is `False`:
+[Your first Neo4j](first-neo4j.md#4-read-the-status).
 
 ### 5. Connect
 
@@ -173,7 +174,9 @@ kubectl port-forward -n default svc/dev 7474:7474
 # Open http://localhost:7474
 ```
 
-Connection details: [neo4j/01-quickstart-standalone.md#connect](../../neo4j/01-quickstart-standalone.md#connect).
+Connection details, including in-cluster URIs: [Your first Neo4j](first-neo4j.md#5-connect).
+To expose Bolt through an Azure load balancer instead of port-forwarding, see
+[Connectivity](../03-neo4j/04-connectivity.md#loadbalancer).
 
 ---
 
@@ -181,21 +184,21 @@ Connection details: [neo4j/01-quickstart-standalone.md#connect](../../neo4j/01-q
 
 ```bash
 kubectl delete neo4j dev -n default --ignore-not-found
-# Operator: see operator/03-uninstall.md
 az group delete --name "$RESOURCE_GROUP" --yes --no-wait
 ```
 
-PVCs may remain until explicitly deleted — see [operator/03-uninstall.md](../../operator/03-uninstall.md).
+Deleting the resource group discards the managed disks with it. To remove Neo4j but keep the
+cluster, note that PersistentVolumeClaims are preserved on purpose — see
+[Uninstall](../02-operator-installation/05-uninstall.md#persistentvolumeclaim-retention).
 
 ---
 
 ## Go deeper
 
-| Topic | Doc |
-|-------|-----|
-| Neo4j workload (Standalone, Cluster) | [neo4j/readme.md](../../neo4j/readme.md) |
-| Standalone CR, status, customize | [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md) |
-| Install operator (generic) | [operator/02-installation.md](../../operator/02-installation.md) |
-| Shared prerequisites | [operator/01-prerequisites.md](../../operator/01-prerequisites.md) |
-| Uninstall | [operator/03-uninstall.md](../../operator/03-uninstall.md) |
-| Troubleshooting | [operator/04-troubleshooting.md](../../operator/04-troubleshooting.md) |
+| Topic | Page |
+|-------|------|
+| The resource you just created | [Your first Neo4j](first-neo4j.md) |
+| What is implemented today | [What works today](feature-status.md) |
+| Shaping the deployment — storage, connectivity, security, plugins | [Neo4j topics](../03-neo4j/readme.md) |
+| Uninstalling the operator | [Uninstall](../02-operator-installation/05-uninstall.md) |
+| Something is wrong | [Troubleshooting](../04-troubleshooting/01-common-issues.md) |

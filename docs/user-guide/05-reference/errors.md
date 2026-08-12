@@ -1,9 +1,8 @@
-# Error overview (test oracle)
+# Error reference
 
-Stable `status.conditions[].reason` values emitted by the operator. Prefer matching
-**Reason** in tests and runbooks — messages are free-form and may change.
-
-Source of truth in code: `src/internal/status/oracle.go` (`ErrorOracle`).
+Every stable `status.conditions[].reason` the operator emits. Match on **Reason** in runbooks,
+alerts and tests: it is a contract and will not change silently, whereas the human-readable message
+may be reworded at any time.
 
 ## How to read a failure
 
@@ -22,7 +21,7 @@ operator resolved something silently and wants you to know. They appear in `kube
 and in the operator log; nothing turns `Ready` false.
 
 Structured logs use `msg`, `level`, and logger names (`neo4j`, `pipeline`, domain).
-See [Operator logging](../operator/05-logging.md).
+See [Operator logs](../04-troubleshooting/02-operator-logs.md).
 
 ## Catalog
 
@@ -74,13 +73,21 @@ addresses (`dbms.cluster.*`, `dbms.routing.*`, `dbms.kubernetes.*`, `server.*.ad
 listener toggles not already refused by CEL (`server.backup.enabled`,
 `server.metrics.prometheus.*`). Set those through the dedicated spec fields instead.
 
-## Test usage
+## Using reasons in automation
 
-Assert on reasons from this table (or import `status.ErrorOracle` in Go tests):
+Gate on a condition's `type` plus `reason`, never on the message:
 
-```go
-c := meta.FindStatusCondition(neo4j.Status.Conditions, status.ConditionStorageReady)
-if c.Reason != "PVCPending" { ... }
+```bash
+kubectl wait --for=condition=Ready neo4j/dev -n default --timeout=10m
+
+kubectl get neo4j dev -n default \
+  -o jsonpath='{range .status.conditions[?(@.type=="StorageReady")]}{.reason}{"\n"}{end}'
 ```
 
-Operational playbooks: [Troubleshooting](../operator/04-troubleshooting.md).
+Severity in the table above tells you what deserves an alert. `error` means the operator has stopped
+making progress and needs a human; `warn` means it is waiting on something that may resolve itself,
+such as a claim being bound; `info` is narration of an operation in progress.
+
+What to do about each symptom: [Troubleshooting](../04-troubleshooting/01-common-issues.md).
+The settings behind `kept (operator-injected)`:
+[Operator-owned settings](operator-owned-config.md).

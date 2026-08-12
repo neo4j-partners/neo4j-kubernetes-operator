@@ -18,7 +18,7 @@
 #   Existing (claimName / pre-bound claims) — operator never deletes those volumes;
 #   remounting the old store keeps the Dropped UUID and ENABLE SERVER fails until you
 #   wipe/replace the claim data (or use a fresh claim). Prefer Dynamic for elastic pools.
-#   Full note: docs/03-user-documentation/neo4j/02-quickstart-cluster.md#storage-and-re-scaling-the-same-ordinal
+#   Full note: docs/user-guide/03-neo4j/02-clustering.md#volumes-when-an-ordinal-comes-back
 #
 # Watch: kubectl get neo4j prod-scale -o jsonpath='{range .status.conditions[*]}{.type}={.status} ({.reason}){"\n"}{end}'
 #   ClusterFormed=True when desired members are Enabled; ServersPendingDrain while draining.

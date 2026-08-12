@@ -1,6 +1,7 @@
-# Operator logging
+# Operator logs
 
-Configurable structured logging for the Neo4j operator (ADR-014).
+How to read and tune the operator's own log. This is not Neo4j's log — for that, see
+[Configuration](../03-neo4j/06-configuration.md#neo4j-logging) and `kubectl logs` on a Neo4j pod.
 
 ## Levels
 
@@ -72,4 +73,13 @@ go run ./src/cmd/manager/main.go --leader-elect=false \
 
 ## Errors
 
-Condition reasons (test oracle): [Error overview](../reference/error-overview.md).
+The log explains *how* a reconcile failed; the resource explains *what* failed, with a stable reason
+you can look up in the [error reference](../05-reference/errors.md). Start from the resource, then come
+here for detail:
+
+```bash
+kubectl describe neo4j <name> -n <namespace>
+kubectl logs -n neo4j-operator-system deploy/neo4j-operator-controller-manager --tail=200
+```
+
+Symptom-driven fixes: [Common issues](01-common-issues.md).

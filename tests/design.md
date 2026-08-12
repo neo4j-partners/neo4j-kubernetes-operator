@@ -32,9 +32,6 @@ setup → case → teardown phase definition; an **action** is one atomic `run.s
   apply the CR fixture the case picks, clean it up. Suites override `case_assert` with the
   topology/feature-specific checks.
 
-See [suites/readme.md](suites/readme.md) for the pipeline / case field reference and
-[ADR-012](../docs/02-technical-design/decision-records/architecture/012-testing-strategy.md)
-for the full harness model.
 
 ## Assertions
 

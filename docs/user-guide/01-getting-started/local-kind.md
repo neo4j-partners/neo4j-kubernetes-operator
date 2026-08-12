@@ -15,7 +15,7 @@ Minimal path from zero to a running Standalone Neo4j on a local [kind](https://k
 | Go 1.24+ | Optional — only for `make run` (controller on laptop) |
 | Neo4j Enterprise image | Sample uses `neo4j:2026.05.0` — pull access or pre-load into kind |
 
-Shared requirements (StorageClass, license, RBAC): [operator prerequisites](../../operator/01-prerequisites.md).
+Shared requirements (StorageClass, license, RBAC): [operator prerequisites](../02-operator-installation/01-prerequisites.md).
 
 kind ships with StorageClass **`standard`** (default). No `storageClassName` override needed in the sample.
 
@@ -35,12 +35,16 @@ kubectl get storageclass
 
 ### 2. Build and load the operator image
 
-kind nodes use the local Docker daemon — build and load before deploy:
+There is no published operator image, so you build it yourself. kind nodes use the local Docker
+daemon, which means loading the image into the node is enough — no registry involved:
 
 ```bash
 make docker-build IMG=controller:latest
 kind load docker-image controller:latest --name neo4j-operator
 ```
+
+Build options, including the platform flag needed on Apple silicon, are covered in
+[Build the operator image](../02-operator-installation/02-build-image.md).
 
 ### 3. Deploy the operator
 
@@ -59,7 +63,8 @@ kubectl get pods -n neo4j-operator-system
 
 ### 4. Install Neo4j
 
-Deploy a Standalone `Neo4j` CR. Full workload guide: [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md) · [neo4j documentation index](../../neo4j/readme.md).
+Deploy a Standalone `Neo4j` resource. The manifest is explained field by field in
+[Your first Neo4j](first-neo4j.md).
 
 **4a. Apply the sample**
 
@@ -81,7 +86,8 @@ The sample omits `metadata.namespace` — Neo4j is created in **`default`**.
 kind load docker-image neo4j:2026.05.0 --name neo4j-operator
 ```
 
-If pulls still fail, configure `spec.image.pullSecrets` on the CR — see [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md).
+If pulls still fail, configure `spec.image.pullSecrets` on the resource — see
+[Operations](../03-neo4j/09-operations.md#pulling-images-from-a-private-registry).
 
 **4c. Watch progress**
 
@@ -114,7 +120,8 @@ When ready:
 - `status.conditions[Ready]`: `True`
 - `status.credentials.secretName`: `dev-auth`
 
-More detail (customization, troubleshooting): [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md).
+How to read those conditions, and what to do when one is `False`:
+[Your first Neo4j](first-neo4j.md#4-read-the-status).
 
 ### 5. Connect
 
@@ -139,7 +146,7 @@ kubectl port-forward -n default svc/dev 7474:7474
 # Open http://localhost:7474
 ```
 
-Connection details: [neo4j/01-quickstart-standalone.md#connect](../../neo4j/01-quickstart-standalone.md#connect).
+Connection details, including in-cluster URIs: [Your first Neo4j](first-neo4j.md#5-connect).
 
 ---
 
@@ -150,17 +157,18 @@ kubectl delete neo4j dev -n default --ignore-not-found
 kind delete cluster --name neo4j-operator
 ```
 
-PVCs may remain until explicitly deleted — see [operator/03-uninstall.md](../../operator/03-uninstall.md).
+Deleting the kind cluster discards the PersistentVolumes with it. On a cluster you keep, PVCs are
+preserved until you delete them — see
+[Uninstall](../02-operator-installation/05-uninstall.md#persistentvolumeclaim-retention).
 
 ---
 
 ## Go deeper
 
-| Topic | Doc |
-|-------|-----|
-| Neo4j workload (Standalone, Cluster) | [neo4j/readme.md](../../neo4j/readme.md) |
-| Standalone CR, status, customize | [neo4j/01-quickstart-standalone.md](../../neo4j/01-quickstart-standalone.md) |
-| Install operator (generic) | [operator/02-installation.md](../../operator/02-installation.md) |
-| Shared prerequisites | [operator/01-prerequisites.md](../../operator/01-prerequisites.md) |
-| Uninstall operator only | [operator/03-uninstall.md](../../operator/03-uninstall.md) |
-| Troubleshooting | [operator/04-troubleshooting.md](../../operator/04-troubleshooting.md) |
+| Topic | Page |
+|-------|------|
+| The resource you just created | [Your first Neo4j](first-neo4j.md) |
+| What is implemented today | [What works today](feature-status.md) |
+| Shaping the deployment — storage, connectivity, security, plugins | [Neo4j topics](../03-neo4j/readme.md) |
+| Installing on a non-kind cluster | [Operator installation](../02-operator-installation/01-prerequisites.md) |
+| Something is wrong | [Troubleshooting](../04-troubleshooting/01-common-issues.md) |

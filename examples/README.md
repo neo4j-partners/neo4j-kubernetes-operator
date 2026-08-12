@@ -8,9 +8,9 @@ for schema fields that are currently no-ops).
 ## How to use
 
 1. **Install the operator** first — see
-   [`docs/03-user-documentation/operator/02-installation.md`](../docs/03-user-documentation/operator/02-installation.md)
-   (or a platform quickstart: [kind](../docs/03-user-documentation/quickstart/local-kind/install.md),
-   [Azure AKS](../docs/03-user-documentation/quickstart/azure-aks/install.md)).
+   [Install the operator](../docs/user-guide/02-operator-installation/03-install.md)
+   (or a platform walkthrough: [kind](../docs/user-guide/01-getting-started/local-kind.md),
+   [Azure AKS](../docs/user-guide/01-getting-started/azure-aks.md)).
 2. **Pick a namespace.** Every example omits `metadata.namespace`, so `kubectl apply` targets your
    current context's default namespace. Add `-n <namespace>` to `kubectl apply`/`kubectl create`
    calls, or set `metadata.namespace` in the CR, to use another one.
@@ -136,7 +136,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
   `neo4j.com/mountable-by-operator: "true"`, and `secretMounts` / `trustedCerts.sources`
   must list `items` (named keys). Details: [`secrets/README.md`](secrets/README.md).
   Why this is needed with an operator but was not with Helm:
-  [security model](../docs/02-technical-design/security.md).
+  [Security](../docs/user-guide/03-neo4j/05-security.md#why-the-operator-requires-opt-in-labels).
 - **Auth:** `generatePassword: true` (default across most examples) needs nothing extra —
   the operator labels the generated auth Secret. Using `auth.passwordSecretRef` needs the
   Secret applied first **with** `neo4j.com/mountable-by-operator=true` **and**
@@ -154,12 +154,12 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 - **Primary count parity:** `topology.primaries.members` must be odd (quorum) and
   `topology.minimumMembers` must be `<= primaries.members`. Scale-in from multi-primary
   DBs down to **1** primary is **not** supported by Neo4j `ALTER DATABASE` — keep ≥ 3 or
-  recreate the DB manually ([docs](../docs/03-user-documentation/neo4j/02-quickstart-cluster.md#multi-primary--one-primary)).
+  recreate the DB manually ([docs](../docs/user-guide/03-neo4j/02-clustering.md#primary-counts-that-cannot-change)).
 - **Scale + storage:** After scale-in, Neo4j `DROP`ped server UUIDs cannot be re-enabled.
   With **Dynamic** data the operator wipes drained ordinal PVCs so scale-out gets a new
   identity. With **Existing** claims the operator never deletes your volumes — remounting
   the old store leaves the member `Dropped` until you wipe/replace the data. Details:
-  [cluster quickstart — Scaling](../docs/03-user-documentation/neo4j/02-quickstart-cluster.md#scaling-members).
+  [Clustering — Scaling members](../docs/user-guide/03-neo4j/02-clustering.md#scaling-members).
 
 ## What is NOT demonstrated yet
 

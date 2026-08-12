@@ -12,7 +12,7 @@ import (
 )
 
 func TestErrorOracleDocumented(t *testing.T) {
-	docPath := filepath.Join(moduleRoot(t), "docs", "03-user-documentation", "reference", "error-overview.md")
+	docPath := filepath.Join(moduleRoot(t), "docs", "user-guide", "05-reference", "errors.md")
 	body, err := os.ReadFile(docPath)
 	if err != nil {
 		t.Fatalf("read oracle doc: %v", err)
@@ -20,7 +20,7 @@ func TestErrorOracleDocumented(t *testing.T) {
 	text := string(body)
 	for _, e := range ErrorOracle {
 		if !strings.Contains(text, e.Reason) {
-			t.Errorf("error-overview.md missing reason %q (%s)", e.Reason, e.Condition)
+			t.Errorf("user-guide errors.md missing reason %q (%s)", e.Reason, e.Condition)
 		}
 	}
 }

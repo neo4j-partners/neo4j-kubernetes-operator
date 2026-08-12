@@ -52,7 +52,7 @@ kubectl apply -f examples/storage/
   Dynamic data: the operator deletes drained ordinal PVCs so a later scale-out starts fresh.
   Existing claims: the operator never deletes them — remounting the same store after scale-in
   leaves `ENABLE SERVER` stuck on `Dropped` until you wipe or replace the claim. See
-  [Scaling members](../../docs/03-user-documentation/neo4j/02-quickstart-cluster.md#scaling-members).
+  [Scaling members](../../docs/user-guide/03-neo4j/02-clustering.md#scaling-members).
 - **Share** mounts reuse the data volume with `subPathExpr` such as `logs/$(POD_NAME)`
   (and `metrics/$(POD_NAME)`). `volumes.plugins` Share uses subPath `plugins` so
   `NEO4J_PLUGINS` downloads persist; see [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml).

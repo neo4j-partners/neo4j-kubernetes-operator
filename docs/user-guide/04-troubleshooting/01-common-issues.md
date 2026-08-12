@@ -1,4 +1,9 @@
-# Troubleshooting — operator install
+# Common issues
+
+Symptom-driven fixes for the failures people actually hit, from installing the operator to scaling a
+cluster. If you only have a condition reason and want to know what it means, start from the
+[error reference](../05-reference/errors.md); if you need to read the operator's log, see
+[Operator logs](02-operator-logs.md).
 
 ## CRD apply fails: metadata.annotations too long
 
@@ -89,7 +94,7 @@ When `spec.auth.generatePassword: true`, the operator creates `{metadata.name}-a
 kubectl get secret dev-auth -n default -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d
 ```
 
-See [Quickstart — Standalone](../neo4j/01-quickstart-standalone.md#connect).
+See [Your first Neo4j](../01-getting-started/first-neo4j.md#5-connect).
 
 ## Secret mount / TLS rejected: missing mountable label or items
 
@@ -107,7 +112,8 @@ kubectl label secret <name> neo4j.com/mountable-by-operator=true
 
 Ensure `spec.storage.secretMounts.*.items` (and `trustedCerts.sources[].secret.items`) list
 each key. Details: [examples/secrets/README.md](../../../examples/secrets/README.md#mountable-secrets-neo-005).
-Why the label exists at all: [security model](../../02-technical-design/security.md).
+Why the label exists at all:
+[Security](../03-neo4j/05-security.md#why-the-operator-requires-opt-in-labels).
 
 ## Scale-in stuck despite setting neo4j.com/drain-ok
 
@@ -132,7 +138,7 @@ reason), mentioning `neo4j.com/allowed-for` or “auth secret … is not delegat
 **Cause:** `passwordSecretRef` Secrets must be delegated to this CR name (in addition to the
 mountable label). Operator-generated `{name}-auth` Secrets are already instance-scoped. An auth
 Secret is read by the operator to dial admin Bolt, not just mounted — see
-[security model](../../02-technical-design/security.md) for the reasoning.
+[Security](../03-neo4j/05-security.md#the-second-label) for the reasoning.
 
 **Fix:**
 
@@ -165,7 +171,7 @@ that gated recycle).
 - With **Existing** claims, wipe or replace the volume data (or bind a fresh claim) for that
   ordinal, then delete the pod. The operator will not delete `Existing.claimName` PVCs.
 
-Details: [Scaling members](../neo4j/02-quickstart-cluster.md#scaling-members).
+Details: [Scaling members](../03-neo4j/02-clustering.md#scaling-members).
 
 ## Scale-in stuck: UnsupportedSinglePrimary / multiple primaries to one primary
 
@@ -220,7 +226,7 @@ kubectl rollout status statefulset/dev-server -n default
 kubectl get neo4j dev -n default -o jsonpath='{.status.conditions[?(@.type=="Ready")]}'
 ```
 
-Status semantics: [status model](../../02-technical-design/crd-spec/neo4j/status.md) (design reference).
+Status fields and their meaning: [API reference](../05-reference/api.md#status).
 
-Condition **reasons** catalog (test oracle): [Error overview](../reference/error-overview.md).
-Operator log levels / file tee: [Logging](05-logging.md).
+Every condition reason: [Error reference](../05-reference/errors.md).
+Operator log levels and the optional log file: [Operator logs](02-operator-logs.md).

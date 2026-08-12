@@ -17,7 +17,7 @@ limitations under the License.
 package status
 
 // Entry is one stable condition reason — the test oracle for operator errors.
-// Keep in sync with docs/03-user-documentation/reference/error-overview.md.
+// Keep in sync with docs/user-guide/05-reference/errors.md.
 type Entry struct {
 	Condition string // status.conditions[].type, or EventOnly
 	Reason    string // status.conditions[].reason, also the Event reason

@@ -7,7 +7,7 @@
 #
 # Assert on Reason, never on the message (free-form and allowed to change). Reasons come from
 # src/internal/status/oracle.go, mirrored in
-# docs/03-user-documentation/reference/error-overview.md.
+# docs/user-guide/05-reference/errors.md.
 #
 # Inputs: NEO4J_CR_NAME, NEO4J_NAMESPACE, EXPECT_REASON, RECONCILE_ERROR_TIMEOUT
 set -euo pipefail
