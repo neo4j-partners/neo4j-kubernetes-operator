@@ -273,6 +273,8 @@ type VolumeClaimRetentionPolicySpec struct {
 }
 
 // ConfigSpec groups Neo4j configuration files and JVM settings (BDR-008).
+// User values must not contain $(...), backticks, or newlines; dangerous JVM agent/OnError
+// flags are rejected (NEO-006). Operator-owned expand-commands in rendered defaults remain.
 // +kubebuilder:validation:XValidation:rule="!has(self.neo4j) || !('server.jvm.additional' in self.neo4j)",message="use spec.config.jvm.additionalArguments instead of server.jvm.additional"
 // +kubebuilder:validation:XValidation:rule="!has(self.neo4j) || !('server.http.listen_address' in self.neo4j)",message="server.http.listen_address is owned by connectivity.listeners.http"
 // +kubebuilder:validation:XValidation:rule="!has(self.neo4j) || !('server.http.enabled' in self.neo4j)",message="server.http.enabled is owned by connectivity.listeners.http"

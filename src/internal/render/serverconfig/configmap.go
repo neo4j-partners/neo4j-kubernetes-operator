@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -282,6 +283,7 @@ func renderApocConf(ctx render.Context) string {
 		if !strings.HasPrefix(k, "apoc.") {
 			continue
 		}
+		// Values are validated by ValidateConfig (no newlines); join stays one setting per line.
 		lines = append(lines, k+"="+ctx.Neo4j.Spec.Config.Apoc[k])
 	}
 	if len(lines) == 1 {
@@ -290,15 +292,62 @@ func renderApocConf(ctx render.Context) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// ValidateConfigReports rejects neo4j.conf keys under config.apoc (CFG-APOC-001).
+// configKeyPattern is the allowlist for user-supplied neo4j.conf / apoc.conf keys (NEO-006).
+var configKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// ValidateConfig rejects config that enables shell/JVM injection or line-smuggling (NEO-006).
+// Operator-owned expand-commands remain in rendered defaults; user values must not contain them.
 func ValidateConfig(neo4j *neo4jv1beta1.Neo4j) error {
-	if neo4j.Spec.Config == nil || neo4j.Spec.Config.Apoc == nil {
+	if neo4j == nil {
+		return nil
+	}
+	if neo4j.Spec.Config != nil {
+		if err := validateStringMap("config.neo4j", neo4j.Spec.Config.Neo4j); err != nil {
+			return err
+		}
+		if err := validateApocMap(neo4j.Spec.Config.Apoc); err != nil {
+			return err
+		}
+		if neo4j.Spec.Config.JVM != nil {
+			for i, arg := range neo4j.Spec.Config.JVM.AdditionalArguments {
+				field := fmt.Sprintf("config.jvm.additionalArguments[%d]", i)
+				if err := rejectUnsafeConfigValue(field, arg); err != nil {
+					return err
+				}
+				if err := rejectDangerousJVMArg(field, arg); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if neo4j.Spec.Connectivity != nil && neo4j.Spec.Connectivity.ClusterDomain != "" {
+		if err := rejectUnsafeConfigValue("connectivity.clusterDomain", neo4j.Spec.Connectivity.ClusterDomain); err != nil {
+			return err
+		}
+	}
+	for id, def := range neo4j.Spec.PluginDefinitions {
+		if err := validateStringMap(fmt.Sprintf("pluginDefinitions[%q].config", id), def.Config); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateApocMap(m map[string]string) error {
+	if m == nil {
 		return nil
 	}
 	var bad []string
-	for k := range neo4j.Spec.Config.Apoc {
+	for k, v := range m {
 		if !strings.HasPrefix(k, "apoc.") {
 			bad = append(bad, k)
+			continue
+		}
+		if err := rejectUnsafeConfigKey("config.apoc", k); err != nil {
+			return err
+		}
+		if err := rejectUnsafeConfigValue(fmt.Sprintf("config.apoc[%q]", k), v); err != nil {
+			return err
 		}
 	}
 	if len(bad) == 0 {
@@ -306,4 +355,53 @@ func ValidateConfig(neo4j *neo4jv1beta1.Neo4j) error {
 	}
 	sort.Strings(bad)
 	return fmt.Errorf("config.apoc only accepts apoc.* keys for apoc.conf; move %v to config.neo4j (neo4j.conf)", bad)
+}
+
+func validateStringMap(field string, m map[string]string) error {
+	for k, v := range m {
+		if err := rejectUnsafeConfigKey(field, k); err != nil {
+			return err
+		}
+		if err := rejectUnsafeConfigValue(fmt.Sprintf("%s[%q]", field, k), v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rejectUnsafeConfigKey(field, key string) error {
+	if !configKeyPattern.MatchString(key) {
+		return fmt.Errorf("%s key %q contains forbidden characters (NEO-006)", field, key)
+	}
+	return nil
+}
+
+func rejectUnsafeConfigValue(field, value string) error {
+	switch {
+	case strings.Contains(value, "$("):
+		return fmt.Errorf("%s must not contain command substitution $(...) (NEO-006)", field)
+	case strings.Contains(value, "`"):
+		return fmt.Errorf("%s must not contain backticks (NEO-006)", field)
+	case strings.ContainsAny(value, "\n\r"):
+		return fmt.Errorf("%s must not contain newlines (NEO-006)", field)
+	default:
+		return nil
+	}
+}
+
+func rejectDangerousJVMArg(field, raw string) error {
+	arg := normalizeJVMArg(raw)
+	lower := strings.ToLower(arg)
+	for _, p := range []string{
+		"-javaagent:",
+		"-agentlib:",
+		"-agentpath:",
+		"-xx:onoutofmemoryerror=",
+		"-xx:onerror=",
+	} {
+		if strings.HasPrefix(lower, p) {
+			return fmt.Errorf("%s %q is not allowed (NEO-006)", field, arg)
+		}
+	}
+	return nil
 }

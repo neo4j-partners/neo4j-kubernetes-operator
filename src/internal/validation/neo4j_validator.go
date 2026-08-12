@@ -10,12 +10,13 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
+	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
 // Neo4jValidator is the validating admission webhook for Neo4j (ADR-001).
-// Slice 1: NEO-001 security/hostPath; NEO-002 SA IAM annotations; NEO-005 secret mounts.
+// Slice 1: NEO-001 security/hostPath; NEO-002 SA IAM; NEO-005 secrets; NEO-006 config injection.
 type Neo4jValidator struct {
 	Client client.Client // optional; when set, checks mountable Secret labels (NEO-005)
 }
@@ -87,6 +88,9 @@ func ValidateNeo4j(obj runtime.Object) error {
 		return err
 	}
 	if err := rendersecrets.ValidateSpec(neo4j); err != nil {
+		return err
+	}
+	if err := rendercfg.ValidateConfig(neo4j); err != nil {
 		return err
 	}
 	return nil
