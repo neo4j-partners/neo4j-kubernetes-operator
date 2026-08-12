@@ -103,7 +103,7 @@ version upgrades, Ingress, LDAP and multi-cluster are not implemented.
 
 Read [what works today](docs/user-guide/01-getting-started/feature-status.md) before relying on a
 field: it is the maintained list, and it separates what is tested end-to-end from what is implemented
-but unverified, and from schema fields that are still inert.
+but unverified, from what is planned with a settled design, and from what is not decided yet.
 
 ## Documentation
 

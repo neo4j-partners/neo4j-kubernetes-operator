@@ -1,20 +1,23 @@
 # What works today
 
-The `Neo4j` CRD is intentionally wider than the current implementation. Fields for planned
-capabilities are already in the schema so that manifests stay forward-compatible, which means the
-API server can accept a field the operator does not act on yet. This page tells you which is
-which.
+The `Neo4j` CRD is intentionally wider than the current implementation. Fields exist for capabilities
+the operator does not act on yet, so that manifests stay forward-compatible — which means the API
+server can accept a field that changes nothing. This page tells you which is which.
 
-Read it as a snapshot of the code, not as a roadmap commitment.
+Read it as a snapshot of the code. Where a capability is missing, the status says whether the shape it
+will take is settled or still open.
 
-## Confidence levels
+## Status values
 
-| Level | Meaning |
-|-------|---------|
-| **Verified** | Implemented, covered by unit tests, and exercised end to end against a real Neo4j on Kubernetes |
-| **Implemented** | Implemented and unit tested; not yet covered by an end-to-end scenario |
-| **Inert** | The field exists and passes validation, but no controller code reads it |
-| **Planned** | Not in the API surface you should rely on |
+| Status | Meaning |
+|--------|---------|
+| **Verified** | Implemented, unit tested, and exercised end to end against a real Neo4j on Kubernetes |
+| **Implemented** | Implemented and unit tested; no end-to-end scenario covers it yet |
+| **Planned** | Not implemented. The design is settled, so the field names and behaviour you see documented are the ones you will get |
+| **Not decided** | Not implemented and the approach is still open. Anything present in the schema may change shape or disappear |
+
+When a schema field exists for something not yet implemented, the note says so. Setting such a field
+validates and does nothing — see [the last section](#if-something-is-planned-or-not-decided).
 
 ## Deployment and topology
 
@@ -25,7 +28,6 @@ Read it as a snapshot of the code, not as a roadmap commitment.
 | Scale out — grow a pool, enable new members, align database topology | Verified | [Clustering](../03-neo4j/02-clustering.md#scaling-members) |
 | Scale in — shrink topology, drain and drop members, then shrink the StatefulSet | Implemented | [Clustering](../03-neo4j/02-clustering.md#scaling-members) |
 | Enterprise edition | Verified | `spec.edition: enterprise` is the only accepted value |
-| Community edition | Planned | Rejected at admission |
 
 ## Storage
 
@@ -37,7 +39,7 @@ Read it as a snapshot of the code, not as a roadmap commitment.
 | `Share` mode — auxiliary directories on the data volume | Verified | [Storage](../03-neo4j/03-storage.md#auxiliary-volumes) |
 | Extra mounts and Secret projections | Verified | [Storage](../03-neo4j/03-storage.md#extra-mounts) |
 | PVC retention on delete and on scale-in | Verified | [Operations](../03-neo4j/09-operations.md#deleting-a-neo4j-resource) |
-| Cloud object storage credentials | Planned | — |
+| Cloud object storage credentials | Planned | Cloud IAM annotations on the ServiceAccount are refused today |
 
 ## Connectivity
 
@@ -49,8 +51,7 @@ Read it as a snapshot of the code, not as a roadmap commitment.
 | Backup listener and admin Service | Implemented | [Connectivity](../03-neo4j/04-connectivity.md#the-admin-service) |
 | Metrics listener | Implemented | [Monitoring](../03-neo4j/08-monitoring.md) |
 | Cluster-internal Services, routing and advertised addresses | Verified | [Clustering](../03-neo4j/02-clustering.md#how-members-find-each-other) |
-| Ingress and reverse proxy | Inert | Fields exist under `spec.connectivity`; nothing is rendered |
-| Multi-cluster | Planned | `spec.connectivity.multiCluster.enabled: true` is rejected |
+| Ingress and reverse proxy | Not decided | Fields exist under `spec.connectivity.ingress`; nothing is rendered |
 
 ## Security
 
@@ -63,9 +64,9 @@ Read it as a snapshot of the code, not as a roadmap commitment.
 | Client certificate authentication and trusted certificate bundles | Implemented | [Security](../03-neo4j/05-security.md#transport-security) |
 | Pod and container security contexts, ServiceAccount, NetworkPolicy | Implemented | [Security](../03-neo4j/05-security.md#pod-and-container-hardening) |
 | TLS certificate reload without restart | Implemented | `spec.trust.reload.enabled` |
-| cert-manager issued certificates | Inert | Fields exist under `spec.trust.certManager`; no Certificate is created |
-| LDAP authentication | Inert | Fields exist under `spec.auth.ldap` |
-| Neo4j users, roles and privileges | Planned | Manage them with Cypher for now |
+| cert-manager issued certificates | Planned | Fields exist under `spec.trust.certManager`; no Certificate is created |
+| Neo4j users, roles and privileges | Not decided | Dedicated resources, after backup and restore. Use Cypher meanwhile |
+| LDAP and external auth providers | Not decided | `spec.auth.ldap` is ignored; configure providers through `spec.config` instead |
 
 ## Configuration and extensions
 
@@ -90,10 +91,10 @@ Read it as a snapshot of the code, not as a roadmap commitment.
 | Offline maintenance mode | Implemented | [Operations](../03-neo4j/09-operations.md#offline-maintenance) |
 | Init containers, sidecars and extra environment variables | Implemented | [Operations](../03-neo4j/09-operations.md#escape-hatches) |
 | Status conditions and Kubernetes Events | Verified | [Errors](../05-reference/errors.md) |
-| Neo4j version upgrades | Planned | `spec.version` is honoured at install; changing it is not orchestrated |
-| Backup and restore workflows | Planned | Only the backup listener and the `backups` volume exist |
-| CSV, JMX and Graphite metrics | Inert | Fields exist under `spec.features.monitoring` |
 | Prometheus metrics and ServiceMonitor | Implemented | [Monitoring](../03-neo4j/08-monitoring.md) |
+| Backup and restore | Planned | Dedicated resources; the backup listener and `backups` volume already exist |
+| Neo4j version upgrades | Planned | `spec.version` is honoured at install; changing it is not orchestrated |
+| CSV, JMX and Graphite metrics | Not decided | Fields exist under `spec.features.monitoring`; only Prometheus is wired |
 
 ## Operator itself
 
@@ -101,18 +102,25 @@ Read it as a snapshot of the code, not as a roadmap commitment.
 |------------|--------|-------|
 | Install from manifests or Helm chart | Verified | [Install](../02-operator-installation/03-install.md) |
 | Watching an explicit list of namespaces | Verified | [Watch scope](../02-operator-installation/04-operator-scope.md) |
-| Watching the whole cluster | Planned | `WATCH_NAMESPACE=*` is refused at start-up, by design |
 | Uninstall preserving data | Verified | [Uninstall](../02-operator-installation/05-uninstall.md) |
-| Published operator image | Planned | Build and push the image yourself — [Build the image](../02-operator-installation/02-build-image.md) |
+| Published operator image | Planned | Build and push it yourself — [Build the image](../02-operator-installation/02-build-image.md) |
 | Operator upgrades | Planned | Re-deploy the new image; no migration is performed |
 
-## If you need something marked Inert or Planned
+Cluster-wide watch is not a gap: it is refused on purpose, as explained in
+[Watch scope](../02-operator-installation/04-operator-scope.md).
 
-Inert fields are safe to leave out of your manifests; setting them does nothing and may become
-meaningful in a later release, at which point the behaviour would start applying to resources
-that already carry the field. Prefer omitting them until the capability is documented as
-implemented.
+## If something is Planned or Not decided
 
-For planned capabilities there is usually a manual path: run Cypher yourself for users and roles,
-call `neo4j-admin` in a Job of your own for backups, and recreate a resource at the target
-version instead of upgrading in place.
+Leave the corresponding fields out of your manifests. A field that does nothing today may start doing
+something in a later release, and it would then apply to resources that already carry it — a value you
+set as a placeholder becomes live without you touching the manifest. Omitting the field keeps that
+decision yours.
+
+There is usually a manual path meanwhile:
+
+- **Users and roles** — run the Cypher yourself, or point Neo4j at your identity provider through
+  `spec.config`.
+- **Backups** — call `neo4j-admin` from a Job of your own against the backup listener.
+- **Version changes** — deploy a new resource at the target version and migrate the data, rather than
+  editing `spec.version` in place.
+- **Ingress** — write the Ingress object yourself against the client Service.

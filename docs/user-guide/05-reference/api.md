@@ -110,8 +110,8 @@ See [Storage](../03-neo4j/03-storage.md).
 |-------|------|---------|-------|
 | `spec.auth.generatePassword` | bool | — | Creates `<name>-auth` with a random password |
 | `spec.auth.passwordSecretRef.name` | string | — | Existing Secret with key `NEO4J_AUTH` as `user/password` |
-| `spec.auth.ldap.enabled` | bool | `false` | Inert |
-| `spec.auth.ldap.passwordSecretRef.name` | string | — | Inert |
+| `spec.auth.ldap.enabled` | bool | `false` | Ignored — approach not decided |
+| `spec.auth.ldap.passwordSecretRef.name` | string | — | Ignored — approach not decided |
 
 `generatePassword: true` and `passwordSecretRef` are mutually exclusive. A referenced Secret needs
 both `neo4j.com/mountable-by-operator=true` and `neo4j.com/allowed-for=<resource name>`.
@@ -164,8 +164,8 @@ See [Plugins](../03-neo4j/07-plugins.md).
 | `spec.connectivity.service.annotations` | map | — | Copied onto the Service |
 | `spec.connectivity.service.loadBalancerSourceRanges` | []string | — | **Required** when type is `LoadBalancer` |
 | `spec.connectivity.clusterDomain` | string | `cluster.local` | Suffix for Neo4j-advertised names |
-| `spec.connectivity.ingress.*` | object | — | Inert |
-| `spec.connectivity.reverseProxy.*` | object | — | Inert |
+| `spec.connectivity.ingress.*` | object | — | Ignored — planned |
+| `spec.connectivity.reverseProxy.*` | object | — | Ignored — planned |
 | `spec.connectivity.multiCluster.enabled` | bool | `false` | `true` is rejected |
 
 See [Connectivity](../03-neo4j/04-connectivity.md).
@@ -182,9 +182,9 @@ See [Connectivity](../03-neo4j/04-connectivity.md).
 | `spec.trust.certificates.*.clientAuth` | string | `None` | `None`, `Optional` or `Require` |
 | `spec.trust.certificates.*.trustedCerts.sources` | []VolumeProjection | — | CA bundles; items must be named |
 | `spec.trust.reload.enabled` | bool | `false` | Reload certificates without restart |
-| `spec.trust.certManager.enabled` | bool | `false` | Inert; `issuerRef.name` required if set to true |
+| `spec.trust.certManager.enabled` | bool | `false` | Ignored — planned; `issuerRef.name` required if set to true |
 | `spec.trust.certManager.issuerRef` | object | — | `name`, `kind` (`Issuer` or `ClusterIssuer`, default `ClusterIssuer`) |
-| `spec.trust.certManager.dnsNames`, `.includeIngressHosts` | — | — | Inert |
+| `spec.trust.certManager.dnsNames`, `.includeIngressHosts` | — | — | Ignored — planned |
 
 With `trust.enabled: true`, Cluster mode requires `certificates.cluster`, and Standalone requires at
 least one of `certificates.bolt` or `certificates.https` while rejecting `cluster`.
@@ -197,7 +197,7 @@ See [Security](../03-neo4j/05-security.md#transport-security).
 |-------|------|---------|-------|
 | `spec.features.backup.enabled` | bool | `false` | Enables the backup listener and the admin Service; no backup workflow |
 | `spec.features.monitoring.prometheus.enabled` | bool | `false` | Prometheus endpoint inside Neo4j |
-| `spec.features.monitoring.prometheus.endpoint` | string | — | Inert; the port comes from the listener |
+| `spec.features.monitoring.prometheus.endpoint` | string | — | Ignored; the port comes from the listener |
 | `spec.features.monitoring.serviceMonitor.enabled` | bool | `false` | Creates `<name>-servicemonitor` |
 | `spec.features.monitoring.serviceMonitor.interval` | string | `30s` | |
 | `spec.features.monitoring.serviceMonitor.port` | string | `tcp-prometheus` | |
@@ -205,7 +205,7 @@ See [Security](../03-neo4j/05-security.md#transport-security).
 | `spec.features.monitoring.serviceMonitor.labels` | map | — | Usually needed for Prometheus to select it |
 | `spec.features.monitoring.serviceMonitor.jobLabel`, `.targetLabels`, `.selector` | — | — | Standard ServiceMonitor fields |
 | `spec.features.monitoring.serviceMonitor.namespaceSelector` | selector | — | Accepted, not applied |
-| `spec.features.monitoring.{csv,jmx,graphite}` | object | — | Inert |
+| `spec.features.monitoring.{csv,jmx,graphite}` | object | — | Ignored — approach not decided |
 
 See [Monitoring](../03-neo4j/08-monitoring.md).
 

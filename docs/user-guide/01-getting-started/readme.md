@@ -10,8 +10,8 @@ Three ways in, depending on what you already have.
 
 Before you invest time, check [what works today](feature-status.md). The `Neo4j` CRD is
 deliberately wider than the current implementation, so a field can exist in the schema and be
-accepted at admission without the operator acting on it. That page lists exactly which parts are
-implemented, which are inert, and which are planned.
+accepted at admission without the operator acting on it. That page lists what is implemented, what is
+planned with a settled design, and what is not decided yet.
 
 ## What you get
 

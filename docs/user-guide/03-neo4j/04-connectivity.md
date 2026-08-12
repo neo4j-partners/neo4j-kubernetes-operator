@@ -158,7 +158,7 @@ routing clients. See [Clustering](02-clustering.md#how-members-find-each-other).
 
 ## Not implemented yet
 
-`spec.connectivity.ingress` and `spec.connectivity.reverseProxy` exist in the schema and are inert:
+`spec.connectivity.ingress` and `spec.connectivity.reverseProxy` exist in the schema and are ignored:
 the operator renders nothing for them. Until they are implemented, expose Bolt and HTTP through a
 Service, and put your own ingress in front of the HTTP Service if you need host-based routing —
 noting that Bolt is not HTTP and most ingress controllers cannot route it without TCP passthrough.

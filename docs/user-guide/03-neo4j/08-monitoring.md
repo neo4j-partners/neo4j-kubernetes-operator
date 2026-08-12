@@ -27,7 +27,7 @@ already, publishing the metrics port under the name `tcp-prometheus`. Metrics ar
 added to the client Service — application clients have no business scraping them, and on a
 LoadBalancer that would expose internals.
 
-`spec.features.monitoring.prometheus.endpoint` is inert: the endpoint follows the listener port.
+`spec.features.monitoring.prometheus.endpoint` is ignored: the endpoint follows the listener port.
 
 ## Checking the endpoint
 
