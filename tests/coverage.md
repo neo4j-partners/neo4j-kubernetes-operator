@@ -65,7 +65,9 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] JVM `additionalArguments` effective at runtime in `server.jvm.additional` (bolt `SHOW SETTINGS`) — NEO-3-003-JVM-02
 - [x] APOC `apoc.*` config rendered into `<cr>-apoc-config` (`apoc.conf`) — NEO-3-003-APOC-01 · AC-NEO-APOC-001
 - [x] Live `spec.config` change applied end-to-end — render (ConfigMap) + rollout (STS template bump = controlled restart) + runtime (bolt `SHOW SETTINGS` on the restarted server) — NEO-3-010-RSTR-01 · AC-NEO-CONFIG-CHANGE
-- [ ] JVM `useDefaults: true` prepends Neo4j default JVM args into `server.jvm.additional` — NEO-3-003-JVM-01 (test **postponed**: render ignores `useDefaults` today, and the assert depends on how defaults are sourced — vendored `.conf` vs hardcoded list vs image; see the jvm.useDefaults implementation issue)
+- [x] JVM `useDefaults: true` renders the Neo4j default args into `server.jvm.additional` ahead of `additionalArguments` (ConfigMap) and they are effective at runtime (bolt `SHOW SETTINGS`); `useDefaults: false` leaves them out of the ConfigMap — NEO-3-003-JVM-01
+- [x] JVM `additionalArguments` colliding with a default (same key) replace it in place — user value wins, one entry per key, position preserved — NEO-3-003-JVM-01
+- [x] A dropped JVM argument is reported — `DuplicateEntry` Warning Event and operator log line naming the field, the value kept and the one dropped — NEO-3-003-JVM-01
 - [ ] APOC credentials mounted from secret — NEO-3-003-APOC-02 · AC-NEO-APOC-CREDS-001 (`pluginDefinitions.apoc.credentials`)
 - [ ] Rolling restart of cluster members one-by-one on config change — NEO-3-010-RSTR-02 (cluster-specific, see `workload-cluster`)
 

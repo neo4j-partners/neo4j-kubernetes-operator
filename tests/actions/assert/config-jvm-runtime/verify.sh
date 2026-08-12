@@ -3,6 +3,10 @@
 # are not just rendered into server.jvm.additional, they take effect on the running server.
 # Reproduces a manual check: connect over bolt with cypher-shell, SHOW SETTINGS the
 # server.jvm.additional setting, and confirm the effective value contains the custom flag.
+#
+# The fixture also sets useDefaults false, so this doubles as the negative half of
+# NEO-3-003-JVM-01: the rendered ConfigMap must not carry Neo4j's default arguments.
+# That check stays on the ConfigMap — at runtime the image may supply defaults of its own.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,6 +18,9 @@ source "${SCRIPT_DIR}/../../../lib/connectivity.sh"
 # Setting/flag expected at runtime — tied to tests/fixtures/neo4j-config-jvm.yaml.
 SETTING_NAME="${EXPECT_SETTING_NAME:-server.jvm.additional}"
 EXPECT_JVM_ARG="${EXPECT_JVM_ARG:--XX:+ExitOnOutOfMemoryError}"
+# Representative entry of neo4jDefaultJVMAdditional (src/internal/render/serverconfig/configmap.go).
+DEFAULT_JVM_ARG="${EXPECT_ABSENT_JVM_ARG:--XX:+UseG1GC}"
+CONFIGMAP="${NEO4J_CONFIGMAP:-${NEO4J_CR_NAME}-config}"
 NEO4J_RESOURCE="neo4j/${NEO4J_CR_NAME}"
 POD="${NEO4J_STS_NAME}-0"
 
@@ -26,6 +33,16 @@ if ! kubectl wait --for=condition=Ready "${NEO4J_RESOURCE}" \
   kubectl describe "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" >&2 || true
   die "${NEO4J_RESOURCE} did not become Ready"
 fi
+
+rendered="$(kubectl get configmap "${CONFIGMAP}" -n "${NEO4J_NAMESPACE}" \
+  -o 'jsonpath={.data.server\.jvm\.additional}' 2>/dev/null || true)"
+grep -qxF -- "${EXPECT_JVM_ARG}" <<<"${rendered}" \
+  || die "ConfigMap ${CONFIGMAP} ${SETTING_NAME} lacks '${EXPECT_JVM_ARG}'; got: ${rendered}"
+if grep -qxF -- "${DEFAULT_JVM_ARG}" <<<"${rendered}"; then
+  die "useDefaults false but ConfigMap ${CONFIGMAP} ${SETTING_NAME} still carries '${DEFAULT_JVM_ARG}'; got: ${rendered}"
+fi
+
+log "useDefaults false — ${CONFIGMAP} holds only the user argument, no Neo4j default (NEO-3-003-JVM-01)"
 
 # Run cypher-shell inside the Neo4j container over its localhost bolt interface.
 conn_exec_serverpod() {

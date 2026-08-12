@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +23,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
+	renderconfig "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
 )
 
@@ -141,6 +143,8 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 	}
 
 	log := ctrllog.FromContext(ctx).WithName("pipeline")
+	reportDuplicateEntries(log, r.Recorder, neo4j)
+
 	steps := []struct {
 		name string
 		step shared.Reconciler
@@ -169,6 +173,24 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 		stepLog.V(1).Info("domain reconcile done")
 	}
 	return ctrl.Result{}, nil
+}
+
+// reportDuplicateEntries surfaces values a render merge dropped on a key collision. Those
+// merges are deterministic and often legitimate (a user argument beating a Neo4j default) but
+// silent, so an operator learns which value won without diffing the rendered output. ADR-014
+// has no warn level, hence Info on the log and a Warning Event carrying the oracle reason.
+//
+// Field-agnostic on purpose: every source returning render.Duplicate reports the same way.
+func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, neo4j *neo4jv1beta1.Neo4j) {
+	for _, d := range renderconfig.Duplicates(neo4j) {
+		log.Info("duplicate entry",
+			"field", d.Field, "key", d.Key,
+			"kept", d.Kept, "keptFrom", d.KeptFrom,
+			"dropped", d.Dropped, "droppedFrom", d.DroppedFrom)
+		if recorder != nil {
+			recorder.Event(neo4j, corev1.EventTypeWarning, status.ReasonDuplicateEntry, d.Message())
+		}
+	}
 }
 
 func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {

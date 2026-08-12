@@ -17,6 +17,10 @@ Rejected Secrets (`SecretNotMountable`, `SecretNotDelegated`) also emit a `Warni
 the same reason — the operator stops before creating any StatefulSet, so `kubectl describe` is
 usually the fastest way to see why nothing was deployed.
 
+Reasons with **no condition** (`—` in the table) are Event-only: the CR is healthy, but the
+operator resolved something silently and wants you to know. They appear in `kubectl describe`
+and in the operator log; nothing turns `Ready` false.
+
 Structured logs use `msg`, `level`, and logger names (`neo4j`, `pipeline`, domain).
 See [Operator logging](../operator/05-logging.md).
 
@@ -27,6 +31,7 @@ See [Operator logging](../operator/05-logging.md).
 | Error | ReconcileFailed | error | A pipeline step returned an error |
 | Error | SecretNotMountable | error | Referenced Secret lacks the `neo4j.com/mountable-by-operator` opt-in label (NEO-005) |
 | Error | SecretNotDelegated | error | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
+| — (Event only) | DuplicateEntry | warn | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | Ready | ReconcileError | error | Ready cleared because reconcile failed |
 | Reconciling | Failed | error | Reconciling stopped after failure |
 | TLSReady | SecretMissing | error | Required TLS/auth Secret is missing or incomplete |
@@ -42,6 +47,32 @@ See [Operator logging](../operator/05-logging.md).
 | ServersPendingDrain | ShrinkingTopology | info | Scale-in in progress |
 | ServersPendingDrain | Draining | info | Server drain / DEALLOCATE in progress |
 | ServersPendingDrain | AwaitingSTSShrink | info | Waiting for StatefulSet replica shrink after drain |
+
+## DuplicateEntry
+
+One reason for every spec field whose rendering merges layers, so a value never disappears in
+silence. The Event message carries the field, the key, and both values with their origin
+(`user`, `neo4j-default`, `operator-default`, `plugin-definition`, `operator-injected`):
+
+```text
+Warning  DuplicateEntry  spec.config.jvm.additionalArguments: duplicate entry for
+-Djdk.nio.maxCachedBufferSize — kept "-Djdk.nio.maxCachedBufferSize=2048" (user),
+dropped "-Djdk.nio.maxCachedBufferSize=1024" (neo4j-default)
+```
+
+Currently reported for `spec.config.jvm.additionalArguments` (same flag twice, or a flag
+replacing a Neo4j default — NEO-3-003-JVM-01) and `spec.config.neo4j` (a key set twice across
+the defaults, plugin, user and operator-injected layers — BDR-008).
+
+Two directions matter. `kept (user)` means your value won as intended, over an operator default
+(`server.default_listen_address`, `server.directories.plugins`,
+`dbms.security.procedures.*`) or a plugin definition. `kept (operator-injected)` means the key
+is operator-owned and your setting was discarded — cluster discovery, routing and advertised
+addresses (`dbms.cluster.*`, `dbms.routing.*`, `dbms.kubernetes.*`, `server.*.advertised_address`,
+`initial.dbms.default_primaries_count`), TLS policies derived from `spec.trust`
+(`dbms.ssl.policy.*`, `server.bolt.tls_level`), log config paths (`server.logs.*.config`) and the
+listener toggles not already refused by CEL (`server.backup.enabled`,
+`server.metrics.prometheus.*`). Set those through the dedicated spec fields instead.
 
 ## Test usage
 

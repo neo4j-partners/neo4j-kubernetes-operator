@@ -1,0 +1,29 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # Both arguments collide with a Neo4j default, one per key shape: a -D value
+  # (default -Djdk.nio.maxCachedBufferSize=1024) and a boolean flip (default
+  # -XX:-OmitStackTraceInFastThrow). additionalArguments must win (NEO-3-003-JVM-01).
+  config:
+    jvm:
+      useDefaults: true
+      additionalArguments:
+        - "-Djdk.nio.maxCachedBufferSize=2048"
+        - "-XX:+OmitStackTraceInFastThrow"

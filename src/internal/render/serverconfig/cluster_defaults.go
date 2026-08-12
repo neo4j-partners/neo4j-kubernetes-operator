@@ -15,10 +15,30 @@ import (
 // dbms.security.procedures.* always land in neo4j.conf — never apoc.conf
 // (https://neo4j.com/docs/apoc/current/config/).
 func mergedNeo4jConf(ctx render.Context) map[string]string {
+	merged, _ := mergeNeo4jConf(ctx)
+	return merged
+}
+
+// mergeNeo4jConf applies the layers above and reports each key whose value one layer replaced
+// with a different one — including the last layer silently discarding a user setting.
+func mergeNeo4jConf(ctx render.Context) (map[string]string, []render.Duplicate) {
 	merged := map[string]string{}
+	originByKey := map[string]string{}
+	var dups []render.Duplicate
+	put := func(k, v, origin string) {
+		if old, ok := merged[k]; ok && old != v {
+			dups = append(dups, render.Duplicate{
+				Field: FieldConfigNeo4j, Key: k,
+				Kept: v, KeptFrom: origin,
+				Dropped: old, DroppedFrom: originByKey[k],
+			})
+		}
+		merged[k] = v
+		originByKey[k] = origin
+	}
 
 	for k, v := range operatorDefaultNeo4jConfKeys(ctx) {
-		merged[k] = v
+		put(k, v, render.OriginOperatorDefault)
 	}
 
 	for _, pluginID := range ctx.PoolPluginIDs() {
@@ -30,21 +50,21 @@ func mergedNeo4jConf(ctx render.Context) map[string]string {
 			continue
 		}
 		for k, v := range def.Config {
-			merged[k] = v
+			put(k, v, render.OriginPluginDefinition)
 		}
 	}
 
 	if ctx.Neo4j.Spec.Config != nil && ctx.Neo4j.Spec.Config.Neo4j != nil {
 		for k, v := range ctx.Neo4j.Spec.Config.Neo4j {
-			merged[k] = v
+			put(k, v, render.OriginUser)
 		}
 	}
 
 	for k, v := range operatorInjectedNeo4jConfKeys(ctx) {
-		merged[k] = v
+		put(k, v, render.OriginOperatorInjected)
 	}
 
-	return merged
+	return merged, render.SortDuplicates(dups)
 }
 
 // operatorDefaultNeo4jConfKeys are overridable by spec.config.neo4j (BDR-008 defaults layer).

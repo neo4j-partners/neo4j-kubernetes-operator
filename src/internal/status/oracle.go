@@ -19,11 +19,16 @@ package status
 // Entry is one stable condition reason — the test oracle for operator errors.
 // Keep in sync with docs/03-user-documentation/reference/error-overview.md.
 type Entry struct {
-	Condition string // status.conditions[].type
-	Reason    string // status.conditions[].reason
+	Condition string // status.conditions[].type, or EventOnly
+	Reason    string // status.conditions[].reason, also the Event reason
 	Severity  string // error | warn | info
 	Summary   string // short MkDocs-friendly description
 }
+
+// EventOnly marks a catalogued reason surfaced as a Kubernetes Event (and an operator log
+// line) without a matching status condition — the CR is healthy, the operator just resolved
+// something the user should know about.
+const EventOnly = ""
 
 // Reasons carried by the Error condition and by the matching Warning Event, so a single
 // oracle entry covers both surfaces.
@@ -31,6 +36,9 @@ const (
 	ReasonReconcileFailed    = "ReconcileFailed"
 	ReasonSecretNotMountable = "SecretNotMountable"
 	ReasonSecretNotDelegated = "SecretNotDelegated"
+	// ReasonDuplicateEntry is Event-only and field-agnostic: any spec field whose rendering
+	// merges layers reports a dropped value under this reason (see render.Duplicate).
+	ReasonDuplicateEntry = "DuplicateEntry"
 )
 
 // ErrorOracle is the canonical catalog of condition reasons operators and tests
@@ -39,6 +47,7 @@ var ErrorOracle = []Entry{
 	{Condition: ConditionError, Reason: ReasonReconcileFailed, Severity: "error", Summary: "A pipeline step returned an error"},
 	{Condition: ConditionError, Reason: ReasonSecretNotMountable, Severity: "error", Summary: "Referenced Secret lacks the neo4j.com/mountable-by-operator opt-in label (NEO-005)"},
 	{Condition: ConditionError, Reason: ReasonSecretNotDelegated, Severity: "error", Summary: "BYO auth Secret is not delegated to this Neo4j via neo4j.com/allowed-for (ADD-01)"},
+	{Condition: EventOnly, Reason: ReasonDuplicateEntry, Severity: "warn", Summary: "Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped"},
 	{Condition: ConditionReady, Reason: "ReconcileError", Severity: "error", Summary: "Ready cleared because reconcile failed"},
 	{Condition: ConditionReconciling, Reason: "Failed", Severity: "error", Summary: "Reconciling stopped after failure"},
 	{Condition: ConditionTLSReady, Reason: "SecretMissing", Severity: "error", Summary: "Required TLS/auth Secret is missing or incomplete"},

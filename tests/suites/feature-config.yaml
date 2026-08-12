@@ -30,15 +30,27 @@ cases:
     expect_contains: Unrecognized
     cr_name: e2e-cfg-unknown
 
-  # NOTE: useDefaults (NEO-3-003-JVM-01) is intentionally NOT tested yet — its assertion
-  # depends on how defaults get sourced (vendored .conf vs hardcoded list vs image), which
-  # is undecided. See coverage.md and the jvm.useDefaults implementation issue.
+  # The two JVM cases are a pair — useDefaults false here, true below.
   - id: jvm-additional-args
-    comment: NEO-3-003-JVM-02 — spec.config.jvm.additionalArguments take effect, SHOW SETTINGS server.jvm.additional contains the custom flag.
+    comment: NEO-3-003-JVM-02 — spec.config.jvm.additionalArguments take effect, SHOW SETTINGS server.jvm.additional contains the custom flag and useDefaults false keeps the Neo4j defaults out.
     fixture: tests/fixtures/neo4j-config-jvm.yaml
     assert: config-jvm-runtime
     expect: success
     cr_name: e2e-cfg-jvm
+
+  - id: jvm-use-defaults
+    comment: NEO-3-003-JVM-01 — useDefaults true injects the Neo4j default JVM arguments ahead of the user argument, and they reach the running server.
+    fixture: tests/fixtures/neo4j-config-jvm-defaults.yaml
+    assert: config-jvm-defaults
+    expect: success
+    cr_name: e2e-cfg-jvmdef
+
+  - id: jvm-override-defaults
+    comment: NEO-3-003-JVM-01 — an additionalArguments entry colliding with a Neo4j default wins and replaces it in place, and the drop is reported on a DuplicateEntry Warning Event plus the operator log.
+    fixture: tests/fixtures/neo4j-config-jvm-override.yaml
+    assert: config-jvm-override
+    expect: success
+    cr_name: e2e-cfg-jvmovr
 
   # Runtime procedure availability belongs to the planned feature-plugins suite.
   - id: apoc-config

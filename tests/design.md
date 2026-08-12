@@ -56,10 +56,33 @@ The APOC case stays a render check (assert waits for `Installed` and reads the C
 assigned via `spec.plugins`, and `SHOW SETTINGS` does not expose APOC config — runtime APOC
 behaviour belongs to `feature-plugins`.
 
-JVM coverage is `additionalArguments` only. `jvm.useDefaults` (NEO-3-003-JVM-01) is **not
-tested yet** — it is a no-op in render today, and the right assertion depends on how the
-defaults get sourced (vendored `.conf` vs hardcoded list vs relying on the image). The test
-is postponed until that implementation decision lands (see the jvm.useDefaults issue).
+Three cases cover `jvm.useDefaults`, whose defaults come from `neo4jDefaultJVMAdditional` in
+`src/internal/render/serverconfig/configmap.go` (the uncommented `server.jvm.additional` lines
+of the vendored `neo4j-enterprise.conf`):
+
+| Case | Fixture | Assertion |
+|------|---------|-----------|
+| `jvm-additional-args` | `neo4j-config-jvm.yaml` (`useDefaults: false`) | custom flag effective at runtime (NEO-3-003-JVM-02) **and** no Neo4j default in the ConfigMap |
+| `jvm-use-defaults` | `neo4j-config-jvm-defaults.yaml` (`useDefaults: true`) | defaults rendered before the custom flag, and effective at runtime (NEO-3-003-JVM-01) |
+| `jvm-override-defaults` | `neo4j-config-jvm-override.yaml` (`useDefaults: true`, colliding args) | the user value replaces the colliding default **in place** — one entry per key, position preserved, and the user value is the one the server reports |
+
+The override case uses one collision per key shape recognised by `jvmArgKey`: a `-D` value
+(`-Djdk.nio.maxCachedBufferSize`) and a `-XX` boolean flip (`OmitStackTraceInFastThrow`).
+"In place" is asserted by position — the winner must still sit before the last default rather
+than be appended at the end — because that ordering is what makes the precedence deterministic.
+
+It also asserts that the drop is *reported*: a `DuplicateEntry` Warning Event (oracle reason)
+and a `duplicate entry` operator log line, both naming the field, the value kept and the value
+dropped. Without that, a user flag silently replacing a default would only be visible by
+diffing the rendered ConfigMap.
+
+`DuplicateEntry` is not JVM-specific — it is the reason for any spec field whose rendering
+merges layers (`render.Duplicate`), `spec.config.neo4j` included. The assert therefore checks
+the field name in the message, so a future source cannot make this case pass by accident.
+
+Presence of the defaults is asserted on the rendered ConfigMap *and* at runtime, absence on the
+ConfigMap only: the image ships its own `neo4j.conf`, so only the ConfigMap distinguishes what
+the operator injected from what Neo4j would carry anyway.
 
 The live config-change case (`config-restart`, NEO-2-010, formerly the separate
 `feature-config-change` suite) deploys a plain Standalone, waits for `Ready`, patches

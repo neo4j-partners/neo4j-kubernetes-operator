@@ -223,3 +223,156 @@ func TestConfigMapRendersJVMDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestDuplicatesReportsDroppedJVMArguments(t *testing.T) {
+	trueVal, falseVal := true, false
+	cases := []struct {
+		name string
+		jvm  *neo4jv1beta1.JVMSpec
+		want []render.Duplicate
+	}{
+		{name: "no jvm spec", jvm: nil},
+		{
+			name: "additional argument without collision",
+			jvm:  &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"}},
+		},
+		{
+			name: "exact repeat loses nothing",
+			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
+				"-XX:MaxMetaspaceSize=1024m", "-XX:MaxMetaspaceSize=1024m",
+			}},
+		},
+		{
+			name: "useDefaults false ignores the defaults",
+			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
+				"-Djdk.nio.maxCachedBufferSize=2048",
+			}},
+		},
+		{
+			name: "user value replaces a Neo4j default",
+			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{
+				"-Djdk.nio.maxCachedBufferSize=2048",
+			}},
+			want: []render.Duplicate{{
+				Field:       FieldJVMArguments,
+				Key:         "-Djdk.nio.maxCachedBufferSize",
+				Kept:        "-Djdk.nio.maxCachedBufferSize=2048",
+				KeptFrom:    render.OriginUser,
+				Dropped:     "-Djdk.nio.maxCachedBufferSize=1024",
+				DroppedFrom: render.OriginNeo4jDefault,
+			}},
+		},
+		{
+			name: "boolean flip of a Neo4j default",
+			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{
+				"-XX:+OmitStackTraceInFastThrow",
+			}},
+			want: []render.Duplicate{{
+				Field:       FieldJVMArguments,
+				Key:         "-XX:OmitStackTraceInFastThrow",
+				Kept:        "-XX:+OmitStackTraceInFastThrow",
+				KeptFrom:    render.OriginUser,
+				Dropped:     "-XX:-OmitStackTraceInFastThrow",
+				DroppedFrom: render.OriginNeo4jDefault,
+			}},
+		},
+		{
+			name: "same key twice in additionalArguments",
+			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
+				"-XX:MaxMetaspaceSize=1024m", "-XX:MaxMetaspaceSize=2048m",
+			}},
+			want: []render.Duplicate{{
+				Field:       FieldJVMArguments,
+				Key:         "-XX:MaxMetaspaceSize",
+				Kept:        "-XX:MaxMetaspaceSize=2048m",
+				KeptFrom:    render.OriginUser,
+				Dropped:     "-XX:MaxMetaspaceSize=1024m",
+				DroppedFrom: render.OriginUser,
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			neo4j := &neo4jv1beta1.Neo4j{
+				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+				Spec:       neo4jv1beta1.Neo4jSpec{Config: &neo4jv1beta1.ConfigSpec{JVM: tc.jvm}},
+			}
+			got := Duplicates(neo4j)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d duplicate(s) %+v, want %d", len(got), got, len(tc.want))
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Errorf("duplicate %d = %+v, want %+v", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// The same reporting covers plain conf keys, so a user setting is never dropped in silence —
+// notably when an operator-injected key wins over spec.config.neo4j.
+func TestDuplicatesReportsDroppedNeo4jConfKeys(t *testing.T) {
+	cases := []struct {
+		name    string
+		cluster bool
+		conf    map[string]string
+		want    []render.Duplicate
+	}{
+		{name: "key the operator does not touch", conf: map[string]string{"db.transaction.timeout": "60s"}},
+		{
+			name: "user value replaces an operator default",
+			conf: map[string]string{"server.default_listen_address": "127.0.0.1"},
+			want: []render.Duplicate{{
+				Field:       FieldConfigNeo4j,
+				Key:         "server.default_listen_address",
+				Kept:        "127.0.0.1",
+				KeptFrom:    render.OriginUser,
+				Dropped:     "0.0.0.0",
+				DroppedFrom: render.OriginOperatorDefault,
+			}},
+		},
+		{
+			// Cluster routing is operator-owned and, unlike the listener keys, no CEL rule
+			// stops a user from setting it — exactly the case that used to go unnoticed.
+			name:    "operator injection wins over the user",
+			cluster: true,
+			conf:    map[string]string{"dbms.routing.enabled": "false"},
+			want: []render.Duplicate{{
+				Field:       FieldConfigNeo4j,
+				Key:         "dbms.routing.enabled",
+				Kept:        "true",
+				KeptFrom:    render.OriginOperatorInjected,
+				Dropped:     "false",
+				DroppedFrom: render.OriginUser,
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			topology := neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone}
+			if tc.cluster {
+				topology = neo4jv1beta1.TopologySpec{
+					Mode:      neo4jv1beta1.TopologyModeCluster,
+					Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+				}
+			}
+			neo4j := &neo4jv1beta1.Neo4j{
+				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jSpec{
+					Topology: topology,
+					Config:   &neo4jv1beta1.ConfigSpec{Neo4j: tc.conf},
+				},
+			}
+			got := Duplicates(neo4j)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d duplicate(s) %+v, want %d", len(got), got, len(tc.want))
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Errorf("duplicate %d = %+v, want %+v", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}

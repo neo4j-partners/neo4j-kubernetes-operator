@@ -132,11 +132,55 @@ var neo4jDefaultJVMAdditional = []string{
 	"-Dlog4j2.disable.jmx=true",
 }
 
+// CR fields whose rendering merges layers, and can therefore drop a value (render.Duplicate).
+const (
+	FieldJVMArguments = "spec.config.jvm.additionalArguments"
+	FieldConfigNeo4j  = "spec.config.neo4j"
+)
+
+// Duplicates reports every value this package dropped while rendering the server config:
+// JVM arguments colliding on the same flag (NEO-3-003-JVM-01) and neo4j.conf keys colliding
+// across the defaults / plugin / user / injected layers (BDR-008). Empty when nothing collides.
+func Duplicates(neo4j *neo4jv1beta1.Neo4j) []render.Duplicate {
+	if neo4j == nil {
+		return nil
+	}
+	var jvm *neo4jv1beta1.JVMSpec
+	if neo4j.Spec.Config != nil {
+		jvm = neo4j.Spec.Config.JVM
+	}
+	_, dups := mergeJVMArgs(jvm)
+
+	// neo4j.conf is rendered per pool; a collision usually repeats across pools, report it once.
+	seen := map[render.Duplicate]struct{}{}
+	for _, pool := range render.ActivePools(neo4j) {
+		_, poolDups := mergeNeo4jConf(render.ContextForPool(neo4j, pool))
+		for _, d := range poolDups {
+			if _, ok := seen[d]; ok {
+				continue
+			}
+			seen[d] = struct{}{}
+			dups = append(dups, d)
+		}
+	}
+	return render.SortDuplicates(dups)
+}
+
 func renderJVMConf(ctx render.Context) string {
 	var jvm *neo4jv1beta1.JVMSpec
 	if ctx.Neo4j.Spec.Config != nil {
 		jvm = ctx.Neo4j.Spec.Config.JVM
 	}
+	ordered, _ := mergeJVMArgs(jvm)
+	if len(ordered) == 0 {
+		return ""
+	}
+	return strings.Join(ordered, "\n") + "\n"
+}
+
+// mergeJVMArgs merges Neo4j defaults with additionalArguments (user wins, in place) and
+// reports every argument dropped on the way.
+func mergeJVMArgs(jvm *neo4jv1beta1.JVMSpec) ([]string, []render.Duplicate) {
 	// CRD / Helm default: useDefaults is true when unset.
 	useDefaults := jvm == nil || jvm.UseDefaults == nil || *jvm.UseDefaults
 	var args []string
@@ -144,36 +188,45 @@ func renderJVMConf(ctx render.Context) string {
 		args = jvm.AdditionalArguments
 	}
 	if !useDefaults && len(args) == 0 {
-		return ""
+		return nil, nil
 	}
 
 	var ordered []string
+	var dups []render.Duplicate
 	indexByKey := map[string]int{}
-	put := func(raw string) {
+	originByKey := map[string]string{}
+	put := func(raw, origin string) {
 		arg := normalizeJVMArg(raw)
 		if arg == "" {
 			return
 		}
 		key := jvmArgKey(arg)
 		if i, ok := indexByKey[key]; ok {
+			// An exact repeat loses nothing, so it is not worth reporting.
+			if ordered[i] != arg {
+				dups = append(dups, render.Duplicate{
+					Field: FieldJVMArguments, Key: key,
+					Kept: arg, KeptFrom: origin,
+					Dropped: ordered[i], DroppedFrom: originByKey[key],
+				})
+			}
 			ordered[i] = arg // later value wins; keep first-seen position
+			originByKey[key] = origin
 			return
 		}
 		indexByKey[key] = len(ordered)
+		originByKey[key] = origin
 		ordered = append(ordered, arg)
 	}
 	if useDefaults {
 		for _, arg := range neo4jDefaultJVMAdditional {
-			put(arg)
+			put(arg, render.OriginNeo4jDefault)
 		}
 	}
 	for _, arg := range args {
-		put(arg)
+		put(arg, render.OriginUser)
 	}
-	if len(ordered) == 0 {
-		return ""
-	}
-	return strings.Join(ordered, "\n") + "\n"
+	return ordered, dups
 }
 
 func normalizeJVMArg(arg string) string {

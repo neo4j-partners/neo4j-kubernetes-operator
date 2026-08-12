@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # Counterpart of neo4j-config-jvm.yaml: useDefaults true so server.jvm.additional carries the
+  # Neo4j default arguments, plus one user argument to prove the two are merged (NEO-3-003-JVM-01).
+  config:
+    jvm:
+      useDefaults: true
+      additionalArguments:
+        - "-XX:+ExitOnOutOfMemoryError"
