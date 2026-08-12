@@ -1,0 +1,40 @@
+# Negative: a plugin licence Secret WITHOUT neo4j.com/mountable-by-operator. The namespace
+# owner has not opted in, so the operator must refuse the CR at reconcile with
+# Error/SecretNotMountable and create no operands (NEO-005).
+#
+# The CR itself is valid — the refusal happens at reconcile, not at admission, so
+# kubectl apply succeeds and assert/reconcile-error waits for the condition.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plg-bloom-license-unlabeled
+  labels:
+    app.kubernetes.io/managed-by: neo4j-e2e
+type: Opaque
+stringData:
+  license.key: e2e-dummy-not-a-real-license
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  plugins: [bloom]
+  pluginDefinitions:
+    bloom:
+      licenseSecretRef: plg-bloom-license-unlabeled

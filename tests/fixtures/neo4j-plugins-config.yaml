@@ -1,0 +1,33 @@
+# pluginDefinitions.<id>.config — the per-plugin config layer. Unlike spec.config.apoc
+# (which renders the separate <cr>-apoc-config / apoc.conf, covered by feature-config),
+# this map merges straight into neo4j.conf between the operator defaults and
+# spec.config.neo4j.
+#
+# The key is deliberately core-namespaced rather than apoc.*: SHOW SETTINGS does not
+# expose plugin-namespaced settings — that is precisely why apoc.conf exists — so an
+# apoc.* key here would be unobservable over bolt and the case could not prove the merge.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  plugins: [apoc]
+  pluginDefinitions:
+    apoc:
+      config:
+        db.transaction.timeout: 47s

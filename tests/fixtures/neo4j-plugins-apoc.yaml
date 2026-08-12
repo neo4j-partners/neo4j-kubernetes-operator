@@ -1,0 +1,27 @@
+# APOC assigned via spec.plugins. The operator only sets NEO4J_PLUGINS=["apoc"]; the
+# official image downloads the JAR at container start, so this fixture needs outbound
+# network on the node. No config.apoc here — apoc.conf rendering is feature-config's job;
+# this one is about the procedure actually being callable.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  plugins: [apoc]
+  pluginDefinitions:
+    apoc: {}

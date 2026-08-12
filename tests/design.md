@@ -160,6 +160,47 @@ Neo4j pod itself (`localhost`) and from a separate client pod (client Service DN
 Expectations are data-driven via `EXPECT_CONN_{BOLT,NEO4J,HTTP,HTTPS}` (see
 `config/neo4j/cases/standalone-connectivity.sh`); a TLS case flips `https` to `success`.
 
+## Plugins suite mechanics (`feature-plugins`)
+
+Runtime plugin behaviour (BDR-004). Every render decision — the `NEO4J_PLUGINS` string, the
+generated ConfigMap keys, the volume shapes — is already covered by unit tests under
+`src/internal/render/`, so each case here asserts something only a real container can show.
+
+**The operator does not download anything.** It sets `NEO4J_PLUGINS` on the container and the
+official Neo4j image fetches the JARs at container start. Consequences: the node needs
+outbound network, and a jar-host outage turns these cases red for reasons outside the
+operator. `on_case_failure: continue` keeps that from hiding the rest of the suite.
+
+**Standalone only.** Every catalog plugin is legal in `spec.plugins`, so one topology covers
+apoc, gds and bloom. In Cluster mode GDS/Bloom are CEL-forbidden on primaries and on
+`secondaries.read` — that placement rule is admission-level and unit-tested, not worth a
+4-pod boot here. Staying on one topology also keeps `NEO4J_POOL` at its `server` default for
+every case.
+
+**Licences are dummies.** The suite asserts the operator's plumbing — whole-Secret projection,
+read-only mount, the real path — never that GDS or Bloom validate a licence, so it runs in CI
+with no licence material. The path is the substance: `render/workload/plugin_volumes.go`
+projects the whole Secret (no `items`) at `/licenses/<pluginID>`, so the file is named after
+the Secret key — `/licenses/bloom/license.key`, **not** `/licenses/bloom.key` as
+`crd-spec/neo4j/spec.md` documents.
+
+**Procedure assertions avoid version strings.** A missing function makes `cypher-shell` print
+`Unknown function 'apoc.version'`, which contains `apoc.version` and would pass a naive
+substring check. The cases use `SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc.'
+RETURN count(*) > 0 AS ok` instead: core Cypher, so it returns `FALSE` rather than erroring
+when the plugin is absent. `conn_assert_cypher` in `lib/connectivity.sh` is the retrying
+wrapper; `conn_run_cypher` is its non-asserting sibling, used to log the actual version for
+diagnostics.
+
+Allowlists are checked over bolt rather than in the ConfigMap, because the Neo4j image ships
+its own `neo4j.conf` — a rendered key is not proof the server resolved it.
+
+**Two documented gaps** (see coverage.md): a volume-only plugin install emits
+`server.directories.plugins` but *no* `dbms.security.procedures.*`, so a manually imported
+JAR loads with its procedures still restricted; and an imported JAR must live at
+`<pvc-root>/plugins/`, because `render/storage/volumes.go` applies the Share subPath to
+`Existing` volumes too. The import case pins both so a fix has to be deliberate.
+
 ## Configuration profiles
 
 | Profile | Behaviour |
