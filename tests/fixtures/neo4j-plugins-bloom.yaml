@@ -1,0 +1,45 @@
+# Licence Secret plus the CR that references it, applied together so the Secret exists on
+# first reconcile.
+#
+# The licence content is a dummy: this case asserts the operator's plumbing (whole-Secret
+# projection, read-only mount, real path), not that Bloom validates a licence. A valid
+# Bloom licence cannot live in CI, so Bloom functionality stays out of scope.
+#
+# neo4j.com/mountable-by-operator is mandatory (NEO-005) — without it the operator refuses
+# the CR before rendering operands, which is the license-secret-unlabeled case.
+# managed-by=neo4j-e2e is what storage/cleanup-extra deletes on teardown.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plg-bloom-license
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    app.kubernetes.io/managed-by: neo4j-e2e
+type: Opaque
+stringData:
+  license.key: e2e-dummy-not-a-real-license
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  plugins: [bloom]
+  pluginDefinitions:
+    bloom:
+      licenseSecretRef: plg-bloom-license

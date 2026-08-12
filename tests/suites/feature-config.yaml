@@ -57,7 +57,7 @@ cases:
     expect: success
     cr_name: e2e-cfg-jvmovr
 
-  # Runtime procedure availability belongs to the planned feature-plugins suite.
+  # Runtime procedure availability belongs to the feature-plugins suite.
   - id: apoc-config
     comment: NEO-3-003-APOC-01 — apoc.* config renders into the dedicated <cr>-apoc-config (apoc.conf) when APOC is assigned via spec.plugins.
     fixture: tests/fixtures/neo4j-config-apoc.yaml
