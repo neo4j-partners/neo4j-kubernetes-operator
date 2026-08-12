@@ -535,10 +535,15 @@ type TrustReloadSpec struct {
 
 // TrustSpec embeds TLS / mTLS configuration (BDR-006 Option B).
 type TrustSpec struct {
-	Enabled     bool                   `json:"enabled,omitempty"`
-	Reload      *TrustReloadSpec       `json:"reload,omitempty"`
-	CertManager *CertManagerSpec       `json:"certManager,omitempty"`
-	Certificates *TrustCertificatesSpec `json:"certificates,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	// InsecureAdminConnection allows the operator to dial Bolt without TLS
+	// (cleartext admin password on the pod network). Required for cluster formation
+	// when certificates.bolt is unset (NEO-004). Prefer enabling bolt TLS instead.
+	// Emits a Warning event when used.
+	InsecureAdminConnection bool                   `json:"insecureAdminConnection,omitempty"`
+	Reload                  *TrustReloadSpec       `json:"reload,omitempty"`
+	CertManager             *CertManagerSpec       `json:"certManager,omitempty"`
+	Certificates            *TrustCertificatesSpec `json:"certificates,omitempty"`
 }
 
 // SecondaryPoolSpec configures analytics or read secondary pool (BDR-002).

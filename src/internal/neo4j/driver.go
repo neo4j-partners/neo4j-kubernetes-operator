@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"strings"
 	"time"
@@ -13,26 +14,61 @@ type driverAdmin struct {
 	driver neo4j.DriverWithContext
 }
 
+// ConnectOpts configures operator admin Bolt transport (NEO-004).
+type ConnectOpts struct {
+	// RootCAs enables neo4j+s with certificate verification.
+	RootCAs *x509.CertPool
+	// AllowPlaintext permits unencrypted neo4j:// (trust.insecureAdminConnection).
+	AllowPlaintext bool
+}
+
 // Connect opens a Bolt admin session to uri with basic auth.
-// ponytail: bolt+ssc when useTLS (skip verify) — proper trust material is a follow-up.
-func Connect(ctx context.Context, uri, user, password string, useTLS bool) (Admin, error) {
-	if useTLS && !strings.Contains(uri, "+s") && !strings.Contains(uri, "+ssc") {
-		uri = strings.Replace(uri, "bolt://", "bolt+ssc://", 1)
-		uri = strings.Replace(uri, "neo4j://", "neo4j+ssc://", 1)
+// TLS uses neo4j+s with RootCAs — never +ssc. Plaintext requires AllowPlaintext (NEO-004).
+func Connect(ctx context.Context, uri, user, password string, opts ConnectOpts) (Admin, error) {
+	uri, err := rewriteAdminURI(uri, opts)
+	if err != nil {
+		return nil, err
 	}
-	driver, err := neo4j.NewDriverWithContext(uri, neo4j.BasicAuth(user, password, ""),
+	d, err := neo4j.NewDriverWithContext(uri, neo4j.BasicAuth(user, password, ""),
 		func(c *neo4j.Config) {
 			c.SocketConnectTimeout = 10 * time.Second
+			if opts.RootCAs != nil {
+				c.RootCAs = opts.RootCAs
+			}
 		})
 	if err != nil {
 		return nil, err
 	}
-	if err := driver.VerifyConnectivity(ctx); err != nil {
-		_ = driver.Close(ctx)
+	if err := d.VerifyConnectivity(ctx); err != nil {
+		_ = d.Close(ctx)
 		return nil, fmt.Errorf("bolt connect: %w", err)
 	}
-	return &driverAdmin{driver: driver}, nil
+	return &driverAdmin{driver: d}, nil
 }
+
+func rewriteAdminURI(uri string, opts ConnectOpts) (string, error) {
+	switch {
+	case opts.RootCAs != nil && opts.AllowPlaintext:
+		return "", fmt.Errorf("admin Bolt: RootCAs and AllowPlaintext are mutually exclusive (NEO-004)")
+	case opts.RootCAs != nil:
+		uri = strings.Replace(uri, "bolt+ssc://", "bolt+s://", 1)
+		uri = strings.Replace(uri, "neo4j+ssc://", "neo4j+s://", 1)
+		if !strings.Contains(uri, "+s://") {
+			uri = strings.Replace(uri, "bolt://", "bolt+s://", 1)
+			uri = strings.Replace(uri, "neo4j://", "neo4j+s://", 1)
+		}
+		return uri, nil
+	case opts.AllowPlaintext:
+		uri = strings.Replace(uri, "bolt+ssc://", "bolt://", 1)
+		uri = strings.Replace(uri, "neo4j+ssc://", "neo4j://", 1)
+		uri = strings.Replace(uri, "bolt+s://", "bolt://", 1)
+		uri = strings.Replace(uri, "neo4j+s://", "neo4j://", 1)
+		return uri, nil
+	default:
+		return "", fmt.Errorf("admin Bolt requires trust.certificates.bolt (verified TLS) or trust.insecureAdminConnection=true (NEO-004)")
+	}
+}
+
 
 func (a *driverAdmin) Close(ctx context.Context) error {
 	return a.driver.Close(ctx)

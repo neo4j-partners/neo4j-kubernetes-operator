@@ -29,3 +29,8 @@ spec:
           size: 10Gi
   auth:
     generatePassword: true
+  trust:
+    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    # Prefer trust.certificates.bolt for verified TLS instead.
+    enabled: false
+    insecureAdminConnection: true

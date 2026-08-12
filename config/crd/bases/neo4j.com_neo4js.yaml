@@ -5810,7 +5810,9 @@ spec:
                         type: object
                     type: object
                   serviceAccount:
-                    description: ServiceAccountSpec configures workload ServiceAccount.
+                    description: |-
+                      ServiceAccountSpec configures workload ServiceAccount.
+                      Cloud workload-identity annotations (EKS/GKE/AKS IAM bindings) are rejected (NEO-002).
                     properties:
                       annotations:
                         additionalProperties:
@@ -23372,6 +23374,13 @@ spec:
                     type: object
                   enabled:
                     type: boolean
+                  insecureAdminConnection:
+                    description: |-
+                      InsecureAdminConnection allows the operator to dial Bolt without TLS
+                      (cleartext admin password on the pod network). Required for cluster formation
+                      when certificates.bolt is unset (NEO-004). Prefer enabling bolt TLS instead.
+                      Emits a Warning event when used.
+                    type: boolean
                   reload:
                     description: TrustReloadSpec configures dbms.security.tls_reload_enabled.
                     properties:
@@ -23457,17 +23466,19 @@ spec:
                 && self.trust.certManager.issuerRef.name != '''')'
             - message: cluster TLS is required for clustered deployments when trust
                 is enabled
-              rule: self.topology.mode != 'Cluster' || !has(self.trust) || self.trust.enabled
-                != true || (has(self.trust.certificates) && has(self.trust.certificates.cluster))
+              rule: self.topology.mode != 'Cluster' || !has(self.trust) || !has(self.trust.enabled)
+                || self.trust.enabled != true || (has(self.trust.certificates) &&
+                has(self.trust.certificates.cluster))
             - message: trust.certificates.cluster is only valid when topology.mode
                 is Cluster
-              rule: self.topology.mode != 'Standalone' || !has(self.trust) || self.trust.enabled
-                != true || !has(self.trust.certificates) || !has(self.trust.certificates.cluster)
+              rule: self.topology.mode != 'Standalone' || !has(self.trust) || !has(self.trust.enabled)
+                || self.trust.enabled != true || !has(self.trust.certificates) ||
+                !has(self.trust.certificates.cluster)
             - message: Standalone trust.enabled requires trust.certificates.bolt and/or
                 trust.certificates.https
-              rule: self.topology.mode != 'Standalone' || !has(self.trust) || self.trust.enabled
-                != true || (has(self.trust.certificates) && (has(self.trust.certificates.bolt)
-                || has(self.trust.certificates.https)))
+              rule: self.topology.mode != 'Standalone' || !has(self.trust) || !has(self.trust.enabled)
+                || self.trust.enabled != true || (has(self.trust.certificates) &&
+                (has(self.trust.certificates.bolt) || has(self.trust.certificates.https)))
             - message: multi-cluster not in V1
               rule: self.topology.mode != 'Cluster' || !has(self.connectivity) ||
                 !has(self.connectivity.multiCluster) || self.connectivity.multiCluster.enabled

@@ -47,3 +47,7 @@ spec:
     clusterDomain: cluster.local
     multiCluster:
       enabled: false
+  trust:
+    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    enabled: false
+    insecureAdminConnection: true

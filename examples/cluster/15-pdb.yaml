@@ -30,6 +30,11 @@ spec:
           size: 10Gi
   auth:
     generatePassword: true
+  trust:
+    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    # Prefer trust.certificates.bolt for verified TLS instead.
+    enabled: false
+    insecureAdminConnection: true
   podDisruptionBudget:
     enabled: true
     # minAvailable: 2   # optional override (int or percentage string)

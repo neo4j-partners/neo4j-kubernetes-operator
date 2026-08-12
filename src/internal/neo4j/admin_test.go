@@ -1,6 +1,10 @@
 package neo4j
 
-import "testing"
+import (
+	"crypto/x509"
+	"strings"
+	"testing"
+)
 
 func TestParseAuthSecret(t *testing.T) {
 	u, p, err := ParseAuthSecret("neo4j/s3cret")
@@ -9,6 +13,32 @@ func TestParseAuthSecret(t *testing.T) {
 	}
 	if _, _, err := ParseAuthSecret("bad"); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestRewriteAdminURI(t *testing.T) {
+	pool := x509.NewCertPool()
+	got, err := rewriteAdminURI("neo4j://db.svc:7687", ConnectOpts{RootCAs: pool})
+	if err != nil || got != "neo4j+s://db.svc:7687" {
+		t.Fatalf("tls got %q %v", got, err)
+	}
+	got, err = rewriteAdminURI("neo4j+ssc://db.svc:7687", ConnectOpts{RootCAs: pool})
+	if err != nil || got != "neo4j+s://db.svc:7687" {
+		t.Fatalf("upgrade ssc got %q %v", got, err)
+	}
+	got, err = rewriteAdminURI("neo4j://db.svc:7687", ConnectOpts{AllowPlaintext: true})
+	if err != nil || got != "neo4j://db.svc:7687" {
+		t.Fatalf("plain got %q %v", got, err)
+	}
+	got, err = rewriteAdminURI("neo4j+ssc://db.svc:7687", ConnectOpts{AllowPlaintext: true})
+	if err != nil || got != "neo4j://db.svc:7687" {
+		t.Fatalf("strip ssc got %q %v", got, err)
+	}
+	if _, err := rewriteAdminURI("neo4j://db.svc:7687", ConnectOpts{}); err == nil || !strings.Contains(err.Error(), "insecureAdminConnection") {
+		t.Fatalf("expected fail-closed, got %v", err)
+	}
+	if _, err := rewriteAdminURI("neo4j://db.svc:7687", ConnectOpts{RootCAs: pool, AllowPlaintext: true}); err == nil {
+		t.Fatal("expected mutual exclusion error")
 	}
 }
 

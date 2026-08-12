@@ -28,6 +28,7 @@ spec:
   auth:
     generatePassword: true
   trust:
+    insecureAdminConnection: true
     enabled: true
     certificates:
       cluster:

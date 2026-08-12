@@ -96,8 +96,18 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Domain asked to requeue (e.g. drainOK just written) — don't overwrite status or delay.
+	// Domain asked to requeue — persist in-memory status (e.g. ClusterFormed/BoltUnavailable)
+	// but skip ObserveAndWrite so we don't recalculate Ready over a mid-pipeline snapshot
+	// (formation already Status().Update'd drainOK when needed).
 	if pipeResult.Requeue || pipeResult.RequeueAfter > 0 {
+		if err := r.Client.Status().Update(ctx, &neo4j); err != nil {
+			if apierrors.IsConflict(err) {
+				log.V(1).Info("status conflict on requeue, requeue")
+				return ctrl.Result{Requeue: true}, nil
+			}
+			log.Error(err, "status write on requeue failed")
+			return ctrl.Result{}, err
+		}
 		return pipeResult, nil
 	}
 
@@ -244,7 +254,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		ServerConfig: serverconfig.New(c, scheme),
 		Workload:     workload.New(c, scheme),
 		Connectivity: connectivity.New(c, scheme),
-		Formation:    formation.New(c, scheme),
+		Formation:    formation.New(c, scheme, mgr.GetEventRecorderFor("neo4j-controller")),
 		StatusWriter: status.NewWriter(c),
 	}
 }

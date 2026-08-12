@@ -35,3 +35,7 @@ spec:
         mode: Dynamic
         dynamic:
           size: 10Gi
+  trust:
+    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    enabled: false
+    insecureAdminConnection: true

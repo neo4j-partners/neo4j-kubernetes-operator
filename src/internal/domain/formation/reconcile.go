@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -27,14 +28,15 @@ const requeueAfter = 15 * time.Second
 
 // Reconciler runs ENABLE SERVER / drain+DROP (NEO-3-011-SRV-01, BDR-009, ADR-007).
 type Reconciler struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client   client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 	// Connect builds an Admin; nil → real Bolt driver.
 	Connect func(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (intneo4j.Admin, error)
 }
 
-func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
-	return &Reconciler{Client: c, Scheme: scheme}
+func New(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder) *Reconciler {
+	return &Reconciler{Client: c, Scheme: scheme, Recorder: recorder}
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
@@ -495,7 +497,11 @@ func (r *Reconciler) defaultConnect(ctx context.Context, neo4j *neo4jv1beta1.Neo
 	if err != nil {
 		return nil, err
 	}
-	return intneo4j.Connect(ctx, AdminBoltURI(neo4j), user, pass, BoltTLSEnabled(neo4j))
+	opts, err := r.adminConnectOpts(ctx, neo4j)
+	if err != nil {
+		return nil, err
+	}
+	return intneo4j.Connect(ctx, AdminBoltURI(neo4j), user, pass, opts)
 }
 
 func countEnabledPrimaries(neo4j *neo4jv1beta1.Neo4j, servers []intneo4j.Server) int32 {
