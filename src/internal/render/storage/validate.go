@@ -164,9 +164,26 @@ func validateExisting(role string, existing *neo4jv1beta1.ExistingVolumeSpec) er
 	}
 	if existing.VolumeClaimTemplate != nil {
 		n++
+		if err := rejectPVCSpecPVBind(fmt.Sprintf("storage.volumes.%s.existing.volumeClaimTemplate", role), existing.VolumeClaimTemplate); err != nil {
+			return err
+		}
 	}
 	if n != 1 {
 		return fmt.Errorf("storage.volumes.%s.existing requires exactly one of claimName, volume, or volumeClaimTemplate", role)
+	}
+	return nil
+}
+
+// rejectPVCSpecPVBind blocks fields that pin a cluster-scoped PersistentVolume (NEO-023).
+func rejectPVCSpecPVBind(field string, spec *corev1.PersistentVolumeClaimSpec) error {
+	if spec == nil {
+		return nil
+	}
+	if spec.VolumeName != "" {
+		return fmt.Errorf("%s.volumeName is not allowed (binds a cluster-scoped PersistentVolume; use existing.claimName)", field)
+	}
+	if spec.Selector != nil {
+		return fmt.Errorf("%s.selector is not allowed (binds a cluster-scoped PersistentVolume; use existing.claimName)", field)
 	}
 	return nil
 }

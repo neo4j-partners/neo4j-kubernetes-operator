@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
@@ -246,6 +247,41 @@ func TestValidateAllowsNonReservedAdditionalMount(t *testing.T) {
 	}}
 	if err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateRejectsVolumeClaimTemplatePVBind(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode: neo4jv1beta1.VolumeModeExisting,
+						Existing: &neo4jv1beta1.ExistingVolumeSpec{
+							VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
+								VolumeName: "pv-from-another-ns",
+								AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+								Resources: corev1.VolumeResourceRequirements{
+									Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	err := Validate(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "volumeName") {
+		t.Fatalf("got %v", err)
+	}
+	neo4j.Spec.Storage.Volumes.Data.Existing.VolumeClaimTemplate.VolumeName = ""
+	neo4j.Spec.Storage.Volumes.Data.Existing.VolumeClaimTemplate.Selector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{"app": "x"},
+	}
+	err = Validate(neo4j)
+	if err == nil || !strings.Contains(err.Error(), "selector") {
+		t.Fatalf("got %v", err)
 	}
 }
 

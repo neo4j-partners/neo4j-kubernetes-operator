@@ -164,6 +164,8 @@ type DynamicVolumeSpec struct {
 }
 
 // ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+// volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+// and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
 type ExistingVolumeSpec struct {
 	ClaimName           string                            `json:"claimName,omitempty"`
 	Volume              *corev1.Volume                    `json:"volume,omitempty"`
