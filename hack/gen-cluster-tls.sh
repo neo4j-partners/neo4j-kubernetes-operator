@@ -20,11 +20,14 @@
 #   # open https://neo4j.lab.local:7473/  — never https://<ip>:7473/
 set -euo pipefail
 
+umask 077
+
 NS="${1:-default}"
 NAME="${2:-analytics}"
 PRIMARIES="${3:-3}"
-OUT="${TMPDIR:-/tmp}/neo4j-tls-${NAME}"
-mkdir -p "$OUT"
+# NEO-019: unpredictable private dir; wipe on exit (keys must not linger under /tmp/neo4j-tls-$NAME).
+OUT="$(mktemp -d "${TMPDIR:-/tmp}/neo4j-tls.XXXXXX")"
+trap 'rm -rf "$OUT"' EXIT
 
 openssl genrsa -out "$OUT/ca.key" 4096
 openssl req -x509 -new -nodes -key "$OUT/ca.key" -sha256 -days 3650 \
@@ -96,7 +99,7 @@ Port-forward (lab — Browser over HTTPS needs Bolt TLS):
   open https://neo4j.localhost:7473/
   # Connect URI (direct, not neo4j+s routing):
   #   bolt+s://127.0.0.1:7687
-  # Trust the lab CA (or allow insecure) for the self-signed cert.
+  # Trust the lab CA for the self-signed cert (import ca.crt or use a trust store).
 
 CR trust block (cluster + https + bolt — Helm ssl.* parity):
 
@@ -139,5 +142,5 @@ HTTPS / external LB (optional EXTRA_DNS — do not bake floating Azure IPs):
 
   Then rebuild/redeploy the operator and roll Neo4j pods.
 
-Material kept at: ${OUT}
+Local key material was removed after upload (NEO-019). Re-run this script to regenerate.
 EOF
