@@ -238,11 +238,14 @@ func TestPluginConfKeysAPOC(t *testing.T) {
 	if data["server.directories.plugins"] != "/plugins" {
 		t.Fatalf("directories.plugins = %q", data["server.directories.plugins"])
 	}
-	if data["dbms.security.procedures.unrestricted"] != "apoc.*" {
-		t.Fatalf("unrestricted = %q", data["dbms.security.procedures.unrestricted"])
-	}
 	if data["dbms.security.procedures.allowlist"] != "apoc.*" {
 		t.Fatalf("allowlist = %q", data["dbms.security.procedures.allowlist"])
+	}
+	if _, ok := data["dbms.security.procedures.unrestricted"]; ok {
+		t.Fatalf("unrestricted must not be auto-set (NEO-024), got %q", data["dbms.security.procedures.unrestricted"])
+	}
+	if _, ok := data["dbms.security.http_auth_allowlist"]; ok {
+		t.Fatalf("http_auth_allowlist must not be auto-set (NEO-024), got %q", data["dbms.security.http_auth_allowlist"])
 	}
 }
 
@@ -265,6 +268,29 @@ func TestPluginConfKeysPluginsVolumeOnly(t *testing.T) {
 	}
 	if _, ok := data["dbms.security.procedures.unrestricted"]; ok {
 		t.Fatalf("unrestricted should be unset without catalog plugins, got %q", data["dbms.security.procedures.unrestricted"])
+	}
+}
+
+func TestPluginConfKeysAPOCWithPluginsVolume(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Plugins:  []string{"apoc"},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
+					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeShare},
+				},
+			},
+		},
+	}
+	data := ConfigMap(render.StandaloneContext(neo4j)).Data
+	if data["server.directories.plugins"] != "/plugins" {
+		t.Fatalf("directories.plugins = %q", data["server.directories.plugins"])
+	}
+	if data["dbms.security.procedures.allowlist"] != "apoc.*" {
+		t.Fatalf("allowlist = %q", data["dbms.security.procedures.allowlist"])
 	}
 }
 

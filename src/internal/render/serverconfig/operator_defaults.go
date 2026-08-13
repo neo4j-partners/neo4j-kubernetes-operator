@@ -71,8 +71,12 @@ func clusterNeo4jConfKeys(ctx render.Context) map[string]string {
 	return keys
 }
 
-// pluginConfKeys points Neo4j at /plugins and opens procedures for assigned catalog plugins.
-// Overridable via spec.config.neo4j (BDR-008 defaults layer).
+// pluginConfKeys points Neo4j at /plugins and allowlists procedures for assigned
+// catalog plugins. Does not set procedures.unrestricted (sandbox bypass) — that
+// must be explicit via spec.config.neo4j (NEO-024).
+//
+// /plugins is always the load path when plugins are in play: either
+// storage.volumes.plugins or an operator-managed emptyDir (ensurePluginsMount).
 func pluginConfKeys(ctx render.Context) map[string]string {
 	ids := ctx.PoolPluginIDs()
 	pluginsVolume := ctx.Neo4j.Spec.Storage != nil &&
@@ -84,6 +88,8 @@ func pluginConfKeys(ctx render.Context) map[string]string {
 	}
 
 	keys := map[string]string{}
+	// Catalog plugins → STS mounts /plugins (volume or emptyDir). Explicit plugins
+	// volume alone also needs the override so Neo4j reads the mount.
 	if len(ids) > 0 || pluginsVolume {
 		keys["server.directories.plugins"] = "/plugins"
 	}
@@ -107,18 +113,13 @@ func pluginConfKeys(ctx render.Context) map[string]string {
 			add("bloom.*")
 		}
 	}
-	// Helm analytics secondary: open GDS procedures on the analytics member.
+	// Analytics pool defaults: GDS procedures allowed (still sandboxed).
 	if ctx.Pool == render.PoolAnalytics {
 		add("gds.*")
 	}
 	if len(patterns) == 0 {
 		return keys
 	}
-	joined := strings.Join(patterns, ",")
-	keys["dbms.security.procedures.unrestricted"] = joined
-	keys["dbms.security.procedures.allowlist"] = joined
-	if _, ok := seen["gds.*"]; ok {
-		keys["dbms.security.http_auth_allowlist"] = "gds.*"
-	}
+	keys["dbms.security.procedures.allowlist"] = strings.Join(patterns, ",")
 	return keys
 }

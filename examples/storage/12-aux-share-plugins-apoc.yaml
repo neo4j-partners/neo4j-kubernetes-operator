@@ -39,7 +39,8 @@ spec:
   pluginDefinitions:
     apoc: {}
   config:
-    # neo4j.conf — overrides operator defaults (apoc.*). Delete these two keys to use defaults.
+    # neo4j.conf — allowlist is also set by the operator for catalog plugins; unrestricted
+    # (sandbox bypass) is never auto-set — opt in here when a procedure needs it (NEO-024).
     neo4j:
       dbms.security.procedures.allowlist: "apoc.algo.aStar"
       dbms.security.procedures.unrestricted: "apoc.algo.aStar"

@@ -245,6 +245,20 @@ func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {
 	if envByName["NEO4J_PLUGINS"] != `["apoc","graph-data-science"]` {
 		t.Fatalf("NEO4J_PLUGINS = %q", envByName["NEO4J_PLUGINS"])
 	}
+	foundMount, foundVol := false, false
+	for _, m := range sts.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.MountPath == "/plugins" && m.Name == "plugins" {
+			foundMount = true
+		}
+	}
+	for _, v := range sts.Spec.Template.Spec.Volumes {
+		if v.Name == "plugins" && v.EmptyDir != nil {
+			foundVol = true
+		}
+	}
+	if !foundMount || !foundVol {
+		t.Fatalf("expected ephemeral emptyDir /plugins mount, mount=%v vol=%v", foundMount, foundVol)
+	}
 }
 
 func TestStandaloneContainerPortsIncludeOptionalListeners(t *testing.T) {
