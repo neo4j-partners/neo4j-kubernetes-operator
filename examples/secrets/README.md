@@ -49,13 +49,21 @@ always dials the short in-cluster Service name (`<svc>.<ns>.svc`) and never appe
 
 | File | Creates | Used by |
 |------|---------|---------|
-| `auth-password.yaml` | `neo4j-auth` (Opaque, key `NEO4J_AUTH`) | `standalone/02-auth-existing-secret.yaml` |
+| `create-auth-secret.sh` | `neo4j-auth` (Opaque, key `NEO4J_AUTH`, random password) | `standalone/02-auth-existing-secret.yaml` |
 | `plugin-licenses.yaml` | `gds-license`, `bloom-license` (dummy `license: REPLACE_ME`) | `cluster/03-pools-analytics-read.yaml`, `cluster/14-full.yaml` |
 
 ```bash
-kubectl apply -f examples/secrets/auth-password.yaml
+# NEO-021: do not apply a committed password — generate locally
+./examples/secrets/create-auth-secret.sh default dev-auth-secret neo4j-auth
 kubectl apply -f examples/secrets/plugin-licenses.yaml
 ```
+
+# Or equivalent one-liner:
+# kubectl create secret generic neo4j-auth \
+#   --from-literal="NEO4J_AUTH=neo4j/$(openssl rand -base64 24)" \
+#   --dry-run=client -o yaml | \
+#   kubectl label --local -f - neo4j.com/mountable-by-operator=true neo4j.com/allowed-for=dev-auth-secret -o yaml | \
+#   kubectl apply -f -
 
 Replace the dummy license values with your real GDS/Bloom license file contents before relying
 on Enterprise features of those plugins.

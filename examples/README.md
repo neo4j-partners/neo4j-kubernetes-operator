@@ -141,7 +141,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
   the operator labels the generated auth Secret. Using `auth.passwordSecretRef` needs the
   Secret applied first **with** `neo4j.com/mountable-by-operator=true` **and**
   `neo4j.com/allowed-for: <Neo4j.metadata.name>` — see
-  [`secrets/auth-password.yaml`](secrets/auth-password.yaml) (delegated to `dev-auth-secret`).
+  [`secrets/create-auth-secret.sh`](secrets/create-auth-secret.sh) (delegated to `dev-auth-secret`; NEO-021).
 - **TLS:** generated on demand with `./hack/gen-cluster-tls.sh <namespace> <name> <primary-count>`
   (script labels the three Secrets). Full walkthrough, `EXTRA_DNS` for LoadBalancer/Browser HTTPS,
   and `bolt+s://` vs `neo4j+s://` notes: [`secrets/README.md`](secrets/README.md).
