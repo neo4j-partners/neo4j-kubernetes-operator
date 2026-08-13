@@ -10,9 +10,10 @@ clouds: [local-kind]
 # something only a real container can show: the JAR actually arrived, the procedure answers,
 # the licence file is where the code (not the doc) says it is.
 #
-# NOTE: the operator contains no download logic. It sets NEO4J_PLUGINS and the official image
-# fetches the JARs at container start, so the download cases need outbound network on the node.
-# A jar-host outage fails those cases; on_case_failure: continue keeps it from hiding the rest.
+# NOTE: the operator contains no install logic. It sets NEO4J_PLUGINS and the image entrypoint
+# installs the JAR at container start. All three V1 catalog plugins ship INSIDE the Enterprise
+# image — apoc in /var/lib/neo4j/labs, gds and bloom in /var/lib/neo4j/products — so no case
+# here needs outbound network, and the suite is hermetic.
 #
 # Standalone only: every catalog plugin is legal in spec.plugins, and staying on one topology
 # keeps NEO4J_POOL at its "server" default for every case.
@@ -27,7 +28,7 @@ pipeline:
 
 cases:
   - id: apoc-runtime
-    comment: APOC assigned via spec.plugins — the JAR downloads at container start and apoc.version() answers over bolt.
+    comment: APOC assigned via spec.plugins — the JAR is installed at container start and apoc.version() answers over bolt.
     fixture: tests/fixtures/neo4j-plugins-apoc.yaml
     assert: plugins-apoc
     expect: success

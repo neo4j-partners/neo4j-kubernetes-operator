@@ -33,4 +33,4 @@ conn_assert_cypher localhost "${password}" \
 # Diagnostic only — also shows whether the server considers itself Community or Enterprise GDS.
 log "gds.version() -> $(conn_run_cypher localhost "${password}" "RETURN gds.version();" 2>&1 | tail -1)"
 
-log "GDS assigned without a licence Secret is downloaded and its procedures are callable (BDR-004)"
+log "GDS assigned without a licence Secret is installed and its procedures are callable (BDR-004)"

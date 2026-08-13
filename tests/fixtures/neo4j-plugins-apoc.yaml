@@ -1,7 +1,7 @@
-# APOC assigned via spec.plugins. The operator only sets NEO4J_PLUGINS=["apoc"]; the
-# official image downloads the JAR at container start, so this fixture needs outbound
-# network on the node. No config.apoc here — apoc.conf rendering is feature-config's job;
-# this one is about the procedure actually being callable.
+# APOC assigned via spec.plugins. The operator only sets NEO4J_PLUGINS=["apoc"]; the image
+# entrypoint installs the JAR at container start from /var/lib/neo4j/labs, where the
+# Enterprise image already ships it — no network needed. No config.apoc here: apoc.conf
+# rendering is feature-config's job, this one is about the procedure being callable.
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:

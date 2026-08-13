@@ -3,9 +3,10 @@
 # actually usable on the running server, not merely declared.
 #
 # The operator only sets NEO4J_PLUGINS (proven by render/plugins/neo4j_plugins_test.go and
-# workload/statefulset_test.go); the official image downloads the JAR at container start.
-# So this is the first point where a broken download, an incompatible JAR, or a blocked
-# procedure shows up at all.
+# workload/statefulset_test.go); the image entrypoint installs the JAR at container start,
+# from /var/lib/neo4j/labs where the Enterprise image already ships it. So this is the first
+# point where a mis-set plugins directory, an incompatible JAR, or a blocked procedure shows
+# up at all — and the plugins directory really was mis-set until ensurePluginsMount landed.
 #
 # Asserts procedure *registration* rather than the output of apoc.version(): a missing
 # function makes cypher-shell print "Unknown function 'apoc.version'", which contains the
@@ -34,8 +35,8 @@ conn_assert_cypher localhost "${password}" \
   "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc.' RETURN count(*) > 0 AS ok;" \
   "TRUE" "plugins-apoc"
 
-# Diagnostic only: the version the image actually downloaded, handy when a future JAR/server
+# Diagnostic only: the version the image actually installed, handy when a future JAR/server
 # mismatch turns this case red.
 log "apoc.version() -> $(conn_run_cypher localhost "${password}" "RETURN apoc.version();" 2>&1 | tail -1)"
 
-log "APOC assigned via spec.plugins is downloaded and its procedures are callable (NEO-3-003-APOC-01)"
+log "APOC assigned via spec.plugins is installed and its procedures are callable (NEO-3-003-APOC-01)"

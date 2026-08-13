@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# assert/plugins-allowlist — BDR-004: the operator derives procedure allowlists from the
-# assigned plugin ids, and they are effective on the running server.
+# assert/plugins-allowlist — BDR-004 + NEO-024: the operator allowlists the assigned
+# plugins' procedures, and does NOT unrestrict them.
 #
-# Checked over bolt, not in the ConfigMap, and that distinction is the point: the Neo4j image
-# ships its own neo4j.conf, so a rendered ConfigMap key is not proof the server resolved it.
-# render/serverconfig/cluster_defaults_test.go already covers the render side.
+# Two halves, and the second is the security one:
+#   dbms.security.procedures.allowlist    — generated from the assigned catalog ids
+#   dbms.security.procedures.unrestricted — must stay EMPTY
 #
-# The operator sets both dbms.security.procedures.unrestricted and .allowlist to the same
-# value (operator_defaults.go), so both are asserted — a regression that populated only one
-# would leave the procedures unusable in one direction.
+# Unrestricting a procedure removes it from the security sandbox, so 93bfc63 stopped the
+# operator setting it: it now requires an explicit opt-in via spec.config.neo4j. A
+# regression that re-enabled the old behaviour would silently widen the sandbox on every
+# plugin install, which no render test would flag as a security change.
+#
+# Checked over bolt rather than in the ConfigMap: the Neo4j image ships its own neo4j.conf,
+# so a rendered key is not proof the server resolved it.
 #
 # Inputs: NEO4J_CR_NAME, NEO4J_NAMESPACE, NEO4J_STS_NAME, NEO4J_AUTH_SECRET
 set -euo pipefail
@@ -28,9 +32,13 @@ conn_exec_serverpod() { kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -
 CONN_EXEC_FN=conn_exec_serverpod
 password="$(neo4j_password)"
 
-for key in dbms.security.procedures.unrestricted dbms.security.procedures.allowlist; do
-  conn_assert_setting localhost "${password}" "${key}" "apoc.*" "plugins-allowlist"
-  conn_assert_setting localhost "${password}" "${key}" "gds.*" "plugins-allowlist"
-done
+# Both assigned plugins appear in the generated allowlist.
+conn_assert_setting localhost "${password}" dbms.security.procedures.allowlist "apoc.*" plugins-allowlist
+conn_assert_setting localhost "${password}" dbms.security.procedures.allowlist "gds.*" plugins-allowlist
 
-log "Procedure allowlists for the assigned plugins are effective on the running server (BDR-004)"
+# NEO-024: the sandbox is not bypassed. SHOW SETTINGS renders an unset value as "".
+unrestricted="$(conn_show_setting localhost "${password}" dbms.security.procedures.unrestricted 2>/dev/null | tail -1 | tr -d '"' | tr -d '[:space:]')"
+[[ -z "${unrestricted}" ]] \
+  || die "dbms.security.procedures.unrestricted is '${unrestricted}' — the operator must not unrestrict plugin procedures; that needs an explicit spec.config.neo4j opt-in (NEO-024)"
+
+log "Assigned plugins are allowlisted and left sandboxed (unrestricted empty) — BDR-004 / NEO-024"
