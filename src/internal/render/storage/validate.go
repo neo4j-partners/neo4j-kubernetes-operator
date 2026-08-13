@@ -95,13 +95,24 @@ func rejectReservedMountPath(field, mountPath string) error {
 	return nil
 }
 
+// rejectReservedLabelKeys blocks user labels that would impersonate operator identity
+// selectors used for wipe/uninstall (NEO-015).
+func rejectReservedLabelKeys(field string, labels map[string]string) error {
+	for k := range labels {
+		if strings.HasPrefix(k, "app.kubernetes.io/") || strings.HasPrefix(k, "neo4j.com/") {
+			return fmt.Errorf("%s[%q]: label key is reserved by the operator", field, k)
+		}
+	}
+	return nil
+}
+
 func validateData(data *neo4jv1beta1.DataVolumeSpec) error {
 	switch data.Mode {
 	case neo4jv1beta1.VolumeModeDynamic:
 		if data.Dynamic == nil || data.Dynamic.Size == "" {
 			return fmt.Errorf("storage.volumes.data.dynamic.size is required when mode is Dynamic")
 		}
-		return nil
+		return rejectReservedLabelKeys("storage.volumes.data.dynamic.labels", data.Dynamic.Labels)
 	case neo4jv1beta1.VolumeModeExisting:
 		return validateExisting("data", data.Existing)
 	case neo4jv1beta1.VolumeModeShare:
@@ -126,7 +137,7 @@ func validateAux(name string, aux *neo4jv1beta1.AuxiliaryVolumeSpec) error {
 		if aux.Dynamic == nil || aux.Dynamic.Size == "" {
 			return fmt.Errorf("storage.volumes.%s.dynamic.size is required when mode is Dynamic", name)
 		}
-		return nil
+		return rejectReservedLabelKeys(fmt.Sprintf("storage.volumes.%s.dynamic.labels", name), aux.Dynamic.Labels)
 	case neo4jv1beta1.VolumeModeExisting:
 		return validateExisting(name, aux.Existing)
 	default:

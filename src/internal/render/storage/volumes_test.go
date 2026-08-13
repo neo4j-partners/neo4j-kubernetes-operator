@@ -132,6 +132,48 @@ func baseStorage() *neo4jv1beta1.StorageSpec {
 	}
 }
 
+func TestValidateRejectsReservedDynamicLabels(t *testing.T) {
+	s := baseStorage()
+	s.Volumes.Data.Dynamic.Labels = map[string]string{
+		"app.kubernetes.io/instance": "victim",
+	}
+	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	if err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestDynamicPVCKeepsOperatorIdentityLabels(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode: neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{
+							Size: "1Gi",
+							Labels: map[string]string{
+								"team":                       "platform",
+								"app.kubernetes.io/instance": "attacker",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	// Validation would reject reserved keys; merge still keeps operator identity if they slipped through.
+	pvc := dynamicPVC(render.StandaloneContext(neo4j), "data", neo4j.Spec.Storage.Volumes.Data.Dynamic)
+	if pvc.Labels["app.kubernetes.io/instance"] != "dev" {
+		t.Fatalf("instance = %q", pvc.Labels["app.kubernetes.io/instance"])
+	}
+	if pvc.Labels["team"] != "platform" {
+		t.Fatalf("user label lost: %#v", pvc.Labels)
+	}
+}
+
 func TestValidateRejectsHostPathAdditionalMount(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: baseStorage()}}
 	neo4j.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{

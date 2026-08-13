@@ -86,6 +86,36 @@ func TestConfigReconcileUpdatesConfigMapAndRollsWorkload(t *testing.T) {
 	}
 }
 
+func TestDeleteConfigMapSkipsUnowned(t *testing.T) {
+	s := runtime.NewScheme()
+	if err := scheme.AddToScheme(s); err != nil {
+		t.Fatalf("core scheme: %v", err)
+	}
+	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+		t.Fatalf("neo4j scheme: %v", err)
+	}
+	neo4j := standaloneNeo4j(t)
+	foreign := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      neo4j.Name + "-server-logs-config",
+			Namespace: neo4j.Namespace,
+		},
+		Data: map[string]string{"server-logs.xml": "keep-me"},
+	}
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(neo4j, foreign).Build()
+	r := New(c, s)
+	if err := r.deleteConfigMapIfPresent(t.Context(), neo4j, foreign.Name); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	var got corev1.ConfigMap
+	if err := c.Get(t.Context(), client.ObjectKeyFromObject(foreign), &got); err != nil {
+		t.Fatalf("unowned ConfigMap was deleted: %v", err)
+	}
+	if got.Data["server-logs.xml"] != "keep-me" {
+		t.Fatalf("data = %#v", got.Data)
+	}
+}
+
 func standaloneNeo4j(t *testing.T) *neo4jv1beta1.Neo4j {
 	t.Helper()
 	return &neo4jv1beta1.Neo4j{

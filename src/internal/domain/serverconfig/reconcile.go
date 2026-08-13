@@ -78,7 +78,7 @@ func (r *Reconciler) reconcileLoggingConfigMaps(ctx context.Context, neo4j *neo4
 		}); err != nil {
 			return shared.Failed(err)
 		}
-	} else if err := r.deleteConfigMapIfPresent(ctx, neo4j.Namespace, baseCtx.ServerLogsConfigMapName()); err != nil {
+	} else if err := r.deleteConfigMapIfPresent(ctx, neo4j, baseCtx.ServerLogsConfigMapName()); err != nil {
 		return shared.Failed(err)
 	}
 	if desired := rendercfg.UserLogsConfigMap(baseCtx); desired != nil {
@@ -90,14 +90,26 @@ func (r *Reconciler) reconcileLoggingConfigMaps(ctx context.Context, neo4j *neo4
 		}); err != nil {
 			return shared.Failed(err)
 		}
-	} else if err := r.deleteConfigMapIfPresent(ctx, neo4j.Namespace, baseCtx.UserLogsConfigMapName()); err != nil {
+	} else if err := r.deleteConfigMapIfPresent(ctx, neo4j, baseCtx.UserLogsConfigMapName()); err != nil {
 		return shared.Failed(err)
 	}
 	return shared.Done()
 }
 
-func (r *Reconciler) deleteConfigMapIfPresent(ctx context.Context, namespace, name string) error {
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+func (r *Reconciler) deleteConfigMapIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, name string) error {
+	cm := &corev1.ConfigMap{}
+	key := client.ObjectKey{Namespace: neo4j.Namespace, Name: name}
+	if err := r.Client.Get(ctx, key, cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	// NEO-015: name collision must not delete a foreign ConfigMap.
+	if !metav1.IsControlledBy(cm, neo4j) {
+		ctrllog.FromContext(ctx).V(1).Info("skip delete: ConfigMap not owned by this Neo4j", "name", name)
+		return nil
+	}
 	if err := r.Client.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
