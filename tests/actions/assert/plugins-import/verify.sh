@@ -27,12 +27,12 @@ storage_wait_ready
 
 STS="statefulset/${NEO4J_STS_NAME}"
 
-# No spec.plugins means the image must not be told to download anything — otherwise the
-# download would land on top of the imported directory.
+# No spec.plugins means the image must not be told to install anything — otherwise the
+# entrypoint would write its own JAR over the imported directory.
 plugins_env="$(kubectl get "${STS}" -n "${NEO4J_NAMESPACE}" \
   -o jsonpath='{.spec.template.spec.containers[?(@.name=="neo4j")].env[?(@.name=="NEO4J_PLUGINS")].value}' 2>/dev/null || true)"
 [[ -z "${plugins_env}" ]] \
-  || die "NEO4J_PLUGINS is set to '${plugins_env}' with no spec.plugins — the image would download over the imported volume"
+  || die "NEO4J_PLUGINS is set to '${plugins_env}' with no spec.plugins — the entrypoint would install over the imported volume"
 
 # Imported content must sit under a 'plugins' subpath of the PVC, not at its root.
 subpath="$(kubectl get "${STS}" -n "${NEO4J_NAMESPACE}" \
