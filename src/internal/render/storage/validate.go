@@ -81,6 +81,9 @@ func Validate(neo4j *neo4jv1beta1.Neo4j) error {
 		if err := rejectReservedMountPath(fmt.Sprintf("storage.secretMounts[%q]", name), sm.MountPath); err != nil {
 			return err
 		}
+		if sm.DefaultMode != nil && *sm.DefaultMode > 0o440 {
+			return fmt.Errorf("storage.secretMounts[%q].defaultMode %#o exceeds maximum 0440 (NEO-018)", name, *sm.DefaultMode)
+		}
 	}
 	return nil
 }

@@ -214,6 +214,16 @@ func TestClusterPoolStatefulSet(t *testing.T) {
 	if licenseMount == nil || licenseMount.MountPath != "/licenses/gds" {
 		t.Fatalf("expected gds license mount, got %#v", licenseMount)
 	}
+	var licenseVol *corev1.Volume
+	for i := range analytics.Spec.Template.Spec.Volumes {
+		if analytics.Spec.Template.Spec.Volumes[i].Name == "license-gds" {
+			licenseVol = &analytics.Spec.Template.Spec.Volumes[i]
+			break
+		}
+	}
+	if licenseVol == nil || licenseVol.Secret == nil || licenseVol.Secret.DefaultMode == nil || *licenseVol.Secret.DefaultMode != 0o440 {
+		t.Fatalf("license Secret defaultMode want 0440, got %#v", licenseVol)
+	}
 }
 
 func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {

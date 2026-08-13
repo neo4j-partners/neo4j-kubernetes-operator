@@ -174,6 +174,23 @@ func TestDynamicPVCKeepsOperatorIdentityLabels(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsWorldReadableSecretMode(t *testing.T) {
+	mode := int32(0o777)
+	s := baseStorage()
+	s.SecretMounts = map[string]neo4jv1beta1.SecretMountSpec{
+		"creds": {
+			SecretName:  "my-creds",
+			MountPath:   "/var/secrets/creds",
+			Items:       []neo4jv1beta1.SecretKeyToPath{{Key: "token", Path: "token"}},
+			DefaultMode: &mode,
+		},
+	}
+	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	if err == nil || !strings.Contains(err.Error(), "0440") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestValidateRejectsHostPathAdditionalMount(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: baseStorage()}}
 	neo4j.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{

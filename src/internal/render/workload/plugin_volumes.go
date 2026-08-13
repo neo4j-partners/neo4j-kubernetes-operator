@@ -42,6 +42,7 @@ func appendPluginLicenseVolumes(ctx render.Context, container *corev1.Container,
 	if ctx.Neo4j.Spec.PluginDefinitions == nil {
 		return
 	}
+	mode440 := int32(0o440)
 	for _, pluginID := range ctx.PoolPluginIDs() {
 		def, ok := ctx.Neo4j.Spec.PluginDefinitions[pluginID]
 		if !ok || def.LicenseSecretRef == "" {
@@ -53,7 +54,8 @@ func appendPluginLicenseVolumes(ctx render.Context, container *corev1.Container,
 			Name: volName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: def.LicenseSecretRef,
+					SecretName:  def.LicenseSecretRef,
+					DefaultMode: &mode440,
 				},
 			},
 		})

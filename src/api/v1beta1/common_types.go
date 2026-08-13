@@ -231,8 +231,12 @@ type SecretMountSpec struct {
 	SecretName  string            `json:"secretName"`
 	MountPath   string            `json:"mountPath"`
 	// Items maps Secret keys to filenames under MountPath (required; NEO-005).
-	Items       []SecretKeyToPath `json:"items,omitempty"`
-	DefaultMode *int32            `json:"defaultMode,omitempty"`
+	Items []SecretKeyToPath `json:"items,omitempty"`
+	// DefaultMode is the file mode for projected Secret keys (default 0440).
+	// Cap at 0440 so credentials are never world-readable (NEO-018).
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=288
+	DefaultMode *int32 `json:"defaultMode,omitempty"`
 }
 
 // StorageSpec groups persistence volumes and pod-level mount configuration (BDR-005).

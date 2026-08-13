@@ -7630,7 +7630,12 @@ spec:
                         Items is required: only named keys are mounted (no whole-Secret projection).
                       properties:
                         defaultMode:
+                          description: |-
+                            DefaultMode is the file mode for projected Secret keys (default 0440).
+                            Cap at 0440 so credentials are never world-readable (NEO-018).
                           format: int32
+                          maximum: 288
+                          minimum: 0
                           type: integer
                         items:
                           description: Items maps Secret keys to filenames under MountPath
