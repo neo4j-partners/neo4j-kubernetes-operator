@@ -183,6 +183,7 @@ func defaultPodSecurityContext() *corev1.PodSecurityContext {
 		RunAsGroup:          &runAsGroup,
 		FSGroup:             &fsGroup,
 		FSGroupChangePolicy: &policy,
+		SeccompProfile:      &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 	}
 }
 
@@ -190,11 +191,14 @@ func defaultContainerSecurityContext() *corev1.SecurityContext {
 	runAsNonRoot := true
 	runAsUser := int64(7474)
 	runAsGroup := int64(7474)
+	allowPrivEsc := false
 	return &corev1.SecurityContext{
-		RunAsNonRoot: &runAsNonRoot,
-		RunAsUser:    &runAsUser,
-		RunAsGroup:   &runAsGroup,
-		Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		RunAsNonRoot:             &runAsNonRoot,
+		RunAsUser:                &runAsUser,
+		RunAsGroup:               &runAsGroup,
+		AllowPrivilegeEscalation: &allowPrivEsc,
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 	}
 }
 

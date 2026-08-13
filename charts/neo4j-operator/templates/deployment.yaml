@@ -73,8 +73,9 @@ spec:
           {{- toYaml .Values.resources | nindent 10 }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
-        {{- if or .Values.webhook.enabled .Values.logging.file.enabled }}
         volumeMounts:
+        - name: tmp
+          mountPath: /tmp
         {{- if .Values.webhook.enabled }}
         - name: webhook-certs
           mountPath: /tmp/k8s-webhook-server/serving-certs
@@ -84,9 +85,9 @@ spec:
         - name: operator-logs
           mountPath: {{ .Values.logging.file.mountPath }}
         {{- end }}
-        {{- end }}
-      {{- if or .Values.webhook.enabled .Values.logging.file.enabled }}
       volumes:
+      - name: tmp
+        emptyDir: {}
       {{- if .Values.webhook.enabled }}
       - name: webhook-certs
         secret:
@@ -96,7 +97,6 @@ spec:
       {{- if .Values.logging.file.enabled }}
       - name: operator-logs
         emptyDir: {}
-      {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

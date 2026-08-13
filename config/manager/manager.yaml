@@ -19,6 +19,8 @@ spec:
       serviceAccountName: neo4j-operator-controller-manager
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: manager
         # Placeholder image/pull policy; e2e install (tests/actions/operator/install/run.sh)
@@ -58,6 +60,15 @@ spec:
             memory: 64Mi
         securityContext:
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}

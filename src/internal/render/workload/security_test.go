@@ -123,3 +123,17 @@ func TestContainerSecurityContextMergesOverDefaults(t *testing.T) {
 		t.Fatalf("Drop ALL must remain, got %#v", csc.Capabilities)
 	}
 }
+
+func TestDefaultSecurityContextsMeetRestrictedPSS(t *testing.T) {
+	psc := defaultPodSecurityContext()
+	if psc.SeccompProfile == nil || psc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("pod seccomp = %#v", psc.SeccompProfile)
+	}
+	csc := defaultContainerSecurityContext()
+	if csc.AllowPrivilegeEscalation == nil || *csc.AllowPrivilegeEscalation {
+		t.Fatalf("AllowPrivilegeEscalation = %#v", csc.AllowPrivilegeEscalation)
+	}
+	if csc.SeccompProfile == nil || csc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("container seccomp = %#v", csc.SeccompProfile)
+	}
+}
