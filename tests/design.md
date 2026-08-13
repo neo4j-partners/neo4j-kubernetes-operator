@@ -147,10 +147,17 @@ Runtime plugin behaviour (BDR-004). Every render decision — the `NEO4J_PLUGINS
 generated ConfigMap keys, the volume shapes — is already covered by unit tests under
 `src/internal/render/`, so each case here asserts something only a real container can show.
 
-**The operator does not download anything.** It sets `NEO4J_PLUGINS` on the container and the
-official Neo4j image fetches the JARs at container start. Consequences: the node needs
-outbound network, and a jar-host outage turns these cases red for reasons outside the
-operator. `on_case_failure: continue` keeps that from hiding the rest of the suite.
+**The operator does not install anything.** It sets `NEO4J_PLUGINS` on the container and the
+image entrypoint installs the JAR at container start. All three V1 catalog plugins ship
+**inside** the Enterprise image — `apoc-*-core.jar` in `/var/lib/neo4j/labs`, and
+`neo4j-graph-data-science-*.jar` / `bloom-plugin-*.jar` in `/var/lib/neo4j/products` — so the
+suite is hermetic and needs no outbound network. (The `NEO4J_PLUGINS` mechanism *can* fetch a
+plugin that is not bundled; none of the V1 catalog ids are in that position.)
+
+The entrypoint installs into whatever `server.directories.plugins` points at, which is why
+`ensurePluginsMount` matters: before it, the operator pointed Neo4j at `/plugins` while the
+JAR went to `$NEO4J_HOME/plugins`, and every plugin silently failed to load on a server that
+still reported `Ready`.
 
 **Standalone only.** Every catalog plugin is legal in `spec.plugins`, so one topology covers
 apoc, gds and bloom. In Cluster mode GDS/Bloom are CEL-forbidden on primaries and on
@@ -177,7 +184,10 @@ wrapper; `conn_run_cypher` is its non-asserting sibling, used to log the actual 
 diagnostics.
 
 Allowlists are checked over bolt rather than in the ConfigMap, because the Neo4j image ships
-its own `neo4j.conf` — a rendered key is not proof the server resolved it.
+its own `neo4j.conf` — a rendered key is not proof the server resolved it. The allowlist case
+also asserts `dbms.security.procedures.unrestricted` stays **empty**: `93bfc63` stopped the
+operator unrestricting plugin procedures (NEO-024), so a regression that re-enabled it would
+widen the security sandbox on every plugin install without any render test noticing.
 
 **Two documented gaps** (see coverage.md): a volume-only plugin install emits
 `server.directories.plugins` but *no* `dbms.security.procedures.*`, so a manually imported

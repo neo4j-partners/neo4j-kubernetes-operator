@@ -1,6 +1,6 @@
 # Manual JAR import channel: a pre-created PVC mounted at /plugins via
 # storage.volumes.plugins mode Existing, with NO spec.plugins entry so the operator leaves
-# NEO4J_PLUGINS unset and the image never downloads over the imported directory.
+# NEO4J_PLUGINS unset and the entrypoint never installs over the imported directory.
 #
 # This is the only manual-import route the operator supports — spec.podTemplate.initContainers
 # is schema-only and never rendered, and additionalMounts/secretMounts reject /plugins as a
