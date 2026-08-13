@@ -177,12 +177,15 @@ apoc, gds and bloom. In Cluster mode GDS/Bloom are CEL-forbidden on primaries an
 4-pod boot here. Staying on one topology also keeps `NEO4J_POOL` at its `server` default for
 every case.
 
-**Licences are dummies.** The suite asserts the operator's plumbing — whole-Secret projection,
-read-only mount, the real path — never that GDS or Bloom validate a licence, so it runs in CI
-with no licence material. The path is the substance: `render/workload/plugin_volumes.go`
-projects the whole Secret (no `items`) at `/licenses/<pluginID>`, so the file is named after
-the Secret key — `/licenses/bloom/license.key`, **not** `/licenses/bloom.key` as
-`crd-spec/neo4j/spec.md` documents.
+**Licences are dummies, and the mount is all that is checked.** The licence case asserts that
+the operator wires the Secret onto the workload at `/licenses/<pluginID>` — not the file
+contents, not the file mode, and not that the plugin accepts the licence. Content and
+functional checks both need real licence material, which cannot live in CI.
+
+Worth knowing when reading `render/workload/plugin_volumes.go`: it projects the **whole**
+Secret (no `items`), so the file is named after the Secret key — `/licenses/bloom/license.key`
+— whereas `crd-spec/neo4j/spec.md` documents `/licenses/gds.key`. The suite does not assert
+that filename; the mismatch is tracked as a doc bug instead.
 
 **Procedure assertions avoid version strings.** A missing function makes `cypher-shell` print
 `Unknown function 'apoc.version'`, which contains `apoc.version` and would pass a naive

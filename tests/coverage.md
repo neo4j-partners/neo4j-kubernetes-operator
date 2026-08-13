@@ -101,7 +101,7 @@ GDS or Bloom validate a licence.
 
 - [x] APOC assigned: `apoc.*` procedures callable at runtime — NEO-3-003-APOC-01
 - [x] GDS assigned: `gds.*` procedures available, with no `licenseSecretRef` (Community runs licence-free) — BDR-004 (no dedicated FR)
-- [x] Bloom assigned: JAR downloads, server boots, and the licence Secret is mounted read-only at `/licenses/bloom/<secret-key>` — BDR-004. Bloom *functionality* is not asserted (needs a real licence)
+- [x] Bloom assigned: JAR downloads, server boots, and the licence Secret is mounted at `/licenses/bloom` — BDR-004. Licence *content* is not inspected and Bloom functionality is not asserted (both need a real licence)
 - [x] Procedure allowlists injected into neo4j.conf (`dbms.security.procedures.unrestricted`/`allowlist`) for assigned plugins, verified effective on the running server — BDR-004
 - [x] Licence Secret without `neo4j.com/mountable-by-operator` refused at reconcile with `Error/SecretNotMountable`, a matching Warning Event, and no operands — NEO-005
 - [x] `pluginDefinitions.<id>.config` merges into `neo4j.conf` (not a per-plugin file) and is effective at runtime — BDR-004
