@@ -48,7 +48,7 @@ cases:
     cr_name: plg-allow
 
   - id: bloom-license-mounted
-    comment: Bloom assigned with a dummy licence Secret — mounted read-only at /licenses/bloom with the Secret key as filename.
+    comment: Bloom assigned with a licence Secret — the Secret is mounted onto the workload at /licenses/bloom. Content is not inspected.
     fixture: tests/fixtures/neo4j-plugins-bloom.yaml
     assert: plugins-license
     expect: success
