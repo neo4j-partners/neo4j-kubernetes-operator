@@ -9,12 +9,6 @@ on:
     # GitHub cron has no timezone support, so the hour shifts with DST.
     - cron: "0 5 * * *"
   workflow_dispatch:
-  # TEMPORARY — delete this trigger before merging to main.
-  # workflow_dispatch and schedule are both registered from the default branch
-  # only, so a push trigger is the only way to exercise the Azure path from this
-  # branch. Every push runs a full AKS create/destroy cycle.
-  push:
-    branches: [tests-azure]
 
 concurrency:
   # Deliberately not keyed on the ref: every run of this workflow, whether from
