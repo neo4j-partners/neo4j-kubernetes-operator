@@ -19,7 +19,17 @@ will take is settled or still open.
 When a schema field exists for something not yet implemented, the note says so. Setting such a field
 validates and does nothing — see [the last section](#if-something-is-planned-or-not-decided).
 
-## Deployment and topology
+## Operator itself
+
+| Capability | Status | Where |
+|------------|--------|-------|
+| Install from manifests or Helm chart | Verified | [Install](../02-operator-installation/03-install.md) |
+| Watching an explicit list of namespaces | Verified | [Watch scope](../02-operator-installation/04-operator-scope.md) |
+| Uninstall preserving data | Verified | [Uninstall](../02-operator-installation/05-uninstall.md) |
+| Published operator image | Planned | Build and push it yourself — [Build the image](../02-operator-installation/02-build-image.md) |
+| Operator upgrades | Planned | Re-deploy the new image; no migration is performed |
+
+## Neo4J Deployment and topology
 
 | Capability | Status | Where |
 |------------|--------|-------|
@@ -29,7 +39,9 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Scale in — shrink topology, drain and drop members, then shrink the StatefulSet | Implemented | [Clustering](../03-neo4j/02-clustering.md#scaling-members) |
 | Enterprise edition | Verified | `spec.edition: enterprise` is the only accepted value |
 
-## Storage
+## Neo4J Features
+
+### Storage
 
 | Capability | Status | Where |
 |------------|--------|-------|
@@ -41,7 +53,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | PVC retention on delete and on scale-in | Verified | [Operations](../03-neo4j/09-operations.md#deleting-a-neo4j-resource) |
 | Cloud object storage credentials | Planned | Cloud IAM annotations on the ServiceAccount are refused today |
 
-## Connectivity
+### Connectivity
 
 | Capability | Status | Where |
 |------------|--------|-------|
@@ -53,7 +65,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Cluster-internal Services, routing and advertised addresses | Verified | [Clustering](../03-neo4j/02-clustering.md#how-members-find-each-other) |
 | Ingress and reverse proxy | Not decided | Fields exist under `spec.connectivity.ingress`; nothing is rendered |
 
-## Security
+### Security
 
 | Capability | Status | Where |
 |------------|--------|-------|
@@ -68,7 +80,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Neo4j users, roles and privileges | Not decided | Dedicated resources, after backup and restore. Use Cypher meanwhile |
 | LDAP and external auth providers | Not decided | `spec.auth.ldap` is ignored; configure providers through `spec.config` instead |
 
-## Configuration and extensions
+### Configuration and extensions
 
 | Capability | Status | Where |
 |------------|--------|-------|
@@ -80,7 +92,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Plugin licence Secrets | Implemented | [Plugins](../03-neo4j/07-plugins.md#licensed-plugins) |
 | Rolling restart when configuration changes | Verified | [Operations](../03-neo4j/09-operations.md#changing-configuration) |
 
-## Workload shaping and operations
+### Workload shaping and operations
 
 | Capability | Status | Where |
 |------------|--------|-------|
@@ -95,16 +107,6 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Backup and restore | Planned | Dedicated resources; the backup listener and `backups` volume already exist |
 | Neo4j version upgrades | Planned | `spec.version` is honoured at install; changing it is not orchestrated |
 | CSV, JMX and Graphite metrics | Not decided | Fields exist under `spec.features.monitoring`; only Prometheus is wired |
-
-## Operator itself
-
-| Capability | Status | Where |
-|------------|--------|-------|
-| Install from manifests or Helm chart | Verified | [Install](../02-operator-installation/03-install.md) |
-| Watching an explicit list of namespaces | Verified | [Watch scope](../02-operator-installation/04-operator-scope.md) |
-| Uninstall preserving data | Verified | [Uninstall](../02-operator-installation/05-uninstall.md) |
-| Published operator image | Planned | Build and push it yourself — [Build the image](../02-operator-installation/02-build-image.md) |
-| Operator upgrades | Planned | Re-deploy the new image; no migration is performed |
 
 Cluster-wide watch is not a gap: it is refused on purpose, as explained in
 [Watch scope](../02-operator-installation/04-operator-scope.md).
