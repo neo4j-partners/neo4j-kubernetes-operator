@@ -57,7 +57,7 @@ vet: ## Run go vet
 
 .PHONY: govulncheck
 govulncheck: ## Fail on known Go vulnerabilities in this module
-	GOTOOLCHAIN=go1.26.5 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	GOTOOLCHAIN=go1.26.6 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 .PHONY: lint-reconcile
 lint-reconcile: ## Lint controller reconcile anti-patterns
