@@ -55,6 +55,8 @@ func PipelineErrorReason(err error) string {
 		return ReasonSecretNotMountable
 	case errors.Is(err, rendersecrets.ErrAuthNotDelegated):
 		return ReasonSecretNotDelegated
+	case errors.Is(err, rendersecrets.ErrAuthValueRejected):
+		return ReasonAuthSecretInvalid
 	default:
 		return ReasonReconcileFailed
 	}

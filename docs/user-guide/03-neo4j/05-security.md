@@ -49,6 +49,13 @@ kubectl label secret neo4j-credentials -n default \
   neo4j.com/allowed-for=dev
 ```
 
+The Neo4j image sets the initial password through a command line, so a few values cannot work:
+the password must not start with `-` nor contain `/`, the user part must be `neo4j`, and the
+password cannot be `neo4j`. The operator checks this before creating anything and reports
+`AuthSecretInvalid` rather than letting the pod crash-loop — see
+[Errors](../05-reference/errors.md#authsecretinvalid). Generated passwords are alphanumeric and
+never hit these rules.
+
 `generatePassword: true` and `passwordSecretRef` are mutually exclusive, and admission says so.
 Example: [`examples/standalone/02-auth-existing-secret.yaml`](../../../examples/standalone/02-auth-existing-secret.yaml),
 with more detail in [`examples/secrets/README.md`](../../../examples/secrets/README.md).

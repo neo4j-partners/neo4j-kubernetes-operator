@@ -33,12 +33,18 @@ _config_happy_path_operator_case() {
 }
 
 _config_align_operator_case_to_cloud() {
+  # `if` rather than `[[ ]] &&`: a false test would make the function return non-zero and
+  # abort the caller under `set -e`, with no message to explain the exit.
   case "${CLOUD_ID:-}" in
     local-kind)
-      [[ "${OPERATOR_CASE}" == "registry-image" ]] && export OPERATOR_CASE=local-image
+      if [[ "${OPERATOR_CASE}" == "registry-image" ]]; then
+        export OPERATOR_CASE=local-image
+      fi
       ;;
     azure-aks)
-      [[ "${OPERATOR_CASE}" == "local-image" ]] && export OPERATOR_CASE=registry-image
+      if [[ "${OPERATOR_CASE}" == "local-image" ]]; then
+        export OPERATOR_CASE=registry-image
+      fi
       ;;
   esac
 }
@@ -72,6 +78,11 @@ _config_reset_case_vars() {
   # Cluster-only knobs — cleared so a Cluster case never leaks its pool/member
   # count into a later Standalone case (derive.sh then falls back to "server").
   unset NEO4J_POOL CLUSTER_EXPECTED_MEMBERS
+  # Credentials knobs — cases run in one shell, so without this a case reading
+  # ${AUTH_KNOWN_PASSWORD:-default} silently inherits the previous case's password and
+  # asserts the wrong thing (the same holds for the expected Secret name and reason).
+  unset AUTH_SECRET_CREATE AUTH_SECRET_NAME AUTH_KNOWN_PASSWORD AUTH_SECRET_LABELS
+  unset CRED_EXPECT_GENERATED CRED_EXPECT_SECRET EXPECT_REASON
 }
 
 load_cloud_config() {

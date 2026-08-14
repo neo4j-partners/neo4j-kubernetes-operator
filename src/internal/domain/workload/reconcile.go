@@ -3,7 +3,6 @@ package workload
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,6 +21,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
@@ -280,6 +280,11 @@ func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1beta1.N
 	var existing corev1.Secret
 	err := r.Client.Get(ctx, types.NamespacedName{Name: secretName, Namespace: ctxRender.Namespace()}, &existing)
 	if err == nil {
+		// The Secret is reused as-is on every reconcile, so a hand-edited value would
+		// crash-loop the pod with the cause buried in the container log.
+		if err := rendersecrets.RequireUsableAuthValue(&existing); err != nil {
+			return "", err
+		}
 		log.Info("auth secret already exists", "secret", secretName, "action", "reuse")
 		return "", nil
 	}
@@ -287,7 +292,7 @@ func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1beta1.N
 		return "", err
 	}
 
-	password, err := randomPassword(16)
+	password, err := randomPassword(generatedPasswordLength)
 	if err != nil {
 		return "", fmt.Errorf("generate auth password: %w", err)
 	}
@@ -310,7 +315,7 @@ func (r *Reconciler) ensureReferencedAuthSecret(ctx context.Context, ctxRender r
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: ctxRender.AuthSecretName(), Namespace: ctxRender.Namespace()}, &secret); err != nil {
 		return fmt.Errorf("auth secret %q: %w", ctxRender.AuthSecretName(), err)
 	}
-	return nil
+	return rendersecrets.RequireUsableAuthValue(&secret)
 }
 
 func (r *Reconciler) recordCredentials(neo4j *neo4jv1beta1.Neo4j, secretName string, generated bool) {
@@ -321,12 +326,37 @@ func (r *Reconciler) recordCredentials(neo4j *neo4jv1beta1.Neo4j, secretName str
 	neo4j.Status.Credentials.Generated = generated
 }
 
+// Generated passwords are alphanumeric on purpose: the Neo4j image entrypoint feeds the
+// value to `neo4j-admin dbms set-initial-password` as a positional argument with no "--"
+// separator, so a leading "-" is parsed as an option and the container crash-loops, and it
+// parses NEO4J_AUTH on "/" (rendersecrets.RequireUsableAuthValue). 24 symbols out of 62
+// keep ~143 bits of entropy.
+const (
+	generatedPasswordLength   = 24
+	generatedPasswordAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+)
+
 func randomPassword(n int) (string, error) {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+	// Bytes at or above the largest whole multiple of the alphabet are redrawn, otherwise
+	// the leading symbols would be slightly more likely than the rest.
+	limit := byte(256 - 256%len(generatedPasswordAlphabet))
+	out := make([]byte, 0, n)
+	buf := make([]byte, n)
+	for len(out) < n {
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
+		for _, b := range buf {
+			if b >= limit {
+				continue
+			}
+			out = append(out, generatedPasswordAlphabet[int(b)%len(generatedPasswordAlphabet)])
+			if len(out) == n {
+				break
+			}
+		}
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return string(out), nil
 }
 
 // OwnedTypes returns types watched via Owns().
