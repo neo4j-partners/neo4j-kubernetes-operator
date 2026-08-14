@@ -69,7 +69,7 @@ jobs:
       # as one JSON object.
       - name: Azure login
         if: inputs.cloud == 'azure-aks'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_SERVICE_ACCOUNT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload e2e results (on failure)
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-results-${{ inputs.cloud }}-${{ github.run_id }}
           path: tests/results/
