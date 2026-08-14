@@ -3,8 +3,6 @@ description: Admission validation — rejected invalid CRs, accepted valid stand
 brief_ref: admission-validation
 use_pipeline: neo4j-suite
 on_case_failure: continue
-clouds: [local-kind]
-
 pipeline:
   case_assert:
     - assert/{{assert}}

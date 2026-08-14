@@ -3,8 +3,6 @@ description: Storage surface (spec.storage) — data modes, aux Share, additiona
 brief_ref: neo4j-storage-surface
 use_pipeline: storage-suite
 on_case_failure: continue
-clouds: [local-kind]
-
 # Each case picks its own assertion; apply always succeeds at admission, so the
 # "fail" cases (bad StorageClass / missing PVC) are asserted at runtime.
 #

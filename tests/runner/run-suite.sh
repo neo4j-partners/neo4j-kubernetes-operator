@@ -27,8 +27,12 @@ ON_CASE_FAILURE="${ON_CASE_FAILURE:-stop}"
 
 suite_clouds="$(suite_yaml_value "${SUITE_FILE}" "clouds")"
 suite_clouds="${suite_clouds//[\[\]]/}"
+# Skip rather than fail, matching how a case restricted to another cloud behaves:
+# the suite file stays the single source of truth for where a suite applies, so a
+# caller can ask for every suite on every platform without encoding the matrix.
 if [[ -n "${suite_clouds}" ]] && ! suite_case_allowed_on_cloud "${suite_clouds}"; then
-  die "suite ${SUITE_NAME} is not configured for cloud ${CLOUD_ID:-unset} (allowed: ${suite_clouds})"
+  log "SKIP suite ${SUITE_NAME} (cloud ${CLOUD_ID:-unset} not in [${suite_clouds}])"
+  exit 0
 fi
 
 suite_load_merged_pipeline "${SUITE_FILE}"

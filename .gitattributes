@@ -4,3 +4,6 @@
 # Scenario/fixture YAML used by the e2e runner
 tests/**/*.yaml text eol=lf
 tests/**/*.yml text eol=lf
+
+# Workflows embed shell in `run:` blocks — same reason as *.sh
+.github/workflows/*.yml text eol=lf

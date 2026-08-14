@@ -15,8 +15,9 @@ spec:
         mode: Dynamic
         dynamic:
           size: 1Gi
-          # kind's default StorageClass (rancher.io/local-path). Binds once the pod
-          # schedules (WaitForFirstConsumer), so the CR reaches Ready.
-          storageClassName: standard
+          # Resolved from the cloud profile — `standard` on kind (rancher.io/local-path),
+          # `managed-csi` on AKS — because the subject of this case is naming an existing
+          # class explicitly, which must hold on every platform.
+          storageClassName: __CLOUD_STORAGE_CLASS__
   auth:
     generatePassword: true

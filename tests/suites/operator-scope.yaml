@@ -6,8 +6,6 @@ description: >
 brief_ref: slice-scope
 use_pipeline: scope-suite
 on_case_failure: stop
-clouds: [local-kind]
-
 pipeline:
   case_assert:
     # -004 least-privilege RBAC, -002 positive control, -003 negative control.

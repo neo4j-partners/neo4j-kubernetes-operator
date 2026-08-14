@@ -31,6 +31,14 @@ setup → case → teardown phase definition; an **action** is one atomic `run.s
 - `neo4j-suite` is the generic single-CR lifecycle (topology-agnostic): install operator,
   apply the CR fixture the case picks, clean it up. Suites override `case_assert` with the
   topology/feature-specific checks.
+- Suites are **cloud-agnostic by default**: every suite runs on every platform, so a green
+  kind run and a green AKS run cover the same behaviour. Anything platform-dependent belongs
+  in the cloud profile (`tests/config/cloud/*.sh`) or in a `__CLOUD_*__` fixture placeholder,
+  not in a suite that skips.
+- `clouds: [...]` is therefore reserved for suites — or cases — whose *subject* is one platform,
+  such as a cloud-authenticated PVC or a registry pull. Asking for one on another cloud logs
+  `SKIP suite <name>` and exits 0, so both CI targets can request the whole catalogue and let
+  the suite files decide. Omitting the key means every cloud.
 
 
 ## Assertions
@@ -145,12 +153,21 @@ See [config/readme.md](config/readme.md) for classic cases per domain.
 
 ## GitHub Actions
 
-Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+Two entry workflows, both delegating to the same reusable ones:
 
-| Job | When | Cluster |
-|-----|------|---------|
-| `unit` | Every PR / push | — |
-| `e2e-local-kind` | After unit | kind on ubuntu-latest (one step per suite) |
-| `e2e-azure-aks` | After unit | AKS (create if missing) |
+| Workflow | When | Runs |
+|----------|------|------|
+| [`ci.yml`](../.github/workflows/ci.yml) | Every PR / push to `main`, manual | `unit.yml`, then `e2e.yml` with `cloud: local-kind` |
+| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then `e2e.yml` on `local-kind` and `azure-aks` in parallel |
+| [`azure-cleanup.yml`](../.github/workflows/azure-cleanup.yml) | 09:00 UTC daily, manual | Deletes the Azure CI resource group if an e2e run left it behind |
+
+[`e2e.yml`](../.github/workflows/e2e.yml) holds the suite list once, one step per suite, and
+selects its setup — kind cluster, or AKS create plus image push plus teardown — from the `cloud`
+input. Adding a suite means editing that one file.
+
+Its teardown step is `if: always()`, so it also fires when a run is cancelled. It does *not*
+fire on a force-cancel (which bypasses `always()` by design) nor when a runner is lost, which
+is what `azure-cleanup.yml` covers — it skips itself while an e2e run is in flight, unless
+dispatched with `force`.
 
 Azure CI credentials and variables are documented in [contribute.md](contribute.md).

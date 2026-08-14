@@ -67,6 +67,19 @@ See [config/readme.md](config/readme.md) for classic cases per domain.
 Suite naming convention: `workload-*` (topology), `feature-*` (topology-agnostic domain),
 `operator-*` (operator behavior). See [design.md](design.md).
 
+### Fixtures must not hard-code a platform
+
+Every suite runs on kind and on AKS, so a fixture may not name a StorageClass that exists on
+only one of them. Use a placeholder instead:
+
+| Placeholder | Rendered as |
+|---|---|
+| `storageClassName: __STORAGE_CLASS__` | the cloud profile's class when the case sets `NEO4J_USE_STORAGE_CLASS=true`; the line is **dropped** otherwise, leaving the cluster default |
+| `storageClassName: __CLOUD_STORAGE_CLASS__` | always the cloud profile's class — for cases whose subject *is* naming an existing class |
+
+An invalid class the operator is expected to reject (`no-such-storage-class`) is portable and
+stays literal. Add a `clouds:` key only when the case cannot mean anything on another platform.
+
 ### Case comments
 
 Every case carries a `comment:` stating what it proves. The runner echoes it under the case
@@ -89,14 +102,45 @@ not a YAML library):
 Rationale that only matters when reading the suite file (undecided behaviour, pointers to a
 decision record) stays a `#` comment above the case.
 
+## Which workflow runs what
+
+| Workflow | Trigger | Targets |
+|----------|---------|---------|
+| `ci.yml` | Every pull request and push to `main`, plus manual dispatch | Unit and audit, then every suite on kind |
+| `e2e-all-platforms.yml` | 05:00 UTC daily, plus manual dispatch | Unit and audit, then every suite on kind **and** on AKS, in parallel |
+| `azure-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes the Azure CI resource group if it outlived its run |
+
+The first two delegate to the same reusable workflows, so the suite list exists once:
+`unit.yml` and `e2e.yml` (which takes a `cloud` input of `local-kind` or `azure-aks`).
+
+The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
+and 06:00 in winter.
+
+### Leftover Azure resources
+
+`e2e.yml` tears the resource group down with `if: always()`, which also covers a cancelled run.
+It cannot cover a **force-cancel** (documented to bypass `always()`) or a lost runner, and an AKS
+cluster bills by the hour. `azure-cleanup.yml` is the net: it deletes the group daily, skipping
+itself while an e2e run is in flight. If a run is stuck holding the cluster, dispatch it with
+`force: true`, or delete the group by hand:
+
+```bash
+az group delete --name "${AZURE_RESOURCE_GROUP:-neo4j-operator-ci-rg}" --yes --no-wait
+```
+
 ## Azure CI setup (maintainers)
 
 ### Required secrets
 
 | Secret | Description |
 |--------|-------------|
-| `AZURE_CREDENTIALS` | JSON from `az ad sp create-for-rbac --sdk-auth` |
-| `AZURE_SUBSCRIPTION_ID` | Target subscription (optional if embedded in credentials) |
+| `AZURE_CLIENT_ID` | Service principal application (client) ID |
+| `AZURE_SERVICE_ACCOUNT_SECRET` | Service principal client secret |
+| `AZURE_TENANT_ID` | Directory (tenant) ID |
+| `AZURE_SUBSCRIPTION_ID` | Target subscription |
+
+`azure/login` receives these as a single `creds` JSON object, because passing `client-id` as an
+input switches the action to OIDC and makes it ignore the secret.
 
 ### Optional repository variables
 
@@ -115,8 +159,9 @@ Set variables under **Settings → Secrets and variables → Actions → Variabl
 az ad sp create-for-rbac \
   --name neo4j-operator-github-ci \
   --role contributor \
-  --scopes /subscriptions/<SUBSCRIPTION_ID> \
-  --sdk-auth
+  --scopes /subscriptions/<SUBSCRIPTION_ID>
 ```
 
-Store the JSON output as `AZURE_CREDENTIALS`.
+Map the output to the secrets above: `appId` → `AZURE_CLIENT_ID`, `password` →
+`AZURE_SERVICE_ACCOUNT_SECRET`, `tenant` → `AZURE_TENANT_ID`. The client secret expires (one year
+by default), so the scheduled Azure job will start failing at login when it does.

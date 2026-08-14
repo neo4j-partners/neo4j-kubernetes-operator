@@ -1,0 +1,34 @@
+name: Unit & audit
+
+# Reusable: called by ci.yml (every PR) and nightly.yml. Never triggered directly.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit & audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          # Keep in sync with the GOTOOLCHAIN pin in the Makefile: govulncheck
+          # reports stdlib vulnerabilities of the toolchain it runs with.
+          go-version: "1.26.6"
+          cache-dependency-path: go.sum
+
+      - name: Install controller-gen
+        run: make controller-gen
+
+      - name: Unit tests
+        run: make test
+
+      - name: govulncheck
+        run: make govulncheck
+
+      - name: Audit (CRD + reconcile lint)
+        run: make audit

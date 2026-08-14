@@ -1,0 +1,56 @@
+name: E2E — all platforms
+
+# The same suites as CI, on kind and on a real AKS cluster in parallel. Azure
+# lives here rather than in CI because it creates and destroys a cluster on
+# every run, so it is scheduled daily instead of gating pull requests.
+on:
+  schedule:
+    # 05:00 UTC — 07:00 in Paris on summer time, 06:00 on winter time.
+    # GitHub cron has no timezone support, so the hour shifts with DST.
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+  # TEMPORARY — delete this trigger before merging to main.
+  # workflow_dispatch and schedule are both registered from the default branch
+  # only, so a push trigger is the only way to exercise the Azure path from this
+  # branch. Every push runs a full AKS create/destroy cycle.
+  push:
+    branches: [tests-azure]
+
+concurrency:
+  # Deliberately not keyed on the ref: every run of this workflow, whether from
+  # cron on main or dispatched on a branch, competes for the same Azure resource
+  # group, ACR and AKS names. Serialising them stops one run tearing down the
+  # cluster another is testing against.
+  group: e2e-all-platforms
+  # Never cancel a run in progress: an interrupted Azure run must still reach
+  # its teardown step rather than leave an AKS cluster billing.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    uses: ./.github/workflows/unit.yml
+
+  # Both targets declare the same single dependency and none on each other, so
+  # they start together as soon as unit passes. Gating on unit avoids creating
+  # an AKS cluster for code that does not compile.
+  e2e-local-kind:
+    name: kind
+    needs: unit
+    uses: ./.github/workflows/e2e.yml
+    with:
+      cloud: local-kind
+
+  e2e-azure-aks:
+    name: Azure
+    needs: unit
+    uses: ./.github/workflows/e2e.yml
+    with:
+      cloud: azure-aks
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_SERVICE_ACCOUNT_SECRET: ${{ secrets.AZURE_SERVICE_ACCOUNT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}

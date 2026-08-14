@@ -15,21 +15,30 @@ stderr_file="$(mktemp)"
 MOUNT_NAME="${STORAGE_MOUNT_NAME:-e2e-extra-${RANDOM}${RANDOM}}"
 MOUNT_PATH="${STORAGE_MOUNT_PATH:-/mnt/${MOUNT_NAME}}"
 
+# Two storage-class placeholders, on purpose:
+#   __STORAGE_CLASS__       opt-in — substituted when the case sets
+#                           NEO4J_USE_STORAGE_CLASS=true, dropped otherwise so the
+#                           operator falls back to the cluster default class.
+#   __CLOUD_STORAGE_CLASS__ always resolved from the cloud profile — for cases whose
+#                           subject *is* naming an existing class, which must therefore
+#                           run on every platform (kind: standard, AKS: managed-csi).
 if [[ "${NEO4J_USE_STORAGE_CLASS:-false}" == "true" && -n "${STORAGE_CLASS_NAME:-}" ]]; then
-  sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
-      -e "s|size: __DATA_SIZE__|size: ${NEO4J_DATA_SIZE:-10Gi}|" \
-      -e "s|storageClassName: __STORAGE_CLASS__|storageClassName: ${STORAGE_CLASS_NAME}|g" \
-      -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
-      -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
-    "${fixture}" >"${rendered}"
+  optin_storage_class=(-e "s|storageClassName: __STORAGE_CLASS__|storageClassName: ${STORAGE_CLASS_NAME}|g")
 else
-  sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
-      -e "s|size: __DATA_SIZE__|size: ${NEO4J_DATA_SIZE:-10Gi}|" \
-      -e '/storageClassName: __STORAGE_CLASS__/d' \
-      -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
-      -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
-    "${fixture}" >"${rendered}"
+  optin_storage_class=(-e '/storageClassName: __STORAGE_CLASS__/d')
 fi
+
+if grep -q '__CLOUD_STORAGE_CLASS__' "${fixture}" && [[ -z "${STORAGE_CLASS_NAME:-}" ]]; then
+  die "fixture ${NEO4J_STANDALONE_FIXTURE} needs __CLOUD_STORAGE_CLASS__ but cloud profile ${CLOUD_ID:-unset} sets no STORAGE_CLASS_NAME"
+fi
+
+sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
+    -e "s|size: __DATA_SIZE__|size: ${NEO4J_DATA_SIZE:-10Gi}|" \
+    "${optin_storage_class[@]}" \
+    -e "s|storageClassName: __CLOUD_STORAGE_CLASS__|storageClassName: ${STORAGE_CLASS_NAME:-}|g" \
+    -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
+    -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
+  "${fixture}" >"${rendered}"
 
 # Persist the resolved mount name/path so assert/storage-additional (a separate
 # subprocess) can verify the exact point inside the neo4j container.

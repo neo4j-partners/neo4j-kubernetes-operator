@@ -8,8 +8,6 @@ description: >
 brief_ref: slice-cluster
 use_pipeline: neo4j-suite
 on_case_failure: continue
-clouds: [local-kind]
-
 # Members → probes → formation → database allocation → routing → status, cheapest check
 # first so a failure reports the most specific cause. Cluster pods are <cr>-primary-N
 # (pool StatefulSets), which the cluster-* cases select via NEO4J_POOL.

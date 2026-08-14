@@ -1,0 +1,166 @@
+name: E2E
+
+# Reusable: one job that runs every suite against one cloud target.
+# Called by ci.yml (local-kind only) and nightly.yml (local-kind and azure-aks
+# in parallel). Callers must pass `secrets: inherit` for the azure-aks target.
+on:
+  workflow_call:
+    inputs:
+      cloud:
+        description: "Target platform — local-kind or azure-aks"
+        required: true
+        type: string
+    # Declared rather than inherited, so this workflow states exactly what it
+    # needs. Unset for the local-kind target, which touches no cloud.
+    secrets:
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_SERVICE_ACCOUNT_SECRET:
+        required: false
+      AZURE_SUBSCRIPTION_ID:
+        required: false
+      AZURE_TENANT_ID:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: ${{ inputs.cloud }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUD: ${{ inputs.cloud }}
+      # Azure resource names — override via repository Variables
+      # (Settings > Secrets and variables > Actions > Variables).
+      # Unset falls back to the defaults in tests/config/cloud/azure-aks.sh.
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_AKS_NAME: ${{ vars.AZURE_AKS_NAME }}
+      AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+      AZURE_AKS_NODE_COUNT: ${{ vars.AZURE_AKS_NODE_COUNT }}
+      AZURE_AKS_NODE_VM_SIZE: ${{ vars.AZURE_AKS_NODE_VM_SIZE }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.6"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Prepare scripts
+        run: find tests -name '*.sh' -exec chmod +x {} +
+
+      # ---------------------------------------------------------------- kind
+      - name: Install kind
+        if: inputs.cloud == 'local-kind'
+        uses: helm/kind-action@v1
+        with:
+          install_only: true
+
+      - name: Create kind cluster and load operator image
+        if: inputs.cloud == 'local-kind'
+        run: bash tests/bin/setup-local-kind.sh
+
+      # --------------------------------------------------------------- azure
+      # Service principal with a client secret: azure/login ignores `creds`
+      # as soon as client-id is passed as an input, so the credentials go in
+      # as one JSON object.
+      - name: Azure login
+        if: inputs.cloud == 'azure-aks'
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_SERVICE_ACCOUNT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Ensure AKS cluster and ACR
+        if: inputs.cloud == 'azure-aks'
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          # Creates the resource group, ACR and AKS cluster if missing, then wires kubectl.
+          . tests/azure/ensure-aks.sh
+          echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}" >> "${GITHUB_ENV}"
+          echo "AZURE_ACR_NAME=${AZURE_ACR_NAME}" >> "${GITHUB_ENV}"
+          # Persist the resolved resource group (script default applies when the Variable is unset) for teardown.
+          echo "AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}" >> "${GITHUB_ENV}"
+
+      - name: Push operator image to ACR
+        if: inputs.cloud == 'azure-aks'
+        run: bash tests/azure/push-operator-image.sh
+
+      # --------------------------------------------------------------- suites
+      # One step per suite so each scenario shows its own pass/fail in the job view.
+      # `!cancelled()` lets every scenario run (and report) even if a previous one failed.
+      # Order: scope (namespace watch) → admission → standalone → cluster → feature-* suites.
+
+      # Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE (OP-2-001-SCOPE-01).
+      # Runs first — the logical entry point before any workload scenario.
+      - name: "Scenario: operator-scope"
+        run: ./tests/bin/run-e2e.sh operator-scope
+
+      # Admission validation — invalid CRs rejected, valid Standalone accepted.
+      - name: "Scenario: operator-admission"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh operator-admission
+
+      - name: "Scenario: workload-standalone"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh workload-standalone
+
+      # Cluster mode (NEO-2-002): members created, cluster actually forms
+      # (SHOW SERVERS Enabled+Available), routing works over neo4j://.
+      # Heaviest suite — runs 1-primary then 3-primary Neo4j Enterprise pods.
+      - name: "Scenario: workload-cluster"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh workload-cluster
+
+      # Boots Neo4j and probes connectors (bolt/neo4j/http succeed, https fails without TLS)
+      # from the Neo4j pod and from a separate client pod.
+      - name: "Scenario: feature-connectivity"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh feature-connectivity
+
+      # spec.config passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error
+      # (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010).
+      - name: "Scenario: feature-config"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh feature-config
+
+      # Generated password vs referenced Secret, each verified with a real bolt query.
+      - name: "Scenario: feature-credentials"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh feature-credentials
+
+      # Data modes (Dynamic/StorageClass, claimName, volumeClaimTemplate, emptyDir),
+      # Share logs/metrics + additionalMounts mount checks, and invalid-storage failures.
+      - name: "Scenario: feature-storage"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh feature-storage
+
+      # Deleting the CR preserves the data PVC by default (NEO-2-018).
+      - name: "Scenario: feature-uninstall"
+        if: ${{ !cancelled() }}
+        run: ./tests/bin/run-e2e.sh feature-uninstall
+
+      - name: Upload e2e results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: e2e-results-${{ inputs.cloud }}-${{ github.run_id }}
+          path: tests/results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Always tear down the Azure platform (AKS + ACR + RG), even when a suite fails
+      # or the run is cancelled — an orphaned AKS cluster bills by the hour.
+      - name: Teardown Azure resources
+        if: always() && inputs.cloud == 'azure-aks'
+        run: |
+          rg="${AZURE_RESOURCE_GROUP:-neo4j-operator-ci-rg}"
+          if az group show --name "${rg}" >/dev/null 2>&1; then
+            echo "Deleting resource group ${rg}"
+            az group delete --name "${rg}" --yes --no-wait
+          else
+            echo "Resource group ${rg} not found — nothing to tear down"
+          fi

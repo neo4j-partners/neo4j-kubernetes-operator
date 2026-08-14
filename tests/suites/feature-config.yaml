@@ -6,8 +6,6 @@ description: >
 brief_ref: neo4j-config-surface
 use_pipeline: neo4j-suite
 on_case_failure: continue
-clouds: [local-kind]
-
 pipeline:
   case_assert:
     - assert/{{assert}}

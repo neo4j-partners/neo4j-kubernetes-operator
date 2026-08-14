@@ -49,8 +49,10 @@ When a suite fails, the run uploads `tests/results/` as an artifact, kept for 14
 before re-running: it holds the operator log, the resource status and the assertion output at the
 moment of failure, which is usually enough to diagnose without reproducing locally.
 
-The Azure AKS job is currently commented out, pending service principal credentials. Only the kind
-job gates merges today.
+Azure does not gate merges. The same suites run against a real AKS cluster in the *E2E — all
+platforms* workflow, which fires daily at 05:00 UTC and creates then destroys the cluster on every
+run; you can also start it by hand from the Actions tab. Keeping it out of the pull request path is deliberate: it is slow, it costs
+money, and a cloud outage should not block a merge.
 
 ## Run the gates before you push
 
