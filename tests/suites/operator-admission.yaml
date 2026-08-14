@@ -32,6 +32,14 @@ cases:
     expect_contains: minimumMembers
     cr_name: e2e-bad-minmembers
 
+  - id: multicluster-enabled
+    comment: NEO-3-007-MULTI-01 — connectivity.multiCluster.enabled is rejected at admission whatever the topology mode, Standalone included, because the operator acts on nothing.
+    fixture: tests/fixtures/neo4j-multicluster-enabled.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: multi-cluster
+    cr_name: e2e-multicluster
+
   - id: happy-minimal
     comment: Positive control — a valid minimal Standalone CR is admitted and becomes Ready.
     fixture: tests/fixtures/neo4j-standalone.yaml

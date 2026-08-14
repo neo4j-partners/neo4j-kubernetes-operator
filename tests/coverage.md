@@ -27,6 +27,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
 - [x] Reject Cluster on Community edition — NEO-2-001-EDT-01 · AC-NEO-LICENSE (edition guard)
 - [x] Reject `minimumMembers` > `primaries.members` (only primaries form the system quorum) — NEO-2-002-CSZ-01 · TOPO-009 (CEL)
+- [x] Reject `connectivity.multiCluster.enabled` in every topology mode — NEO-3-007-MULTI-01 (CEL)
 - [x] Accept a valid minimal Standalone CR (sanity)
 
 ### `workload-standalone` — NEO-1-001
@@ -57,7 +58,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] HTTP (7474) reachable — NEO-3-007-PRT-01 · AC-NEO-NETWORKING-PORTS-HTTP
 - [x] HTTP+Bolt exposed, HTTPS disabled — NEO-3-007-PCMB-03 · AC-NEO-NETWORKING-PORTS-HTTP-BOLT
 - [x] Reachable via client ClusterIP Service from an external pod — NEO-3-007-SVC-01 · AC-NEO-NETWORKING-CLUSTERIP
-- [x] Single-cluster only (multiCluster disabled) — NEO-3-007-MULTI-01
+- [x] Single-cluster only — `multiCluster.enabled` refused at admission, see `operator-admission` — NEO-3-007-MULTI-01
 
 ### `feature-config` — NEO-2-003 / NEO-2-010
 - [x] Valid `spec.config.neo4j` effective at runtime (bolt `SHOW SETTINGS`) — NEO-3-003-CFG-01 · AC-NEO-CONFIG-001
