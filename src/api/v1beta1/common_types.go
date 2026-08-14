@@ -474,6 +474,8 @@ type IngressSpec struct {
 
 // MultiClusterSpec exposes cluster ports on client Service (V1: enabled false only).
 type MultiClusterSpec struct {
+	// Enabled is refused at admission in every topology mode: nothing in the operator acts
+	// on it, so accepting true would silently promise cross-cluster discovery (NEO-3-007-MULTI-01).
 	Enabled bool `json:"enabled,omitempty"`
 }
 

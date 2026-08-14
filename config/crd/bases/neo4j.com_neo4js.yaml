@@ -232,6 +232,9 @@ spec:
                       Service (V1: enabled false only).'
                     properties:
                       enabled:
+                        description: |-
+                          Enabled is refused at admission in every topology mode: nothing in the operator acts
+                          on it, so accepting true would silently promise cross-cluster discovery (NEO-3-007-MULTI-01).
                         type: boolean
                     type: object
                   reverseProxy:
@@ -23499,9 +23502,9 @@ spec:
                 || self.trust.enabled != true || (has(self.trust.certificates) &&
                 (has(self.trust.certificates.bolt) || has(self.trust.certificates.https)))
             - message: multi-cluster not in V1
-              rule: self.topology.mode != 'Cluster' || !has(self.connectivity) ||
-                !has(self.connectivity.multiCluster) || self.connectivity.multiCluster.enabled
-                != true
+              rule: '!has(self.connectivity) || !has(self.connectivity.multiCluster)
+                || !has(self.connectivity.multiCluster.enabled) || self.connectivity.multiCluster.enabled
+                != true'
             - message: backup listener requires features.backup.enabled
               rule: '!has(self.connectivity) || !has(self.connectivity.listeners)
                 || !has(self.connectivity.listeners.backup) || (has(self.features)

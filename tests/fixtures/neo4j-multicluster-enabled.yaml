@@ -1,0 +1,27 @@
+# Multi-cluster asked for on a Standalone instance. Nothing in the operator acts on the flag,
+# so CEL refuses it in every topology mode rather than accepting a promise it cannot keep
+# (NEO-3-007-MULTI-01). Standalone is the discriminating case: the rule used to be guarded by
+# topology.mode == Cluster, which let this exact manifest through and ignored the field.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  connectivity:
+    multiCluster:
+      enabled: true
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
