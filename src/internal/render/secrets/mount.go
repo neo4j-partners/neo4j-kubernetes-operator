@@ -158,6 +158,9 @@ func EnsureMountable(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.N
 			if err := RequireAuthSecretDelegated(&secret, neo4j); err != nil {
 				return err
 			}
+			if err := RequireUsableAuthValue(&secret); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

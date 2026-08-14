@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # assert/storage-sc — Dynamic data volume with an explicit storageClassName.
-# The operator provisions data-<cr>-server-0 with that StorageClass and the CR
-# reaches Ready (kind's "standard" class binds once the pod schedules).
+# The operator provisions data-<cr>-server-0 with that StorageClass and the CR reaches Ready.
+# The class comes from the cloud profile (local-kind: standard, azure-aks: managed-csi), the
+# same source the fixture's __CLOUD_STORAGE_CLASS__ placeholder resolves from.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,7 +11,9 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 # shellcheck source=../../../lib/storage.sh
 source "${SCRIPT_DIR}/../../../lib/storage.sh"
 
-EXPECT_SC="${STORAGE_EXPECT_SC:-standard}"
+EXPECT_SC="${STORAGE_EXPECT_SC:-${STORAGE_CLASS_NAME:-}}"
+[[ -n "${EXPECT_SC}" ]] \
+  || die "cloud profile ${CLOUD_ID:-unset} sets no STORAGE_CLASS_NAME (set STORAGE_EXPECT_SC to override)"
 
 storage_wait_ready
 

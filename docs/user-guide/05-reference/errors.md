@@ -12,7 +12,7 @@ kubectl describe neo4j <name> -n <ns>   # Events carry the same Reason as the co
 kubectl logs -n neo4j-operator-system deploy/neo4j-operator-controller-manager --tail=200
 ```
 
-Rejected Secrets (`SecretNotMountable`, `SecretNotDelegated`) also emit a `Warning` Event under
+Rejected Secrets (`SecretNotMountable`, `SecretNotDelegated`, `AuthSecretInvalid`) also emit a `Warning` Event under
 the same reason — the operator stops before creating any StatefulSet, so `kubectl describe` is
 usually the fastest way to see why nothing was deployed.
 
@@ -30,6 +30,7 @@ See [Operator logs](../04-troubleshooting/02-operator-logs.md).
 | Error | ReconcileFailed | error | A pipeline step returned an error |
 | Error | SecretNotMountable | error | Referenced Secret lacks the `neo4j.com/mountable-by-operator` opt-in label (NEO-005) |
 | Error | SecretNotDelegated | error | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
+| Error | AuthSecretInvalid | error | Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop |
 | — (Event only) | DuplicateEntry | warn | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | Ready | ReconcileError | error | Ready cleared because reconcile failed |
 | Reconciling | Failed | error | Reconciling stopped after failure |
@@ -72,6 +73,27 @@ addresses (`dbms.cluster.*`, `dbms.routing.*`, `dbms.kubernetes.*`, `server.*.ad
 (`dbms.ssl.policy.*`, `server.bolt.tls_level`), log config paths (`server.logs.*.config`) and the
 listener toggles not already refused by CEL (`server.backup.enabled`,
 `server.metrics.prometheus.*`). Set those through the dedicated spec fields instead.
+
+## AuthSecretInvalid
+
+The Neo4j image sets the initial password from the `NEO4J_AUTH` key of the auth Secret, in the
+form `neo4j/<password>`. Its entrypoint is strict, and every rejection below makes the container
+exit before Neo4j starts — which without this check would show up only as a `CrashLoopBackOff`
+pod and a CR stuck at `0/1 servers ready`. The operator refuses the Secret instead, so the reason
+and the Event tell you what to fix:
+
+| Rejected because | Why the container would die |
+|------------------|-----------------------------|
+| The password starts with `-` | The entrypoint passes it as a positional argument to `neo4j-admin dbms set-initial-password` without a `--` separator, so the CLI parser reads it as an option and reports a missing parameter |
+| The value is not `neo4j/<password>`, or the password contains `/` | The entrypoint cannot parse it and exits with `Invalid value for NEO4J_AUTH` |
+| The user part is not `neo4j` | The image only accepts the `neo4j` administrator |
+| The password is `neo4j` | The image refuses the default password |
+
+Generated passwords are alphanumeric, so they never hit these rules. Bring-your-own Secrets can,
+and so can a hand-edited generated Secret, since the operator reuses an existing one as-is.
+Messages never quote the value.
+
+See [Security](../03-neo4j/05-security.md) for how auth Secrets are labelled and delegated.
 
 ## Using reasons in automation
 

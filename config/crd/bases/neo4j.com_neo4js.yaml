@@ -7720,8 +7720,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string
@@ -9783,8 +9785,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string
@@ -11836,8 +11840,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string
@@ -13897,8 +13903,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string
@@ -15958,8 +15966,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string
@@ -18019,8 +18029,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string
@@ -20080,8 +20092,10 @@ spec:
                                 type: string
                             type: object
                           existing:
-                            description: ExistingVolumeSpec binds pre-provisioned
-                              storage (exactly one source when mode is Existing).
+                            description: |-
+                              ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
+                              volumeClaimTemplate must not set volumeName or selector — those bind a cluster-scoped PV
+                              and escalate beyond namespace PVC create (NEO-023). Prefer claimName for an existing PVC.
                             properties:
                               claimName:
                                 type: string

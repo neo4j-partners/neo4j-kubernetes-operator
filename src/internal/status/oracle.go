@@ -36,6 +36,7 @@ const (
 	ReasonReconcileFailed    = "ReconcileFailed"
 	ReasonSecretNotMountable = "SecretNotMountable"
 	ReasonSecretNotDelegated = "SecretNotDelegated"
+	ReasonAuthSecretInvalid  = "AuthSecretInvalid"
 	// ReasonDuplicateEntry is Event-only and field-agnostic: any spec field whose rendering
 	// merges layers reports a dropped value under this reason (see render.Duplicate).
 	ReasonDuplicateEntry = "DuplicateEntry"
@@ -47,6 +48,7 @@ var ErrorOracle = []Entry{
 	{Condition: ConditionError, Reason: ReasonReconcileFailed, Severity: "error", Summary: "A pipeline step returned an error"},
 	{Condition: ConditionError, Reason: ReasonSecretNotMountable, Severity: "error", Summary: "Referenced Secret lacks the neo4j.com/mountable-by-operator opt-in label (NEO-005)"},
 	{Condition: ConditionError, Reason: ReasonSecretNotDelegated, Severity: "error", Summary: "BYO auth Secret is not delegated to this Neo4j via neo4j.com/allowed-for (ADD-01)"},
+	{Condition: ConditionError, Reason: ReasonAuthSecretInvalid, Severity: "error", Summary: "Auth Secret holds a NEO4J_AUTH value the Neo4j image entrypoint cannot use; the pod would crash-loop"},
 	{Condition: EventOnly, Reason: ReasonDuplicateEntry, Severity: "warn", Summary: "Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped"},
 	{Condition: ConditionReady, Reason: "ReconcileError", Severity: "error", Summary: "Ready cleared because reconcile failed"},
 	{Condition: ConditionReconciling, Reason: "Failed", Severity: "error", Summary: "Reconciling stopped after failure"},
