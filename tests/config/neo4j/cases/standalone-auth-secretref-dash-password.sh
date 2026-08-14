@@ -14,7 +14,9 @@ export E2E_ASSERT_NEO4J_READY=false
 
 export AUTH_SECRET_CREATE=true
 export AUTH_SECRET_NAME="${AUTH_SECRET_NAME:-neo4j-auth}"
-export AUTH_KNOWN_PASSWORD="${AUTH_KNOWN_PASSWORD:--DashLeadingPass1}"
+# Set unconditionally: the leading "-" is the whole point of the case, an inherited or
+# caller-provided password would make it pass for the wrong reason.
+export AUTH_KNOWN_PASSWORD='-DashLeadingPass1'
 # Labels are correct here — the value alone must be enough to refuse.
 export AUTH_SECRET_LABELS=full
 
