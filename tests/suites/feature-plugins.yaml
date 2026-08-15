@@ -3,17 +3,20 @@ description: Plugin surface (spec.plugins / spec.pluginDefinitions) — runtime 
 brief_ref: neo4j-plugin-surface
 use_pipeline: neo4j-suite
 on_case_failure: continue
-clouds: [local-kind]
 
 # Runtime plugin behaviour (BDR-004). The unit tests already prove every render decision —
 # the NEO4J_PLUGINS string, the ConfigMap keys, the volume shapes — so every case here is
 # something only a real container can show: the JAR actually arrived, the procedure answers,
 # the licence file is where the code (not the doc) says it is.
 #
+# No clouds: key — nothing here has a platform-specific subject. The plugins ship in the
+# Enterprise image, the licence Secrets are dummies, and storage is a plain Dynamic volume,
+# so the suite is hermetic and should run on every platform.
+#
 # NOTE: the operator contains no install logic. It sets NEO4J_PLUGINS and the image entrypoint
 # installs the JAR at container start. All three V1 catalog plugins ship INSIDE the Enterprise
 # image — apoc in /var/lib/neo4j/labs, gds and bloom in /var/lib/neo4j/products — so no case
-# here needs outbound network, and the suite is hermetic.
+# here needs outbound network.
 #
 # Standalone only: every catalog plugin is legal in spec.plugins, and staying on one topology
 # keeps NEO4J_POOL at its "server" default for every case.
