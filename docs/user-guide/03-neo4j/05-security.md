@@ -283,11 +283,18 @@ spec:
   security:
     networkPolicy:
       enabled: true
+      # Required when enabled (NEO-010) — client ports never use an empty From.
+      ingressFrom:
+        - podSelector: {}   # any pod in this namespace; tighten with matchLabels
+      # Optional narrower peers (otherwise ingressFrom is reused):
+      # backupFrom: [...]
+      # metricsFrom: [...]
 ```
 
-Off by default, because a policy in a cluster without a policy-enforcing CNI is inert, and a policy
-in a cluster with one can silently cut off your applications. Enable it once you know which clients
-must reach Neo4j, and verify connectivity afterwards.
+Off by default. When enabled, `ingressFrom` is required so Bolt/HTTP/HTTPS are not
+reachable from every pod in the cluster. Cluster-internal ports stay same-namespace only.
+Egress is not managed here — rely on your CNI / platform policies. A policy is inert without
+a NetworkPolicy-enforcing CNI.
 
 Example: [`examples/standalone/22-security.yaml`](../../../examples/standalone/22-security.yaml).
 

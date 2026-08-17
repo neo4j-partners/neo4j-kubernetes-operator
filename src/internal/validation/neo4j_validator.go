@@ -81,6 +81,9 @@ func ValidateNeo4j(obj runtime.Object) error {
 	if err := renderwl.ValidateSecurity(neo4j); err != nil {
 		return err
 	}
+	if err := renderwl.ValidateNetworkPolicy(neo4j); err != nil {
+		return err
+	}
 	if err := renderwl.ValidatePDB(neo4j); err != nil {
 		return err
 	}

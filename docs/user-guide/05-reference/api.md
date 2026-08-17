@@ -228,11 +228,11 @@ See [Monitoring](../03-neo4j/08-monitoring.md).
 | `spec.security.containerSecurityContext` | SecurityContext | — | |
 | `spec.security.serviceAccount.create` | bool | `false` | ServiceAccount named after the resource |
 | `spec.security.serviceAccount.annotations` | map | — | Cloud workload-identity annotations are rejected |
-| `spec.security.networkPolicy.enabled` | bool | `false` | |
+| `spec.security.networkPolicy.enabled` | bool | `false` | Opt-in; requires `ingressFrom` when true (NEO-010) |
+| `spec.security.networkPolicy.ingressFrom` | []NetworkPolicyPeer | — | Peers for Bolt/HTTP/HTTPS |
+| `spec.security.networkPolicy.backupFrom` | []NetworkPolicyPeer | — | Optional; defaults to `ingressFrom` |
+| `spec.security.networkPolicy.metricsFrom` | []NetworkPolicyPeer | — | Optional; defaults to `ingressFrom` |
 | `spec.maintenance.offlineMode` | bool | `false` | Runs an idle container instead of Neo4j |
-| `spec.podTemplate.initContainers` | []Container | — | |
-| `spec.podTemplate.sidecars` | []Container | — | |
-| `spec.podTemplate.env` | []EnvVar | — | Operator-set variables take precedence |
 
 See [Operations](../03-neo4j/09-operations.md).
 

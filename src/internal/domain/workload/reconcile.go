@@ -41,6 +41,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		log.Error(err, "workload security validation failed")
 		return shared.Failed(err)
 	}
+	if err := renderwl.ValidateNetworkPolicy(neo4j); err != nil {
+		log.Error(err, "networkPolicy validation failed")
+		return shared.Failed(err)
+	}
 
 	baseCtx := render.ContextForPool(neo4j, render.ActivePools(neo4j)[0])
 

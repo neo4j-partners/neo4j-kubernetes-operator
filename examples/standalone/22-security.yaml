@@ -20,6 +20,19 @@ spec:
         azure.workload.identity/client-id: "REPLACE_WITH_MANAGED_IDENTITY_CLIENT_ID"
     networkPolicy:
       enabled: true
+      # Required when enabled (NEO-010) — never an empty From on client ports.
+      # Empty podSelector = any pod in this namespace (tighten MatchLabels for apps).
+      ingressFrom:
+        - podSelector: {}
+      # Optional: narrower peers for backup / metrics listeners.
+      # backupFrom:
+      #   - podSelector:
+      #       matchLabels:
+      #         app: neo4j-backup
+      # metricsFrom:
+      #   - namespaceSelector:
+      #       matchLabels:
+      #         kubernetes.io/metadata.name: monitoring
   storage:
     volumes:
       data:

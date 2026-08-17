@@ -648,7 +648,11 @@ Empty → operator applies Neo4j-tuned defaults (`NEO-3-009-PROBE-01`).
 | `containerSecurityContext` | Override container SC; omit for defaults (`drop: [ALL]`). |
 | `serviceAccount.annotations` | IRSA / Workload Identity annotations on the operand SA. |
 | `serviceAccount.create` | Reserved — operator always creates the workload SA. |
-| `networkPolicy.enabled` | Opt-in NetworkPolicy (default off). Client ports open; cluster ports same-namespace only. |
+| `networkPolicy.enabled` | Opt-in NetworkPolicy (default off). Requires `ingressFrom` when true (NEO-010). |
+| `networkPolicy.ingressFrom` | Peers for Bolt/HTTP/HTTPS — required when enabled; empty `From` is rejected. |
+| `networkPolicy.backupFrom` | Optional peers for backup listener; defaults to `ingressFrom`. |
+| `networkPolicy.metricsFrom` | Optional peers for metrics listener; defaults to `ingressFrom`. |
+| | Cluster-internal ports (5000/6000/7000/7688) stay same-namespace only. Egress is not managed (platform / CNI). |
 
 ---
 

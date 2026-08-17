@@ -18,8 +18,9 @@ package v1beta1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // Neo4j edition (V1: enterprise only).
@@ -655,9 +656,17 @@ type SecuritySpec struct {
 	NetworkPolicy            *NetworkPolicySpec               `json:"networkPolicy,omitempty"`
 }
 
-// NetworkPolicySpec opt-in NetworkPolicy creation.
+// NetworkPolicySpec opt-in NetworkPolicy creation (NEO-010).
+// When enabled, ingressFrom is required — client ports never use an empty From.
+// +kubebuilder:validation:XValidation:rule="!self.enabled || (has(self.ingressFrom) && size(self.ingressFrom) > 0)",message="security.networkPolicy.ingressFrom is required when networkPolicy.enabled is true"
 type NetworkPolicySpec struct {
 	Enabled bool `json:"enabled,omitempty"`
+	// IngressFrom peers allowed to reach Bolt/HTTP/HTTPS (required when enabled).
+	IngressFrom []networkingv1.NetworkPolicyPeer `json:"ingressFrom,omitempty"`
+	// BackupFrom peers for the backup listener. When unset, ingressFrom is used.
+	BackupFrom []networkingv1.NetworkPolicyPeer `json:"backupFrom,omitempty"`
+	// MetricsFrom peers for the metrics listener. When unset, ingressFrom is used.
+	MetricsFrom []networkingv1.NetworkPolicyPeer `json:"metricsFrom,omitempty"`
 }
 
 // MaintenanceSpec configures maintenance windows.
