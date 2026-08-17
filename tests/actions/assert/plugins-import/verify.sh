@@ -2,10 +2,10 @@
 # assert/plugins-import — the manual JAR import channel: storage.volumes.plugins mode
 # Existing, with no spec.plugins entry.
 #
-# This is the only manual-import route the operator supports. spec.podTemplate.initContainers
-# is schema-only and never rendered, and additionalMounts/secretMounts reject /plugins as a
-# reserved path. So this case pins the channel, not a loaded JAR — the PVC is empty because
-# seeding a real JAR needs a Job the harness does not have.
+# This is the only manual-import route the operator supports: there is no init-container hook
+# (spec.podTemplate was removed from the CRD in 8837095), and additionalMounts and secretMounts
+# both reject /plugins as a reserved path. So this case pins the channel, not a loaded JAR —
+# the PVC is empty because seeding a real JAR needs a Job the harness does not have.
 #
 # The subPathExpr check is the valuable one. render/storage/volumes.go applies
 # shareSubPathExpr to Existing volumes too, so an imported JAR must live at
