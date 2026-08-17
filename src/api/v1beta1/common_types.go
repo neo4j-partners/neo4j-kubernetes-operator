@@ -124,8 +124,15 @@ type LicenseSpec struct {
 
 // ImageSpec overrides container image repository and pull policy.
 type ImageSpec struct {
+	// Repository is the image name without tag (default neo4j). Must match the
+	// operator --allowed-image-repositories allowlist (NEO-012).
 	// +kubebuilder:default="neo4j"
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9]([a-zA-Z0-9._:-]*/)*[a-zA-Z0-9._-]+$`
 	Repository string `json:"repository,omitempty"`
+	// Digest pins the image by digest (repo@sha256:...). When set, the tag from
+	// spec.version is not used in the image reference (NEO-012).
+	// +kubebuilder:validation:Pattern=`^sha256:[a-fA-F0-9]{64}$`
+	Digest string `json:"digest,omitempty"`
 	// +kubebuilder:validation:Enum=Always;IfNotPresent;Never
 	// +kubebuilder:default=IfNotPresent
 	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`

@@ -64,6 +64,7 @@ Values worth knowing:
 | Value | Effect |
 |-------|--------|
 | `image.repository`, `image.tag`, `image.digest` | Which controller image runs; a digest wins over a tag |
+| `allowedImageRepositories` | Operand Neo4j image repos allowed on CRs (NEO-012); add ACR/ECR mirrors here |
 | `imagePullSecrets` | Pull Secret for the operator image itself |
 | `watchNamespaces` | Namespaces reconciled, and the namespaces a Role and RoleBinding are created in |
 | `logging.level`, `logging.devel`, `logging.file.*` | Verbosity, encoder, and optional log file inside the pod |

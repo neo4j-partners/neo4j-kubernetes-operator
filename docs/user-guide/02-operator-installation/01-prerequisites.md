@@ -42,9 +42,11 @@ instance never starts. The full matrix of volume modes, including reusing an exi
 
 ## Neo4j image
 
-The operator runs `{spec.image.repository}:{spec.version}`, defaulting to the `neo4j` repository on
-Docker Hub. Your nodes must be able to pull that tag, so on a restricted network either mirror the
-image or set `spec.image.pullSecrets`.
+The operator runs `{spec.image.repository}:{spec.version}` (or `repository@digest` when
+`spec.image.digest` is set), defaulting to the `neo4j` repository on Docker Hub. Repositories
+must be on the operator allowlist (`allowedImageRepositories` / `--allowed-image-repositories`,
+NEO-012). On a restricted network, mirror the image, add the mirror to that allowlist, and set
+`spec.image.pullSecrets` if needed.
 
 Enterprise is the only supported edition today: `spec.edition: enterprise` with
 `spec.license.accept: "yes"`. Anything else is rejected at admission. Setting `accept` is a

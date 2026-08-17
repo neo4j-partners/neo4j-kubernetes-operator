@@ -239,12 +239,16 @@ func (c Context) SelectorLabels() map[string]string {
 	}
 }
 
-// ImageRef returns the effective container image reference (repository:tag).
+// ImageRef returns the effective container image reference.
+// Prefer digest pin (repo@sha256:...) when set; otherwise repository:tag (NEO-012).
 // spec.version is the Neo4j calver without edition suffix; Enterprise images use a -enterprise tag (Helm parity).
 func (c Context) ImageRef() string {
 	repo := "neo4j"
 	if c.Neo4j.Spec.Image != nil && c.Neo4j.Spec.Image.Repository != "" {
 		repo = c.Neo4j.Spec.Image.Repository
+	}
+	if c.Neo4j.Spec.Image != nil && c.Neo4j.Spec.Image.Digest != "" {
+		return repo + "@" + c.Neo4j.Spec.Image.Digest
 	}
 	return repo + ":" + imageTag(c.Neo4j.Spec.Version, c.Neo4j.Spec.Edition)
 }

@@ -190,18 +190,33 @@ Example: [`examples/standalone/17-offline-maintenance.yaml`](../../../examples/s
 
 ## Pulling images from a private registry
 
+The operator allowlists Neo4j image repositories (NEO-012). Defaults are `neo4j`,
+`docker.io/neo4j`, and `index.docker.io/neo4j`. For a private mirror, add the repository
+prefix on the **operator** Helm values, then reference it on the CR:
+
+```yaml
+# charts/neo4j-operator values
+allowedImageRepositories:
+  - neo4j
+  - docker.io/neo4j
+  - myregistry.example.com/neo4j
+```
+
 ```yaml
 spec:
   image:
     repository: myregistry.example.com/neo4j
+    # Optional digest pin (skips :tag in the image ref):
+    # digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     pullPolicy: IfNotPresent
     pullSecrets:
       - regcred
 ```
 
-The image reference is built from the repository and `spec.version`, with the Enterprise suffix added
-for you, so `version: "2026.05.0"` becomes the Enterprise tag of that release. `pullSecrets` names
-image pull Secrets that already exist in the workload namespace:
+Without the allowlist entry, reconcile fails with an allowlist error even if the cluster can
+pull the image. The image reference is built from the repository and `spec.version` (or
+`repository@digest` when `digest` is set), with the Enterprise suffix added for tag pulls.
+`pullSecrets` names image pull Secrets that already exist in the workload namespace:
 
 ```bash
 kubectl create secret docker-registry regcred -n default \

@@ -1,6 +1,7 @@
 package render
 
 import (
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,6 +81,25 @@ func TestImageRef(t *testing.T) {
 				t.Fatalf("ImageRef() = %q, want %q", got, tt.wantRef)
 			}
 		})
+	}
+}
+
+func TestImageRefDigest(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("ab", 32)
+	ctx := StandaloneContext(&neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition: neo4jv1beta1.EditionEnterprise,
+			Version: "2026.05.0",
+			Image: &neo4jv1beta1.ImageSpec{
+				Repository: "neo4j",
+				Digest:     digest,
+			},
+		},
+	})
+	want := "neo4j@" + digest
+	if got := ctx.ImageRef(); got != want {
+		t.Fatalf("ImageRef() = %q, want %q", got, want)
 	}
 }
 

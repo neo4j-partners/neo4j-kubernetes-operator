@@ -17,6 +17,15 @@ watchNamespaces:
 
 replicaCount: 1
 
+# Operand Neo4j image repositories allowed in CRs (NEO-012).
+# Default: official neo4j short name + docker.io. Add your ACR/ECR mirror, e.g.:
+#   - myacr.azurecr.io/neo4j
+# Use ["*"] only in disposable labs.
+allowedImageRepositories:
+  - neo4j
+  - docker.io/neo4j
+  - index.docker.io/neo4j
+
 # Extra args appended after --leader-elect / health probe / logging args.
 extraArgs: []
 

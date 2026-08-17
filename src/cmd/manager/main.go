@@ -33,6 +33,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	neo4jctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4j"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
 )
@@ -54,16 +55,24 @@ func main() {
 	var secureMetrics bool
 	var enableWebhooks bool
 	var webhookCertDir string
+	var allowedImageRepos string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", false, "If set, the metrics endpoint is served securely.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", false, "Register the Neo4j validating admission webhook (requires TLS certs).")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory with tls.crt and tls.key for the webhook server.")
+	flag.StringVar(&allowedImageRepos, "allowed-image-repositories", "",
+		"Comma-separated image repository prefixes allowed in Neo4j CRs (NEO-012). Empty uses defaults (neo4j, docker.io/neo4j). Use * to allow any (lab only).")
 	// Production JSON by default (ADR-014); --zap-devel for console. Optional --log-file tees verbose logs.
 	logOpts := logging.Options{}
 	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	if allowedImageRepos == "" {
+		allowedImageRepos = os.Getenv("ALLOWED_IMAGE_REPOSITORIES")
+	}
+	imagepolicy.SetAllowedRepositories(allowedImageRepos)
 
 	rootLog, closeLog, err := logging.New(logOpts)
 	if err != nil {
@@ -83,6 +92,11 @@ func main() {
 		defaultNamespaces[ns] = cache.Config{}
 	}
 	setupLog.Info("watching namespaces", "namespaces", namespaces)
+	if allow := imagepolicy.AllowedRepositories(); allow == nil {
+		setupLog.Info("image repository allowlist", "allowed", "*")
+	} else {
+		setupLog.Info("image repository allowlist", "allowed", allow)
+	}
 
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,

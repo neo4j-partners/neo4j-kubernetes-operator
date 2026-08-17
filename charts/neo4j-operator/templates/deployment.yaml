@@ -32,6 +32,9 @@ spec:
         - --leader-elect
         - --health-probe-bind-address=:8081
         - --zap-log-level={{ .Values.logging.level | default "info" }}
+        {{- if .Values.allowedImageRepositories }}
+        - --allowed-image-repositories={{ .Values.allowedImageRepositories | join "," }}
+        {{- end }}
         {{- if .Values.logging.devel }}
         - --zap-devel=true
         {{- end }}

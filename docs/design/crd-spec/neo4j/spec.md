@@ -181,11 +181,12 @@ Ordinals are **per pool** (`0 .. members-1`). Example pod: `prod-read-2`.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `repository` | string | no | `neo4j` | Container image repository. |
+| `repository` | string | no | `neo4j` | Image repository; must match operator allowlist (NEO-012). |
+| `digest` | string | no | — | Optional `sha256:…` pin → `repo@digest` (NEO-012). |
 | `pullPolicy` | string | no | `IfNotPresent` | `Always`, `IfNotPresent`, `Never`. |
 | `pullSecrets` | []string | no | `[]` | Image pull secret names (`NEO-3-004-IMG-01`). |
 
-Effective image: `{repository}:{spec.version}`.
+Effective image: `{repository}@{digest}` when digest is set, else `{repository}:{spec.version}` (with Enterprise tag suffix).
 
 ---
 

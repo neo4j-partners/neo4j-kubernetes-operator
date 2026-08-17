@@ -591,6 +591,12 @@ spec:
               image:
                 description: Image overrides container image repository and pull settings.
                 properties:
+                  digest:
+                    description: |-
+                      Digest pins the image by digest (repo@sha256:...). When set, the tag from
+                      spec.version is not used in the image reference (NEO-012).
+                    pattern: ^sha256:[a-fA-F0-9]{64}$
+                    type: string
                   pullPolicy:
                     default: IfNotPresent
                     description: PullPolicy describes a policy for if/when to pull
@@ -606,6 +612,10 @@ spec:
                     type: array
                   repository:
                     default: neo4j
+                    description: |-
+                      Repository is the image name without tag (default neo4j). Must match the
+                      operator --allowed-image-repositories allowlist (NEO-012).
+                    pattern: ^[a-zA-Z0-9]([a-zA-Z0-9._:-]*/)*[a-zA-Z0-9._-]+$
                     type: string
                 type: object
               license:

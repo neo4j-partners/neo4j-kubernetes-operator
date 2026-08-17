@@ -55,7 +55,8 @@ is required too, since a database with no data volume is not useful.
 | `spec.edition` | string | — | **Required.** Only `enterprise` is accepted |
 | `spec.version` | string | — | **Required.** Neo4j calendar version, for example `2026.05.0`; the Enterprise image suffix is added for you. Changing it later is not orchestrated |
 | `spec.license.accept` | string | — | **Required.** `yes` or `eval` |
-| `spec.image.repository` | string | `neo4j` | Image repository |
+| `spec.image.repository` | string | `neo4j` | Must match operator allowlist (NEO-012); default `neo4j` / `docker.io/neo4j` |
+| `spec.image.digest` | string | — | Optional `sha256:…` pin; renders `repo@digest` instead of `:tag` |
 | `spec.image.pullPolicy` | string | `IfNotPresent` | `Always`, `IfNotPresent` or `Never` |
 | `spec.image.pullSecrets` | []string | — | Names of image pull Secrets in the workload namespace |
 
