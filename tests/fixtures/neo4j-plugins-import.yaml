@@ -2,9 +2,9 @@
 # storage.volumes.plugins mode Existing, with NO spec.plugins entry so the operator leaves
 # NEO4J_PLUGINS unset and the entrypoint never installs over the imported directory.
 #
-# This is the only manual-import route the operator supports — spec.podTemplate.initContainers
-# is schema-only and never rendered, and additionalMounts/secretMounts reject /plugins as a
-# reserved path.
+# This is the only manual-import route the operator supports — there is no init-container
+# hook (spec.podTemplate was removed from the CRD in 8837095), and additionalMounts and
+# secretMounts both reject /plugins as a reserved path.
 #
 # The PVC is left empty on purpose. Seeding a real JAR needs a Job the harness does not have,
 # so this case proves the channel (mount, subPathExpr, no NEO4J_PLUGINS), not that an
