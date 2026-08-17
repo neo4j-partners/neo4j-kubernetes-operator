@@ -665,13 +665,6 @@ type MaintenanceSpec struct {
 	OfflineMode bool `json:"offlineMode,omitempty"`
 }
 
-// PodTemplateSpec escape hatch for init containers, sidecars, and env.
-type PodTemplateSpec struct {
-	InitContainers []corev1.Container `json:"initContainers,omitempty"`
-	Sidecars       []corev1.Container `json:"sidecars,omitempty"`
-	Env            []corev1.EnvVar    `json:"env,omitempty"`
-}
-
 // --- Status types (ADR-004, status.md) ---
 
 // ReplicaSummary is lightweight StatefulSet replica counts.

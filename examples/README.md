@@ -169,7 +169,6 @@ workload. They are intentionally left out of every example above:
 
 | Field | Status |
 |-------|--------|
-| `podTemplate` (initContainers, sidecars, env) | schema-only |
 | `trust.certManager` | schema-only — only BYO Secret TLS (`privateKey`/`publicCertificate`) is wired |
 | `connectivity.ingress.enabled: true` | schema-only — no Ingress object is created |
 | `connectivity.reverseProxy` | schema-only |

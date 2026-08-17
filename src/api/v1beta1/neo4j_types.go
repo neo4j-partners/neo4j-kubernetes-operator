@@ -99,8 +99,6 @@ type Neo4jSpec struct {
 	Security *SecuritySpec `json:"security,omitempty"`
 	// Maintenance enables operator-led maintenance such as offline mode.
 	Maintenance *MaintenanceSpec `json:"maintenance,omitempty"`
-	// PodTemplate is an escape hatch for init containers, sidecars, and env vars.
-	PodTemplate *PodTemplateSpec `json:"podTemplate,omitempty"`
 }
 
 // Neo4jStatus defines the observed state of Neo4j (ADR-004).

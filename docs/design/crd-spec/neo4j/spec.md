@@ -36,9 +36,10 @@ spec
 ├── scheduling, podDisruptionBudget, probes
 ├── security
 ├── monitoring
-├── maintenance
-└── podTemplate                        # escape hatch (containers only)
+└── maintenance
 ```
+
+> **Removed (NEO-025):** `spec.podTemplate` (`initContainers` / `sidecars` / `env`) was never rendered. Re-add only with NEO-001-class validation when implemented.
 
 ---
 
@@ -664,22 +665,6 @@ Empty → operator applies Neo4j-tuned defaults (`NEO-3-009-PROBE-01`).
 | `offlineMode` | bool | `false` | Yes | Replace Neo4j process with sleep loop for maintenance (`NEO-3-017-MNT-01` partial). |
 
 Full maintenance jobs (`NEO-2-017`) deferred to V2.
-
----
-
-## `spec.podTemplate`
-
-Escape hatch for advanced customization.
-
-| Field | Description |
-|-------|-------------|
-| `initContainers` | Additional init containers. |
-| `sidecars` | Sidecar containers. |
-| `env` | Additional environment variables (merged, not replaced). |
-
-Prefer `spec.storage.additionalMounts` and `spec.storage.secretMounts` for volumes — see [BDR-005](../../decision-records/business/neo4j/005-storage-volume-mode.md). Raw `podTemplate` patches deferred V1 unless needed for container overrides.
-
-Operator-owned keys cannot be overridden.
 
 ---
 
