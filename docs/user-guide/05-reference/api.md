@@ -143,7 +143,7 @@ See [Configuration](../03-neo4j/06-configuration.md).
 |-------|------|---------|-------|
 | `spec.plugins` | []string | — | Max 8, from `apoc`, `gds`, `bloom`. **Standalone only** — rejected in Cluster mode |
 | `spec.pluginDefinitions.<id>.licenseSecretRef` | string | — | Secret mounted at `/licenses/<id>`; needs the mountable label |
-| `spec.pluginDefinitions.<id>.version` | string | — | Not honoured yet |
+| `spec.pluginDefinitions.<id>.version` | string | — | Rejected — pin JARs via Existing `/plugins` volume or a custom image (NEO-013) |
 | `spec.pluginDefinitions.<id>.config` | map[string]string | — | Merged into `neo4j.conf` below your own configuration |
 
 In Cluster mode plugins are declared per pool under `spec.topology`.

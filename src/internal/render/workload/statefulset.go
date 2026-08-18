@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	neo4jConfVolumeName = "neo4j-conf"
-	apocConfVolumeName  = "apoc-conf"
+	neo4jConfVolumeName  = "neo4j-conf"
+	apocConfVolumeName   = "apoc-conf"
 	serverLogsVolumeName = "neo4j-server-logs"
 	userLogsVolumeName   = "neo4j-user-logs"
 	// configVolumeDefaultMode matches Helm (neo4j-statefulset.yaml defaultMode: 0440).
@@ -94,7 +94,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 				},
 				Spec: podSpec,
 			},
-			VolumeClaimTemplates: storageVCTs,
+			VolumeClaimTemplates:                 storageVCTs,
 			PersistentVolumeClaimRetentionPolicy: renderstorage.RetentionPolicy(ctx.Neo4j),
 		},
 	}
@@ -291,11 +291,13 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 			},
 		)
 	}
-	if pluginsEnv := plugins.NEO4JPluginsEnv(ctx.PoolPluginIDs()); pluginsEnv != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  "NEO4J_PLUGINS",
-			Value: pluginsEnv,
-		})
+	if !plugins.SkipNetworkFetch(ctx.Neo4j) {
+		if pluginsEnv := plugins.NEO4JPluginsEnv(ctx.PoolPluginIDs()); pluginsEnv != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  "NEO4J_PLUGINS",
+				Value: pluginsEnv,
+			})
+		}
 	}
 	env = append(env, corev1.EnvVar{
 		Name: "NEO4J_AUTH",

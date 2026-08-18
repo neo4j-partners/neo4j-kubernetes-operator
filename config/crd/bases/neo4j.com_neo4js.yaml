@@ -706,15 +706,21 @@ spec:
                     licenseSecretRef:
                       type: string
                     version:
+                      description: Version is rejected at admission — the image entrypoint
+                        does not pin plugin JARs (NEO-013).
                       type: string
                   type: object
-                description: PluginDefinitions holds per-plugin license, version,
-                  and config keyed by catalog id.
+                description: PluginDefinitions holds per-plugin license and config
+                  keyed by catalog id.
                 type: object
               plugins:
                 description: Plugins lists catalog plugin ids installed on every server
                   (Standalone only).
                 items:
+                  enum:
+                  - apoc
+                  - gds
+                  - bloom
                   type: string
                 maxItems: 8
                 type: array
@@ -19635,6 +19641,10 @@ spec:
                         type: integer
                       plugins:
                         items:
+                          enum:
+                          - apoc
+                          - gds
+                          - bloom
                           type: string
                         maxItems: 8
                         type: array
@@ -19655,6 +19665,10 @@ spec:
                             type: integer
                           plugins:
                             items:
+                              enum:
+                              - apoc
+                              - gds
+                              - bloom
                               type: string
                             maxItems: 8
                             type: array
@@ -19669,6 +19683,10 @@ spec:
                             type: integer
                           plugins:
                             items:
+                              enum:
+                              - apoc
+                              - gds
+                              - bloom
                               type: string
                             maxItems: 8
                             type: array

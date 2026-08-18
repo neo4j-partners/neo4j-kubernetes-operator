@@ -23,6 +23,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderconfig "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
@@ -136,6 +137,9 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
 	if err := imagepolicy.Validate(neo4j); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := plugins.Validate(neo4j); err != nil {
 		return ctrl.Result{}, err
 	}
 	if err := rendersecrets.ValidateSpec(neo4j); err != nil {

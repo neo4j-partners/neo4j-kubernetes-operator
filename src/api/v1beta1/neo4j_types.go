@@ -67,8 +67,9 @@ type Neo4jSpec struct {
 
 	// Plugins lists catalog plugin ids installed on every server (Standalone only).
 	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
 	Plugins []string `json:"plugins,omitempty"`
-	// PluginDefinitions holds per-plugin license, version, and config keyed by catalog id.
+	// PluginDefinitions holds per-plugin license and config keyed by catalog id.
 	PluginDefinitions map[string]PluginDefinitionSpec `json:"pluginDefinitions,omitempty"`
 
 	// Image overrides container image repository and pull settings.

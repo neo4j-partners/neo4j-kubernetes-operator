@@ -1,8 +1,12 @@
 # Plugins
 
-Three plugins are supported by name: `apoc`, `gds` for Graph Data Science, and `bloom`. You declare
-which ones you want and the operator installs them, points Neo4j at the plugin directory, and
-allowlists their procedures.
+Three plugins are supported by name: `apoc`, `gds` for Graph Data Science, and `bloom`. Unknown
+ids are rejected. Declaring a catalog plugin sets `NEO4J_PLUGINS` so the official image
+**downloads JARs at pod start** — the operator does not checksum those files (NEO-013).
+
+For production or air-gapped clusters, pre-seed `/plugins` and skip the fetch (see below).
+Procedure sandbox stays on unless you opt in via `spec.config.neo4j`
+(`dbms.security.procedures.unrestricted`).
 
 ## Standalone
 
@@ -52,13 +56,29 @@ Example: [`examples/cluster/11-plugins-apoc.yaml`](../../../examples/cluster/11-
 
 ## What the operator configures for you
 
-For the plugins assigned to a pool, the rendered `neo4j.conf` gets the plugin directory and the
-procedure allowlists — `apoc.*`, `gds.*`, `bloom.*` as appropriate, in both
-`dbms.security.procedures.unrestricted` and `dbms.security.procedures.allowlist`. GDS additionally
-gets its HTTP auth allowlist entry.
+For plugins assigned to a pool, the rendered `neo4j.conf` sets `server.directories.plugins=/plugins`
+and **allowlists** procedures (`apoc.*` / `gds.*` / `bloom.*` in
+`dbms.security.procedures.allowlist`). It does **not** set `procedures.unrestricted` — that is an
+explicit opt-in in `spec.config.neo4j` (NEO-024).
 
 You can still add your own settings; they merge with the generated ones and yours win. See
 [Configuration](06-configuration.md#when-two-layers-set-the-same-key).
+
+## How plugins get onto disk
+
+| Path | `NEO4J_PLUGINS` fetch | Use when |
+|------|----------------------|----------|
+| Catalog id only (ephemeral emptyDir) | Yes, every restart | Labs |
+| `volumes.plugins` Share / Dynamic | Yes on first start, then persist | Default production if egress is allowed |
+| `volumes.plugins` **Existing** | **No** | Air-gap / pre-seeded JARs (NEO-013) |
+| Custom image with JARs baked in | No (and omit catalog ids, or use Existing) | Fully pinned supply chain |
+
+`pluginDefinitions.*.version` is rejected — the image entrypoint cannot pin plugin versions.
+Put known-good JARs on an Existing volume or in a derived image.
+
+Download egress (when fetch is on) is whatever the Neo4j image documents for
+[Docker plugins](https://neo4j.com/docs/operations-manual/current/docker/plugins/) — typically
+GitHub / Neo4j download hosts. Allowlist those destinations if you restrict egress.
 
 ## Persisting downloaded plugins
 
@@ -74,8 +94,24 @@ spec:
         shareFrom: data
 ```
 
-`Share` puts `/plugins` in a subdirectory of the data volume, so it costs no extra claim. This is
-worth doing anywhere restarts matter, and necessary on clusters with no egress to the internet.
+`Share` puts `/plugins` in a subdirectory of the data volume, so it costs no extra claim. First
+start still downloads (needs egress); later restarts reuse the files.
+
+To skip the network fetch entirely, mount a pre-populated PVC:
+
+```yaml
+spec:
+  plugins: [apoc]
+  storage:
+    volumes:
+      plugins:
+        mode: Existing
+        existing:
+          claimName: my-plugins
+```
+
+The operator will not set `NEO4J_PLUGINS`. Put the JARs in that claim yourself (or bake them into
+a custom image — add the image repository to the operator allowlist, NEO-012).
 
 Example: [`examples/storage/12-aux-share-plugins-apoc.yaml`](../../../examples/storage/12-aux-share-plugins-apoc.yaml).
 
@@ -111,7 +147,7 @@ The reasoning behind that label is in
 
 `pluginDefinitions` is also where per-plugin settings live, keyed by plugin id, which keeps plugin
 configuration next to the plugin instead of scattered through `spec.config.neo4j`. Its `version`
-field is not honoured yet: plugin versions currently follow the Neo4j image.
+field is rejected: pin JARs with `volumes.plugins` Existing or a custom image (NEO-013).
 
 ## Verifying
 

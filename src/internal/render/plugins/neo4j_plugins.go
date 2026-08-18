@@ -14,6 +14,9 @@ func NEO4JPluginsEnv(catalogIDs []string) string {
 	names := make([]string, 0, len(catalogIDs))
 	for _, id := range catalogIDs {
 		name := ImageName(id)
+		if name == "" {
+			continue
+		}
 		if _, dup := seen[name]; dup {
 			continue
 		}

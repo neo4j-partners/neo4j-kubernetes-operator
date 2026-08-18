@@ -10,6 +10,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
@@ -103,6 +104,9 @@ func ValidateNeo4j(obj runtime.Object) error {
 		return err
 	}
 	if err := imagepolicy.Validate(neo4j); err != nil {
+		return err
+	}
+	if err := plugins.Validate(neo4j); err != nil {
 		return err
 	}
 	return nil

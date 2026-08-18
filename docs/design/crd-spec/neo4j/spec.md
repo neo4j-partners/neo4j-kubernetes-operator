@@ -512,7 +512,7 @@ pluginDefinitions:
 |-------|------|----------|---------|-------------|
 | `<id>` | PluginDefinition | no | — | Per-plugin config. Key must match catalog id. |
 | `<id>.licenseSecretRef` | string | conditional | — | Kubernetes Secret name. **Required** for `gds`, `bloom` when that id is referenced. Same Secret mounted on every pod running the plugin. |
-| `<id>.version` | string | no | `spec.version` | Plugin JAR version; major.minor must match Neo4j. |
+| `<id>.version` | string | no | — | Rejected (NEO-013). Pin JARs with `volumes.plugins` Existing or a custom image. |
 | `<id>.config` | map[string]string | no | `{}` | Plugin-specific settings (e.g. `gds.enterprise.license_file` path inside the container). |
 
 Empty object `{}` means **catalog defaults only** (typical for `apoc`).

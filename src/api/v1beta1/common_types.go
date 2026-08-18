@@ -567,6 +567,7 @@ type SecondaryPoolSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	Members int32 `json:"members,omitempty"`
 	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
 	Plugins []string `json:"plugins,omitempty"`
 }
 
@@ -581,6 +582,7 @@ type PrimariesSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	Members int32 `json:"members"`
 	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
 	Plugins []string `json:"plugins,omitempty"`
 }
 
@@ -610,6 +612,7 @@ type TopologySpec struct {
 // gds.enterprise.license_file) to unlock GDS Enterprise features.
 type PluginDefinitionSpec struct {
 	LicenseSecretRef string            `json:"licenseSecretRef,omitempty"`
+	// Version is rejected at admission — the image entrypoint does not pin plugin JARs (NEO-013).
 	Version          string            `json:"version,omitempty"`
 	Config           map[string]string `json:"config,omitempty"`
 }
