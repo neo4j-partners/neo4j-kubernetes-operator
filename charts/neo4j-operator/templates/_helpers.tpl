@@ -48,6 +48,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{- define "neo4j-operator.watchNamespacesCSV" -}}
+{{- range .Values.watchNamespaces }}
+{{- if eq . $.Release.Namespace }}
+{{- fail (printf "watchNamespaces must not include the operator namespace %q (NEO-016); install in a dedicated namespace and watch workload namespaces only" $.Release.Namespace) }}
+{{- end }}
+{{- end }}
 {{- join "," .Values.watchNamespaces }}
 {{- end }}
 

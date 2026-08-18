@@ -61,9 +61,11 @@ evaluation and development.
 | One or more workload namespaces | Your `Neo4j` resources and the pods, Services and PVCs they own |
 
 The operator only reconciles namespaces it was told to watch, and it is not cluster-wide by
-default. The manifests ship with `default,neo4j-operator-system`, which is why examples that omit
-`metadata.namespace` work out of the box. Adding a namespace means both extending that list and
-granting the operator rights in it — see [Watch scope and RBAC](04-operator-scope.md).
+default. The manifests ship with `WATCH_NAMESPACE=default`, which is why examples that omit
+`metadata.namespace` work out of the box. The operator install namespace is never on that list
+(NEO-016) — a `Neo4j` CR there is refused at start-up if you add it. Adding a workload namespace
+means both extending that list and granting the operator rights in it — see
+[Watch scope and RBAC](04-operator-scope.md).
 
 ## Next
 

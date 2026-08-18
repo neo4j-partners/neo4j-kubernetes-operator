@@ -32,5 +32,23 @@ func watchNamespaces() ([]string, error) {
 	if len(out) == 0 {
 		return nil, fmt.Errorf("WATCH_NAMESPACE has no namespaces")
 	}
+	if err := rejectWatchingOperatorNamespace(out, strings.TrimSpace(os.Getenv("POD_NAMESPACE"))); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// rejectWatchingOperatorNamespace forbids reconciling Neo4j CRs in the operator
+// install namespace (NEO-016). A CR there can adopt the operator ServiceAccount.
+// POD_NAMESPACE empty (local make run) skips the check.
+func rejectWatchingOperatorNamespace(watched []string, podNS string) error {
+	if podNS == "" {
+		return nil
+	}
+	for _, ns := range watched {
+		if ns == podNS {
+			return fmt.Errorf("WATCH_NAMESPACE includes the operator namespace %q; install the operator in a dedicated namespace and watch workload namespaces only (NEO-016)", podNS)
+		}
+	}
+	return nil
 }

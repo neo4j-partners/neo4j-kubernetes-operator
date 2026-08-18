@@ -11,6 +11,7 @@
      -n {{ .Release.Namespace }} --timeout=120s
 
 3. Watch namespaces (WATCH_NAMESPACE): {{ include "neo4j-operator.watchNamespacesCSV" . }}
+   The operator namespace {{ .Release.Namespace }} is not watched (NEO-016). Apply Neo4j CRs in a listed workload namespace.
 
 4. Apply a Neo4j CR in a watched namespace, e.g. examples/standalone/01-minimal.yaml
 

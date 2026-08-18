@@ -11,16 +11,25 @@ list of namespace names:
 ```yaml
 env:
 - name: WATCH_NAMESPACE
-  value: "default,neo4j-operator-system"
+  value: "default"
+- name: POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
 ```
 
-That is what ships in the manifests, and the Helm equivalent is `watchNamespaces`. Two values are
-refused at start-up, both deliberately:
+That is what ships in the manifests, and the Helm equivalent is `watchNamespaces`. Three values are
+refused at start-up, all deliberately:
 
 | Value | Result |
 |-------|--------|
 | Empty or unset | `WATCH_NAMESPACE is required` — the process exits |
 | `*` | `WATCH_NAMESPACE=* (cluster-wide) is not supported` — the process exits |
+| Any name equal to `POD_NAMESPACE` | Operator namespace must not be watched (NEO-016) — the process exits |
+
+Helm also fails template render if `watchNamespaces` includes the release namespace. Install the
+operator in `neo4j-operator-system` (or another dedicated namespace) and list **workload**
+namespaces only. A `Neo4j` CR in the operator namespace can adopt the controller ServiceAccount.
 
 A `Neo4j` resource created outside the watched namespaces is accepted by the API server and then
 ignored: no pods, no events, no status. That silence is the usual explanation for "my resource
@@ -72,8 +81,8 @@ next start rather than immediately.
 The Role grants full lifecycle rights on the object kinds the operator builds: ConfigMaps,
 Secrets, Services, endpoints, ServiceAccounts, PersistentVolumeClaims, pods, StatefulSets, and
 PodDisruptionBudgets, plus creating and patching Events, plus Roles and RoleBindings for the
-per-instance ServiceAccount it can create. In `neo4j-operator-system` it additionally holds the
-leases used for leader election.
+per-instance ServiceAccount it can create. Leader-election leases stay in the operator namespace
+on a **separate** Role; the manager Role is not granted there (NEO-016).
 
 The consequence worth internalising is `secrets` with `get`, `list` and `watch`: **inside a watched
 namespace the operator can read every Secret, not only the ones you meant for Neo4j.** Kubernetes

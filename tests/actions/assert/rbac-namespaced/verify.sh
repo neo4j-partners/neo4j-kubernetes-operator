@@ -21,12 +21,15 @@ WATCH_NS="${NEO4J_NAMESPACE:-default}"
 ROLE="${OPERATOR_ROLE:-neo4j-operator-manager-role}"
 SA="${OPERATOR_SA:-neo4j-operator-controller-manager}"
 
-# 1. Namespaced Role must exist in each watched namespace.
-for ns in "${OP_NS}" "${WATCH_NS}"; do
-  kubectl get role "${ROLE}" -n "${ns}" >/dev/null 2>&1 \
-    || die "namespaced Role ${ROLE} missing in ${ns} — operator not scoped as expected"
-  log "Role ${ROLE} present in ${ns}"
-done
+# 1. Namespaced manager Role must exist in each watched workload namespace,
+#    and must NOT exist in the operator namespace (NEO-016).
+kubectl get role "${ROLE}" -n "${WATCH_NS}" >/dev/null 2>&1 \
+  || die "namespaced Role ${ROLE} missing in ${WATCH_NS} — operator not scoped as expected"
+log "Role ${ROLE} present in ${WATCH_NS}"
+if kubectl get role "${ROLE}" -n "${OP_NS}" >/dev/null 2>&1; then
+  die "manager Role ${ROLE} must not exist in operator namespace ${OP_NS} (NEO-016)"
+fi
+log "Role ${ROLE} absent from operator namespace ${OP_NS} (NEO-016)"
 
 # 2. No ClusterRoleBinding may grant the operator ServiceAccount cluster-wide access.
 #    (A namespaced operator must not appear as a subject in any ClusterRoleBinding.)

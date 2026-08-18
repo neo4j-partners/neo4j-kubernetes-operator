@@ -12,6 +12,8 @@ image:
 imagePullSecrets: []
 
 # Namespaces the operator reconciles (WATCH_NAMESPACE). One Role+RoleBinding each.
+# Must not include the Helm release namespace (NEO-016) — install the operator in
+# neo4j-operator-system (or similar) and list workload namespaces here.
 watchNamespaces:
   - default
 

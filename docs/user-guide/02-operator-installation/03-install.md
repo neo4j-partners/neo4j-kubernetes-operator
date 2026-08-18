@@ -32,8 +32,9 @@ This creates the `neo4j-operator-system` namespace, applies the roles and bindin
 cluster-scoped role and binding that older installs used, since watch scope is now granted per
 namespace.
 
-The Deployment ships with `WATCH_NAMESPACE=default,neo4j-operator-system`, which is why examples
-without an explicit namespace work immediately. To reconcile other namespaces, read
+The Deployment ships with `WATCH_NAMESPACE=default` (workload namespace only). Examples that omit
+`metadata.namespace` land in `default` and are reconciled. The operator namespace is never watched
+(NEO-016). To reconcile other namespaces, read
 [Watch scope and RBAC](04-operator-scope.md) before you go further — the environment variable and
 the roles have to be changed together.
 
@@ -67,7 +68,7 @@ Values worth knowing:
 | `allowedImageRepositories` | Operand Neo4j image repos allowed on CRs (NEO-012); add ACR/ECR mirrors here |
 | `maxConcurrentReconciles` | Concurrent Neo4j reconciles (default 2, maximum 16; NEO-014) |
 | `imagePullSecrets` | Pull Secret for the operator image itself |
-| `watchNamespaces` | Namespaces reconciled, and the namespaces a Role and RoleBinding are created in |
+| `watchNamespaces` | Workload namespaces to reconcile (must not include the Helm release namespace) |
 | `logging.level`, `logging.devel`, `logging.file.*` | Verbosity, encoder, and optional log file inside the pod |
 | `resources`, `nodeSelector`, `tolerations`, `affinity` | Placement and sizing of the controller pod |
 | `extraArgs` | Extra manager flags, appended after the defaults |

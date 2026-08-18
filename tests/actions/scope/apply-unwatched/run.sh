@@ -2,7 +2,7 @@
 # scope/apply-unwatched — create a namespace the operator does NOT watch and apply
 # a valid Neo4j CR into it. Used by the operator-scope suite to prove single-namespace
 # scope (OP-2-001-SCOPE-01): the operator watches only WATCH_NAMESPACE
-# ("default,neo4j-operator-system"), so a CR here must be left untouched.
+# ("default"), so a CR here must be left untouched.
 #
 # The manifest is inlined (not a fixtures/ file) because it is only ever applied
 # to the unwatched namespace and must not be picked up by the normal deploy path.

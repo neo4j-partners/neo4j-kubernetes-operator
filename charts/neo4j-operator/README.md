@@ -36,7 +36,7 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 |-----|---------|---------|
 | `image.repository` / `tag` / `digest` | ACR repo; tag defaults to `Chart.appVersion`; optional `digest` (`sha256:…`) | Prefer digest or semver — not `latest` |
 | `image.pullPolicy` | `IfNotPresent` | Use `Always` only for mutable tags |
-| `watchNamespaces` | `[default]` | Namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each) |
+| `watchNamespaces` | `[default]` | Workload namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each). Must not include the operator release namespace (NEO-016). |
 | `serviceAccount.create` / `name` | `true` / `""` | When `create: false`, `name` is **required** (no silent fallback to `default`) |
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
 | `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |

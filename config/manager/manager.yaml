@@ -35,8 +35,13 @@ spec:
         - --max-concurrent-reconciles=2
         env:
         # Must match Role/RoleBinding namespaces in config/rbac/. Comma-separated list.
+        # Must not include this pod's namespace (NEO-016).
         - name: WATCH_NAMESPACE
-          value: "default,neo4j-operator-system"
+          value: "default"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         ports:
         - containerPort: 8081
           name: health
