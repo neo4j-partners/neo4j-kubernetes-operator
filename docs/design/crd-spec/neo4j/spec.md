@@ -97,7 +97,7 @@ topology:
   mode: Standalone
 ```
 
-Forbidden when `Standalone`: `primaries`, `secondaries`, `minimumMembers`.
+Forbidden when `Standalone`: `primaries`, `secondaries`.
 
 ### Cluster shape
 
@@ -114,7 +114,6 @@ topology:
     read:
       members: 2
       plugins: [apoc]
-  minimumMembers: 3
 pluginDefinitions:
   apoc: {}
   gds:
@@ -136,7 +135,13 @@ pluginDefinitions:
 
 **Removed (do not implement):** `secondaries[]` list with `name` field; `secondaries[].serverRole`.
 
-| `minimumMembers` | int32 | no | `primaries.members` | Formation gate (`NEO-2-011`). **Immutable after create** — scale via `primaries.members` only. |
+**No `minimumMembers` field.** The system bootstrap gate
+(`dbms.cluster.minimum_initial_system_primaries_count`, Helm `minimumClusterSize`) is derived by the
+operator: `1` for a single-primary cluster, `3` for any multi-primary one. Exposing it bought nothing
+and cost churn — a gate that follows `primaries.members` changes `neo4j.conf` on every scale and rolls
+the pool mid-resize, while a constant `3` gives up no redundancy because the system database has no
+explicit topology and spreads to every enabled primary (verified: 5 primaries with the gate at 3 end
+up with `system` on all 5). Values above `3` would only delay formation.
 
 Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md), **Option E — accepted**). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
 
@@ -170,7 +175,7 @@ Ordinals are **per pool** (`0 .. members-1`). Example pod: `prod-read-2`.
 | Helm | `spec.topology` |
 |------|-----------------|
 | `minimumClusterSize: 1`, no analytics | `mode: Standalone` |
-| `minimumClusterSize: 3` | `mode: Cluster`, `primaries.members: 3`, `minimumMembers: 3` |
+| `minimumClusterSize: 3` | `mode: Cluster`, `primaries.members: 3` (gate derived, not exposed) |
 | analytics + N secondaries | `primaries.members: 3`, `secondaries.analytics.members: N` |
 | Read replica scaling | `primaries.members: 3`, `secondaries.read.members: N` |
 | `operations.enableServer: true` | scale / enable-server flow (`NEO-2-011`) |
@@ -692,7 +697,6 @@ spec:
     mode: Cluster
     primaries:
       members: 3
-    minimumMembers: 3
   volumes:
     data:
       mode: Dynamic
@@ -762,7 +766,6 @@ spec:
       analytics:
         members: 1
         plugins: [gds]
-    minimumMembers: 3
   pluginDefinitions:
     apoc: {}
     gds:

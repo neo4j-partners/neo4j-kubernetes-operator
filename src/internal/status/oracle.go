@@ -16,6 +16,8 @@ limitations under the License.
 
 package status
 
+import "github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
+
 // Entry is one stable condition reason — the test oracle for operator errors.
 // Keep in sync with docs/user-guide/05-reference/errors.md.
 type Entry struct {
@@ -50,6 +52,7 @@ var ErrorOracle = []Entry{
 	{Condition: ConditionError, Reason: ReasonSecretNotDelegated, Severity: "error", Summary: "BYO auth Secret is not delegated to this Neo4j via neo4j.com/allowed-for (ADD-01)"},
 	{Condition: ConditionError, Reason: ReasonAuthSecretInvalid, Severity: "error", Summary: "Auth Secret holds a NEO4J_AUTH value the Neo4j image entrypoint cannot use; the pod would crash-loop"},
 	{Condition: EventOnly, Reason: ReasonDuplicateEntry, Severity: "warn", Summary: "Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped"},
+	{Condition: EventOnly, Reason: formation.ReasonDatabaseTopologyResized, Severity: "warn", Summary: "A scale-in forced ALTER DATABASE SET TOPOLOGY on a database wider than the remaining pool; the Event names the database and both counts, before and after"},
 	{Condition: ConditionReady, Reason: "ReconcileError", Severity: "error", Summary: "Ready cleared because reconcile failed"},
 	{Condition: ConditionReconciling, Reason: "Failed", Severity: "error", Summary: "Reconciling stopped after failure"},
 	{Condition: ConditionTLSReady, Reason: "SecretMissing", Severity: "error", Summary: "Required TLS/auth Secret is missing or incomplete"},

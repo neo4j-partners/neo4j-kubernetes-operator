@@ -10,6 +10,20 @@
 
 ---
 
+**Amendment (2026-08-18) — `topology.minimumMembers` withdrawn.** The accepted API below exposes
+`minimumMembers` as an optional formation gate mapping Helm's `minimumClusterSize`. Implementation
+showed the field only offered ways to hurt: left unset it defaulted to `primaries.members`, so every
+scale rewrote `dbms.cluster.minimum_initial_system_primaries_count` in `neo4j.conf`, moved the config
+checksum and rolled the primary pool in the middle of a resize; set explicitly it was immutable, and
+pinning it at creation forbade shrinking the cluster later. Nothing was gained by exposing it, because
+the `system` database has no topology of its own and spreads to every enabled primary whatever the
+gate says — a 5-primary cluster gated at 3 was measured with `system` on all 5. The operator now
+derives the value (`1` for a single primary, `3` otherwise), which makes it invariant across scaling.
+Rules TOPO-008, TOPO-009 and TOPO-014 are withdrawn with the field. Everything below stands as the
+record of the June decision.
+
+---
+
 ## Context
 
 [BDR-001](001-single-neo4j-crd.md) chose **one `Neo4j` CRD**. That resolves the *kind* question. This BDR resolves the **topology composition** question: how users express single-node, HA cluster, and **primary + secondary** layouts (read scaling or analytics) in one API.

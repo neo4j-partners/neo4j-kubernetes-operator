@@ -35,30 +35,7 @@ func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 	if neo4j, ok := newObj.(*neo4jv1beta1.Neo4j); ok && neo4j.DeletionTimestamp != nil && !neo4j.DeletionTimestamp.IsZero() {
 		return nil, nil
 	}
-	if err := validateMinimumMembersImmutable(oldObj, newObj); err != nil {
-		return nil, err
-	}
 	return nil, v.validate(ctx, newObj)
-}
-
-// validateMinimumMembersImmutable rejects updates that change topology.minimumMembers
-// (CEL also enforces this when the CRD is current; webhook covers enable-webhooks installs).
-func validateMinimumMembersImmutable(oldObj, newObj runtime.Object) error {
-	oldN, okOld := oldObj.(*neo4jv1beta1.Neo4j)
-	newN, okNew := newObj.(*neo4jv1beta1.Neo4j)
-	if !okOld || !okNew {
-		return nil
-	}
-	oldM := oldN.Spec.Topology.MinimumMembers
-	newM := newN.Spec.Topology.MinimumMembers
-	switch {
-	case oldM == nil && newM == nil:
-		return nil
-	case oldM == nil || newM == nil || *oldM != *newM:
-		return fmt.Errorf("topology.minimumMembers cannot change after create (scale via topology.primaries.members)")
-	default:
-		return nil
-	}
 }
 
 func (v *Neo4jValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
@@ -127,9 +104,6 @@ func validateScaleCaps(n *neo4jv1beta1.Neo4j) error {
 	t := n.Spec.Topology
 	if t.Primaries != nil && t.Primaries.Members > maxPrimaryMembers {
 		return fmt.Errorf("topology.primaries.members %d exceeds maximum %d (NEO-014)", t.Primaries.Members, maxPrimaryMembers)
-	}
-	if t.MinimumMembers != nil && *t.MinimumMembers > maxPrimaryMembers {
-		return fmt.Errorf("topology.minimumMembers %d exceeds maximum %d (NEO-014)", *t.MinimumMembers, maxPrimaryMembers)
 	}
 	if t.DefaultPrimariesCount != nil && *t.DefaultPrimariesCount > maxPrimaryMembers {
 		return fmt.Errorf("topology.defaultPrimariesCount %d exceeds maximum %d (NEO-014)", *t.DefaultPrimariesCount, maxPrimaryMembers)

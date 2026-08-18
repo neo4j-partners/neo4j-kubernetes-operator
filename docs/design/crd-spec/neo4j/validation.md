@@ -19,20 +19,20 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| TOPO-001 | `mode: Standalone` → `primaries`, `secondaries`, `minimumMembers` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
+| TOPO-001 | `mode: Standalone` → `primaries`, `secondaries` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
 | TOPO-002 | `mode: Cluster` → `primaries.members` required (≥ 1) | Error | CEL | `primaries.members` is required when `mode` is `Cluster` |
 | TOPO-003 | `secondaries` without `primaries` | Error | CEL | `primaries.members` must be set before secondaries |
 | TOPO-004 | `secondaries` when `mode: Standalone` | Error | CEL | Secondaries require `mode: Cluster` |
 | TOPO-005 | `gds` or `bloom` in `secondaries.read.plugins` | Error | CEL | GDS/Bloom must use secondaries.analytics pool |
 | TOPO-006 | `primaries.members` even and > 0 | Error | CEL | Primary count must be odd for quorum |
 | TOPO-007 | `secondaries.analytics` or `secondaries.read` present with `members < 1` | Error | CEL | pool members must be at least 1 when pool is configured |
-| TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
-| TOPO-009 | `minimumMembers > primaries.members` | Error | CEL | `minimumMembers` cannot exceed `primaries.members` (only primaries form the system quorum; secondaries analytics/read do not count) |
+| TOPO-008 | *withdrawn* — no `minimumMembers` field to forbid in Standalone |
+| TOPO-009 | *withdrawn* — the system bootstrap gate is derived (1 primary → 1, else 3), so it can never exceed `primaries.members` |
 | TOPO-010 | Primary scale-in below quorum / unsafe pool scale-in | Error | Webhook | Scale-in would break primary quorum or remove members before drain completes |
 | TOPO-011 | STS scale-down gated by `status.drainOK` + matching `drainOKGeneration` (not CR annotations) | — | Reconciler | (ADD-02; forgeable `neo4j.com/drain-ok` ignored) |
 | TOPO-012 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
-| TOPO-014 | `minimumMembers` immutable after create | Error | CEL (+ webhook) | `topology.minimumMembers cannot change after create` — scale via `primaries.members` only |
+| TOPO-014 | *withdrawn* — nothing to keep immutable once the gate is derived instead of declared |
 | TOPO-015 | `primaries.members` ≤ 15; each secondary pool ≤ 25 | Error | CEL + Webhook | exceeds maximum (NEO-014) |
 
 ### CEL sketches (topology)
@@ -42,7 +42,7 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 - rule: |
     !(self.topology.mode == 'Standalone') ||
     !has(self.topology.primaries) && !has(self.topology.secondaries) &&
-    !has(self.topology.minimumMembers)
+    !has(self.topology.defaultPrimariesCount)
   message: members fields are not allowed when mode is Standalone
 
 # TOPO-002 — Cluster requires primaries.members
@@ -66,20 +66,8 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
     self.topology.primaries.members % 2 == 1
   message: primary count must be odd for quorum
 
-# TOPO-009 — minimumMembers cannot exceed primaries (only primaries form the system quorum)
-- rule: |
-    !has(self.topology.minimumMembers) || !has(self.topology.primaries) ||
-    !has(self.topology.primaries.members) ||
-    self.topology.minimumMembers <= self.topology.primaries.members
-  message: minimumMembers cannot exceed primaries.members (only primaries can form system quorum)
-
-# TOPO-014 — minimumMembers immutable (bootstrap / system formation size only)
-- rule: |
-    self == oldSelf ||
-    ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) ||
-     (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) &&
-      self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
-  message: topology.minimumMembers cannot change after create
+# TOPO-009 / TOPO-014 — withdrawn with the minimumMembers field; nothing to validate on a value
+# the operator derives itself.
 ```
 
 ---
@@ -353,7 +341,6 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 | `secondaries.analytics.plugins` | `[]` |
 | `secondaries.read.plugins` | `[]` |
 | `spec.plugins` | `[]` (Standalone) |
-| `topology.minimumMembers` | `primaries.members` (Cluster) |
 | `image.pullPolicy` | `IfNotPresent` |
 | `auth.generatePassword` | `true` if no `passwordSecretRef` |
 | `trust.enabled` | `false` |
@@ -368,7 +355,7 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 | `podDisruptionBudget.enabled` | `true` when Cluster and total members ≥ 3 |
 | `maintenance.offlineMode` | `false` |
 
-**Standalone**: mutating webhook must **not** inject `primaries` / `secondaries` / `minimumMembers`.
+**Standalone**: mutating webhook must **not** inject `primaries` / `secondaries`.
 
 **Cluster**: mutating webhook may inject empty `pluginDefinitions` entries for referenced `apoc` ids only when `pluginDefinitions` is present but key missing (optional convenience — prefer explicit `{}`).
 

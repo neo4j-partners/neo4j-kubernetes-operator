@@ -43,9 +43,13 @@ func listenerConfKeys(ctx render.Context) map[string]string {
 func clusterNeo4jConfKeys(ctx render.Context) map[string]string {
 	keys := map[string]string{}
 
-	// Formation gate vs default DB topology are independent:
-	// minimumMembers → system Raft gate; defaultPrimariesCount → new DB default (default 1).
+	// System Raft gate vs default DB topology are independent: the gate is derived from the pool
+	// shape (see render.Context.MinimumMembers) and stays constant across scaling, while
+	// defaultPrimariesCount is the new-database default (1 when unset).
+	// Both initial.* keys only seed the DBMS at initialisation; formation re-applies them on a
+	// running cluster through dbms.setDefaultAllocationNumbers.
 	keys["initial.dbms.default_primaries_count"] = strconv.FormatInt(int64(ctx.DefaultPrimariesCount()), 10)
+	keys["initial.dbms.default_secondaries_count"] = strconv.FormatInt(int64(ctx.DefaultSecondariesCount()), 10)
 	keys["dbms.cluster.minimum_initial_system_primaries_count"] = strconv.FormatInt(int64(ctx.MinimumMembers()), 10)
 	keys["dbms.cluster.raft.binding_timeout"] = "1d"
 

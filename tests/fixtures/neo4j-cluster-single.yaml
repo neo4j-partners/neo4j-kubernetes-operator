@@ -13,7 +13,6 @@ spec:
     mode: Cluster
     primaries:
       members: 1
-    minimumMembers: 1
   storage:
     volumes:
       data:

@@ -50,8 +50,8 @@ StatefulSet. Applications should connect through the `dev` Service rather than t
 
 The server runs without clustering: no discovery, no Raft, no `SHOW SERVERS` peers. Databases are
 single-copy, so `spec.topology` accepts no member fields at all. Setting `primaries`,
-`secondaries`, `minimumMembers` or `defaultPrimariesCount` in Standalone mode is rejected at
-admission, with a message naming the field.
+`secondaries` or `defaultPrimariesCount` in Standalone mode is rejected at admission, with a message
+naming the field.
 
 Plugins are declared instance-wide with `spec.plugins`, since there are no pools to place them on:
 

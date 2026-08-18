@@ -31,7 +31,7 @@ func TestClusterNeo4jConfInjected(t *testing.T) {
 		"server.http.enabled":                        "true",
 		"server.bolt.listen_address":                 ":7687",
 		"initial.dbms.default_primaries_count":       "1", // defaultPrimariesCount unset → 1
-		"dbms.cluster.minimum_initial_system_primaries_count": "3", // minimumMembers unset → primaries.members
+		"dbms.cluster.minimum_initial_system_primaries_count": "3", // derived: multi-primary cluster
 		"dbms.cluster.discovery.resolver_type":       "K8S",
 		"dbms.kubernetes.discovery.service_port_name": "tcp-tx",
 		"dbms.kubernetes.label_selector": "app.kubernetes.io/name=neo4j,app.kubernetes.io/instance=prod,neo4j.com/service=internals,neo4j.com/clustering=true",
@@ -58,37 +58,62 @@ func TestClusterNeo4jConfInjected(t *testing.T) {
 	}
 }
 
-func TestMinimumMembersDrivesFormationConf(t *testing.T) {
-	min := int32(2)
-	neo4j := &neo4jv1beta1.Neo4j{
-		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:           neo4jv1beta1.TopologyModeCluster,
-				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
-				MinimumMembers: &min,
+// The bootstrap gate must not move with the pool size, or every scale would rewrite neo4j.conf and
+// roll the pool in the middle of the resize. 1 primary → 1, any multi-primary shape → 3.
+func TestSystemBootstrapGateIsScaleInvariant(t *testing.T) {
+	key := "dbms.cluster.minimum_initial_system_primaries_count"
+	for _, tc := range []struct {
+		members int32
+		want    string
+	}{{1, "1"}, {3, "3"}, {5, "3"}, {7, "3"}} {
+		neo4j := &neo4jv1beta1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jSpec{
+				Topology: neo4jv1beta1.TopologySpec{
+					Mode:      neo4jv1beta1.TopologyModeCluster,
+					Primaries: &neo4jv1beta1.PrimariesSpec{Members: tc.members},
+				},
 			},
-		},
-	}
-	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
-	if data["initial.dbms.default_primaries_count"] != "1" {
-		t.Fatalf("default_primaries_count = %q, want 1 (unset defaultPrimariesCount)", data["initial.dbms.default_primaries_count"])
-	}
-	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "2" {
-		t.Fatalf("minimum_initial_system_primaries_count = %q, want 2 from minimumMembers", data["dbms.cluster.minimum_initial_system_primaries_count"])
+		}
+		data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
+		if data[key] != tc.want {
+			t.Errorf("%d primaries: %s = %q, want %q", tc.members, key, data[key], tc.want)
+		}
 	}
 }
 
-func TestDefaultPrimariesCountDrivesDefaultDBTopology(t *testing.T) {
+// The same cluster scaled 3 → 5 → 3 must render byte-identical config, so the checksum never moves.
+func TestScalingDoesNotChangeConfigChecksum(t *testing.T) {
 	def := int32(3)
-	min := int32(3)
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Topology: neo4jv1beta1.TopologySpec{
 				Mode:                  neo4jv1beta1.TopologyModeCluster,
 				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
-				MinimumMembers:        &min,
+				DefaultPrimariesCount: &def,
+			},
+		},
+	}
+	before := ConfigChecksum(render.ContextForPool(neo4j, render.PoolPrimary))
+	neo4j.Spec.Topology.Primaries.Members = 5
+	if got := ConfigChecksum(render.ContextForPool(neo4j, render.PoolPrimary)); got != before {
+		t.Fatalf("scaling out changed the config checksum (%s → %s): the pool would roll during the resize", before, got)
+	}
+	neo4j.Spec.Topology.Primaries.Members = 3
+	if got := ConfigChecksum(render.ContextForPool(neo4j, render.PoolPrimary)); got != before {
+		t.Fatalf("scaling back in changed the config checksum (%s → %s)", before, got)
+	}
+}
+
+func TestDefaultPrimariesCountDrivesDefaultDBTopology(t *testing.T) {
+	def := int32(3)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:                  neo4jv1beta1.TopologyModeCluster,
+				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
 				DefaultPrimariesCount: &def,
 			},
 		},
@@ -120,23 +145,6 @@ func TestDefaultPrimariesCountClampedToPrimaries(t *testing.T) {
 	}
 }
 
-func TestMinimumMembersClampedToPrimaries(t *testing.T) {
-	min := int32(5)
-	neo4j := &neo4jv1beta1.Neo4j{
-		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:           neo4jv1beta1.TopologyModeCluster,
-				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
-				MinimumMembers: &min,
-			},
-		},
-	}
-	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
-	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "3" {
-		t.Fatalf("expected clamp to primaries.members=3, got %q", data["dbms.cluster.minimum_initial_system_primaries_count"])
-	}
-}
 
 func TestReadPoolCannotBootstrapAsPrimary(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{

@@ -14,7 +14,11 @@ on_case_failure: continue
 #
 # probes-default runs here too, and this is where its startup budget matters: the 1000 x 5s
 # threshold exists so a forming cluster is not killed by the kubelet. It inspects the
-# primary pool StatefulSet only. status-conditions runs last, once the CR has settled.
+# primary pool StatefulSet only. status-conditions runs after the CR has settled.
+#
+# cluster-scale-out-in comes last because it is the only mutating step: it resizes the pool,
+# so every assertion above it describes the declared shape. It is a no-op for cases that do
+# not declare CLUSTER_SCALE_OUT_MEMBERS (a case cannot carry its own step list).
 pipeline:
   case_assert:
     - assert/cluster-members
@@ -24,6 +28,7 @@ pipeline:
     - assert/cluster-db-routing
     - assert/cluster-routing
     - assert/status-conditions
+    - assert/cluster-scale-out-in
 
 cases:
   - id: lab-single-primary
@@ -46,3 +51,10 @@ cases:
     neo4j_case: cluster-3primaries-default-db
     expect: success
     cr_name: e2e-cluster-defaultdb
+
+  - id: scale-out-in
+    comment: Scale out 3 to 5 primaries then back in to 3 on one cluster — added members are enabled by the operator, a database asking for more primaries than the target does not block the shrink, and the StatefulSet is held until Neo4j has released the drained servers.
+    fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
+    neo4j_case: cluster-scale-out-in
+    expect: success
+    cr_name: e2e-cluster-scale

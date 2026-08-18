@@ -615,19 +615,19 @@ type TopologySpec struct {
 	Mode TopologyMode `json:"mode"`
 	Primaries   *PrimariesSpec   `json:"primaries,omitempty"`
 	Secondaries *SecondariesSpec `json:"secondaries,omitempty"`
-	// MinimumMembers is the system formation gate (enabled primaries before Ready)
-	// and maps to dbms.cluster.minimum_initial_system_primaries_count.
-	// Defaults to primaries.members when unset. Immutable after create — changing it
-	// rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=15
-	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
-	// DefaultPrimariesCount is the desired primary count for standard databases
-	// (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE
-	// SET TOPOLOGY). Defaults to 1 when unset. Clamped to primaries.members.
-	// System Raft size stays on minimumMembers. Cypher CREATE DATABASE can still
-	// request an explicit TOPOLOGY; the operator does not force every DB onto
-	// all primary servers.
+	// The system bootstrap gate (dbms.cluster.minimum_initial_system_primaries_count) is derived,
+	// not configurable: 1 for a single-primary cluster, 3 otherwise. Deriving it from the primary
+	// count would move it on every scale, rewriting neo4j.conf and rolling the pool in the middle
+	// of a resize; a constant 3 costs nothing because the system database spreads to every enabled
+	// primary regardless of the gate. See render.Context.MinimumMembers.
+
+	// DefaultPrimariesCount is the primary count a database gets when it is created without an
+	// explicit TOPOLOGY clause (initial.dbms.default_primaries_count at bootstrap, then
+	// dbms.setDefaultAllocationNumbers). Defaults to 1 when unset, clamped to primaries.members.
+	// It is a default, not a constraint: a topology set with CREATE/ALTER DATABASE is never
+	// rewritten to follow this field. Only a scale-in caps a database, and only down to the
+	// primaries the pool still has. The system database is not affected: it always spans every
+	// enabled primary.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=15
 	DefaultPrimariesCount *int32 `json:"defaultPrimariesCount,omitempty"`

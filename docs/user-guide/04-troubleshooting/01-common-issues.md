@@ -181,8 +181,8 @@ Details: [Scaling members](../03-neo4j/02-clustering.md#scaling-members).
 **Cause:** Neo4j forbids `ALTER DATABASE SET TOPOLOGY` from a multi-primary topology to
 **1** primary. The operator will not drain further in that case.
 
-**Fix:** Set `topology.primaries.members` back to an odd count ≥ 3 (and matching
-`minimumMembers`). Scaling primaries down to 1 is not supported — recreate if needed.
+**Fix:** Set `topology.primaries.members` back to an odd count ≥ 3. Scaling primaries down to 1 is
+not supported — recreate if needed.
 
 ## Scale-out stuck: UnsupportedSystemScaleUp (1 → N primaries)
 
@@ -193,16 +193,23 @@ from 1.
 not automate Neo4j single-to-cluster dump/load. Deploying at 1 primary is fine; changing
 primary count is not.
 
-**Fix:** Set `topology.primaries.members` back to 1 (leave `minimumMembers` as created — it is immutable). Or recreate the CR at the
-target primary count (typically 3). Scaling analytics/read secondaries only is supported.
+**Fix:** Set `topology.primaries.members` back to 1, or recreate the resource at the target primary
+count (typically 3). Scaling analytics/read secondaries only is supported.
 
-## Scale disrupted after changing minimumMembers
+## Members roll while scaling
 
-**Symptom:** Admission error `topology.minimumMembers cannot change after create`, or (on an older CRD) pods rolling / new members stuck on Raft snapshot while scaling 3↔5.
+**Symptom:** Primaries restart one after another during a `primaries.members` change, and new members
+sit waiting for a Raft snapshot.
 
-**Cause:** `minimumMembers` is bootstrap-only (formation gate + `minimum_initial_system_primaries_count`). Mutating it changes the config checksum and rolls the primary StatefulSet.
+**Cause:** Something changed `neo4j.conf`, not the scale itself. A scale alone leaves the rendered
+configuration byte-identical — including the
+[system bootstrap gate](../03-neo4j/02-clustering.md#the-system-bootstrap-gate), which the operator
+keeps at a fixed value for that very reason — so the config checksum does not move and no pod is
+recreated. A roll means the patch carried something else, typically `spec.config`, `spec.version` or a
+listener change.
 
-**Fix:** Scale only `topology.primaries.members`. Keep `minimumMembers` at the create-time value (HA: usually 3; analytics 1+secondaries: 1).
+**Fix:** Compare the ConfigMap before and after, and split the patch: scale on its own, configuration
+changes on their own.
 
 ## Cluster with secondaries never Ready (Bolt refused)
 

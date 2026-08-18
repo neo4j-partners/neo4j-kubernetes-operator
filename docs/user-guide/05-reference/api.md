@@ -71,10 +71,13 @@ is required too, since a database with no data volume is not useful.
 | `spec.topology.secondaries.analytics.plugins` | []string | — | The pool for `gds` and `bloom` |
 | `spec.topology.secondaries.read.members` | int32 | — | Minimum 1 when the pool is declared; maximum 25; target of `kubectl scale` |
 | `spec.topology.secondaries.read.plugins` | []string | — | `gds` and `bloom` are rejected here |
-| `spec.topology.minimumMembers` | int32 | `primaries.members` | Primaries required to form the `system` database. Maximum 15. Cannot exceed `primaries.members`. **Immutable** |
-| `spec.topology.defaultPrimariesCount` | int32 | `1` | Primaries hosting each standard database. Minimum 1, maximum 15, cannot exceed `primaries.members` |
+| `spec.topology.defaultPrimariesCount` | int32 | `1` | Primaries given to a standard database created without an explicit topology. Existing databases are not rewritten to match. Minimum 1, maximum 15, cannot exceed `primaries.members` |
 
-Standalone mode rejects `primaries`, `secondaries`, `minimumMembers` and `defaultPrimariesCount`.
+There is no field for the number of primaries that must meet to form the `system` database: the
+operator derives it, `1` for a single-primary cluster and `3` for any larger one, and it stays there
+whatever the pool size. See [Clustering](../03-neo4j/02-clustering.md#the-system-bootstrap-gate).
+
+Standalone mode rejects `primaries`, `secondaries` and `defaultPrimariesCount`.
 Cluster mode requires `primaries.members`, and `secondaries` requires `primaries.members` to be set
 first.
 
@@ -288,7 +291,6 @@ decisions cannot be forged from outside. Do not write them.
 | Change | Result |
 |--------|--------|
 | `spec.topology.mode` | Rejected — create a new resource instead |
-| `spec.topology.minimumMembers` | Rejected after creation |
 | Cluster primaries from several to exactly 1 | Held with reason `UnsupportedSinglePrimary` |
 | Cluster primaries from 1 upwards | Held with reason `UnsupportedSystemScaleUp` |
 | `whenDeleted: Delete` patched after creation | Accepted but not armed; the pinned value stands |

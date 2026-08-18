@@ -77,7 +77,12 @@ _config_reset_case_vars() {
   unset OPERATOR_CASE_NAME OPERATOR_IMAGE_PULL_POLICY
   # Cluster-only knobs — cleared so a Cluster case never leaks its pool/member
   # count into a later Standalone case (derive.sh then falls back to "server").
-  unset NEO4J_POOL CLUSTER_EXPECTED_MEMBERS
+  # The database expectations matter just as much: a case inheriting the previous one's
+  # primary count or resize targets asserts the wrong shape, or resizes a cluster that
+  # was never meant to be resized.
+  unset NEO4J_POOL CLUSTER_EXPECTED_MEMBERS CLUSTER_EXPECTED_DB_PRIMARIES CLUSTER_DEFAULT_DB
+  unset CLUSTER_SCALE_OUT_MEMBERS CLUSTER_SCALE_IN_MEMBERS CLUSTER_SCALE_DB CLUSTER_SCALE_TIMEOUT
+  unset CLUSTER_SCALE_STABLE_SECONDS
   # Credentials knobs — cases run in one shell, so without this a case reading
   # ${AUTH_KNOWN_PASSWORD:-default} silently inherits the previous case's password and
   # asserts the wrong thing (the same holds for the expected Secret name and reason).

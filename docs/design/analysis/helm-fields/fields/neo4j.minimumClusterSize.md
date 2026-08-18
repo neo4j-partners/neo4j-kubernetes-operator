@@ -29,7 +29,7 @@ topology
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.topology.mode` (`Cluster` when ≥3), `spec.topology.primaries.members`, `spec.topology.minimumMembers`
+- **Target**: `Neo4j.spec.topology.mode` (`Cluster` when ≥3), `spec.topology.primaries.members`. The gate itself has no CRD field: the operator derives `dbms.cluster.minimum_initial_system_primaries_count` as 1 for a single primary and 3 otherwise (BDR-002 amendment)
 - **Notes**: Helm multi-release HA (STS `replicas: 1` per install) diverges from operator single-STS multi-replica model ([BDR-002](../../decision-records/business/002-neo4j-crd-topology.md))
 
 ## Aggregation

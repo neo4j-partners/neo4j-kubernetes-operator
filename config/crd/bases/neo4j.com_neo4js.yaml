@@ -3086,8 +3086,8 @@ spec:
                     x-kubernetes-validations:
                     - message: security.networkPolicy.ingressFrom is required when
                         networkPolicy.enabled is true
-                      rule: '!has(self.enabled) || self.enabled == false || (has(self.ingressFrom) && size(self.ingressFrom)
-                        > 0)'
+                      rule: '!has(self.enabled) || self.enabled == false || (has(self.ingressFrom)
+                        && size(self.ingressFrom) > 0)'
                   podSecurityContext:
                     description: |-
                       PodSecurityContext holds pod-level security attributes and common container settings.
@@ -5202,6 +5202,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -7267,6 +7269,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -9322,6 +9326,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -11385,6 +11391,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -13448,6 +13456,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -15511,6 +15521,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -17574,6 +17586,8 @@ spec:
                                   type: string
                                 type: object
                               size:
+                                description: Ceiling is enforced in admission (16Ti,
+                                  NEO-014) — quantity max is not expressible in OpenAPI.
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 type: string
                               storageClassName:
@@ -19637,22 +19651,13 @@ spec:
                 properties:
                   defaultPrimariesCount:
                     description: |-
-                      DefaultPrimariesCount is the desired primary count for standard databases
-                      (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE
-                      SET TOPOLOGY). Defaults to 1 when unset. Clamped to primaries.members.
-                      System Raft size stays on minimumMembers. Cypher CREATE DATABASE can still
-                      request an explicit TOPOLOGY; the operator does not force every DB onto
-                      all primary servers.
-                    format: int32
-                    maximum: 15
-                    minimum: 1
-                    type: integer
-                  minimumMembers:
-                    description: |-
-                      MinimumMembers is the system formation gate (enabled primaries before Ready)
-                      and maps to dbms.cluster.minimum_initial_system_primaries_count.
-                      Defaults to primaries.members when unset. Immutable after create — changing it
-                      rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
+                      DefaultPrimariesCount is the primary count a database gets when it is created without an
+                      explicit TOPOLOGY clause (initial.dbms.default_primaries_count at bootstrap, then
+                      dbms.setDefaultAllocationNumbers). Defaults to 1 when unset, clamped to primaries.members.
+                      It is a default, not a constraint: a topology set with CREATE/ALTER DATABASE is never
+                      rewritten to follow this field. Only a scale-in caps a database, and only down to the
+                      primaries the pool still has. The system database is not affected: it always spans every
+                      enabled primary.
                     format: int32
                     maximum: 15
                     minimum: 1
@@ -20926,8 +20931,7 @@ spec:
             x-kubernetes-validations:
             - message: members fields are not allowed when mode is Standalone
               rule: self.topology.mode != 'Standalone' || (!has(self.topology.primaries)
-                && !has(self.topology.secondaries) && !has(self.topology.minimumMembers)
-                && !has(self.topology.defaultPrimariesCount))
+                && !has(self.topology.secondaries) && !has(self.topology.defaultPrimariesCount))
             - message: primaries.members is required when mode is Cluster
               rule: self.topology.mode != 'Cluster' || (has(self.topology.primaries)
                 && has(self.topology.primaries.members) && self.topology.primaries.members
@@ -20951,13 +20955,6 @@ spec:
             - message: read pool members must be at least 1 when pool is configured
               rule: '!has(self.topology.secondaries) || !has(self.topology.secondaries.read)
                 || self.topology.secondaries.read.members >= 1'
-            - message: minimumMembers not allowed in Standalone
-              rule: self.topology.mode != 'Standalone' || !has(self.topology.minimumMembers)
-            - message: minimumMembers cannot exceed primaries.members (only primaries
-                can form system quorum)
-              rule: '!has(self.topology.minimumMembers) || !has(self.topology.primaries)
-                || !has(self.topology.primaries.members) || self.topology.minimumMembers
-                <= self.topology.primaries.members'
             - message: defaultPrimariesCount not allowed in Standalone
               rule: self.topology.mode != 'Standalone' || !has(self.topology.defaultPrimariesCount)
             - message: defaultPrimariesCount cannot exceed primaries.members
@@ -21354,10 +21351,6 @@ spec:
         x-kubernetes-validations:
         - message: topology.mode cannot change
           rule: self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode
-        - message: topology.minimumMembers cannot change after create
-          rule: self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers))
-            || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers)
-            && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
     served: true
     storage: true
     subresources:

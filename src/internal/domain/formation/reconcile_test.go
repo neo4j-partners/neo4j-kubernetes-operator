@@ -2,6 +2,7 @@ package formation
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
@@ -19,6 +21,9 @@ type fakeAdmin struct {
 	mu      sync.Mutex
 	servers []intneo4j.Server
 	dbs     []intneo4j.DatabaseTopology
+	// defaultAlloc records the last dbms.setDefaultAllocationNumbers call, nil until called.
+	defaultAlloc *[2]int64
+	alters       int
 }
 
 func (f *fakeAdmin) ShowServers(context.Context) ([]intneo4j.Server, error) {
@@ -40,6 +45,7 @@ func (f *fakeAdmin) ShowDatabaseTopologies(context.Context) ([]intneo4j.Database
 func (f *fakeAdmin) SetDatabaseTopology(_ context.Context, name string, primaries, secondaries int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.alters++
 	for i := range f.dbs {
 		if f.dbs[i].Name == name {
 			f.dbs[i].RequestedPrimaries = primaries
@@ -48,6 +54,13 @@ func (f *fakeAdmin) SetDatabaseTopology(_ context.Context, name string, primarie
 			f.dbs[i].CurrentSecondaries = secondaries
 		}
 	}
+	return nil
+}
+
+func (f *fakeAdmin) SetDefaultAllocationNumbers(_ context.Context, primaries, secondaries int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.defaultAlloc = &[2]int64{primaries, secondaries}
 	return nil
 }
 
@@ -96,9 +109,8 @@ func testClusterCR(primaries int32) *neo4jv1beta1.Neo4j {
 			Version:  "2026.05.0",
 			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{
-				Mode:           neo4jv1beta1.TopologyModeCluster,
-				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: primaries},
-				MinimumMembers: ptr(int32(1)),
+				Mode:      neo4jv1beta1.TopologyModeCluster,
+				Primaries: &neo4jv1beta1.PrimariesSpec{Members: primaries},
 			},
 		},
 	}
@@ -248,9 +260,122 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 	}
 }
 
-func TestReconcileGrowsSecondariesForAnalytics(t *testing.T) {
+// Shrinking hosting rewrites a topology the user may have set with their own ALTER DATABASE, so it
+// must never be silent: one Warning Event under the catalogued reason, naming the database and the
+// counts on both sides.
+func TestReconcileReportsDatabaseTopologyResize(t *testing.T) {
 	neo4j := testClusterCR(3)
-	// defaultPrimariesCount unset → 1; do not expand neo4j onto all primary servers.
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	replicas := int32(5)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+		neo4j.DeepCopy(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
+	).Build()
+
+	admin := &fakeAdmin{
+		servers: []intneo4j.Server{
+			{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s3", Address: "prod-primary-3.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s4", Address: "prod-primary-4.default.svc.cluster.local:7687", State: "Enabled"},
+		},
+		dbs: []intneo4j.DatabaseTopology{{
+			Name: "orders", Type: "standard", HasTopology: true,
+			RequestedPrimaries: 5, RequestedSecondaries: 0,
+			CurrentPrimaries: 5, CurrentSecondaries: 0,
+		}},
+	}
+	recorder := record.NewFakeRecorder(10)
+	r := &Reconciler{
+		Client:   c,
+		Recorder: recorder,
+		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			return admin, nil
+		},
+	}
+
+	if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
+		t.Fatal(out.Err)
+	}
+
+	event := findEvent(recorder, ReasonDatabaseTopologyResized)
+	if event == "" {
+		t.Fatalf("no %s Event after the operator shrunk a database topology", ReasonDatabaseTopologyResized)
+	}
+	if !strings.Contains(event, "Warning") {
+		t.Errorf("event %q should be a Warning", event)
+	}
+	// Which database, from what, to what — enough to audit the rewrite without reading the log.
+	for _, want := range []string{"orders", "5 primaries", "to 3"} {
+		if !strings.Contains(event, want) {
+			t.Errorf("event %q should mention %q", event, want)
+		}
+	}
+}
+
+func TestReconcileNoResizeEventWhenTopologiesAlreadyFit(t *testing.T) {
+	neo4j := testClusterCR(3)
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	replicas := int32(3)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+		neo4j.DeepCopy(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
+	).Build()
+
+	admin := &fakeAdmin{
+		servers: []intneo4j.Server{
+			{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+		},
+		// defaultPrimariesCount is unset, so 1 primary is the target and nothing has to move.
+		dbs: []intneo4j.DatabaseTopology{{
+			Name: "neo4j", Type: "standard", HasTopology: true,
+			RequestedPrimaries: 1, CurrentPrimaries: 1,
+		}},
+	}
+	recorder := record.NewFakeRecorder(10)
+	r := &Reconciler{
+		Client:   c,
+		Recorder: recorder,
+		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			return admin, nil
+		},
+	}
+
+	if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
+		t.Fatal(out.Err)
+	}
+	if event := findEvent(recorder, ReasonDatabaseTopologyResized); event != "" {
+		t.Errorf("unexpected resize Event while every topology already fits: %q", event)
+	}
+}
+
+// findEvent drains the buffered events and returns the first one carrying reason, "" if none.
+func findEvent(recorder *record.FakeRecorder, reason string) string {
+	for {
+		select {
+		case e := <-recorder.Events:
+			if strings.Contains(e, reason) {
+				return e
+			}
+		default:
+			return ""
+		}
+	}
+}
+
+// Pools wider than a database are not a reason to rewrite it: defaultPrimariesCount and the
+// secondary pools decide what a *new* database gets, and the operator carries that intent through
+// the DBMS creation defaults instead of ALTER DATABASE (TOPO-006).
+func TestReconcileLeavesTopologyAloneWhenPoolsAreWider(t *testing.T) {
+	neo4j := testClusterCR(3)
+	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(3))
 	neo4j.Spec.Topology.Secondaries = &neo4jv1beta1.SecondariesSpec{
 		Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
 		Read:      &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
@@ -291,11 +416,55 @@ func TestReconcileGrowsSecondariesForAnalytics(t *testing.T) {
 	if out.Err != nil {
 		t.Fatal(out.Err)
 	}
-	if admin.dbs[0].RequestedPrimaries != 1 {
-		t.Fatalf("expected primaries to stay at defaultPrimariesCount=1, got %#v", admin.dbs[0])
+	if admin.alters != 0 {
+		t.Errorf("operator ran %d ALTER DATABASE while no pool shrank", admin.alters)
 	}
-	if admin.dbs[0].RequestedSecondaries != 2 {
-		t.Fatalf("expected 2 secondaries, got %#v", admin.dbs[0])
+	if admin.dbs[0].RequestedPrimaries != 1 || admin.dbs[0].RequestedSecondaries != 0 {
+		t.Errorf("database rewritten behind its owner's back: %#v", admin.dbs[0])
+	}
+	// The intent is not lost, it moved to where it belongs: the next CREATE DATABASE.
+	if admin.defaultAlloc == nil || *admin.defaultAlloc != [2]int64{3, 2} {
+		t.Errorf("creation defaults = %v, want 3 primaries / 2 secondaries", admin.defaultAlloc)
+	}
+}
+
+// A running cluster must keep honouring the field: initial.dbms.default_*_count is only read when
+// the DBMS is initialised, so an edited defaultPrimariesCount reaches Neo4j through the procedure.
+func TestReconcileAppliesCreationDefaults(t *testing.T) {
+	neo4j := testClusterCR(3)
+	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(3))
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	replicas := int32(3)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+		neo4j.DeepCopy(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
+	).Build()
+
+	admin := &fakeAdmin{
+		servers: []intneo4j.Server{
+			{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+		},
+		dbs: []intneo4j.DatabaseTopology{{
+			Name: "neo4j", Type: "standard", HasTopology: true,
+			RequestedPrimaries: 3, CurrentPrimaries: 3,
+		}},
+	}
+	r := &Reconciler{
+		Client: c,
+		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			return admin, nil
+		},
+	}
+
+	if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
+		t.Fatal(out.Err)
+	}
+	if admin.defaultAlloc == nil || *admin.defaultAlloc != [2]int64{3, 0} {
+		t.Fatalf("creation defaults = %v, want 3 primaries / 0 secondaries", admin.defaultAlloc)
 	}
 }
 
@@ -357,9 +526,12 @@ func TestReconcileScaleInLeavesFittingTopologyAlone(t *testing.T) {
 	}
 }
 
-func TestReconcileDoesNotExpandPrimariesBeyondDefault(t *testing.T) {
+// The narrow topology a user asked for with their own ALTER DATABASE must survive every pass, even
+// while defaultPrimariesCount says something wider. Regression guard: the operator used to pull it
+// back on every reconcile, undoing the change in a loop.
+func TestReconcileKeepsUserTopologyAcrossPasses(t *testing.T) {
 	neo4j := testClusterCR(3)
-	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(1))
+	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(3))
 	scheme := runtime.NewScheme()
 	_ = neo4jv1beta1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
@@ -388,12 +560,13 @@ func TestReconcileDoesNotExpandPrimariesBeyondDefault(t *testing.T) {
 		},
 	}
 
-	out := r.Reconcile(t.Context(), neo4j)
-	if out.Err != nil {
-		t.Fatal(out.Err)
-	}
-	if admin.dbs[0].RequestedPrimaries != 1 {
-		t.Fatalf("must not expand to primaries.members; got %#v", admin.dbs[0])
+	for i := 0; i < 3; i++ {
+		if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
+			t.Fatalf("pass %d: %v", i, out.Err)
+		}
+		if admin.dbs[0].RequestedPrimaries != 1 {
+			t.Fatalf("pass %d widened the database to %d primaries", i, admin.dbs[0].RequestedPrimaries)
+		}
 	}
 }
 

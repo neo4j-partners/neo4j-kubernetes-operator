@@ -72,7 +72,6 @@ func TestCRDContainsCELValidations(t *testing.T) {
 		"x-kubernetes-validations",
 		"primaries.members is required when mode is Cluster",
 		"topology.mode cannot change",
-		"topology.minimumMembers cannot change after create",
 		"statusReplicasPath: .status.readPoolReplicas",
 	} {
 		if !strings.Contains(content, fragment) {

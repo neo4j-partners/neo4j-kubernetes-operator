@@ -36,8 +36,9 @@ Warning Event with reason `DuplicateEntry`, showing `kept (operator-injected)` â
 |------|--------------|
 | `server.bolt.enabled`, `server.http.enabled`, `server.https.enabled`, `server.backup.enabled`, and their listen addresses | `spec.connectivity.listeners` |
 | `server.metrics.prometheus.enabled`, `server.metrics.prometheus.endpoint` | `spec.features.monitoring.prometheus` plus the metrics listener |
-| `dbms.cluster.minimum_initial_system_primaries_count` | `spec.topology.minimumMembers` |
+| `dbms.cluster.minimum_initial_system_primaries_count` | `spec.topology.primaries.members`: `1` when there is a single primary, `3` otherwise â€” deliberately not the pool size, so scaling never rewrites this file |
 | `initial.dbms.default_primaries_count` | `spec.topology.defaultPrimariesCount` |
+| `initial.dbms.default_secondaries_count` | `spec.topology.secondaries` member totals |
 | `dbms.cluster.discovery.resolver_type`, `dbms.kubernetes.discovery.service_port_name`, `dbms.kubernetes.label_selector`, `dbms.cluster.raft.binding_timeout` | Kubernetes-based cluster discovery |
 | `dbms.routing.enabled`, `dbms.routing.default_router`, `dbms.routing.client_side.enforce_for_domains` | Cluster mode and `spec.connectivity.clusterDomain` |
 | `server.bolt.advertised_address`, `server.cluster.advertised_address`, `server.cluster.raft.advertised_address`, `server.routing.advertised_address` | Per-member Service names |

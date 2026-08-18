@@ -22,7 +22,7 @@ import (
 )
 
 // Neo4jSpec defines the desired state of Neo4j.
-// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries) && !has(self.topology.minimumMembers) && !has(self.topology.defaultPrimariesCount))",message="members fields are not allowed when mode is Standalone"
+// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries) && !has(self.topology.defaultPrimariesCount))",message="members fields are not allowed when mode is Standalone"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || (has(self.topology.primaries) && has(self.topology.primaries.members) && self.topology.primaries.members >= 1)",message="primaries.members is required when mode is Cluster"
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.secondaries) || (has(self.topology.primaries) && has(self.topology.primaries.members))",message="primaries.members must be set before secondaries"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || !has(self.topology.secondaries)",message="Secondaries require mode: Cluster"
@@ -30,8 +30,6 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.primaries) || self.topology.primaries.members == 0 || self.topology.primaries.members % 2 == 1",message="primary count must be odd for quorum"
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.secondaries) || !has(self.topology.secondaries.analytics) || self.topology.secondaries.analytics.members >= 1",message="analytics pool members must be at least 1 when pool is configured"
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.secondaries) || !has(self.topology.secondaries.read) || self.topology.secondaries.read.members >= 1",message="read pool members must be at least 1 when pool is configured"
-// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || !has(self.topology.minimumMembers)",message="minimumMembers not allowed in Standalone"
-// +kubebuilder:validation:XValidation:rule="!has(self.topology.minimumMembers) || !has(self.topology.primaries) || !has(self.topology.primaries.members) || self.topology.minimumMembers <= self.topology.primaries.members",message="minimumMembers cannot exceed primaries.members (only primaries can form system quorum)"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || !has(self.topology.defaultPrimariesCount)",message="defaultPrimariesCount not allowed in Standalone"
 // +kubebuilder:validation:XValidation:rule="!has(self.topology.defaultPrimariesCount) || !has(self.topology.primaries) || !has(self.topology.primaries.members) || self.topology.defaultPrimariesCount <= self.topology.primaries.members",message="defaultPrimariesCount cannot exceed primaries.members"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.topology.primaries) || !has(self.topology.primaries.plugins) || self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')",message="GDS and Bloom cannot be installed on primary members in Cluster mode"
@@ -157,7 +155,6 @@ type Neo4jStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode",message="topology.mode cannot change"
-// +kubebuilder:validation:XValidation:rule="self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))",message="topology.minimumMembers cannot change after create"
 type Neo4j struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

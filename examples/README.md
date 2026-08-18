@@ -152,8 +152,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
   [`secrets/plugin-licenses.yaml`](secrets/plugin-licenses.yaml).
   GDS and Bloom may only be installed on `secondaries.analytics` in Cluster mode (CRD-enforced);
   APOC may go on primaries, analytics, read, or (Standalone) `spec.plugins`.
-- **Primary count parity:** `topology.primaries.members` must be odd (quorum) and
-  `topology.minimumMembers` must be `<= primaries.members`. Scale-in from multi-primary
+- **Primary count parity:** `topology.primaries.members` must be odd (quorum). Scale-in from multi-primary
   DBs down to **1** primary is **not** supported by Neo4j `ALTER DATABASE` — keep ≥ 3 or
   recreate the DB manually ([docs](../docs/user-guide/03-neo4j/02-clustering.md#primary-counts-that-cannot-change)).
 - **Scale + storage:** After scale-in, Neo4j `DROP`ped server UUIDs cannot be re-enabled.

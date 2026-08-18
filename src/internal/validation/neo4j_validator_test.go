@@ -48,27 +48,6 @@ func TestValidateNeo4jRejectsPrivileged(t *testing.T) {
 	}
 }
 
-func TestValidateMinimumMembersImmutable(t *testing.T) {
-	oldN := validStandalone()
-	oldN.Spec.Topology = neo4jv1beta1.TopologySpec{
-		Mode:           neo4jv1beta1.TopologyModeCluster,
-		Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
-		MinimumMembers: ptr(int32(3)),
-	}
-	newN := oldN.DeepCopy()
-	*newN.Spec.Topology.MinimumMembers = 1
-	err := validateMinimumMembersImmutable(oldN, newN)
-	if err == nil || !strings.Contains(err.Error(), "minimumMembers cannot change") {
-		t.Fatalf("got %v", err)
-	}
-	newSame := oldN.DeepCopy()
-	if err := validateMinimumMembersImmutable(oldN, newSame); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func ptr[T any](v T) *T { return &v }
-
 func TestValidateUpdateSkipsSpecOnDelete(t *testing.T) {
 	n := validStandalone()
 	n.Spec.Security = &neo4jv1beta1.SecuritySpec{

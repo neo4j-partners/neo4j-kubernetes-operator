@@ -19,7 +19,6 @@ spec:
       read:
         members: 1
         plugins: [apoc]
-    minimumMembers: 3
   pluginDefinitions:
     apoc: {}
     gds:

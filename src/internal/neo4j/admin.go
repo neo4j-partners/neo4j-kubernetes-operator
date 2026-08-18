@@ -29,6 +29,8 @@ type Admin interface {
 	ShowServers(ctx context.Context) ([]Server, error)
 	ShowDatabaseTopologies(ctx context.Context) ([]DatabaseTopology, error)
 	SetDatabaseTopology(ctx context.Context, name string, primaries, secondaries int64) error
+	// SetDefaultAllocationNumbers sets the topology a CREATE DATABASE with no TOPOLOGY clause gets.
+	SetDefaultAllocationNumbers(ctx context.Context, primaries, secondaries int64) error
 	EnableServer(ctx context.Context, name, modeConstraint string) error
 	DeallocateDatabases(ctx context.Context, name string) error
 	DropServer(ctx context.Context, name string) error

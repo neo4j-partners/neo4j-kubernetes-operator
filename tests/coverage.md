@@ -26,7 +26,6 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 ### `operator-admission` — validation (ADR-001)
 - [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
 - [x] Reject Cluster on Community edition — NEO-2-001-EDT-01 · AC-NEO-LICENSE (edition guard)
-- [x] Reject `minimumMembers` > `primaries.members` (only primaries form the system quorum) — NEO-2-002-CSZ-01 · TOPO-009 (CEL)
 - [x] Reject `connectivity.multiCluster.enabled` in every topology mode — NEO-3-007-MULTI-01 (CEL)
 - [x] Accept a valid minimal Standalone CR (sanity)
 
@@ -46,12 +45,20 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Cluster forms (`SHOW SERVERS`: Enabled + Available) — AC-NEO-CLUSTER-002
 - [x] Default database allocated on `topology.defaultPrimariesCount` primaries (`SHOW DATABASES`: requested = current)
 - [x] `defaultPrimariesCount` omitted → the documented default of 1 primary, on a 3-primary cluster
+- [x] `defaultPrimariesCount` is a creation default, not a constraint: a database created wider than the field keeps its topology across reconcile passes, with no `DatabaseTopologyResized` Event — TOPO-006
 - [x] Default database reachable via `neo4j://` from members that do not host it (direct `bolt://` may be refused)
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
 - [ ] Cluster TLS material (`spec.trust`) — NEO-3-005-TLS-03 · AC-NEO-TLS (no TLS case yet)
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
-- [ ] Scale out/in cluster members after deploy (`topology.*.members`) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
-- [ ] Added servers auto-enabled: operator runs `ENABLE SERVER` so a scaled-out member reaches `Enabled` in `SHOW SERVERS` and hosts databases — NEO-3-011-SRV-01 · AC-NEO-SCALE
+- [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
+- [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE
+- [x] Scaling leaves the surviving members alone: identical pod UIDs, no container restarts and an unchanged pool config checksum on both halves, since the system bootstrap gate is a derived constant rather than a function of `primaries.members`
+- [x] Scale-in drains Neo4j first: the StatefulSet is held until `status.drainOK` confirms the tail was deallocated and dropped — ADD-02
+- [x] The tail is drained one member at a time, highest ordinal first (operator log order), and the drained ordinals are no longer `Enabled`
+- [x] A database requesting more primaries than the scale-in target does not block the shrink; it is narrowed to the target count and stays online
+- [x] The narrowing — the only topology rewrite the operator performs — is never silent: `DatabaseTopologyResized` Warning Event on the CR and an operator log entry, both naming the database and the counts before/after
+- [x] A resize that would leave `defaultPrimariesCount` above `primaries.members` is refused at admission on update, and the running cluster is untouched
+- [ ] Scale-in to a single primary refused (`ServersPendingDrain`/`UnsupportedSinglePrimary`) while a multi-primary database exists — now reachable at admission (a 3 → 1 patch is accepted when `defaultPrimariesCount` is unset), so the operator-side refusal can finally be asserted
 
 ### `feature-connectivity` — NEO-2-007
 - [x] Bolt (7687) reachable from the Neo4j pod — NEO-3-007-PRT-03 · AC-NEO-NETWORKING-PORTS-BOLT

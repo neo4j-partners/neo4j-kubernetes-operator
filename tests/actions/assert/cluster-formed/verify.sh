@@ -41,7 +41,7 @@ log "operator reports Ready (reason=${reason:-?}, message=${message:-none})"
 # 1b. ClusterFormed is the operator's dedicated formation verdict (set by
 #     domain/formation): True/Formed once every desired server is enabled. Ready can
 #     go True on member health alone, so assert the formation-specific condition too.
-#     Reasons it may hold instead: WaitingQuorum, AligningTopology,
+#     Reasons it may hold instead: WaitingQuorum, EnablingServer,
 #     UnsupportedSystemScaleUp, UnsupportedSinglePrimary.
 formed_status="$(kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" \
   -o jsonpath='{.status.conditions[?(@.type=="ClusterFormed")].status}' 2>/dev/null || true)"

@@ -16,7 +16,6 @@ spec:
     mode: Cluster
     primaries:
       members: 3
-    minimumMembers: 3
   features:
     backup:
       enabled: true

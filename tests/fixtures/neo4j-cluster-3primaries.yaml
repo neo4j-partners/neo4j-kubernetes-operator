@@ -14,7 +14,6 @@ spec:
     mode: Cluster
     primaries:
       members: 3
-    minimumMembers: 3
     # Explicit: the default is 1, which would host the `neo4j` database on a single
     # primary — an HA DBMS with non-HA data. 3 keeps data on every primary.
     defaultPrimariesCount: 3
