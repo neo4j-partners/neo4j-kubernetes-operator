@@ -55,7 +55,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
 - [ ] Cluster TLS material via BYO Secret (`spec.trust` with `secretName`/`privateKey`) — NEO-3-005-TLS-03 · AC-NEO-TLS (cert-manager path covered by `feature-tls`; BYO Secret path unit-tested only)
 - [x] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady=SecretsPresent`, cluster forms and serves Bolt over TLS — NEO-2-005 · AC-NEO-TLS (see `feature-tls`)
-- [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
+- Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02: see `feature-config`
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
 - [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE
 - [x] Scaling leaves the surviving members alone: identical pod UIDs, no container restarts and an unchanged pool config checksum on both halves, since the system bootstrap gate never follows `primaries.members` — derived when `minimumMembers` is unset, immutable when it is set
@@ -83,7 +83,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] JVM `additionalArguments` colliding with a default (same key) replace it in place — user value wins, one entry per key, position preserved — NEO-3-003-JVM-01
 - [x] A dropped JVM argument is reported — `DuplicateEntry` Warning Event and operator log line naming the field, the value kept and the one dropped — NEO-3-003-JVM-01
 - [ ] APOC credentials mounted from secret — NEO-3-003-APOC-02 · AC-NEO-APOC-CREDS-001 (`pluginDefinitions.apoc.credentials`)
-- [ ] Rolling restart of cluster members one-by-one on config change — NEO-3-010-RSTR-02 (cluster-specific, see `workload-cluster`)
+- [x] Rolling restart of cluster members one-by-one on config change — the 3-primary pool rolls to the new revision with at most one member unavailable at a time, `ClusterFormed` never goes False, and the new value is live on a restarted member — NEO-3-010-RSTR-02 · AC-NEO-CONFIG-CHANGE / AC-NEO-CLUSTER
 
 ### `feature-plugins` — plugins (BDR-004)
 
