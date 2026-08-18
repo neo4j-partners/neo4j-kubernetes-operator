@@ -1,0 +1,20 @@
+# Cluster lifecycle with BYO TLS material published first.
+#
+# Same shape as credentials-suite: the certificate Secrets must exist before the CR is
+# applied, because the operator refuses to render operands when trust.certificates points
+# at a Secret that is missing or not opted in (NEO-005). A suite override cannot express
+# this — suite phases append to the pipeline's, so the ensure step would land after
+# deploy/neo4j — hence a pipeline of its own.
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - tls/ensure-cluster-certs
+  - deploy/neo4j
+
+case_teardown:
+  - cleanup/standalone
+  - tls/cleanup-certs

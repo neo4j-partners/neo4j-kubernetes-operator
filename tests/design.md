@@ -158,6 +158,41 @@ Neo4j pod itself (`localhost`) and from a separate client pod (client Service DN
 Expectations are data-driven via `EXPECT_CONN_{BOLT,NEO4J,HTTP,HTTPS}` (see
 `config/neo4j/cases/standalone-connectivity.sh`); a TLS case flips `https` to `success`.
 
+## BYO TLS suite mechanics (`feature-tls-byo`)
+
+Covers `spec.trust` with user-supplied material, the half `feature-tls` does not: there the
+operator asks cert-manager to issue certificates, here it mounts material it never created.
+Every non-TLS cluster fixture disables TLS (`trust.enabled: false` +
+`insecureAdminConnection: true`), so this suite is what exercises that path.
+
+**Certificates are generated per run, not committed.** `tls/ensure-cluster-certs` builds a CA
+and a cluster leaf, publishes three Secrets, and labels them
+`neo4j.com/mountable-by-operator=true`. Committing them is not an option — they are private
+keys (NEO-019 / NEO-021) — and generating also keeps the SANs correct if the CR name or
+namespace change. `hack/gen-cluster-tls.sh` is the hand-run equivalent.
+
+**SANs must match what members advertise**, or the mTLS handshake fails and the cluster never
+forms — a test bug that looks exactly like a product bug. The operator advertises
+`server.cluster.advertised_address` as `<pod>-internals.<ns>.svc.<cluster-domain>`, so every
+ordinal's `-internals` FQDN is listed explicitly rather than relying on the wildcard.
+
+**`client_auth` is not a choice.** `render/trust` forces `REQUIRE` for the cluster policy and
+the validator rejects `None`: cluster communication is mutually authenticated. mTLS in turn
+makes `trustedCerts.sources` mandatory, which is why the CA is mounted alongside the leaf.
+
+**`insecureAdminConnection` stays `true`.** Only the *cluster* policy is configured, so the
+operator's own admin Bolt dial is still plaintext. Turning it off without also configuring
+`trust.certificates.bolt` would stop the operator reaching Bolt, and formation would stall for
+a reason unrelated to the certificates under test.
+
+It needs its own pipeline (`cluster-tls-suite`) rather than a suite override: the Secrets must
+exist *before* the CR is applied, and suite phases append to the pipeline's, so an override
+would place the ensure step after `deploy/neo4j`.
+
+`assert/cluster-formed` runs alongside `assert/cluster-tls` and is the substantive half — the
+TLS assert pins how it was achieved (condition, mounts, effective policy, and that the mounted
+certificate is the published one rather than image-shipped material).
+
 ## Configuration profiles
 
 | Profile | Behaviour |

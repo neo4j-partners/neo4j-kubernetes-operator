@@ -1,0 +1,28 @@
+name: feature-tls-byo
+description: BYO TLS material (spec.trust) — cluster communication secured with operator-mounted certificates
+brief_ref: neo4j-trust-surface
+use_pipeline: cluster-tls-suite
+on_case_failure: stop
+
+# First coverage of the TLS domain. Every other cluster fixture sets trust.enabled: false
+# with insecureAdminConnection: true, so spec.trust was entirely unexercised.
+#
+# cluster-formed runs alongside cluster-tls and is the substantive half: cluster comms are
+# mTLS once the policy is on, so a wrong certificate or a SAN that does not match what
+# members advertise would fail the handshake and the cluster would never form. The TLS
+# assert then pins how that was achieved — condition, mounts, effective policy.
+#
+# Certificates are generated per run by tls/ensure-cluster-certs rather than committed;
+# they are private keys, and the repo does not carry key material (NEO-019 / NEO-021).
+pipeline:
+  case_assert:
+    - assert/cluster-formed
+    - assert/cluster-tls
+
+cases:
+  - id: cluster-byo-tls
+    comment: NEO-3-005-TLS-03 — a 3-primary cluster forms over mTLS using operator-mounted BYO certificates, with the cluster policy enabled and client_auth REQUIRE at runtime.
+    fixture: tests/fixtures/neo4j-cluster-tls.yaml
+    neo4j_case: cluster-tls
+    expect: success
+    cr_name: e2e-tls
