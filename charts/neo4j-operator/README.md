@@ -40,6 +40,7 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 | `serviceAccount.create` / `name` | `true` / `""` | When `create: false`, `name` is **required** (no silent fallback to `default`) |
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
 | `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |
+| `maxConcurrentReconciles` | `2` | Concurrent Neo4j reconciles (NEO-014). Maximum 16 |
 | `replicaCount` | `1` | Controller replicas |
 | `logging.level` | `info` | stderr verbosity (`debug` / `info` / `error`) |
 | `logging.devel` | `false` | Console encoder (local debug) |

@@ -1,0 +1,19 @@
+# Purpose: Namespace ResourceQuota for a watched tenant namespace (NEO-014).
+# Apply in each namespace the operator watches. The CRD already caps pool members
+# (15 primaries / 25 per secondary pool) and Dynamic PVC size (16Ti). This quota is
+# the cluster-level backstop for CPU, memory, PVC count, and Service IPs.
+# spec.resources on the Neo4j CR stays optional — set it for production (see 21-resources.yaml).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: neo4j-tenant
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 64Gi
+    limits.cpu: "32"
+    limits.memory: 128Gi
+    pods: "40"
+    persistentvolumeclaims: "30"
+    requests.storage: 8Ti
+    services: "40"

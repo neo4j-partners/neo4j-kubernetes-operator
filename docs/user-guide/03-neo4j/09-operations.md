@@ -17,7 +17,10 @@ spec:
 
 These are the standard Kubernetes requests and limits, applied to the Neo4j container. Nothing is set
 by default, which means an unsized Neo4j is scheduled anywhere and can be evicted under node
-pressure — fine for a laptop, wrong for production.
+pressure — fine for a laptop, wrong for production. Put a `ResourceQuota` on watched namespaces
+([`examples/standalone/23-namespace-quota.yaml`](../../../examples/standalone/23-namespace-quota.yaml))
+so one CR cannot exhaust the node or the Service CIDR. The CRD also caps `primaries.members` at 15,
+each secondary pool at 25, and Dynamic PVC size at 16Ti (NEO-014).
 
 Coordinate them with the JVM. The heap and page cache you set in
 [Configuration](06-configuration.md#neo4jconf-settings) must fit inside the memory limit, with room to

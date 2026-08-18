@@ -6,9 +6,13 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
+
+// MaxDynamicVolumeSize is the V1 ceiling on Dynamic PVC requests (NEO-014).
+const MaxDynamicVolumeSize = "16Ti"
 
 // Operator-owned mount roots (STO-009 / ADD-07). Overlap wedges STS apply and every later reconcile.
 var reservedMountPaths = []string{
@@ -115,6 +119,9 @@ func validateData(data *neo4jv1beta1.DataVolumeSpec) error {
 		if data.Dynamic == nil || data.Dynamic.Size == "" {
 			return fmt.Errorf("storage.volumes.data.dynamic.size is required when mode is Dynamic")
 		}
+		if err := rejectOversizedQuantity("storage.volumes.data.dynamic.size", data.Dynamic.Size); err != nil {
+			return err
+		}
 		return rejectReservedLabelKeys("storage.volumes.data.dynamic.labels", data.Dynamic.Labels)
 	case neo4jv1beta1.VolumeModeExisting:
 		return validateExisting("data", data.Existing)
@@ -139,6 +146,9 @@ func validateAux(name string, aux *neo4jv1beta1.AuxiliaryVolumeSpec) error {
 	case neo4jv1beta1.VolumeModeDynamic:
 		if aux.Dynamic == nil || aux.Dynamic.Size == "" {
 			return fmt.Errorf("storage.volumes.%s.dynamic.size is required when mode is Dynamic", name)
+		}
+		if err := rejectOversizedQuantity(fmt.Sprintf("storage.volumes.%s.dynamic.size", name), aux.Dynamic.Size); err != nil {
+			return err
 		}
 		return rejectReservedLabelKeys(fmt.Sprintf("storage.volumes.%s.dynamic.labels", name), aux.Dynamic.Labels)
 	case neo4jv1beta1.VolumeModeExisting:
@@ -184,6 +194,22 @@ func rejectPVCSpecPVBind(field string, spec *corev1.PersistentVolumeClaimSpec) e
 	}
 	if spec.Selector != nil {
 		return fmt.Errorf("%s.selector is not allowed (binds a cluster-scoped PersistentVolume; use existing.claimName)", field)
+	}
+	if q, ok := spec.Resources.Requests[corev1.ResourceStorage]; ok {
+		if err := rejectOversizedQuantity(field+".resources.requests.storage", q.String()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rejectOversizedQuantity(field, size string) error {
+	q, err := resource.ParseQuantity(size)
+	if err != nil {
+		return fmt.Errorf("%s %q is not a valid quantity", field, size)
+	}
+	if q.Cmp(resource.MustParse(MaxDynamicVolumeSize)) > 0 {
+		return fmt.Errorf("%s %s exceeds maximum %s (NEO-014)", field, size, MaxDynamicVolumeSize)
 	}
 	return nil
 }

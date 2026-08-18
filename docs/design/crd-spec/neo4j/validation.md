@@ -33,6 +33,7 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 | TOPO-012 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
 | TOPO-014 | `minimumMembers` immutable after create | Error | CEL (+ webhook) | `topology.minimumMembers cannot change after create` — scale via `primaries.members` only |
+| TOPO-015 | `primaries.members` ≤ 15; each secondary pool ≤ 25 | Error | CEL + Webhook | exceeds maximum (NEO-014) |
 
 ### CEL sketches (topology)
 
@@ -170,6 +171,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | STO-002 | `volumes.data.dynamic.size` must be valid quantity | Error | CEL | invalid storage size |
 | STO-003 | `dynamic.storageClassName` must exist when set | Error | Webhook | StorageClass not found |
 | STO-004 | Shrink `volumes.data.dynamic.size` blocked | Error | Webhook | PVC expansion only — shrinking not supported |
+| STO-004b | `dynamic.size` and Existing VCT storage request ≤ 16Ti | Error | Webhook | exceeds maximum 16Ti (NEO-014) |
 | STO-005 | `volumes.data.mode` must not be `Share` | Error | CEL | data volume cannot use Share mode |
 | STO-006 | `Existing` requires exactly one of `claimName`, `volume`, `volumeClaimTemplate` | Error | CEL | invalid existing volume binding |
 | STO-007 | `mode: Share` on aux requires `shareFrom: data` (V1) | Error | CEL | invalid shareFrom |
@@ -227,7 +229,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | NET-004 | `mode: Cluster` + `connectivity.multiCluster.enabled` | Error | CEL | multi-cluster not in V1 |
 | LISTENER-001 | `connectivity.listeners.backup` set ⇒ `features.backup.enabled` | Error | CEL | backup listener requires feature |
 | LISTENER-002 | `connectivity.listeners.metrics` set ⇒ `features.monitoring.prometheus.enabled` | Error | CEL | metrics listener requires prometheus feature |
-| LISTENER-003 | `connectivity.listeners.*` in 1–65535 when set | Error | CEL | invalid listen port |
+| LISTENER-003 | `connectivity.listeners.*` in 1–65535 when set | Error | CEL + Webhook | invalid listen port (NEO-014) |
 | TLS-LISTENER-001 | `connectivity.listeners.https` set ⇒ `trust.enabled` + https cert material | Error | CEL | HTTPS listen port requires trust |
 | TLS-LISTENER-002 | `https` ∈ `service.expose` ⇒ `connectivity.listeners.https` set | Error | CEL | cannot expose disabled HTTPS connector |
 | TLS-LISTENER-003 | `connectivity.listeners.https` set ⇏ `https` ∈ `service.expose` | — | — | in-cluster HTTPS without LB port is valid |

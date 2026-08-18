@@ -65,14 +65,14 @@ is required too, since a database with no data volume is not useful.
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `spec.topology.mode` | string | — | **Required.** `Standalone` or `Cluster`. **Immutable** |
-| `spec.topology.primaries.members` | int32 | — | Required in Cluster mode, minimum 1, must be **odd** |
+| `spec.topology.primaries.members` | int32 | — | Required in Cluster mode, minimum 1, maximum 15, must be **odd** |
 | `spec.topology.primaries.plugins` | []string | — | Max 8; `gds` and `bloom` are rejected here in Cluster mode |
-| `spec.topology.secondaries.analytics.members` | int32 | — | Minimum 1 when the pool is declared |
+| `spec.topology.secondaries.analytics.members` | int32 | — | Minimum 1 when the pool is declared; maximum 25 |
 | `spec.topology.secondaries.analytics.plugins` | []string | — | The pool for `gds` and `bloom` |
-| `spec.topology.secondaries.read.members` | int32 | — | Minimum 1 when the pool is declared; target of `kubectl scale` |
+| `spec.topology.secondaries.read.members` | int32 | — | Minimum 1 when the pool is declared; maximum 25; target of `kubectl scale` |
 | `spec.topology.secondaries.read.plugins` | []string | — | `gds` and `bloom` are rejected here |
-| `spec.topology.minimumMembers` | int32 | `primaries.members` | Primaries required to form the `system` database. Cannot exceed `primaries.members`. **Immutable** |
-| `spec.topology.defaultPrimariesCount` | int32 | `1` | Primaries hosting each standard database. Minimum 1, cannot exceed `primaries.members` |
+| `spec.topology.minimumMembers` | int32 | `primaries.members` | Primaries required to form the `system` database. Maximum 15. Cannot exceed `primaries.members`. **Immutable** |
+| `spec.topology.defaultPrimariesCount` | int32 | `1` | Primaries hosting each standard database. Minimum 1, maximum 15, cannot exceed `primaries.members` |
 
 Standalone mode rejects `primaries`, `secondaries`, `minimumMembers` and `defaultPrimariesCount`.
 Cluster mode requires `primaries.members`, and `secondaries` requires `primaries.members` to be set
@@ -85,7 +85,7 @@ See [Clustering](../03-neo4j/02-clustering.md).
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `spec.storage.volumes.data.mode` | string | — | **Required** within `data`: `Dynamic` or `Existing`. `Share` is rejected |
-| `spec.storage.volumes.data.dynamic.size` | quantity | — | Required when mode is `Dynamic` |
+| `spec.storage.volumes.data.dynamic.size` | quantity | — | Required when mode is `Dynamic`; maximum 16Ti (NEO-014) |
 | `spec.storage.volumes.data.dynamic.storageClassName` | string | cluster default | |
 | `spec.storage.volumes.data.dynamic.accessMode` | string | `ReadWriteOnce` | Only value accepted |
 | `spec.storage.volumes.data.dynamic.labels` | map | — | Extra labels on the generated claims |
@@ -161,7 +161,7 @@ See [Plugins](../03-neo4j/07-plugins.md).
 | `spec.connectivity.listeners.metrics` | int32 | `2004` when set | Requires `features.monitoring.prometheus.enabled: true` |
 | `spec.connectivity.service.type` | string | `ClusterIP` | `ClusterIP`, `NodePort` or `LoadBalancer` |
 | `spec.connectivity.service.expose` | []string | `[bolt, http]` | Filter over enabled connectors |
-| `spec.connectivity.service.ports.{bolt,http,https,backup,metrics}` | int32 | listener port | Remap the Service port |
+| `spec.connectivity.service.ports.{bolt,http,https,backup,metrics}` | int32 | listener port | Remap the Service port (1–65535) |
 | `spec.connectivity.service.annotations` | map | — | Copied onto the Service |
 | `spec.connectivity.service.loadBalancerSourceRanges` | []string | — | **Required** when type is `LoadBalancer` |
 | `spec.connectivity.clusterDomain` | string | `cluster.local` | Suffix for Neo4j-advertised names |
@@ -214,7 +214,7 @@ See [Monitoring](../03-neo4j/08-monitoring.md).
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `spec.resources` | ResourceRequirements | — | Requests and limits for the Neo4j container |
+| `spec.resources` | ResourceRequirements | — | Requests and limits for the Neo4j container. Unset is allowed; production should set them (or a namespace ResourceQuota) |
 | `spec.scheduling.nodeSelector` | map | — | |
 | `spec.scheduling.tolerations` | []Toleration | — | |
 | `spec.scheduling.affinity.podAntiAffinity` | string | — | `soft`, `hard` or `custom` |

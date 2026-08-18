@@ -32,6 +32,7 @@ spec:
         args:
         - --leader-elect
         - --health-probe-bind-address=:8081
+        - --max-concurrent-reconciles=2
         env:
         # Must match Role/RoleBinding namespaces in config/rbac/. Comma-separated list.
         - name: WATCH_NAMESPACE

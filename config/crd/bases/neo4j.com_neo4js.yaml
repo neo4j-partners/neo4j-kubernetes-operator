@@ -213,18 +213,28 @@ spec:
                     properties:
                       backup:
                         format: int32
+                        maximum: 65535
+                        minimum: 1
                         type: integer
                       bolt:
                         format: int32
+                        maximum: 65535
+                        minimum: 1
                         type: integer
                       http:
                         format: int32
+                        maximum: 65535
+                        minimum: 1
                         type: integer
                       https:
                         format: int32
+                        maximum: 65535
+                        minimum: 1
                         type: integer
                       metrics:
                         format: int32
+                        maximum: 65535
+                        minimum: 1
                         type: integer
                     type: object
                   multiCluster:
@@ -319,18 +329,28 @@ spec:
                             properties:
                               backup:
                                 format: int32
+                                maximum: 65535
+                                minimum: 1
                                 type: integer
                               bolt:
                                 format: int32
+                                maximum: 65535
+                                minimum: 1
                                 type: integer
                               http:
                                 format: int32
+                                maximum: 65535
+                                minimum: 1
                                 type: integer
                               https:
                                 format: int32
+                                maximum: 65535
+                                minimum: 1
                                 type: integer
                               metrics:
                                 format: int32
+                                maximum: 65535
+                                minimum: 1
                                 type: integer
                             type: object
                           type:
@@ -366,18 +386,28 @@ spec:
                         properties:
                           backup:
                             format: int32
+                            maximum: 65535
+                            minimum: 1
                             type: integer
                           bolt:
                             format: int32
+                            maximum: 65535
+                            minimum: 1
                             type: integer
                           http:
                             format: int32
+                            maximum: 65535
+                            minimum: 1
                             type: integer
                           https:
                             format: int32
+                            maximum: 65535
+                            minimum: 1
                             type: integer
                           metrics:
                             format: int32
+                            maximum: 65535
+                            minimum: 1
                             type: integer
                         type: object
                       type:
@@ -19614,6 +19644,7 @@ spec:
                       request an explicit TOPOLOGY; the operator does not force every DB onto
                       all primary servers.
                     format: int32
+                    maximum: 15
                     minimum: 1
                     type: integer
                   minimumMembers:
@@ -19623,6 +19654,8 @@ spec:
                       Defaults to primaries.members when unset. Immutable after create — changing it
                       rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
                     format: int32
+                    maximum: 15
+                    minimum: 1
                     type: integer
                   mode:
                     description: TopologyMode is Standalone or Cluster (immutable
@@ -19637,6 +19670,7 @@ spec:
                     properties:
                       members:
                         format: int32
+                        maximum: 15
                         minimum: 1
                         type: integer
                       plugins:
@@ -19661,6 +19695,7 @@ spec:
                         properties:
                           members:
                             format: int32
+                            maximum: 25
                             minimum: 0
                             type: integer
                           plugins:
@@ -19679,6 +19714,7 @@ spec:
                         properties:
                           members:
                             format: int32
+                            maximum: 25
                             minimum: 0
                             type: integer
                           plugins:

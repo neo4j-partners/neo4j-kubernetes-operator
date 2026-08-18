@@ -144,6 +144,19 @@ func TestValidateRejectsReservedDynamicLabels(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOversizedDynamicPVC(t *testing.T) {
+	s := baseStorage()
+	s.Volumes.Data.Dynamic.Size = "500Ti"
+	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	if err == nil || !strings.Contains(err.Error(), "16Ti") {
+		t.Fatalf("got %v", err)
+	}
+	s.Volumes.Data.Dynamic.Size = "16Ti"
+	if err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDynamicPVCKeepsOperatorIdentityLabels(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},

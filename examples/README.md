@@ -54,6 +54,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/20-logging-configmap-ref.yaml`](standalone/20-logging-configmap-ref.yaml) | `logging.*ConfigMapRef` (existing ConfigMaps) |
 | [`standalone/21-resources.yaml`](standalone/21-resources.yaml) | `spec.resources` — CPU/memory requests and limits |
 | [`standalone/22-security.yaml`](standalone/22-security.yaml) | `security.serviceAccount.annotations` + opt-in NetworkPolicy |
+| [`standalone/23-namespace-quota.yaml`](standalone/23-namespace-quota.yaml) | Namespace `ResourceQuota` backstop (NEO-014) |
 
 ## Cluster
 

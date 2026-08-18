@@ -39,3 +39,17 @@ func TestTrustNoopWhenDisabled(t *testing.T) {
 		t.Fatalf("unexpected requeue")
 	}
 }
+
+func TestNormalizeMaxConcurrentReconciles(t *testing.T) {
+	got, err := NormalizeMaxConcurrentReconciles(0)
+	if err != nil || got != DefaultMaxConcurrentReconciles {
+		t.Fatalf("default: got %d %v", got, err)
+	}
+	got, err = NormalizeMaxConcurrentReconciles(8)
+	if err != nil || got != 8 {
+		t.Fatalf("in range: got %d %v", got, err)
+	}
+	if _, err := NormalizeMaxConcurrentReconciles(MaxConcurrentReconcilesLimit + 1); err == nil {
+		t.Fatal("expected reject above cap")
+	}
+}

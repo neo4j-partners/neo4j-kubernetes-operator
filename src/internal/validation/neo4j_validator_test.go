@@ -82,6 +82,30 @@ func TestValidateUpdateSkipsSpecOnDelete(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOversizedCluster(t *testing.T) {
+	n := validStandalone()
+	n.Spec.Topology = neo4jv1beta1.TopologySpec{
+		Mode:      neo4jv1beta1.TopologyModeCluster,
+		Primaries: &neo4jv1beta1.PrimariesSpec{Members: 99},
+	}
+	err := ValidateNeo4j(n)
+	if err == nil || !strings.Contains(err.Error(), "primaries.members") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateRejectsInvalidListenPort(t *testing.T) {
+	n := validStandalone()
+	bad := int32(0)
+	n.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{
+		Listeners: &neo4jv1beta1.ConnectivityListenersSpec{Bolt: &bad},
+	}
+	err := ValidateNeo4j(n)
+	if err == nil || !strings.Contains(err.Error(), "port") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestValidateNeo4jRejectsHostPath(t *testing.T) {
 	n := validStandalone()
 	n.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{

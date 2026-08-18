@@ -26,6 +26,10 @@ allowedImageRepositories:
   - docker.io/neo4j
   - index.docker.io/neo4j
 
+# Concurrent Neo4j reconciles (NEO-014). Default 2 so one wedged CR cannot starve others.
+# Maximum 16 — higher values are rejected at operator start (API-server stampede).
+maxConcurrentReconciles: 2
+
 # Extra args appended after --leader-elect / health probe / logging args.
 extraArgs: []
 

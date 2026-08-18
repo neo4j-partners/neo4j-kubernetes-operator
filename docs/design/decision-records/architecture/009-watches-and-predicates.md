@@ -94,7 +94,7 @@ Use `handler.EnqueueRequestsFromMapFunc` — map to `Neo4j` namespacedName via o
 
 ### Max concurrent reconciles
 
-`MaxConcurrentReconciles: 2` default — Neo4j reconcile is heavy; tune via env `MAX_CONCURRENT_RECONCILES`.
+`MaxConcurrentReconciles: 2` default — Neo4j reconcile is heavy; tune via `--max-concurrent-reconciles` or env `MAX_CONCURRENT_RECONCILES`. Maximum 16 (NEO-014); higher values are rejected at process start.
 
 ---
 

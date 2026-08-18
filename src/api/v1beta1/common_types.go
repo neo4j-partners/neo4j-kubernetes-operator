@@ -163,6 +163,7 @@ type AuthSpec struct {
 // DynamicVolumeSpec configures dynamically provisioned PVCs.
 type DynamicVolumeSpec struct {
 	// +kubebuilder:validation:Pattern=`^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$`
+	// Ceiling is enforced in admission (16Ti, NEO-014) — quantity max is not expressible in OpenAPI.
 	Size             string `json:"size,omitempty"`
 	StorageClassName string `json:"storageClassName,omitempty"`
 	// +kubebuilder:validation:Enum=ReadWriteOnce
@@ -408,19 +409,39 @@ type FeaturesSpec struct {
 
 // ConnectivityListenersSpec defines Neo4j listen ports (connector present ⇒ enabled).
 type ConnectivityListenersSpec struct {
-	Bolt    *int32 `json:"bolt,omitempty"`
-	HTTP    *int32 `json:"http,omitempty"`
-	HTTPS   *int32 `json:"https,omitempty"`
-	Backup  *int32 `json:"backup,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Bolt *int32 `json:"bolt,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	HTTP *int32 `json:"http,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	HTTPS *int32 `json:"https,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Backup *int32 `json:"backup,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	Metrics *int32 `json:"metrics,omitempty"`
 }
 
 // ServicePortsSpec optional Service façade ports (targetPort from listeners).
 type ServicePortsSpec struct {
-	Bolt    *int32 `json:"bolt,omitempty"`
-	HTTP    *int32 `json:"http,omitempty"`
-	HTTPS   *int32 `json:"https,omitempty"`
-	Backup  *int32 `json:"backup,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Bolt *int32 `json:"bolt,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	HTTP *int32 `json:"http,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	HTTPS *int32 `json:"https,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Backup *int32 `json:"backup,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	Metrics *int32 `json:"metrics,omitempty"`
 }
 
@@ -565,6 +586,7 @@ type TrustSpec struct {
 // SecondaryPoolSpec configures analytics or read secondary pool (BDR-002).
 type SecondaryPoolSpec struct {
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=25
 	Members int32 `json:"members,omitempty"`
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
@@ -580,6 +602,7 @@ type SecondariesSpec struct {
 // PrimariesSpec configures primary (quorum) members in Cluster mode.
 type PrimariesSpec struct {
 	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=15
 	Members int32 `json:"members"`
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
@@ -596,6 +619,8 @@ type TopologySpec struct {
 	// and maps to dbms.cluster.minimum_initial_system_primaries_count.
 	// Defaults to primaries.members when unset. Immutable after create — changing it
 	// rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=15
 	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
 	// DefaultPrimariesCount is the desired primary count for standard databases
 	// (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE
@@ -604,6 +629,7 @@ type TopologySpec struct {
 	// request an explicit TOPOLOGY; the operator does not force every DB onto
 	// all primary servers.
 	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=15
 	DefaultPrimariesCount *int32 `json:"defaultPrimariesCount,omitempty"`
 }
 

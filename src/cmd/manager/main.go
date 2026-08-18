@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -56,6 +57,7 @@ func main() {
 	var enableWebhooks bool
 	var webhookCertDir string
 	var allowedImageRepos string
+	var maxConcurrentReconciles int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
@@ -64,6 +66,9 @@ func main() {
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory with tls.crt and tls.key for the webhook server.")
 	flag.StringVar(&allowedImageRepos, "allowed-image-repositories", "",
 		"Comma-separated image repository prefixes allowed in Neo4j CRs (NEO-012). Empty uses defaults (neo4j, docker.io/neo4j). Use * to allow any (lab only).")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 0,
+		fmt.Sprintf("Max concurrent Neo4j reconciles (NEO-014). 0 uses %d, or MAX_CONCURRENT_RECONCILES. Maximum %d.",
+			neo4jctrl.DefaultMaxConcurrentReconciles, neo4jctrl.MaxConcurrentReconcilesLimit))
 	// Production JSON by default (ADR-014); --zap-devel for console. Optional --log-file tees verbose logs.
 	logOpts := logging.Options{}
 	logOpts.BindFlags(flag.CommandLine)
@@ -73,6 +78,21 @@ func main() {
 		allowedImageRepos = os.Getenv("ALLOWED_IMAGE_REPOSITORIES")
 	}
 	imagepolicy.SetAllowedRepositories(allowedImageRepos)
+	if maxConcurrentReconciles <= 0 {
+		if v := os.Getenv("MAX_CONCURRENT_RECONCILES"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 1 {
+				fmt.Fprintf(os.Stderr, "invalid MAX_CONCURRENT_RECONCILES %q\n", v)
+				os.Exit(1)
+			}
+			maxConcurrentReconciles = n
+		}
+	}
+	maxConcurrentReconciles, err := neo4jctrl.NormalizeMaxConcurrentReconciles(maxConcurrentReconciles)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
 
 	rootLog, closeLog, err := logging.New(logOpts)
 	if err != nil {
@@ -125,10 +145,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := neo4jctrl.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
+	rec := neo4jctrl.NewReconciler(mgr)
+	rec.MaxConcurrentReconciles = maxConcurrentReconciles
+	if err := rec.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Neo4j")
 		os.Exit(1)
 	}
+	setupLog.Info("neo4j reconciler", "maxConcurrentReconciles", maxConcurrentReconciles)
 
 	if enableWebhooks {
 		if err := ctrl.NewWebhookManagedBy(mgr).

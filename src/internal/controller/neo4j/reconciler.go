@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -22,11 +24,10 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
-	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
-	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderconfig "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
 )
 
 const FinalizerName = "neo4j.com/finalizer"
@@ -44,6 +45,28 @@ type Neo4jReconciler struct {
 	Connectivity *connectivity.Reconciler
 	Formation    *formation.Reconciler
 	StatusWriter *status.Writer
+
+	// MaxConcurrentReconciles defaults to 2 so one wedged CR cannot starve others (NEO-014).
+	MaxConcurrentReconciles int
+}
+
+const (
+	DefaultMaxConcurrentReconciles = 2
+	MaxConcurrentReconcilesLimit   = 16
+)
+
+// NormalizeMaxConcurrentReconciles maps 0 to the default and rejects values above the cap.
+func NormalizeMaxConcurrentReconciles(n int) (int, error) {
+	if n < 0 {
+		return 0, fmt.Errorf("max concurrent reconciles must be >= 0")
+	}
+	if n == 0 {
+		return DefaultMaxConcurrentReconciles, nil
+	}
+	if n > MaxConcurrentReconcilesLimit {
+		return 0, fmt.Errorf("max concurrent reconciles %d exceeds maximum %d (NEO-014)", n, MaxConcurrentReconcilesLimit)
+	}
+	return n, nil
 }
 
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js,verbs=get;list;watch;create;update;patch;delete
@@ -136,13 +159,7 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
-	if err := imagepolicy.Validate(neo4j); err != nil {
-		return ctrl.Result{}, err
-	}
-	if err := plugins.Validate(neo4j); err != nil {
-		return ctrl.Result{}, err
-	}
-	if err := rendersecrets.ValidateSpec(neo4j); err != nil {
+	if err := validation.ValidateNeo4j(neo4j); err != nil {
 		return ctrl.Result{}, err
 	}
 	if err := rendersecrets.EnsureMountable(ctx, r.Client, neo4j); err != nil {
@@ -247,7 +264,11 @@ func (r *Neo4jReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	for _, obj := range connectivity.OwnedTypes() {
 		builder = builder.Owns(obj)
 	}
-	return builder.Complete(r)
+	n, err := NormalizeMaxConcurrentReconciles(r.MaxConcurrentReconciles)
+	if err != nil {
+		return err
+	}
+	return builder.WithOptions(controller.Options{MaxConcurrentReconciles: n}).Complete(r)
 }
 
 func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {

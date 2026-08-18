@@ -125,11 +125,11 @@ pluginDefinitions:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `primaries.members` | int32 | **yes** (Cluster) | — | Primary members (writers / quorum). Odd when > 0. |
+| `primaries.members` | int32 | **yes** (Cluster) | — | Primary members (writers / quorum). Odd when > 0. Maximum 15 (NEO-014). |
 | `primaries.plugins` | []string | no | `[]` | Plugin ids for every primary pod. **Cluster only** — field absent in Standalone. |
 | `secondaries.analytics` | SecondaryPool | no | — | Analytics / GDS secondary pool. Omit or `members: 0` to disable. |
 | `secondaries.read` | SecondaryPool | no | — | Read-scaling secondary pool. Omit or `members: 0` to disable. |
-| `secondaries.<pool>.members` | int32 | conditional | — | Required ≥ 1 when pool block is present and non-zero. |
+| `secondaries.<pool>.members` | int32 | conditional | — | Required ≥ 1 when pool block is present and non-zero. Maximum 25 (NEO-014). |
 | `secondaries.<pool>.plugins` | []string | no | `[]` | Plugin ids for every pod in that pool. |
 
 **SecondaryPool** (`analytics` | `read` only): `{ members, plugins? }`.
@@ -212,7 +212,7 @@ Mirrors Helm `values.yaml` → **`volumes:`** ([BDR-005](../../decision-records/
 | Field | Type | Required | Default | Immutable | Description |
 |-------|------|----------|---------|-----------|-------------|
 | `mode` | string | **yes** | `Dynamic` | yes | `Dynamic` \| `Existing`. |
-| `dynamic.size` | string | when `Dynamic` | — | no† | PVC size (e.g. `100Gi`). |
+| `dynamic.size` | string | when `Dynamic` | — | no† | PVC size (e.g. `100Gi`). Maximum 16Ti (NEO-014). |
 | `dynamic.storageClassName` | string | no | cluster default | yes | StorageClass (`NEO-3-006-PVC-01/02`). |
 | `dynamic.accessMode` | string | no | `ReadWriteOnce` | yes | V1: `ReadWriteOnce` only. |
 | `dynamic.labels` | map | no | `{}` | no | PVC metadata labels. |
