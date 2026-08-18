@@ -41,6 +41,9 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
 | `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |
 | `maxConcurrentReconciles` | `2` | Concurrent Neo4j reconciles (NEO-014). Maximum 16 |
+| `metrics.enabled` | `false` | Operator HTTPS `/metrics` with Kubernetes auth (NEO-017). Do not use `extraArgs` |
+| `metrics.port` | `8443` | Metrics listen port when enabled |
+| `metrics.serviceMonitor.enabled` | `false` | Optional Prometheus Operator ServiceMonitor (needs `metrics.enabled` and the CRD) |
 | `replicaCount` | `1` | Controller replicas |
 | `logging.level` | `info` | stderr verbosity (`debug` / `info` / `error`) |
 | `logging.devel` | `false` | Console encoder (local debug) |
@@ -76,6 +79,21 @@ helm upgrade --install neo4j-operator ./charts/neo4j-operator \
 ```
 
 Without the webhook, the same checks still run at reconcile time.
+
+## Operator metrics (optional)
+
+Off by default. Enabling serves HTTPS `/metrics` with Kubernetes authn/authz (NEO-017).
+Do not pass `--metrics-bind-address` through `extraArgs` — that used to be unauthenticated HTTP.
+
+```bash
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  -n neo4j-operator-system --create-namespace \
+  --set metrics.enabled=true
+```
+
+Bind your Prometheus ServiceAccount to ClusterRole `neo4j-operator-metrics-reader` (name is
+`<release>-metrics-reader` if the release name is not `neo4j-operator`). Optional
+`metrics.serviceMonitor.enabled` needs the Prometheus Operator CRD.
 
 `helm upgrade` rolls the controller only; Neo4j CRs and PVCs are not deleted.
 

@@ -12,6 +12,11 @@
 
 3. Watch namespaces (WATCH_NAMESPACE): {{ include "neo4j-operator.watchNamespacesCSV" . }}
    The operator namespace {{ .Release.Namespace }} is not watched (NEO-016). Apply Neo4j CRs in a listed workload namespace.
+{{- if .Values.metrics.enabled }}
+
+   Operator metrics: HTTPS :{{ .Values.metrics.port }} with Kubernetes auth (NEO-017).
+   Bind your Prometheus ServiceAccount to ClusterRole {{ include "neo4j-operator.fullname" . }}-metrics-reader.
+{{- end }}
 
 4. Apply a Neo4j CR in a watched namespace, e.g. examples/standalone/01-minimal.yaml
 

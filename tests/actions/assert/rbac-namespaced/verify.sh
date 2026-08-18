@@ -31,8 +31,10 @@ if kubectl get role "${ROLE}" -n "${OP_NS}" >/dev/null 2>&1; then
 fi
 log "Role ${ROLE} absent from operator namespace ${OP_NS} (NEO-016)"
 
-# 2. No ClusterRoleBinding may grant the operator ServiceAccount cluster-wide access.
-#    (A namespaced operator must not appear as a subject in any ClusterRoleBinding.)
+# 2. No ClusterRoleBinding may grant the operator ServiceAccount cluster-wide access
+#    on a default install. metrics.enabled (NEO-017) is the documented exception
+#    (TokenReview / SubjectAccessReview for authenticated /metrics). E2E leaves
+#    metrics off.
 #    Flatten every CRB's subjects to "<crb> ServiceAccount/<ns>/<name>" lines and
 #    look for our SA — plain jsonpath + grep, no jq dependency.
 subject_needle="ServiceAccount/${OP_NS}/${SA}"

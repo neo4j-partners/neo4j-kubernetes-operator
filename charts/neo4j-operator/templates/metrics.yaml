@@ -1,0 +1,89 @@
+{{- if and .Values.metrics.serviceMonitor.enabled (not .Values.metrics.enabled) }}
+{{- fail "metrics.serviceMonitor.enabled requires metrics.enabled (NEO-017)" }}
+{{- end }}
+{{- if .Values.metrics.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-reader
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j-operator-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+spec:
+  ports:
+  - name: https
+    port: {{ .Values.metrics.port }}
+    protocol: TCP
+    targetPort: metrics
+  selector:
+    {{- include "neo4j-operator.selectorLabels" . | nindent 4 }}
+{{- if .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: neo4j-operator-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - port: https
+    scheme: https
+    path: /metrics
+    interval: {{ .Values.metrics.serviceMonitor.interval }}
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tlsConfig:
+      insecureSkipVerify: true
+  selector:
+    matchLabels:
+      {{- include "neo4j-operator.selectorLabels" . | nindent 4 }}
+{{- end }}
+{{- end }}

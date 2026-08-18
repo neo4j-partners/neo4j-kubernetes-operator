@@ -47,6 +47,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
+{{- define "neo4j-operator.refuseMetricsExtraArgs" -}}
+{{- range .Values.extraArgs }}
+{{- if or (contains "metrics-bind-address" .) (contains "metrics-secure" .) }}
+{{- fail "enable operator metrics with metrics.enabled, not extraArgs (NEO-017)" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- define "neo4j-operator.watchNamespacesCSV" -}}
 {{- range .Values.watchNamespaces }}
 {{- if eq . $.Release.Namespace }}

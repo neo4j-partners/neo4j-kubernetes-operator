@@ -67,11 +67,13 @@ Values worth knowing:
 | `image.repository`, `image.tag`, `image.digest` | Which controller image runs; a digest wins over a tag |
 | `allowedImageRepositories` | Operand Neo4j image repos allowed on CRs (NEO-012); add ACR/ECR mirrors here |
 | `maxConcurrentReconciles` | Concurrent Neo4j reconciles (default 2, maximum 16; NEO-014) |
+| `metrics.enabled` | Operator `/metrics` on HTTPS with Kubernetes auth (off by default; NEO-017). Do not enable via `extraArgs` |
+| `metrics.serviceMonitor.enabled` | Optional Prometheus Operator ServiceMonitor for the controller (requires `metrics.enabled`) |
 | `imagePullSecrets` | Pull Secret for the operator image itself |
 | `watchNamespaces` | Workload namespaces to reconcile (must not include the Helm release namespace) |
 | `logging.level`, `logging.devel`, `logging.file.*` | Verbosity, encoder, and optional log file inside the pod |
 | `resources`, `nodeSelector`, `tolerations`, `affinity` | Placement and sizing of the controller pod |
-| `extraArgs` | Extra manager flags, appended after the defaults |
+| `extraArgs` | Extra manager flags, appended after the defaults (not for metrics — use `metrics.enabled`) |
 
 The chart's own `README.md` under `charts/neo4j-operator/` documents every value with its default.
 

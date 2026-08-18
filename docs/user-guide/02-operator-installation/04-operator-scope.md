@@ -84,6 +84,11 @@ PodDisruptionBudgets, plus creating and patching Events, plus Roles and RoleBind
 per-instance ServiceAccount it can create. Leader-election leases stay in the operator namespace
 on a **separate** Role; the manager Role is not granted there (NEO-016).
 
+Enabling `metrics.enabled` is the one ClusterRole exception (NEO-017): the controller needs
+`tokenreviews` and `subjectaccessreviews` so `/metrics` can require a bearer token, and a
+`…-metrics-reader` ClusterRole lets you bind your Prometheus ServiceAccount to `get /metrics`.
+Default install leaves metrics off, so there is still no ClusterRoleBinding for the operator SA.
+
 The consequence worth internalising is `secrets` with `get`, `list` and `watch`: **inside a watched
 namespace the operator can read every Secret, not only the ones you meant for Neo4j.** Kubernetes
 RBAC has no way to say "only these Secrets".

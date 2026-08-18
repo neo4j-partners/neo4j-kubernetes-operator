@@ -17,9 +17,9 @@ uneven. This ADR defines the contract for **logs**, **metrics**, **Kubernetes Ev
 
 **Current state (baseline):**
 
-- **Metrics are disabled by default.** `cmd/manager/main.go` sets `--metrics-bind-address=0`
-  and `--metrics-secure=false`; the controller-runtime metrics registry (reconcile totals,
-  workqueue depth, client latency, leader election) is never served.
+- **Metrics are disabled by default.** `cmd/manager/main.go` sets `--metrics-bind-address=0`.
+  Enabling a bind requires `--metrics-secure` and `filters.WithAuthenticationAndAuthorization`
+  (NEO-017); plaintext `:8080` is refused.
 - **Logging is production JSON by default** (`internal/logging`); `--zap-devel` for console;
   `--zap-log-level` for stderr verbosity; optional `--log-file` / `--log-file-level` tees a
   more verbose sink. Domains log apply create/update via `shared.Apply`; pipeline steps are named.
@@ -118,7 +118,7 @@ Extra container + image to maintain; superseded upstream.
 
 Serve secure metrics on `:8443` via `metricsserver.Options{SecureServing: true, FilterProvider: filters.WithAuthenticationAndAuthorization}`; ship an **operator `ServiceMonitor`** (+ metrics
 `Service` and scrape RBAC) gated by a Helm value / flag so clusters without Prometheus
-Operator are unaffected. Local/dev may still use `:8080` plain.
+Operator are unaffected. Plain `:8080` is refused (NEO-017).
 
 | Advantages | Disadvantages |
 |------------|---------------|
@@ -178,8 +178,8 @@ func init() { metrics.Registry.MustRegister(OperandApply /*, ... */) }
 
 ### Exposure
 
-- Serve secure metrics on `:8443` with the built-in authn/authz filter; keep `:8080` plain
-  only for local/dev (`E2E`/`make run`).
+- Serve secure metrics on `:8443` with the built-in authn/authz filter (Helm `metrics.enabled`).
+  Default bind remains `0` (off). Plain `:8080` is refused (NEO-017).
 - Ship an **optional** operator `ServiceMonitor` + metrics `Service` + scrape RBAC, gated by
   a Helm value (`metrics.serviceMonitor.enabled`, default off). No hard dependency on the
   Prometheus Operator CRDs.

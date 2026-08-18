@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
@@ -29,7 +28,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
@@ -58,10 +56,10 @@ func main() {
 	var webhookCertDir string
 	var allowedImageRepos string
 	var maxConcurrentReconciles int
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "Metrics bind address. \"0\" disables the endpoint. Any other value requires --metrics-secure (NEO-017).")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", false, "If set, the metrics endpoint is served securely.")
+	flag.BoolVar(&secureMetrics, "metrics-secure", true, "Serve metrics with TLS. Required when metrics-bind-address is not \"0\" (NEO-017).")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", false, "Register the Neo4j validating admission webhook (requires TLS certs).")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory with tls.crt and tls.key for the webhook server.")
 	flag.StringVar(&allowedImageRepos, "allowed-image-repositories", "",
@@ -118,15 +116,15 @@ func main() {
 		setupLog.Info("image repository allowlist", "allowed", allow)
 	}
 
+	metricsOpts, err := metricsServerOptions(metricsAddr, secureMetrics)
+	if err != nil {
+		setupLog.Error(err, "invalid metrics config")
+		os.Exit(1)
+	}
+
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress:   metricsAddr,
-			SecureServing: secureMetrics,
-			TLSOpts: []func(*tls.Config){
-				func(cfg *tls.Config) { cfg.MinVersion = tls.VersionTLS12 },
-			},
-		},
+		Metrics: metricsOpts,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "neo4j.com.neo4j-operator",

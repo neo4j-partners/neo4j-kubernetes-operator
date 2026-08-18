@@ -33,7 +33,19 @@ allowedImageRepositories:
 maxConcurrentReconciles: 2
 
 # Extra args appended after --leader-elect / health probe / logging args.
+# Do not pass --metrics-bind-address here (NEO-017) — use metrics.enabled.
 extraArgs: []
+
+# Operator controller metrics (NEO-017). Off by default. When enabled: HTTPS +
+# Kubernetes TokenReview/SubjectAccessReview. Scrape RBAC is ClusterRole-only
+# (nonResourceURL /metrics); bind your Prometheus SA to
+# <release>-metrics-reader. Do not enable via extraArgs.
+metrics:
+  enabled: false
+  port: 8443
+  serviceMonitor:
+    enabled: false
+    interval: 30s
 
 # Operator logging (ADR-014). stderr = essentials; optional file may be more verbose.
 logging:
