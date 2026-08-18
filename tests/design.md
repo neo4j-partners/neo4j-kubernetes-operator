@@ -97,6 +97,23 @@ The live config-change case (`config-restart`, NEO-2-010, formerly the separate
 pod comes back `Ready`, `SHOW SETTINGS` over bolt reports the new value). It is the only
 config case that mutates a running CR, so it is heavier than the deploy-once cases.
 
+`cluster-config-restart` (NEO-3-010-RSTR-02) is its cluster half, and asserts the property a
+single member cannot show: the roll is **serial**. It patches the same setting on the
+3-primary fixture and then *samples the live rollout* every 2s, requiring `readyReplicas`
+never to fall below N-1 and `ClusterFormed` never to leave `True`, before checking the value
+is effective on a restarted member.
+
+Sampling rather than inspecting the spec is deliberate. The operator sets
+`PodManagementPolicy: Parallel` on the pool StatefulSet — pods are created and deleted in
+parallel when *scaling* — and leaves `updateStrategy` at its Kubernetes default,
+`RollingUpdate`, which still updates one pod at a time. Those two settings pull in opposite
+directions, and a change that made updates parallel too would drop quorum without any render
+test noticing.
+
+It is the only Cluster case in this suite and therefore runs **last**: `neo4j_case` sets
+`NEO4J_POOL=primary`, and `_config_reset_case_vars` only clears that for cases that declare a
+`neo4j_case`, so a bare-fixture case after it would derive the wrong StatefulSet name.
+
 ## Storage suite mechanics (`feature-storage`)
 
 Covers the `spec.storage` surface, one case per feature (all admitted). Mount points are
