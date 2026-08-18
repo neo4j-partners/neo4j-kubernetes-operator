@@ -665,7 +665,7 @@ type SecuritySpec struct {
 
 // NetworkPolicySpec opt-in NetworkPolicy creation (NEO-010).
 // When enabled, ingressFrom is required — client ports never use an empty From.
-// +kubebuilder:validation:XValidation:rule="!self.enabled || (has(self.ingressFrom) && size(self.ingressFrom) > 0)",message="security.networkPolicy.ingressFrom is required when networkPolicy.enabled is true"
+// +kubebuilder:validation:XValidation:rule="!has(self.enabled) || self.enabled == false || (has(self.ingressFrom) && size(self.ingressFrom) > 0)",message="security.networkPolicy.ingressFrom is required when networkPolicy.enabled is true"
 type NetworkPolicySpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// IngressFrom peers allowed to reach Bolt/HTTP/HTTPS (required when enabled).

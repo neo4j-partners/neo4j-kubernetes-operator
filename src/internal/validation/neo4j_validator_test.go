@@ -69,6 +69,19 @@ func TestValidateMinimumMembersImmutable(t *testing.T) {
 
 func ptr[T any](v T) *T { return &v }
 
+func TestValidateUpdateSkipsSpecOnDelete(t *testing.T) {
+	n := validStandalone()
+	n.Spec.Security = &neo4jv1beta1.SecuritySpec{
+		NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{Enabled: true},
+	}
+	now := metav1.Now()
+	n.DeletionTimestamp = &now
+	v := &Neo4jValidator{}
+	if _, err := v.ValidateUpdate(t.Context(), n, n); err != nil {
+		t.Fatalf("deleting object must skip spec validation, got %v", err)
+	}
+}
+
 func TestValidateNeo4jRejectsHostPath(t *testing.T) {
 	n := validStandalone()
 	n.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{

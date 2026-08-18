@@ -3050,7 +3050,7 @@ spec:
                     x-kubernetes-validations:
                     - message: security.networkPolicy.ingressFrom is required when
                         networkPolicy.enabled is true
-                      rule: '!self.enabled || (has(self.ingressFrom) && size(self.ingressFrom)
+                      rule: '!has(self.enabled) || self.enabled == false || (has(self.ingressFrom) && size(self.ingressFrom)
                         > 0)'
                   podSecurityContext:
                     description: |-

@@ -29,6 +29,11 @@ func (v *Neo4jValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 }
 
 func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	// Finalizer removal is an UPDATE. Do not re-apply spec checks or a stale/invalid
+	// CR cannot finish deleting (NEO-010).
+	if neo4j, ok := newObj.(*neo4jv1beta1.Neo4j); ok && neo4j.DeletionTimestamp != nil && !neo4j.DeletionTimestamp.IsZero() {
+		return nil, nil
+	}
 	if err := validateMinimumMembersImmutable(oldObj, newObj); err != nil {
 		return nil, err
 	}
