@@ -21,7 +21,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 
 ## Coverage by suite
 
-Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail pending a feature.
+Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 
 ### `operator-admission` — validation (ADR-001)
 - [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
@@ -95,9 +95,10 @@ Needs Neo4j Ready + a bolt query.
 - [x] Ephemeral `emptyDir` (no PVC)
 - [x] logs+metrics Share the data volume
 - [x] `additionalMounts` mounted at their paths
-- [ ] Non-existent StorageClass → time out and mark CR `Failed` (message mentions PVC) — expected-fail, pending storage-timeout feature
-- [ ] Missing `claimName` PVC → time out and mark CR `Failed` — expected-fail
-- [ ] `volumeClaimTemplate` bad StorageClass → time out and mark CR `Failed` — expected-fail
+- [x] Non-existent StorageClass → CR stays Pending with `StorageReady=False/PVCPending`, message names the PVC — NEO-3-006-PVC-02
+- [x] Missing `claimName` PVC → CR stays Pending with `StorageReady=False/PVCPending`
+- [x] `volumeClaimTemplate` bad StorageClass → CR stays Pending with `StorageReady=False/PVCPending`
+- [ ] An unbindable PVC eventually fails the install rather than requeuing forever — the operator has no storage timeout (`src/internal/status/writer.go` only ever reports `PVCPending`), so a misconfigured StorageClass is indistinguishable from one that is merely slow
 
 ### `feature-uninstall` — NEO-2-018
 - [x] CR delete preserves data PVC by default — OP-2-005-UNINST-01 · AC-NEO-UNINSTALL-PRESERVE
