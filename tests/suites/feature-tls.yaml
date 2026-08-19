@@ -1,0 +1,26 @@
+name: feature-tls
+description: >
+  NEO-2-005 TLS via cert-manager — the operator issues one Certificate per policy against a
+  self-signed CA Issuer, mounts the Secrets cert-manager writes, and the cluster forms and
+  serves Bolt over TLS. Proves issuance (Certificate Ready), the operator's verdict
+  (TLSReady=SecretsPresent), formation over TLS (ClusterFormed), and enforcement (SHOW SERVERS
+  over bolt+ssc succeeds while plaintext bolt:// is refused).
+brief_ref: neo4j-tls-cert-manager
+use_pipeline: neo4j-tls-suite
+on_case_failure: continue
+# tls-ready first (it waits for issuance + formation), then the generic condition catalog once
+# the CR has settled — by then Ready should be AllMembersReady, not TLSNotReady. tls-renewal
+# runs last because it deliberately perturbs the cluster (deletes a Secret, forces a roll).
+pipeline:
+  case_assert:
+    - assert/tls-ready
+    - assert/status-conditions
+    - assert/tls-renewal
+
+cases:
+  - id: cluster-cert-manager
+    comment: 3-primary cluster with bolt+cluster TLS issued by cert-manager; forms and serves over TLS, plaintext Bolt refused.
+    fixture: tests/fixtures/neo4j-tls-cert-manager.yaml
+    neo4j_case: cluster-tls-cert-manager
+    expect: success
+    cr_name: e2e-tls-cm

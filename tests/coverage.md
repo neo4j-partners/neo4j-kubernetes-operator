@@ -13,6 +13,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-connectivity` | [suites/feature-connectivity.yaml](suites/feature-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
 | `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010) |
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
+| `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
 | `feature-plugins` | _(planned — no suite file yet)_ | Plugin runtime — APOC procedures, GDS, and Bloom available on assigned pools (BDR-004) |
@@ -52,8 +53,8 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] `defaultPrimariesCount` is a creation default, not a constraint: a database created wider than the field keeps its topology across reconcile passes, with no `DatabaseTopologyResized` Event — TOPO-006
 - [x] Default database reachable via `neo4j://` from members that do not host it (direct `bolt://` may be refused)
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
-- [ ] Cluster TLS material (`spec.trust`) — NEO-3-005-TLS-03 · AC-NEO-TLS (no TLS case yet)
-- [ ] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady` moves `CertificatePending` → `SecretsPresent`, cluster forms over the issued material — NEO-2-005 · AC-NEO-TLS (unit-tested only)
+- [ ] Cluster TLS material via BYO Secret (`spec.trust` with `secretName`/`privateKey`) — NEO-3-005-TLS-03 · AC-NEO-TLS (cert-manager path covered by `feature-tls`; BYO Secret path unit-tested only)
+- [x] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady=SecretsPresent`, cluster forms and serves Bolt over TLS — NEO-2-005 · AC-NEO-TLS (see `feature-tls`)
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
 - [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE
@@ -98,6 +99,22 @@ Needs Neo4j Ready + a bolt query.
 ### `feature-credentials` — NEO-2-004
 - [x] Operator-generated password authenticates over bolt — NEO-3-004-CRED-01 · AC-NEO-SECRETS
 - [x] Password from referenced Secret authenticates over bolt — NEO-3-004-CRED-02 · AC-NEO-SECRETS
+
+### `feature-tls` — NEO-2-005
+
+Cluster TLS with certificates issued by cert-manager. Runs on the smallest real HA topology
+(3 primaries) so cluster mTLS is genuinely exercised, not just a single-server handshake.
+Installs cert-manager before the operator (dedicated `neo4j-tls-suite` pipeline) so the
+operator watches `Certificate`s at boot. The fixture ships a self-signed CA `Issuer`, so the
+suite is self-contained.
+
+- [x] Operator issues one `Certificate` per policy (bolt, cluster) against the referenced Issuer; each reaches `Ready=True` — NEO-2-005 · AC-NEO-TLS
+- [x] `TLSReady=True/SecretsPresent` — operator read usable key material from the Secrets cert-manager wrote (`observeTLSReady`) — NEO-2-005
+- [x] Cluster forms over the issued material (`ClusterFormed=True` — the operator's admin dial speaks TLS to members) — NEO-2-005 · AC-NEO-CLUSTER-002
+- [x] Neo4j serves Bolt over TLS: `SHOW SERVERS` via `bolt+ssc` returns every member Enabled+Available — NEO-2-005 · AC-NEO-TLS
+- [x] TLS is enforced, not merely offered: a plaintext `bolt://` session is refused — NEO-2-005
+- [x] Leaf renewal picked up: deleting the leaf Secret makes cert-manager reissue, the operator re-stamps `neo4j.com/tls-checksum` and rolls the StatefulSet, and the pod serves a new certificate serial (subPath mounts never update in place — the roll is the mechanism, BDR-006) — NEO-2-005
+- [ ] `includeIngressHosts` SANs — requires an ingress case, not covered
 
 ### `feature-storage` — NEO-2-006
 - [x] Dynamic data via existing StorageClass — NEO-3-006-PVC-02 · AC-NEO-STORAGE-DYNAMIC

@@ -1,0 +1,18 @@
+# Same single-CR lifecycle as neo4j-suite, but installs cert-manager BEFORE the operator.
+# Order matters and cannot be expressed from a suite: suite_resolve_phase appends the suite's
+# phase items AFTER the pipeline's, so a suite could only ever put cert-manager/install last.
+# The operator only registers the Certificate watch when the cert-manager.io CRD exists at
+# boot (otherwise it falls back to a 10s issuance poll), so cert-manager goes first here.
+# cert-manager is left installed on teardown, like the CRD — it is cluster infra, not per-case.
+setup:
+  - cert-manager/install
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - deploy/neo4j
+
+case_teardown:
+  - cleanup/standalone

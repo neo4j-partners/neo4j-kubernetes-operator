@@ -1,0 +1,92 @@
+# Cluster TLS issued by cert-manager (NEO-2-005). Self-contained: a namespaced self-signed
+# root Issuer signs a CA cert, exposed as a CA Issuer, and the operator issues one leaf
+# Certificate per TLS policy against it. Namespaced (Issuer, not ClusterIssuer) so everything
+# lives in and is GC'd with the case namespace. All docs land in NEO4J_NAMESPACE (kubectl -n).
+#
+# Only `name: __CR_NAME__` and the storage placeholders are substituted by deploy/neo4j;
+# the issuer/secret names below are fixed literals, decoupled from the CR name on purpose so
+# a different cr_name does not break the trust wiring.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: tls-cm-root
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tls-cm-ca
+spec:
+  isCA: true
+  commonName: tls-cm-ca
+  secretName: tls-cm-ca
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  issuerRef:
+    name: tls-cm-root
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: tls-cm-ca
+spec:
+  ca:
+    secretName: tls-cm-ca
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+    defaultPrimariesCount: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
+  trust:
+    enabled: true
+    reload:
+      enabled: true
+    certManager:
+      enabled: true
+      issuerRef:
+        name: tls-cm-ca
+        kind: Issuer
+    # cert-manager shape: target secretName only. SANs are derived by the operator from the
+    # client Service (bolt) and the per-member internals Services (cluster).
+    certificates:
+      bolt:
+        secretName: tls-cm-bolt
+      cluster:
+        clientAuth: Require
+        secretName: tls-cm-cluster
+        # Members validate each other against the CA cert-manager publishes as ca.crt in the
+        # same Secret it writes the leaf into.
+        trustedCerts:
+          sources:
+            - secret:
+                name: tls-cm-cluster
+                items:
+                  - key: ca.crt
+                    path: ca.crt

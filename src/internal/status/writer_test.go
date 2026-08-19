@@ -147,6 +147,73 @@ func TestObservePoolStorageReadyPVCMissing(t *testing.T) {
 	}
 }
 
+func standaloneCertManagerCR() *neo4jv1beta1.Neo4j {
+	return &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Trust: &neo4jv1beta1.TrustSpec{
+				Enabled:     true,
+				CertManager: &neo4jv1beta1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1beta1.IssuerRef{Name: "corp-ca"}},
+				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
+					Bolt: &neo4jv1beta1.TLSPolicySpec{SecretName: "dev-bolt-tls"},
+				},
+			},
+		},
+	}
+}
+
+func TestObserveTLSReadyDisabled(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec:       neo4jv1beta1.Neo4jSpec{Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone}},
+	}
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
+	ok, reason, _ := w.observeTLSReady(t.Context(), neo4j)
+	if !ok || reason != "TrustDisabled" {
+		t.Fatalf("ok=%v reason=%q", ok, reason)
+	}
+}
+
+// Before cert-manager writes the Secret, TLSReady must read as pending issuance rather than
+// a user-fixable SecretMissing — the operator provisioned it and is waiting.
+func TestObserveTLSReadyCertManagerPending(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := standaloneCertManagerCR()
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
+	ok, reason, msg := w.observeTLSReady(t.Context(), neo4j)
+	if ok || reason != "CertificatePending" {
+		t.Fatalf("ok=%v reason=%q", ok, reason)
+	}
+	if !strings.Contains(msg, "dev-bolt-tls") {
+		t.Fatalf("msg = %q", msg)
+	}
+}
+
+func TestObserveTLSReadyCertManagerIssued(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := standaloneCertManagerCR()
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev-bolt-tls", Namespace: "default"},
+		Data:       map[string][]byte{"tls.crt": []byte("cert"), "tls.key": []byte("key")},
+	}
+	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build())
+	ok, reason, _ := w.observeTLSReady(t.Context(), neo4j)
+	if !ok || reason != "SecretsPresent" {
+		t.Fatalf("ok=%v reason=%q", ok, reason)
+	}
+}
+
 func standaloneWithDynamicSC(name, ns, sc string) *neo4jv1beta1.Neo4j {
 	dyn := &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi", StorageClassName: sc}
 	return &neo4jv1beta1.Neo4j{

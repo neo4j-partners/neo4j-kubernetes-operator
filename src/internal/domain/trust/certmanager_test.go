@@ -126,6 +126,24 @@ func TestCertManagerRejectsSecretWithoutMountOptIn(t *testing.T) {
 	}
 }
 
+// cert-manager can create the Secret before it finishes writing the key material. A present but
+// empty data key is still pending issuance, so reconcile must requeue rather than mount nothing.
+func TestCertManagerRequeuesOnPartialIssuance(t *testing.T) {
+	scheme := certManagerScheme(t)
+	neo4j := standaloneCertManagerCR()
+	half := issuedSecret("dev-bolt-tls-secret", rendersecrets.WithMountableLabel(nil))
+	half.Data["tls.crt"] = nil // key present, value not written yet
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(neo4j, half).Build()
+
+	out := New(c, scheme).Reconcile(t.Context(), neo4j)
+	if out.Err != nil {
+		t.Fatalf("unexpected error: %v", out.Err)
+	}
+	if out.Result.RequeueAfter == 0 {
+		t.Fatal("expected a requeue while tls.crt is empty")
+	}
+}
+
 func TestCertManagerPrunesCertificateWhenDisabled(t *testing.T) {
 	scheme := certManagerScheme(t)
 	neo4j := standaloneCertManagerCR()
