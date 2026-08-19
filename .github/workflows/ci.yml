@@ -1,6 +1,6 @@
 name: CI
 
-# Gate for every change: unit tests and audit, then the full e2e suite on kind.
+# Gate for every change: unit tests and audit, then every e2e suite on kind, one job each.
 # Azure is deliberately excluded — it is slow and costs money, so it runs in
 # the nightly workflow instead.
 on:
@@ -21,9 +21,89 @@ jobs:
   unit:
     uses: ./.github/workflows/unit.yml
 
+  # Build the operator and fetch Neo4j ONCE per run, then hand both to every suite job.
+  # Serially this cost 138s and was paid once; fanned out it would be paid by all ten jobs,
+  # including ten Docker Hub pulls of the Neo4j image — rate-limited on CI runners, and the
+  # very thing setup-local-kind.sh pre-loads to avoid.
+  images:
+    name: Build images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Resolve the Neo4j image
+        id: neo4j
+        run: |
+          # tests/config/neo4j/base.sh is the single source of truth for the pinned version,
+          # and is what setup-local-kind.sh derives its image name from too.
+          . tests/config/neo4j/base.sh
+          if [ "${NEO4J_EDITION}" = "enterprise" ]; then
+            image="neo4j:${NEO4J_VERSION}-enterprise"
+          else
+            image="neo4j:${NEO4J_VERSION}"
+          fi
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+          echo "Neo4j image: ${image}"
+
+      # Keyed on the pinned tag, so it survives across runs and only re-pulls when the
+      # version moves.
+      - name: Cache the Neo4j image
+        id: neo4j-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/e2e-images/neo4j.tar
+          key: neo4j-image-${{ steps.neo4j.outputs.image }}
+
+      - name: Pull Neo4j
+        if: steps.neo4j-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/e2e-images
+          docker pull "${{ steps.neo4j.outputs.image }}"
+          docker save -o /tmp/e2e-images/neo4j.tar "${{ steps.neo4j.outputs.image }}"
+
+      # Never cached: it is this commit's code.
+      - name: Build the operator
+        run: |
+          mkdir -p /tmp/e2e-images
+          docker build -t neo4j-operator:local .
+          docker save -o /tmp/e2e-images/operator.tar neo4j-operator:local
+
+      - name: Share both images
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-images
+          path: /tmp/e2e-images/*.tar
+          retention-days: 1
+
+  # The matrix comes from the suite files themselves, so adding tests/suites/<name>.yaml is
+  # all it takes to get a CI job. The previous workflow listed every suite by hand, which
+  # meant a new suite silently ran nowhere until someone remembered to edit it.
+  suites:
+    name: Discover suites
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: find
+        run: |
+          list="$(ls tests/suites/*.yaml | xargs -n1 basename | sed 's/\.yaml$//' \
+                  | jq -R . | jq -sc .)"
+          echo "list=${list}" >> "${GITHUB_OUTPUT}"
+          echo "Suites: ${list}"
+
   e2e-local-kind:
     name: E2E
-    needs: unit
+    needs: [unit, images, suites]
+    strategy:
+      # Every suite reports independently; one red suite must not hide the rest.
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.suites.outputs.list) }}
     uses: ./.github/workflows/e2e.yml
     with:
       cloud: local-kind
+      suite: ${{ matrix.suite }}
+      images_artifact: e2e-images

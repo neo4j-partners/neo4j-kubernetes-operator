@@ -1,14 +1,31 @@
 name: E2E
 
-# Reusable: one job that runs every suite against one cloud target.
-# Called by ci.yml (local-kind only) and nightly.yml (local-kind and azure-aks
-# in parallel). Callers must pass `secrets: inherit` for the azure-aks target.
+# Reusable: runs e2e against one cloud target, either one named suite or all of them.
+#
+# ci.yml passes `suite` and fans out a matrix, so each suite is its own job with its own
+# log, its own re-run button and its own results artifact.
+#
+# e2e-all-platforms.yml passes no `suite`, so every suite runs in a single job. That is
+# required for azure-aks: the jobs share one AKS cluster, and parallel jobs would race to
+# provision it while another job's teardown deleted the resource group underneath them.
+#
+# Callers must pass the AZURE_* secrets for the azure-aks target.
 on:
   workflow_call:
     inputs:
       cloud:
         description: "Target platform — local-kind or azure-aks"
         required: true
+        type: string
+      suite:
+        description: "Single suite to run. Empty runs every suite in one job (the azure path)."
+        required: false
+        default: ""
+        type: string
+      images_artifact:
+        description: "Artifact holding pre-built operator + Neo4j images. Empty builds and pulls in-job."
+        required: false
+        default: ""
         type: string
     # Declared rather than inherited, so this workflow states exactly what it
     # needs. Unset for the local-kind target, which touches no cloud.
@@ -27,7 +44,7 @@ permissions:
 
 jobs:
   e2e:
-    name: ${{ inputs.cloud }}
+    name: ${{ inputs.suite && inputs.suite || inputs.cloud }}
     runs-on: ubuntu-latest
     env:
       CLOUD: ${{ inputs.cloud }}
@@ -58,6 +75,26 @@ jobs:
         uses: helm/kind-action@v1
         with:
           install_only: true
+
+      # One operator build and one Docker Hub pull per RUN, not per suite. Without this the
+      # matrix would rebuild the operator and re-pull Neo4j for every suite; the pull is
+      # rate-limited on CI runners, which is the very thing setup-local-kind.sh pre-loads
+      # to avoid.
+      - name: Restore shared images
+        if: inputs.cloud == 'local-kind' && inputs.images_artifact != ''
+        uses: actions/download-artifact@v6
+        with:
+          name: ${{ inputs.images_artifact }}
+          path: /tmp/e2e-images
+
+      - name: Load shared images into the daemon
+        if: inputs.cloud == 'local-kind' && inputs.images_artifact != ''
+        run: |
+          for tar in /tmp/e2e-images/*.tar; do
+            echo "loading ${tar}"
+            docker load -i "${tar}"
+          done
+          echo "E2E_REUSE_LOCAL_IMAGES=true" >> "${GITHUB_ENV}"
 
       - name: Create kind cluster and load operator image
         if: inputs.cloud == 'local-kind'
@@ -90,64 +127,37 @@ jobs:
         run: bash tests/azure/push-operator-image.sh
 
       # --------------------------------------------------------------- suites
-      # One step per suite so each scenario shows its own pass/fail in the job view.
-      # `!cancelled()` lets every scenario run (and report) even if a previous one failed.
-      # Order: scope (namespace watch) → admission → standalone → cluster → feature-* suites.
+      # Two modes. `suite` set: this job runs exactly one suite, and the caller fans the
+      # matrix out — each suite gets its own job, its own log and its own re-run button.
+      # `suite` empty: every suite runs in this one job, which is what the azure target
+      # needs because all its jobs would otherwise race to provision and tear down the
+      # same AKS cluster.
+      #
+      # Neither mode hardcodes the list: it comes from tests/suites/*.yaml, so adding a
+      # suite file is all it takes to get it into CI.
+      - name: "Suite: ${{ inputs.suite }}"
+        if: inputs.suite != ''
+        run: ./tests/bin/run-e2e.sh "${{ inputs.suite }}"
 
-      # Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE (OP-2-001-SCOPE-01).
-      # Runs first — the logical entry point before any workload scenario.
-      - name: "Scenario: operator-scope"
-        run: ./tests/bin/run-e2e.sh operator-scope
-
-      # Admission validation — invalid CRs rejected, valid Standalone accepted.
-      - name: "Scenario: operator-admission"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh operator-admission
-
-      - name: "Scenario: workload-standalone"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh workload-standalone
-
-      # Cluster mode (NEO-2-002): members created, cluster actually forms
-      # (SHOW SERVERS Enabled+Available), routing works over neo4j://.
-      # Heaviest suite — runs 1-primary then 3-primary Neo4j Enterprise pods.
-      - name: "Scenario: workload-cluster"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh workload-cluster
-
-      # Boots Neo4j and probes connectors (bolt/neo4j/http succeed, https fails without TLS)
-      # from the Neo4j pod and from a separate client pod.
-      - name: "Scenario: feature-connectivity"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh feature-connectivity
-
-      # spec.config passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error
-      # (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010).
-      - name: "Scenario: feature-config"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh feature-config
-
-      # Generated password vs referenced Secret, each verified with a real bolt query.
-      - name: "Scenario: feature-credentials"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh feature-credentials
-
-      # Data modes (Dynamic/StorageClass, claimName, volumeClaimTemplate, emptyDir),
-      # Share logs/metrics + additionalMounts mount checks, and invalid-storage failures.
-      - name: "Scenario: feature-storage"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh feature-storage
-
-      # Deleting the CR preserves the data PVC by default (NEO-2-018).
-      - name: "Scenario: feature-uninstall"
-        if: ${{ !cancelled() }}
-        run: ./tests/bin/run-e2e.sh feature-uninstall
+      - name: All suites
+        if: inputs.suite == ''
+        run: |
+          set -uo pipefail
+          fail=0
+          for f in tests/suites/*.yaml; do
+            s="$(basename "${f}" .yaml)"
+            echo "::group::${s}"
+            # Keep going so every suite reports, then fail the step if any did.
+            ./tests/bin/run-e2e.sh "${s}" || fail=1
+            echo "::endgroup::"
+          done
+          exit "${fail}"
 
       - name: Upload e2e results (on failure)
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-results-${{ inputs.cloud }}-${{ github.run_id }}
+          name: e2e-results-${{ inputs.cloud }}-${{ inputs.suite || 'all' }}-${{ github.run_id }}
           path: tests/results/
           if-no-files-found: warn
           retention-days: 14
