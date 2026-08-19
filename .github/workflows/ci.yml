@@ -95,17 +95,22 @@ jobs:
           echo "Suites: ${list}"
 
   e2e-local-kind:
-    # Naming the leg after the suite keeps the check readable ("feature-config / local-kind") and
-    # drops the "(feature-config)" GitHub appends when every leg carries the same static name.
+    # Named after the suite and nothing else, so the check reads "CI / feature-config". Calling a
+    # reusable workflow instead would add a job level ("… / local-kind") and the checks list
+    # truncates the left half, hiding the only part that identifies the leg.
     name: ${{ matrix.suite }}
     needs: [unit, images, suites]
+    runs-on: ubuntu-latest
     strategy:
       # Every suite reports independently; one red suite must not hide the rest.
       fail-fast: false
       matrix:
         suite: ${{ fromJSON(needs.suites.outputs.list) }}
-    uses: ./.github/workflows/e2e.yml
-    with:
-      cloud: local-kind
-      suite: ${{ matrix.suite }}
-      images_artifact: e2e-images
+    steps:
+      # A local action needs the repository on disk before it can be resolved.
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/e2e
+        with:
+          cloud: local-kind
+          suite: ${{ matrix.suite }}
+          images-artifact: e2e-images

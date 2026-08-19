@@ -30,21 +30,62 @@ jobs:
   # Both targets declare the same single dependency and none on each other, so
   # they start together as soon as unit passes. Gating on unit avoids creating
   # an AKS cluster for code that does not compile.
+  #
+  # Neither fans a matrix out the way CI does: passing no `suite` runs them all in one job. For
+  # azure that is mandatory, since parallel jobs would race to provision the shared AKS cluster
+  # while another job's teardown deleted the resource group underneath them.
   e2e-local-kind:
-    name: all suites
+    name: kind
     needs: unit
-    uses: ./.github/workflows/e2e.yml
-    with:
-      cloud: local-kind
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/e2e
+        with:
+          cloud: local-kind
 
   e2e-azure-aks:
-    name: all suites
+    name: Azure
     needs: unit
-    uses: ./.github/workflows/e2e.yml
-    with:
-      cloud: azure-aks
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_SERVICE_ACCOUNT_SECRET: ${{ secrets.AZURE_SERVICE_ACCOUNT_SECRET }}
+    runs-on: ubuntu-latest
+    env:
+      # Azure resource names — override via repository Variables
+      # (Settings > Secrets and variables > Actions > Variables).
+      # Unset falls back to the defaults in tests/config/cloud/azure-aks.sh.
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_AKS_NAME: ${{ vars.AZURE_AKS_NAME }}
+      AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+      AZURE_AKS_NODE_COUNT: ${{ vars.AZURE_AKS_NODE_COUNT }}
+      AZURE_AKS_NODE_VM_SIZE: ${{ vars.AZURE_AKS_NODE_VM_SIZE }}
+      # ensure-aks.sh selects the subscription; only a workflow can read the secret.
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Service principal with a client secret: azure/login ignores `creds`
+      # as soon as client-id is passed as an input, so the credentials go in
+      # as one JSON object.
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_SERVICE_ACCOUNT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - uses: ./.github/actions/e2e
+        with:
+          cloud: azure-aks
+
+      # Always tear down the platform (AKS + ACR + RG), even when a suite fails or the run is
+      # cancelled — an orphaned AKS cluster bills by the hour. This stays a job step rather than
+      # part of the action: inside a composite, `always()` tracks the action's status, not the
+      # job's, so a cancelled job would skip it.
+      - name: Teardown Azure resources
+        if: always()
+        run: |
+          rg="${AZURE_RESOURCE_GROUP:-neo4j-operator-ci-rg}"
+          if az group show --name "${rg}" >/dev/null 2>&1; then
+            echo "Deleting resource group ${rg}"
+            az group delete --name "${rg}" --yes --no-wait
+          else
+            echo "Resource group ${rg} not found — nothing to tear down"
+          fi

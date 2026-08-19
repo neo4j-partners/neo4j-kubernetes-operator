@@ -153,21 +153,27 @@ See [config/readme.md](config/readme.md) for classic cases per domain.
 
 ## GitHub Actions
 
-Two entry workflows, both delegating to the same reusable ones:
+Two entry workflows, both driving the same composite action:
 
 | Workflow | When | Runs |
 |----------|------|------|
-| [`ci.yml`](../.github/workflows/ci.yml) | Every PR / push to `main`, manual | `unit.yml`, then `e2e.yml` with `cloud: local-kind` |
-| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then `e2e.yml` on `local-kind` and `azure-aks` in parallel |
+| [`ci.yml`](../.github/workflows/ci.yml) | Every PR / push to `main`, manual | `unit.yml`, one image build, then one job per suite on `local-kind` |
+| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then every suite on `local-kind` and on `azure-aks` in parallel |
 | [`azure-cleanup.yml`](../.github/workflows/azure-cleanup.yml) | 09:00 UTC daily, manual | Deletes the Azure CI resource group if an e2e run left it behind |
 
-[`e2e.yml`](../.github/workflows/e2e.yml) holds the suite list once, one step per suite, and
-selects its setup — kind cluster, or AKS create plus image push plus teardown — from the `cloud`
-input. Adding a suite means editing that one file.
+[`.github/actions/e2e`](../.github/actions/e2e/action.yml) holds the platform setup — kind
+cluster, or AKS create plus image push — and runs either one suite (`suite` input) or all of
+them. Neither mode lists the suites: CI derives its matrix from `tests/suites/*.yaml` and the
+action loops over the same glob, so adding a suite file is all it takes.
 
-Its teardown step is `if: always()`, so it also fires when a run is cancelled. It does *not*
-fire on a force-cancel (which bypasses `always()` by design) nor when a runner is lost, which
-is what `azure-cleanup.yml` covers — it skips itself while an e2e run is in flight, unless
-dispatched with `force`.
+It is an action rather than a reusable workflow so that each CI check is a single name
+(`CI / feature-config`); a called workflow would add a job level and the checks list truncates
+the left half of `caller / callee`.
+
+Azure teardown lives in the calling job, not the action, with `if: always()` — inside a
+composite, `always()` tracks the action's status rather than the job's, so a cancelled job would
+skip it. Even there it does *not* fire on a force-cancel (which bypasses `always()` by design)
+nor when a runner is lost, which is what `azure-cleanup.yml` covers — it skips itself while an
+e2e run is in flight, unless dispatched with `force`.
 
 Azure CI credentials and variables are documented in [contribute.md](contribute.md).
