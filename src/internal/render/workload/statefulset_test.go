@@ -19,7 +19,7 @@ func TestStandaloneStatefulSet(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Storage: &neo4jv1beta1.StorageSpec{
 				Volumes: &neo4jv1beta1.VolumesSpec{
@@ -121,13 +121,36 @@ func TestStandaloneStatefulSet(t *testing.T) {
 	}
 }
 
+// The community image ships under GPLv3 and declares its own edition, so neither licensing variable
+// belongs in the pod. Passing NEO4J_EDITION=COMMUNITY_K8S would also invent a value Helm never emits.
+func TestCommunityStatefulSetOmitsLicensingEnv(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionCommunity,
+			Version:  "2026.05.0",
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	container := sts.Spec.Template.Spec.Containers[0]
+	if container.Image != "neo4j:2026.05.0" {
+		t.Fatalf("image = %q, want the unsuffixed community tag", container.Image)
+	}
+	for _, e := range container.Env {
+		if e.Name == "NEO4J_ACCEPT_LICENSE_AGREEMENT" || e.Name == "NEO4J_EDITION" {
+			t.Fatalf("%s must not be set for community, got %q", e.Name, e.Value)
+		}
+	}
+}
+
 func TestClusterPoolStatefulSet(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition: neo4jv1beta1.EditionEnterprise,
 			Version: "2026.05.0",
-			License: neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{
 				Mode: neo4jv1beta1.TopologyModeCluster,
 				Primaries: &neo4jv1beta1.PrimariesSpec{
@@ -232,7 +255,7 @@ func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Plugins:  []string{"apoc", "gds"},
 			Storage: &neo4jv1beta1.StorageSpec{
@@ -277,7 +300,7 @@ func TestExistingPluginsVolumeOmitsNEO4JPlugins(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Plugins:  []string{"apoc"},
 			Storage: &neo4jv1beta1.StorageSpec{
@@ -313,7 +336,7 @@ func TestStandaloneContainerPortsIncludeOptionalListeners(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Connectivity: &neo4jv1beta1.ConnectivitySpec{
 				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{
@@ -372,7 +395,7 @@ func TestSecurityContextOverrides(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Security: &neo4jv1beta1.SecuritySpec{
 				PodSecurityContext: &corev1.PodSecurityContext{RunAsUser: &uid, FSGroup: &uid},
@@ -419,7 +442,7 @@ func TestImagePullSecrets(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Image: &neo4jv1beta1.ImageSpec{
 				PullSecrets: []string{"my-registry-secret", "", "other-secret"},
@@ -447,7 +470,7 @@ func TestStatefulSetCustomLoggingMounts(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Logging: &neo4jv1beta1.LoggingSpec{
 				ServerLogsXml: "<Configuration/>",
@@ -484,7 +507,7 @@ func TestStatefulSetLoggingConfigMapRefMounts(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Logging: &neo4jv1beta1.LoggingSpec{
 				ServerLogsConfigMapRef: &neo4jv1beta1.LoggingConfigMapRef{Name: "ext-server-logs", Key: "slog.xml"},
@@ -522,7 +545,7 @@ func TestStatefulSetAppliesResources(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{

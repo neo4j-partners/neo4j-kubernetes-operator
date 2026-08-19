@@ -48,10 +48,15 @@ must be on the operator allowlist (`allowedImageRepositories` / `--allowed-image
 NEO-012). On a restricted network, mirror the image, add the mirror to that allowlist, and set
 `spec.image.pullSecrets` if needed.
 
-Enterprise is the only supported edition today: `spec.edition: enterprise` with
-`spec.license.accept: "yes"`. Anything else is rejected at admission. Setting `accept` is a
-statement that you hold a commercial licence or use the image under the terms Neo4j grants for
-evaluation and development.
+Both editions are supported. `spec.edition: enterprise` requires `spec.license.accept: "yes"`
+(or `"eval"`), which is a statement that you hold a commercial licence or use the image under the
+terms Neo4j grants for evaluation and development. `spec.edition: community` needs no licence — the
+block is optional and ignored there, and the operator pulls the unsuffixed image tag, which is the
+Community build.
+
+Community is confined to `topology.mode: Standalone`, and `features.backup` and
+`features.monitoring.prometheus` are rejected on it: clustering, backup and metrics are Enterprise
+capabilities, and a Community server refuses to start once its configuration mentions them.
 
 ## Namespaces
 

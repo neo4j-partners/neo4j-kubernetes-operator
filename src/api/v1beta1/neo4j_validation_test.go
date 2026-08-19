@@ -75,6 +75,10 @@ func TestCRDContainsCELValidations(t *testing.T) {
 		"topology.minimumMembers cannot change after create",
 		"minimumMembers 1 requires primaries.members 1",
 		"Cluster mode needs an admin Bolt path for the operator",
+		"community edition supports topology.mode Standalone only",
+		"Enterprise edition requires spec.license.accept",
+		"features.backup requires Enterprise edition",
+		"features.monitoring.prometheus requires Enterprise edition",
 		"statusReplicasPath: .status.readPoolReplicas",
 	} {
 		if !strings.Contains(content, fragment) {
@@ -83,5 +87,13 @@ func TestCRDContainsCELValidations(t *testing.T) {
 	}
 	if strings.Contains(content, "gds requires pluginDefinitions.gds.licenseSecretRef") {
 		t.Fatal("CRD must not require GDS licenseSecretRef — Community Edition runs without a license file")
+	}
+	// Community is accepted by the schema (EDT-001 narrows it to Standalone rather than refusing it),
+	// and the license block it has nothing to accept is optional.
+	if !strings.Contains(content, "- community") {
+		t.Fatal("CRD edition enum must accept community")
+	}
+	if strings.Contains(content, "\n            - license\n") {
+		t.Fatal("spec.license must not be required — community needs no license")
 	}
 }

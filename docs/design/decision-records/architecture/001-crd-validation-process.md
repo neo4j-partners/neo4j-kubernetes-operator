@@ -121,7 +121,7 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 - **Forbidden fields** per mode (Standalone vs Cluster)
 - **Topology** — odd `primaries.members`, unique pool names, `minimumMembers` / `defaultPrimariesCount` bounds *when expressible from spec alone*
 - **Plugin placement** — GDS/Bloom forbidden on `primaries.plugins` in Cluster; `licenseSecretRef` required when `gds` referenced
-- **Edition / enum** guards — V1 `enterprise` only, `license.accept` values
+- **Edition / enum** guards — `enterprise` or `community`, the latter confined to Standalone and denied the Enterprise-only features (`features.backup`, `features.monitoring.prometheus`); `license.accept` required on `enterprise` only
 - **TLS structure** — `trust.enabled` + Cluster ⇒ `cluster` cert ref; HTTPS port ⇒ `trust.enabled`
 - **Immutability** — `topology.mode` cannot change after create
 

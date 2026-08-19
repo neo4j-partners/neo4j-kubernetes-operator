@@ -47,7 +47,7 @@ spec
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `edition` | string | **yes** | — | `enterprise` only in V1 (`NEO-2-001-EDT-01`). `community` deferred. |
+| `edition` | string | **yes** | — | `enterprise` or `community` (`NEO-2-001-EDT-01`). `community` is confined to `topology.mode: Standalone` and refuses `features.backup` and `features.monitoring.prometheus` (EDT-001, EDT-007, EDT-008); it needs no license and renders the unsuffixed image tag. |
 
 ---
 
@@ -61,9 +61,13 @@ spec
 
 ## `spec.license`
 
+The block is optional at schema level, and required by CEL on `enterprise` only (EDT-002): community
+ships under GPLv3 with nothing to accept, and the operator renders no
+`NEO4J_ACCEPT_LICENSE_AGREEMENT` there.
+
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `accept` | string | **yes** | — | `yes` — accepted Enterprise license (`NEO-2-001-LIC-01`). `eval` deferred (`NEO-2-001-LIC-02`, V1=No). |
+| `accept` | string | **yes** when the block is present | — | `yes` — accepted Enterprise license (`NEO-2-001-LIC-01`). `eval` deferred (`NEO-2-001-LIC-02`, V1=No). |
 
 ---
 

@@ -37,9 +37,10 @@ import (
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.topology.primaries) || !has(self.topology.primaries.plugins) || self.topology.primaries.plugins.all(p, p != 'gds' && p != 'bloom')",message="GDS and Bloom cannot be installed on primary members in Cluster mode"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.plugins)",message="spec.plugins is not allowed when mode is Cluster"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries))",message="use spec.plugins in standalone mode"
-// +kubebuilder:validation:XValidation:rule="self.edition == 'enterprise'",message="V1 supports Enterprise edition only"
-// +kubebuilder:validation:XValidation:rule="self.license.accept == 'yes' || self.license.accept == 'eval'",message="Enterprise license must be explicitly accepted"
-// +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || self.edition == 'enterprise'",message="Cluster mode requires Enterprise edition"
+// +kubebuilder:validation:XValidation:rule="self.edition != 'community' || self.topology.mode == 'Standalone'",message="community edition supports topology.mode Standalone only (clustering is an Enterprise feature)"
+// +kubebuilder:validation:XValidation:rule="self.edition != 'enterprise' || (has(self.license) && (self.license.accept == 'yes' || self.license.accept == 'eval'))",message="Enterprise edition requires spec.license.accept: yes or eval"
+// +kubebuilder:validation:XValidation:rule="self.edition == 'enterprise' || !has(self.features) || !has(self.features.backup) || self.features.backup.enabled != true",message="features.backup requires Enterprise edition"
+// +kubebuilder:validation:XValidation:rule="self.edition == 'enterprise' || !has(self.features) || !has(self.features.monitoring) || !has(self.features.monitoring.prometheus) || self.features.monitoring.prometheus.enabled != true",message="features.monitoring.prometheus requires Enterprise edition (metrics are an Enterprise feature)"
 // +kubebuilder:validation:XValidation:rule="self.version != ''",message="spec.version is required"
 // +kubebuilder:validation:XValidation:rule="!(has(self.auth) && has(self.auth.generatePassword) && self.auth.generatePassword == true && has(self.auth.passwordSecretRef))",message="provide generatePassword or passwordSecretRef, not both"
 // +kubebuilder:validation:XValidation:rule="!has(self.trust) || !has(self.trust.certManager) || self.trust.certManager.enabled != true || (has(self.trust.certManager.issuerRef) && has(self.trust.certManager.issuerRef.name) && self.trust.certManager.issuerRef.name != '')",message="cert-manager issuerRef is required when cert-manager is enabled"
@@ -53,15 +54,16 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.config) || !has(self.config.neo4j) || !has(self.features) || !has(self.features.backup) || !('server.backup.listen_address' in self.config.neo4j)",message="use connectivity.listeners.backup for backup listen address"
 // +kubebuilder:validation:XValidation:rule="!has(self.connectivity) || !has(self.connectivity.service) || self.connectivity.service.type != 'LoadBalancer' || (has(self.connectivity.service.loadBalancerSourceRanges) && size(self.connectivity.service.loadBalancerSourceRanges) > 0)",message="connectivity.service.loadBalancerSourceRanges is required when service type is LoadBalancer"
 type Neo4jSpec struct {
-	// Edition selects the Neo4j product tier (V1: enterprise only).
+	// Edition selects the Neo4j product tier. community restricts the resource to Standalone mode
+	// and to features the edition ships (no clustering, backup or metrics).
 	// +kubebuilder:validation:Required
 	Edition Edition `json:"edition"`
 	// Version is the Neo4j image tag driving deploy and rolling upgrade.
 	// +kubebuilder:validation:Required
 	Version string `json:"version"`
-	// License records explicit Enterprise license acceptance.
-	// +kubebuilder:validation:Required
-	License LicenseSpec `json:"license"`
+	// License records explicit Enterprise license acceptance: required for enterprise, and ignored
+	// for community, which ships under GPLv3 and has nothing to accept.
+	License *LicenseSpec `json:"license,omitempty"`
 	// Topology defines Standalone vs Cluster mode and member pool sizes.
 	// +kubebuilder:validation:Required
 	Topology TopologySpec `json:"topology"`

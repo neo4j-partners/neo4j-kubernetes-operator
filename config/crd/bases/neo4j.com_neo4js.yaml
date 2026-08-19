@@ -426,10 +426,12 @@ spec:
                     type: object
                 type: object
               edition:
-                description: 'Edition selects the Neo4j product tier (V1: enterprise
-                  only).'
+                description: |-
+                  Edition selects the Neo4j product tier. community restricts the resource to Standalone mode
+                  and to features the edition ships (no clustering, backup or metrics).
                 enum:
                 - enterprise
+                - community
                 type: string
               features:
                 description: Features toggles optional capabilities such as backup
@@ -649,10 +651,13 @@ spec:
                     type: string
                 type: object
               license:
-                description: License records explicit Enterprise license acceptance.
+                description: |-
+                  License records explicit Enterprise license acceptance: required for enterprise, and ignored
+                  for community, which ships under GPLv3 and has nothing to accept.
                 properties:
                   accept:
-                    description: Accept must be "yes" for V1 production use.
+                    description: Accept must be "yes" for production use, or "eval"
+                      for an evaluation license.
                     enum:
                     - "yes"
                     - eval
@@ -20939,7 +20944,6 @@ spec:
                 type: string
             required:
             - edition
-            - license
             - topology
             - version
             type: object
@@ -20994,12 +20998,20 @@ spec:
             - message: use spec.plugins in standalone mode
               rule: self.topology.mode != 'Standalone' || (!has(self.topology.primaries)
                 && !has(self.topology.secondaries))
-            - message: V1 supports Enterprise edition only
-              rule: self.edition == 'enterprise'
-            - message: Enterprise license must be explicitly accepted
-              rule: self.license.accept == 'yes' || self.license.accept == 'eval'
-            - message: Cluster mode requires Enterprise edition
-              rule: self.topology.mode != 'Cluster' || self.edition == 'enterprise'
+            - message: community edition supports topology.mode Standalone only (clustering
+                is an Enterprise feature)
+              rule: self.edition != 'community' || self.topology.mode == 'Standalone'
+            - message: 'Enterprise edition requires spec.license.accept: yes or eval'
+              rule: self.edition != 'enterprise' || (has(self.license) && (self.license.accept
+                == 'yes' || self.license.accept == 'eval'))
+            - message: features.backup requires Enterprise edition
+              rule: self.edition == 'enterprise' || !has(self.features) || !has(self.features.backup)
+                || self.features.backup.enabled != true
+            - message: features.monitoring.prometheus requires Enterprise edition
+                (metrics are an Enterprise feature)
+              rule: self.edition == 'enterprise' || !has(self.features) || !has(self.features.monitoring)
+                || !has(self.features.monitoring.prometheus) || self.features.monitoring.prometheus.enabled
+                != true
             - message: spec.version is required
               rule: self.version != ''
             - message: provide generatePassword or passwordSecretRef, not both

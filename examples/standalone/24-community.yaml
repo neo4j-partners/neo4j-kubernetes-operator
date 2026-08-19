@@ -1,0 +1,29 @@
+# Purpose: Community edition Standalone — no licence to accept, no Enterprise features.
+# Prerequisites: none.
+# Apply: kubectl apply -f examples/standalone/24-community.yaml
+# Related README: ../README.md#standalone
+#
+# The only differences from 01-minimal.yaml: edition is community, and spec.license is gone. The
+# operator pulls the unsuffixed tag (neo4j:2026.05.0, which is the Community build) and passes
+# neither NEO4J_ACCEPT_LICENSE_AGREEMENT nor NEO4J_EDITION to the container.
+#
+# Community is Standalone only. Asking for topology.mode: Cluster, features.backup or
+# features.monitoring.prometheus here is rejected at admission (EDT-001, EDT-007, EDT-008) rather
+# than left to crash-loop, since a Community server refuses to start on Enterprise settings.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: dev-community
+spec:
+  edition: community
+  version: "2026.05.0"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true

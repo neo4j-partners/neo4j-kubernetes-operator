@@ -16,7 +16,7 @@ func TestApplyScheduling(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Scheduling: &neo4jv1beta1.SchedulingSpec{
 				NodeSelector:      map[string]string{"disk": "ssd"},
@@ -78,7 +78,7 @@ func TestApplySchedulingSoftAntiAffinity(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Scheduling: &neo4jv1beta1.SchedulingSpec{
 				Affinity: &neo4jv1beta1.SchedulingAffinitySpec{PodAntiAffinity: "soft"},
@@ -105,7 +105,7 @@ func TestTopologySpreadDefaultLabelSelector(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Scheduling: &neo4jv1beta1.SchedulingSpec{
 				TopologySpreadConstraints: []corev1.TopologySpreadConstraint{{
@@ -142,7 +142,7 @@ func TestTerminationGracePeriodOverride(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Scheduling: &neo4jv1beta1.SchedulingSpec{
 				TerminationGracePeriodSeconds: &grace,
@@ -169,7 +169,7 @@ func TestTerminationGracePeriodDefaultWithoutScheduling(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Storage: &neo4jv1beta1.StorageSpec{
 				Volumes: &neo4jv1beta1.VolumesSpec{

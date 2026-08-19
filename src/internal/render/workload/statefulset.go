@@ -240,14 +240,6 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 	checksum := rendercfg.ConfigChecksum(ctx)
 	env := []corev1.EnvVar{
 		{
-			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
-			Value: ctx.LicenseAcceptEnv(),
-		},
-		{
-			Name:  "NEO4J_EDITION",
-			Value: ctx.Neo4jEditionK8SEnv(),
-		},
-		{
 			Name:  "NEO4J_CONF",
 			Value: "/config/",
 		},
@@ -269,6 +261,15 @@ func neo4jContainerEnv(ctx render.Context) []corev1.EnvVar {
 				FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
 			},
 		},
+	}
+	// Licensing is Enterprise-only. The community image ships under GPLv3 with nothing to accept,
+	// and it sets its own NEO4J_EDITION from the tag — passing either variable there would state
+	// something untrue about the image being run.
+	if ctx.EnterpriseEdition() {
+		env = append(env,
+			corev1.EnvVar{Name: "NEO4J_ACCEPT_LICENSE_AGREEMENT", Value: ctx.LicenseAcceptEnv()},
+			corev1.EnvVar{Name: "NEO4J_EDITION", Value: ctx.Neo4jEditionK8SEnv()},
+		)
 	}
 	if render.IsClusterMode(ctx.Neo4j) {
 		// Helm parity: SERVICE_NEO4J / SERVICE_NEO4J_INTERNALS are per-member Service FQDNs.

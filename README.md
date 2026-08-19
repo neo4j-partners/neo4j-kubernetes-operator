@@ -48,8 +48,9 @@ silently.
 
 - Kubernetes 1.28 or later, with a StorageClass that can provision volumes. Older API servers do not
   evaluate the CRD's validation rules.
-- **Neo4j Enterprise.** Community is rejected at admission. `spec.license.accept: "yes"` is a required
-  field: it records that you hold a license from Neo4j for the image you are about to run.
+- **Neo4j Enterprise or Community.** Enterprise requires `spec.license.accept: "yes"`, which records
+  that you hold a license from Neo4j for the image you are about to run. Community needs no licence
+  and runs Standalone only — clustering, backup and metrics are Enterprise capabilities.
 - Permission to install a CRD (cluster-scoped) and to create RBAC in the operator namespace.
 - The operator watches **one namespace by default**, set through `WATCH_NAMESPACE`. Cluster-wide watch
   is deliberately refused — see [operator scope](docs/user-guide/02-operator-installation/04-operator-scope.md).

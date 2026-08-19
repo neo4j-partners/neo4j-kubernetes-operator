@@ -23,11 +23,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// Neo4j edition (V1: enterprise only).
-// +kubebuilder:validation:Enum=enterprise
+// Neo4j edition. Enterprise unlocks clustering, backup and metrics; community is Standalone only
+// (EDT-001) and needs no license.
+// +kubebuilder:validation:Enum=enterprise;community
 type Edition string
 
-const EditionEnterprise Edition = "enterprise"
+const (
+	EditionEnterprise Edition = "enterprise"
+	EditionCommunity  Edition = "community"
+)
 
 // License acceptance.
 // +kubebuilder:validation:Enum=yes;eval
@@ -115,9 +119,10 @@ type UpgradePhase string
 // +kubebuilder:validation:Enum=primary;analytics;read;server
 type MemberPool string
 
-// LicenseSpec holds Enterprise license acceptance.
+// LicenseSpec holds Enterprise license acceptance. Community needs none, so the whole block is
+// optional and ignored there (EDT-002).
 type LicenseSpec struct {
-	// Accept must be "yes" for V1 production use.
+	// Accept must be "yes" for production use, or "eval" for an evaluation license.
 	// +kubebuilder:validation:Required
 	Accept LicenseAccept `json:"accept"`
 }

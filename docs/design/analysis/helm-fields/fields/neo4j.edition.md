@@ -28,8 +28,13 @@ topology
 
 ## CRD mapping (draft)
 
-- **Target**: `Neo4j.spec.edition` (`enterprise` only in V1 per `NEO-2-001-EDT-01`)
-- **Notes**: `community` deferred in operator V1
+- **Target**: `Neo4j.spec.edition` — `enterprise` or `community` (`NEO-2-001-EDT-01`)
+- **Notes**: Helm parity for the edition guard: the chart fails fast on Community + clustering, the CRD
+  refuses it at admission (EDT-001). The operator additionally refuses `features.backup` and
+  `features.monitoring.prometheus` on Community (EDT-007, EDT-008), and renders neither
+  `NEO4J_ACCEPT_LICENSE_AGREEMENT` nor `NEO4J_EDITION` there. Unlike Helm it does not select a
+  different base conf file: the operator writes its own `neo4j.conf` and only emits Enterprise keys
+  for Enterprise-only features.
 
 ## Aggregation
 
@@ -48,4 +53,5 @@ topology
 
 ## Open questions
 
-- Community edition timeline for operator V2?
+- None. Community is supported as of the community-edition change; the remaining gap is e2e coverage
+  (no suite boots a Community server yet).

@@ -59,7 +59,7 @@ Synthesized from [`_index.csv`](_index.csv) by **crd-synthesis-analyst** — 93 
 | `services.neo4j.multiCluster` | `spec.connectivity.multiCluster` — V1.1+ |
 | `ldapPassword*` | LDAP auth V2 |
 | `image.imageCredentials` | Chart pull-secret helper — prefer `imagePullSecrets` |
-| Community edition paths | `neo4j.edition: community` — enterprise-only V1 |
+| ~~Community edition paths~~ | Shipped: `neo4j.edition: community` maps to `spec.edition: community`, Standalone only (EDT-001) |
 
 ---
 

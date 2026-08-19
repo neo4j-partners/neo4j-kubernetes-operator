@@ -30,6 +30,13 @@ Runnable variants: [`examples/standalone/`](../../../examples/standalone/), from
 [`01-minimal.yaml`](../../../examples/standalone/01-minimal.yaml) to
 [`15-full.yaml`](../../../examples/standalone/15-full.yaml) which exercises most of the surface at once.
 
+Standalone is also the only shape Community runs: set `edition: community`, drop the `license` block
+entirely, and the operator pulls the unsuffixed image tag and passes no licensing environment. What
+you give up beyond clustering is `features.backup` and `features.monitoring.prometheus`, both
+rejected at admission on Community since a Community server refuses to start once its configuration
+mentions Enterprise settings. See
+[`24-community.yaml`](../../../examples/standalone/24-community.yaml).
+
 ## What gets created
 
 For a resource named `dev`:

@@ -1,3 +1,6 @@
+# Enterprise without spec.license: refused by EDT-002. The block is optional in the schema now that
+# community exists and has nothing to accept, so the refusal comes from CEL rather than from the
+# required-fields list.
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
