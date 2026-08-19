@@ -45,16 +45,16 @@ spec:
     generatePassword: true
 ```
 
-Required: `edition`, `version`, `license.accept`, `topology.mode`. In practice `storage.volumes.data`
-is required too, since a database with no data volume is not useful.
+Required: `edition`, `version`, `topology.mode`, plus `license.accept` on `enterprise`. In practice
+`storage.volumes.data` is required too, since a database with no data volume is not useful.
 
 ## Identity
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `spec.edition` | string | — | **Required.** Only `enterprise` is accepted |
-| `spec.version` | string | — | **Required.** Neo4j calendar version, for example `2026.05.0`; the Enterprise image suffix is added for you. Changing it later is not orchestrated |
-| `spec.license.accept` | string | — | **Required.** `yes` or `eval` |
+| `spec.edition` | string | — | **Required.** `enterprise` or `community`. Community is restricted to `topology.mode: Standalone` and cannot use `features.backup` or `features.monitoring.prometheus` |
+| `spec.version` | string | — | **Required.** Neo4j calendar version, for example `2026.05.0`; the `-enterprise` image suffix is added for you, and community uses the unsuffixed tag. Changing it later is not orchestrated |
+| `spec.license.accept` | string | — | `yes` or `eval`. **Required on `enterprise`**; on `community` the whole `license` block may be omitted, and is ignored if present |
 | `spec.image.repository` | string | `neo4j` | Must match operator allowlist (NEO-012); default `neo4j` / `docker.io/neo4j` |
 | `spec.image.digest` | string | — | Optional `sha256:…` pin; renders `repo@digest` instead of `:tag` |
 | `spec.image.pullPolicy` | string | `IfNotPresent` | `Always`, `IfNotPresent` or `Never` |

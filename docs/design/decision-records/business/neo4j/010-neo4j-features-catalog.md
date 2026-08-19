@@ -130,7 +130,7 @@ Complete list of parameters tied to V1 `features.backup` and `features.monitorin
 
 | `neo4j.conf` key | CRD field | Owner if not `features` | Notes |
 |------------------|-----------|---------------------------|-------|
-| `server.backup.enabled` | `features.backup.enabled` | — | Enterprise only; gates backup connector + admin Service |
+| `server.backup.enabled` | `features.backup.enabled` | — | Enterprise only, enforced by EDT-001/EDT-007; gates backup connector + admin Service |
 | `server.backup.listen_address` | — | `connectivity.listeners.backup` | CFG-LISTENER denylist — port from `connectivity.listeners.backup` |
 | `dbms.ssl.policy.backup.*` | — | `spec.trust.certificates.backup` | TLS policy — [BDR-006](007-tls-trust-model.md) |
 

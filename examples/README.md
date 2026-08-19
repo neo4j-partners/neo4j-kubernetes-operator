@@ -3,7 +3,9 @@
 Working `Neo4j` CR manifests for every field the operator actually wires up today. Every example
 uses `edition: enterprise`, `version: "2026.05.0"`, `license.accept: "yes"`, and only sets fields
 that are read by the reconciler/render code (see [What is NOT demonstrated yet](#what-is-not-demonstrated-yet)
-for schema fields that are currently no-ops).
+for schema fields that are currently no-ops). The one exception is
+[`standalone/24-community.yaml`](standalone/24-community.yaml), which runs Community: no licence
+block, Standalone only, and no backup or metrics.
 
 ## How to use
 
@@ -55,6 +57,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/21-resources.yaml`](standalone/21-resources.yaml) | `spec.resources` — CPU/memory requests and limits |
 | [`standalone/22-security.yaml`](standalone/22-security.yaml) | `security.serviceAccount.annotations` + opt-in NetworkPolicy |
 | [`standalone/23-namespace-quota.yaml`](standalone/23-namespace-quota.yaml) | Namespace `ResourceQuota` backstop (NEO-014) |
+| [`standalone/24-community.yaml`](standalone/24-community.yaml) | Community edition — `edition: community`, no `license` block |
 
 ## Cluster
 

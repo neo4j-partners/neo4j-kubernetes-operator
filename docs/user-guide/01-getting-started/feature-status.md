@@ -37,7 +37,8 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Cluster — primaries, plus analytics and read pools | Verified | [Clustering](../03-neo4j/02-clustering.md) |
 | Scale out — grow a pool, enable new members, align database topology | Verified | [Clustering](../03-neo4j/02-clustering.md#scaling-members) |
 | Scale in — shrink topology, drain and drop members, then shrink the StatefulSet | Implemented | [Clustering](../03-neo4j/02-clustering.md#scaling-members) |
-| Enterprise edition | Verified | `spec.edition: enterprise` is the only accepted value |
+| Enterprise edition | Verified | `spec.edition: enterprise` with `spec.license.accept` |
+| Community edition | Implemented | `spec.edition: community`, Standalone only, no licence, no backup or metrics — accepted by admission but not yet exercised end to end |
 
 ## Neo4J Features
 

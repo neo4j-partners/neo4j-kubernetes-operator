@@ -35,7 +35,7 @@ func TestNeo4jDeepCopy(t *testing.T) {
 		Spec: Neo4jSpec{
 			Edition: EditionEnterprise,
 			Version: "2026.05.0",
-			License: LicenseSpec{Accept: LicenseAcceptYes},
+			License: &LicenseSpec{Accept: LicenseAcceptYes},
 			Topology: TopologySpec{Mode: TopologyModeStandalone},
 			Auth:     &AuthSpec{GeneratePassword: &trueVal},
 		},
@@ -56,7 +56,7 @@ func TestStandaloneTopologyFields(t *testing.T) {
 	spec := Neo4jSpec{
 		Edition: EditionEnterprise,
 		Version: "2026.05.0",
-		License: LicenseSpec{Accept: LicenseAcceptYes},
+		License: &LicenseSpec{Accept: LicenseAcceptYes},
 		Topology: TopologySpec{
 			Mode: TopologyModeStandalone,
 		},

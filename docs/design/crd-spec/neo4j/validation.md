@@ -147,12 +147,18 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| EDT-001 | `edition` must be `enterprise` in V1 | Error | CEL | V1 supports Enterprise edition only |
-| EDT-002 | `license.accept` must be `yes` or `eval` | Error | CEL | Enterprise license must be explicitly accepted |
-| EDT-003 | any `secondaries` with `members > 0` requires `edition: enterprise` | Error | CEL | secondary pools require Enterprise edition |
-| EDT-004 | any pool references `gds` in `plugins` requires `edition: enterprise` | Error | CEL | GDS requires Enterprise edition |
+| EDT-001 | `edition: community` requires `mode: Standalone` | Error | CEL | community edition supports topology.mode Standalone only (clustering is an Enterprise feature) |
+| EDT-002 | `edition: enterprise` requires `license.accept` `yes` or `eval` | Error | CEL | Enterprise edition requires spec.license.accept: yes or eval |
+| EDT-003 | any `secondaries` with `members > 0` requires `edition: enterprise` | Error | — | Covered transitively: secondaries require `mode: Cluster` (TOPO-001), which EDT-001 denies to community |
+| EDT-004 | any pool references `gds` in `plugins` requires `edition: enterprise` | — | — | **Withdrawn.** GDS ships an open-source edition that runs on Community |
 | EDT-005 | `secondaries.analytics` with `gds` in `plugins` requires analytics-capable server config | Error | Webhook | GDS on analytics pool requires analytics server configuration |
-| EDT-006 | `mode: Cluster` requires `edition: enterprise` | Error | CEL | Cluster mode requires Enterprise edition |
+| EDT-006 | `mode: Cluster` requires `edition: enterprise` | — | — | **Merged into EDT-001**, which states the same constraint from the edition side and so also covers modes added later |
+| EDT-007 | `features.backup.enabled` requires `edition: enterprise` | Error | CEL | features.backup requires Enterprise edition |
+| EDT-008 | `features.monitoring.prometheus.enabled` requires `edition: enterprise` | Error | CEL | features.monitoring.prometheus requires Enterprise edition (metrics are an Enterprise feature) |
+
+EDT-007 and EDT-008 exist because Neo4j 5+ refuses to start on an unknown setting: both features write
+`server.backup.*` / `server.metrics.*` keys that do not exist in the Community binary, so accepting
+them would produce a pod that crash-loops rather than a rejected resource.
 
 ---
 
@@ -404,7 +410,7 @@ rendered gate stay `1`/`3` without pinning a value the user could never change a
 |--------|-------|
 | ADR-001 | Mechanism choice (CEL / webhook / reconciler) |
 | BDR-004 Option E | TOPO-001…013, PLG-001…013 |
-| `03-variant_matrix` Edition | EDT-001…006 |
+| `03-variant_matrix` Edition | EDT-001…008 |
 | `NEO-2-005` TLS | TLS-001…007, TLS-011 |
 | `NEO-2-006` Storage | STO-001…005 |
 | `NEO-2-011` Scale | TOPO-009, TOPO-010 |

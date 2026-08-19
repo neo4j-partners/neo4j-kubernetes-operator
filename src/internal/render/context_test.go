@@ -62,6 +62,13 @@ func TestImageRef(t *testing.T) {
 			repo:    "registry.example.com/neo4j",
 			wantRef: "registry.example.com/neo4j:2026.05.0-enterprise",
 		},
+		{
+			// The unsuffixed tag IS the Community image on Docker Hub.
+			name:    "community keeps the bare tag",
+			edition: neo4jv1beta1.EditionCommunity,
+			version: "2026.05.0",
+			wantRef: "neo4j:2026.05.0",
+		},
 	}
 
 	for _, tt := range tests {
@@ -109,6 +116,30 @@ func TestImageTag(t *testing.T) {
 	}
 	if got := imageTag("2026.05.0-enterprise", neo4jv1beta1.EditionEnterprise); got != "2026.05.0-enterprise" {
 		t.Fatalf("imageTag no double suffix = %q", got)
+	}
+	if got := imageTag("2026.05.0", neo4jv1beta1.EditionCommunity); got != "2026.05.0" {
+		t.Fatalf("imageTag community = %q", got)
+	}
+}
+
+// Community has no license to accept and no NEO4J_EDITION to declare: the image carries its own.
+func TestCommunityLicensingEnvIsEmpty(t *testing.T) {
+	ctx := StandaloneContext(&neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionCommunity,
+			Version:  "2026.05.0",
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		},
+	})
+	if ctx.EnterpriseEdition() {
+		t.Fatal("EnterpriseEdition() = true for community")
+	}
+	if got := ctx.LicenseAcceptEnv(); got != "" {
+		t.Fatalf("LicenseAcceptEnv() = %q, want empty when spec.license is unset", got)
+	}
+	if got := ctx.Neo4jEditionK8SEnv(); got != "" {
+		t.Fatalf("Neo4jEditionK8SEnv() = %q, want empty for community", got)
 	}
 }
 

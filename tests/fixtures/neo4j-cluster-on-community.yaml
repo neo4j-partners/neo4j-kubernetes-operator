@@ -1,3 +1,6 @@
+# Community is a supported edition, but clustering is not part of it: EDT-001 confines community to
+# Standalone, so this CR is refused at admission. The license block is accepted and simply ignored —
+# community ships under GPLv3 with nothing to accept.
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:

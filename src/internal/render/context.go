@@ -263,13 +263,28 @@ func imageTag(version string, edition neo4jv1beta1.Edition) string {
 	return version
 }
 
-// LicenseAcceptEnv returns NEO4J_ACCEPT_LICENSE_AGREEMENT (yes | eval) from spec.license.accept.
+// EnterpriseEdition reports whether the resource runs Enterprise, which gates both the image tag
+// suffix and the licensing environment the community image neither needs nor understands.
+func (c Context) EnterpriseEdition() bool {
+	return c.Neo4j.Spec.Edition == neo4jv1beta1.EditionEnterprise
+}
+
+// LicenseAcceptEnv returns NEO4J_ACCEPT_LICENSE_AGREEMENT (yes | eval) from spec.license.accept,
+// empty when unset — community leaves the block out entirely (EDT-002).
 func (c Context) LicenseAcceptEnv() string {
+	if c.Neo4j.Spec.License == nil {
+		return ""
+	}
 	return string(c.Neo4j.Spec.License.Accept)
 }
 
 // Neo4jEditionK8SEnv returns NEO4J_EDITION for the official Neo4j K8s image (Helm: ENTERPRISE_K8S).
+// Empty for community: the image derives its own edition from the tag, and Helm only ever emits the
+// Enterprise value, so overriding it with COMMUNITY_K8S would invent a value nothing consumes.
 func (c Context) Neo4jEditionK8SEnv() string {
+	if !c.EnterpriseEdition() {
+		return ""
+	}
 	return strings.ToUpper(string(c.Neo4j.Spec.Edition)) + "_K8S"
 }
 

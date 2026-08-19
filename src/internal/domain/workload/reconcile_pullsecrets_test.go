@@ -28,7 +28,7 @@ func TestReconcilePropagatesImagePullSecrets(t *testing.T) {
 		Spec: neo4jv1beta1.Neo4jSpec{
 			Edition:  neo4jv1beta1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
 			Storage: &neo4jv1beta1.StorageSpec{
 				Volumes: &neo4jv1beta1.VolumesSpec{

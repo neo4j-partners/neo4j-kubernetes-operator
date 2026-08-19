@@ -17,7 +17,7 @@ cases:
     cr_name: e2e-no-license
 
   - id: community-cluster
-    comment: Cluster mode on the Community edition is rejected at admission.
+    comment: EDT-001 — Community is an accepted edition but only in Standalone mode, so a Community CR asking for Cluster is rejected at admission.
     fixture: tests/fixtures/neo4j-cluster-on-community.yaml
     assert: admission-rejected
     expect: failure

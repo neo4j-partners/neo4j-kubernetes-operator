@@ -25,7 +25,8 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 
 ### `operator-admission` — validation (ADR-001)
 - [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
-- [x] Reject Cluster on Community edition — NEO-2-001-EDT-01 · AC-NEO-LICENSE (edition guard)
+- [x] Reject Cluster on Community edition — Community is an accepted edition, confined to Standalone — NEO-2-001-EDT-01 · EDT-001 (CEL)
+- [ ] Boot a Community Standalone and reach `Ready` — the edition is accepted at admission and unit-tested at render level (image tag, absent licensing env), but no suite starts a Community server: every fixture pins `enterprise` and `tests/config/neo4j/base.sh` sets the edition globally
 - [x] Reject `connectivity.multiCluster.enabled` in every topology mode — NEO-3-007-MULTI-01 (CEL)
 - [x] Reject a Cluster with no admin Bolt path — neither `trust.certificates.bolt` nor `trust.insecureAdminConnection` — NEO-2-005 · TLS-011 (CEL)
 - [x] Reject `minimumMembers: 1` on a multi-primary cluster (a multi-primary `system` database cannot bootstrap on one server) — NEO-2-002-CSZ-01 · TOPO-008 (CEL)
