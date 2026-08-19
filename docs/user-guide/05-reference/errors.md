@@ -39,6 +39,7 @@ See [Operator logs](../04-troubleshooting/02-operator-logs.md).
 | StorageReady | PVCPending | warn | Data PVC not Bound yet (or missing StorageClass) |
 | Ready | OfflineMaintenance | info | `spec.maintenance.offlineMode` is true |
 | ClusterFormed | BoltUnavailable | warn | Cannot reach Bolt to form/align the cluster |
+| ClusterFormed | BootstrapGateTooHigh | error | `topology.minimumMembers` asks for more primaries than the pool has, so the system database never bootstraps and Bolt never answers |
 | ClusterFormed | ShowServersFailed | error | `SHOW SERVERS` failed over Bolt |
 | ClusterFormed | UnsupportedSinglePrimary | error | Neo4j forbids shrinking to a single primary |
 | ClusterFormed | UnsupportedSystemScaleUp | error | Cannot grow system DB from 1 primary via ENABLE alone |

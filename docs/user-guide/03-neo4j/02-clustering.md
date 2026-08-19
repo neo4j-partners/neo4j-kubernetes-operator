@@ -78,6 +78,44 @@ Because addresses are derived from Kubernetes names, listen and advertised addre
 operator-owned: setting them in `spec.config.neo4j` is either rejected or overridden. See
 [Operator-owned settings](../05-reference/operator-owned-config.md).
 
+## The operator needs an admin session
+
+Everything the operator does to a cluster it does through an authenticated Bolt session as `neo4j` on
+the `system` database: `ENABLE SERVER` when a member joins, `SHOW SERVERS` and `SHOW DATABASES` to
+observe, `DEALLOCATE`/`DROP SERVER` when one leaves. Without that session there is no formation, no
+scale-out and no scale-in — Neo4j would still start, but the resource would sit on
+`ClusterFormed=False` and the operator would drive nothing.
+
+So a Cluster has to declare how the operator may open it, one of two ways. Either give Bolt real
+certificates, which is what production should do:
+
+```yaml
+spec:
+  trust:
+    enabled: true
+    certificates:
+      bolt:
+        privateKey:
+          secretName: prod-bolt-key
+        publicCertificate:
+          secretName: prod-bolt-cert
+```
+
+Or accept an unencrypted session on the pod network, which is what every example in `examples/cluster`
+does:
+
+```yaml
+spec:
+  trust:
+    insecureAdminConnection: true
+```
+
+A Cluster with neither is **rejected at admission** — it could never be operated, so there is no
+point letting it start. Be clear-eyed about what the flag does and does not do: it does not open
+anything on the network. If Bolt has no TLS, the port is already in cleartext for every client. The
+flag is your acknowledgement that the operator's own admin password will travel that way too. It has
+no effect in Standalone mode, where the operator opens no admin session at all.
+
 ## Formation and readiness
 
 Two separate numbers decide how a cluster comes up, and conflating them is the most common
@@ -85,7 +123,7 @@ misunderstanding. Only one of them is yours to set.
 
 | Number | Controls | Value |
 |--------|----------|-------|
-| The system bootstrap gate | How many primaries must meet before the `system` database can form | Derived by the operator: `1` for a single primary, `3` for any larger cluster |
+| `topology.minimumMembers` | How many primaries must meet before the `system` database can form | Derived when unset: `1` for a single primary, `3` for any larger cluster |
 | `topology.defaultPrimariesCount` | How many primaries host a **standard** database created without an explicit topology | `1` unless you set it |
 
 So a three-primary cluster forms its `system` database across all three, but by default the `neo4j`
@@ -119,19 +157,51 @@ kubectl exec -n default prod-primary-0 -- \
 ### The system bootstrap gate
 
 Neo4j needs a minimum number of primaries to have found each other before it will create the
-`system` database, and that number is not a field on the resource. The operator sets it to `1` for a
-single-primary cluster and to `3` for every larger one, and it never moves again.
+`system` database. Leave `topology.minimumMembers` unset and the operator picks that number for you:
+`1` for a single-primary cluster, `3` for every larger one, whatever the pool size.
 
-Two reasons for that. First, the gate is written into `neo4j.conf`, so a value that followed
-`primaries.members` would change the file every time you scaled, rolling the whole primary pool in
-the middle of a resize — precisely when you least want members restarting. Pinned at `3`, scaling
-`3 → 5 → 3` leaves the configuration untouched and no pod restarts.
+The derived value deliberately ignores `primaries.members`, for two reasons. First, the gate is
+written into `neo4j.conf`, so a value that followed the pool would change the file every time you
+scaled, rolling the whole primary pool in the middle of a resize — precisely when you least want
+members restarting. Held at `3`, scaling `3 → 5 → 3` leaves the configuration untouched and no pod
+restarts.
 
 Second, a lower gate costs no redundancy. The `system` database has no topology of its own; it
 spreads to every primary the operator enables. A five-primary cluster gated at `3` forms as soon as
 three members meet, then extends `system` onto the fourth and fifth as they are enabled — you can
-see it yourself, `SHOW DATABASES` reports `system` with a `currentPrimariesCount` of 5. A higher gate
-would only make formation wait for more members at once, with nothing gained.
+see it yourself, `SHOW DATABASES` reports `system` with a `currentPrimariesCount` of 5.
+
+Set the field only to **raise** the bar, when you would rather have the DBMS refuse to come online
+than form on too few members — typically to hold bootstrap until members are spread across
+availability zones:
+
+```yaml
+spec:
+  topology:
+    primaries:
+      members: 5
+    minimumMembers: 5
+```
+
+Any value from `1` to `primaries.members` is accepted, even ones — Neo4j takes any integer here, and
+a two-server cluster has to be gated at `2`. A gate of `1` is only valid on a single-primary cluster,
+since a multi-primary `system` database cannot bootstrap on one server.
+
+The field is **immutable**: Neo4j reads it at first bootstrap and ignores it afterwards, so changing
+it would rewrite `neo4j.conf` and roll every member for no effect. It follows that a later scale-in
+may leave the gate above the pool — `minimumMembers: 5` with `primaries.members` back to `3` is
+accepted and harmless, and the operator caps its own quorum check accordingly.
+
+The one way to get this wrong is to gate a cluster above the pool **at creation**. Neo4j then waits
+for primaries that will never exist, the `system` database is never created, and nothing answers on
+Bolt. The API server refuses it when the validating webhook is enabled; otherwise the operator says
+so on the resource:
+
+```
+ClusterFormed=False (BootstrapGateTooHigh)
+  topology.minimumMembers 5 exceeds the 3 primaries in the pool: the system database cannot
+  bootstrap, so Bolt never answers
+```
 
 Cluster formation is slow compared to a single instance — several minutes is normal, more on large
 stores — and the default probes are sized for that. Follow progress on the resource:

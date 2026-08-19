@@ -1,0 +1,30 @@
+# Incoherent bootstrap gate: minimumMembers 1 on a 3-primary cluster.
+# A multi-primary system database cannot bootstrap on a single server, so CEL refuses it at
+# admission (TOPO-008). The other bound, minimumMembers > primaries.members, is create-only and
+# lives in the webhook, which this harness runs without.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 1
+  # Present only so the gate is the single reason this CR is refused (TLS-011).
+  trust:
+    insecureAdminConnection: true
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true

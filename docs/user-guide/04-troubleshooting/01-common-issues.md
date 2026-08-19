@@ -196,6 +196,20 @@ primary count is not.
 **Fix:** Set `topology.primaries.members` back to 1, or recreate the resource at the target primary
 count (typically 3). Scaling analytics/read secondaries only is supported.
 
+## Cluster never forms, `BootstrapGateTooHigh`
+
+**Symptom:** `ClusterFormed=False` with reason `BootstrapGateTooHigh`, all pods `Running` but `0/1`,
+nothing answers on Bolt.
+
+**Cause:** `topology.minimumMembers` was created above `primaries.members`. Neo4j waits for primaries
+that will never exist, so the `system` database is never created. The validating webhook rejects this
+at admission when it is enabled; without it the resource is accepted and the operator reports the
+condition instead.
+
+**Fix:** The field is immutable, so recreate the resource with a gate that fits the pool — or simply
+omit it and let the operator derive `1` or `3`. A gate left *above* the pool by a later scale-in is a
+different, harmless case: the operator caps its quorum check and the cluster stays formed.
+
 ## Members roll while scaling
 
 **Symptom:** Primaries restart one after another during a `primaries.members` change, and new members

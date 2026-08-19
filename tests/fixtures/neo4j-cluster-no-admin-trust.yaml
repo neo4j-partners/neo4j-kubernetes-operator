@@ -1,0 +1,26 @@
+# Cluster with no admin Bolt path: trust.certificates.bolt absent and insecureAdminConnection unset.
+# The operator drives formation, scale-out and scale-in over an admin Bolt session, so this cluster
+# could never be operated — CEL refuses it at admission (TLS-011, NEO-004) instead of letting it
+# settle on ClusterFormed=False/BoltUnavailable.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true

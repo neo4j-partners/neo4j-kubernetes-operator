@@ -24,8 +24,9 @@
 #
 # The members that stay must not even notice. Both halves check that ordinals 0..NARROW-1 keep their
 # pod UID and restart count and that the pool's config checksum never moves: the system bootstrap
-# gate is derived as a constant rather than from primaries.members precisely so a resize leaves
-# neo4j.conf byte-identical instead of rolling the survivors mid-resize.
+# gate never follows primaries.members — derived when topology.minimumMembers is unset, immutable
+# when set — precisely so a resize leaves neo4j.conf byte-identical instead of rolling the survivors
+# mid-resize.
 #
 # Note what is *not* one at a time: pods. The pool StatefulSet uses podManagementPolicy Parallel
 # on purpose (render/workload/statefulset.go), so the two new pods appear together and the two
@@ -257,9 +258,10 @@ pool_identity() { # <last surviving ordinal>
     -o jsonpath='{.spec.template.metadata.annotations.neo4j\.com/config-checksum}' 2>/dev/null || echo absent)"
 }
 
-# The system bootstrap gate is derived as a constant for every multi-primary cluster precisely so a
-# resize leaves neo4j.conf alone. If it followed primaries.members instead, the checksum would move
-# and the surviving members would roll while the cluster was being resized.
+# The system bootstrap gate never tracks primaries.members — 3 for every multi-primary cluster unless
+# topology.minimumMembers pins it, and that field is immutable — precisely so a resize leaves
+# neo4j.conf alone. If it followed the pool, the checksum would move and the surviving members would
+# roll while the cluster was being resized.
 assert_pool_untouched() { # <baseline snapshot> <last surviving ordinal> <label>
   local baseline=$1 last=$2 label=$3 now
   now="$(pool_identity "${last}")"

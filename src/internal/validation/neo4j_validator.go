@@ -26,6 +26,9 @@ type Neo4jValidator struct {
 var _ admission.CustomValidator = &Neo4jValidator{}
 
 func (v *Neo4jValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	if err := validateBootstrapGateFitsPool(obj); err != nil {
+		return nil, err
+	}
 	return nil, v.validate(ctx, obj)
 }
 
@@ -35,7 +38,50 @@ func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 	if neo4j, ok := newObj.(*neo4jv1beta1.Neo4j); ok && neo4j.DeletionTimestamp != nil && !neo4j.DeletionTimestamp.IsZero() {
 		return nil, nil
 	}
+	if err := validateMinimumMembersImmutable(oldObj, newObj); err != nil {
+		return nil, err
+	}
 	return nil, v.validate(ctx, newObj)
+}
+
+// validateBootstrapGateFitsPool rejects a gate larger than the pool it must bootstrap. Create-only:
+// a later scale-in may legitimately leave topology.minimumMembers above primaries.members, since the
+// gate is read once at bootstrap. Deliberately not a CEL rule — an always-on rule would also reject
+// that scale-in, and controller-gen has no create-only form.
+func validateBootstrapGateFitsPool(obj runtime.Object) error {
+	n, ok := obj.(*neo4jv1beta1.Neo4j)
+	if !ok {
+		return nil
+	}
+	t := n.Spec.Topology
+	if t.MinimumMembers == nil || t.Primaries == nil {
+		return nil
+	}
+	if *t.MinimumMembers > t.Primaries.Members {
+		return fmt.Errorf("topology.minimumMembers %d cannot exceed topology.primaries.members %d at create (only primaries bootstrap the system database)",
+			*t.MinimumMembers, t.Primaries.Members)
+	}
+	return nil
+}
+
+// validateMinimumMembersImmutable rejects updates that change topology.minimumMembers
+// (CEL also enforces this when the CRD is current; webhook covers enable-webhooks installs).
+func validateMinimumMembersImmutable(oldObj, newObj runtime.Object) error {
+	oldN, okOld := oldObj.(*neo4jv1beta1.Neo4j)
+	newN, okNew := newObj.(*neo4jv1beta1.Neo4j)
+	if !okOld || !okNew {
+		return nil
+	}
+	oldM := oldN.Spec.Topology.MinimumMembers
+	newM := newN.Spec.Topology.MinimumMembers
+	switch {
+	case oldM == nil && newM == nil:
+		return nil
+	case oldM == nil || newM == nil || *oldM != *newM:
+		return fmt.Errorf("topology.minimumMembers cannot change after create (it is read at bootstrap only; scale via topology.primaries.members)")
+	default:
+		return nil
+	}
 }
 
 func (v *Neo4jValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
@@ -104,6 +150,9 @@ func validateScaleCaps(n *neo4jv1beta1.Neo4j) error {
 	t := n.Spec.Topology
 	if t.Primaries != nil && t.Primaries.Members > maxPrimaryMembers {
 		return fmt.Errorf("topology.primaries.members %d exceeds maximum %d (NEO-014)", t.Primaries.Members, maxPrimaryMembers)
+	}
+	if t.MinimumMembers != nil && *t.MinimumMembers > maxPrimaryMembers {
+		return fmt.Errorf("topology.minimumMembers %d exceeds maximum %d (NEO-014)", *t.MinimumMembers, maxPrimaryMembers)
 	}
 	if t.DefaultPrimariesCount != nil && *t.DefaultPrimariesCount > maxPrimaryMembers {
 		return fmt.Errorf("topology.defaultPrimariesCount %d exceeds maximum %d (NEO-014)", *t.DefaultPrimariesCount, maxPrimaryMembers)

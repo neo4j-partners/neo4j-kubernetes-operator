@@ -10,17 +10,27 @@
 
 ---
 
-**Amendment (2026-08-18) — `topology.minimumMembers` withdrawn.** The accepted API below exposes
-`minimumMembers` as an optional formation gate mapping Helm's `minimumClusterSize`. Implementation
-showed the field only offered ways to hurt: left unset it defaulted to `primaries.members`, so every
+**Amendment (2026-08-19) — `topology.minimumMembers` kept, but derived when unset and no longer a
+scale floor.** The accepted API below exposes `minimumMembers` as an optional formation gate mapping
+Helm's `minimumClusterSize`. Implementation found two defects in how it was specified, both fixed
+here rather than by dropping the field.
+
+First, the documented default was `primaries.members`. That made the gate follow the pool, so every
 scale rewrote `dbms.cluster.minimum_initial_system_primaries_count` in `neo4j.conf`, moved the config
-checksum and rolled the primary pool in the middle of a resize; set explicitly it was immutable, and
-pinning it at creation forbade shrinking the cluster later. Nothing was gained by exposing it, because
-the `system` database has no topology of its own and spreads to every enabled primary whatever the
-gate says — a 5-primary cluster gated at 3 was measured with `system` on all 5. The operator now
-derives the value (`1` for a single primary, `3` otherwise), which makes it invariant across scaling.
-Rules TOPO-008, TOPO-009 and TOPO-014 are withdrawn with the field. Everything below stands as the
-record of the June decision.
+checksum and rolled the primary pool in the middle of a resize. Unset now derives `1` for a
+single-primary cluster and `3` beyond, invariant across scaling. This costs no redundancy: the
+`system` database has no topology of its own and spreads to every enabled primary whatever the gate
+says — a 5-primary cluster gated at 3 was measured with `system` on all 5.
+
+Second, `minimumMembers <= primaries.members` was enforced on every update. Combined with
+immutability, a cluster created at 5 could then never shrink, which is an artefact of our validation
+and not a Neo4j constraint — the setting is read at first bootstrap and ignored afterwards. The bound
+is now checked at **create** only (webhook, TOPO-009), the field stays immutable (TOPO-014), and
+formation caps its quorum floor at the pool size so a gate left above the pool is inert. Values are
+any integer in `1..primaries.members`, odd or even, `1` being restricted to single-primary clusters
+(TOPO-008): Neo4j accepts any positive integer and a two-server cluster must be gated at `2`.
+
+Everything below stands as the record of the June decision.
 
 ---
 

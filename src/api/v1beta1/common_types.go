@@ -574,9 +574,10 @@ type TrustReloadSpec struct {
 type TrustSpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// InsecureAdminConnection allows the operator to dial Bolt without TLS
-	// (cleartext admin password on the pod network). Required for cluster formation
-	// when certificates.bolt is unset (NEO-004). Prefer enabling bolt TLS instead.
-	// Emits a Warning event when used.
+	// (cleartext admin password on the pod network). Cluster mode needs one of the two admin Bolt
+	// paths — this flag or certificates.bolt — and admission rejects a Cluster that has neither,
+	// since formation, scale-out and scale-in all run over that session (NEO-004). Prefer enabling
+	// bolt TLS instead. Emits a Warning event when used.
 	InsecureAdminConnection bool                   `json:"insecureAdminConnection,omitempty"`
 	Reload                  *TrustReloadSpec       `json:"reload,omitempty"`
 	CertManager             *CertManagerSpec       `json:"certManager,omitempty"`
@@ -615,11 +616,17 @@ type TopologySpec struct {
 	Mode TopologyMode `json:"mode"`
 	Primaries   *PrimariesSpec   `json:"primaries,omitempty"`
 	Secondaries *SecondariesSpec `json:"secondaries,omitempty"`
-	// The system bootstrap gate (dbms.cluster.minimum_initial_system_primaries_count) is derived,
-	// not configurable: 1 for a single-primary cluster, 3 otherwise. Deriving it from the primary
-	// count would move it on every scale, rewriting neo4j.conf and rolling the pool in the middle
-	// of a resize; a constant 3 costs nothing because the system database spreads to every enabled
-	// primary regardless of the gate. See render.Context.MinimumMembers.
+	// MinimumMembers is the bootstrap gate (dbms.cluster.minimum_initial_system_primaries_count):
+	// how many primaries must discover each other before the system database bootstraps and the
+	// DBMS comes online. Unset derives 1 for a single-primary cluster and 3 otherwise, which is
+	// what almost every deployment wants — set it only to raise the bar, typically to hold
+	// bootstrap until members are spread across availability zones. It buys no redundancy: the
+	// system database spans every member whatever the gate, since server.cluster.system_database_mode
+	// defaults to PRIMARY. Read at first bootstrap only, hence immutable; the value may exceed the
+	// pool after a later scale-in and formation caps its quorum floor accordingly.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=15
+	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
 
 	// DefaultPrimariesCount is the primary count a database gets when it is created without an
 	// explicit TOPOLOGY clause (initial.dbms.default_primaries_count at bootstrap, then

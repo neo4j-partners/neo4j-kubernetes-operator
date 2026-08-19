@@ -97,7 +97,7 @@ topology:
   mode: Standalone
 ```
 
-Forbidden when `Standalone`: `primaries`, `secondaries`.
+Forbidden when `Standalone`: `primaries`, `secondaries`, `minimumMembers`, `defaultPrimariesCount`.
 
 ### Cluster shape
 
@@ -125,6 +125,7 @@ pluginDefinitions:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `primaries.members` | int32 | **yes** (Cluster) | — | Primary members (writers / quorum). Odd when > 0. Maximum 15 (NEO-014). |
+| `minimumMembers` | int32 | no | `1` with one primary, `3` beyond | System bootstrap gate (`NEO-2-011`). **Immutable after create**; bound to `primaries.members` at create only. |
 | `primaries.plugins` | []string | no | `[]` | Plugin ids for every primary pod. **Cluster only** — field absent in Standalone. |
 | `secondaries.analytics` | SecondaryPool | no | — | Analytics / GDS secondary pool. Omit or `members: 0` to disable. |
 | `secondaries.read` | SecondaryPool | no | — | Read-scaling secondary pool. Omit or `members: 0` to disable. |
@@ -135,13 +136,22 @@ pluginDefinitions:
 
 **Removed (do not implement):** `secondaries[]` list with `name` field; `secondaries[].serverRole`.
 
-**No `minimumMembers` field.** The system bootstrap gate
-(`dbms.cluster.minimum_initial_system_primaries_count`, Helm `minimumClusterSize`) is derived by the
-operator: `1` for a single-primary cluster, `3` for any multi-primary one. Exposing it bought nothing
-and cost churn — a gate that follows `primaries.members` changes `neo4j.conf` on every scale and rolls
-the pool mid-resize, while a constant `3` gives up no redundancy because the system database has no
-explicit topology and spreads to every enabled primary (verified: 5 primaries with the gate at 3 end
-up with `system` on all 5). Values above `3` would only delay formation.
+**`minimumMembers`** is the system bootstrap gate
+(`dbms.cluster.minimum_initial_system_primaries_count`, Helm `minimumClusterSize`), optional and
+immutable. Left unset the operator derives `1` for a single-primary cluster and `3` for any
+multi-primary one, deliberately ignoring `primaries.members`: a gate that followed the pool would
+rewrite `neo4j.conf` on every scale and roll the pool mid-resize, while holding at `3` gives up no
+redundancy because the system database has no explicit topology and spreads to every enabled primary
+(verified: 5 primaries with the gate at 3 end up with `system` on all 5). Setting the field therefore
+only raises the bootstrap bar — the use case is holding the DBMS offline until members are spread
+across availability zones. Any integer in `1..primaries.members` is accepted, odd or even (a
+two-server cluster must be gated at `2`), with `1` restricted to single-primary clusters.
+
+Because the gate is read at first bootstrap only, the `<= primaries.members` bound is enforced at
+**create** and not on update: a later scale-in may leave the value above the pool, where it is inert
+and formation caps its own quorum floor at the pool size. A gate created above the pool is fatal
+instead — the webhook rejects it, and installs without webhooks get
+`ClusterFormed=False/BootstrapGateTooHigh` from the operator.
 
 Plugin ids in `primaries.plugins` / `secondaries.analytics.plugins` / `secondaries.read.plugins` are **references only** — resolved via `spec.pluginDefinitions` ([BDR-004](../../decision-records/business/004-neo4j-plugin-topology.md), **Option E — accepted**). Which plugins are allowed where depends on `topology.mode` — see [Plugin placement by mode](#plugin-placement-by-mode).
 

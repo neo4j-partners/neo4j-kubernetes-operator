@@ -82,6 +82,54 @@ func TestSystemBootstrapGateIsScaleInvariant(t *testing.T) {
 	}
 }
 
+// topology.minimumMembers raises the bar above the derived value, and keeps it: the field is
+// immutable, so a later scale-in leaves the rendered gate alone rather than rewriting neo4j.conf.
+func TestUserBootstrapGateOverridesDerivedAndSurvivesScaleIn(t *testing.T) {
+	key := "dbms.cluster.minimum_initial_system_primaries_count"
+	gate := int32(5)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:           neo4jv1beta1.TopologyModeCluster,
+				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 5},
+				MinimumMembers: &gate,
+			},
+		},
+	}
+	before := ConfigChecksum(render.ContextForPool(neo4j, render.PoolPrimary))
+	if data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data; data[key] != "5" {
+		t.Fatalf("%s = %q, want 5 from minimumMembers", key, data[key])
+	}
+	neo4j.Spec.Topology.Primaries.Members = 3
+	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
+	if data[key] != "5" {
+		t.Fatalf("after scale-in %s = %q, want the unchanged 5", key, data[key])
+	}
+	if got := ConfigChecksum(render.ContextForPool(neo4j, render.PoolPrimary)); got != before {
+		t.Fatalf("scale-in changed the config checksum (%s → %s): the pool would roll during the resize", before, got)
+	}
+}
+
+// An even gate is legal: Neo4j accepts any integer >= 1, and a two-server cluster needs 2.
+func TestEvenBootstrapGateIsRendered(t *testing.T) {
+	gate := int32(2)
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:           neo4jv1beta1.TopologyModeCluster,
+				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
+				MinimumMembers: &gate,
+			},
+		},
+	}
+	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
+	if data["dbms.cluster.minimum_initial_system_primaries_count"] != "2" {
+		t.Fatalf("gate = %q, want 2", data["dbms.cluster.minimum_initial_system_primaries_count"])
+	}
+}
+
 // The same cluster scaled 3 → 5 → 3 must render byte-identical config, so the checksum never moves.
 func TestScalingDoesNotChangeConfigChecksum(t *testing.T) {
 	def := int32(3)

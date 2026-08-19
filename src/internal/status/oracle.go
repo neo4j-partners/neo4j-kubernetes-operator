@@ -59,6 +59,7 @@ var ErrorOracle = []Entry{
 	{Condition: ConditionStorageReady, Reason: "PVCPending", Severity: "warn", Summary: "Data PVC not Bound yet (or missing StorageClass)"},
 	{Condition: ConditionReady, Reason: "OfflineMaintenance", Severity: "info", Summary: "spec.maintenance.offlineMode is true"},
 	{Condition: "ClusterFormed", Reason: "BoltUnavailable", Severity: "warn", Summary: "Cannot reach Bolt to form/align the cluster"},
+	{Condition: "ClusterFormed", Reason: "BootstrapGateTooHigh", Severity: "error", Summary: "topology.minimumMembers asks for more primaries than the pool has, so the system database never bootstraps and Bolt never answers"},
 	{Condition: "ClusterFormed", Reason: "ShowServersFailed", Severity: "error", Summary: "SHOW SERVERS failed over Bolt"},
 	{Condition: "ClusterFormed", Reason: "UnsupportedSinglePrimary", Severity: "error", Summary: "Neo4j forbids shrinking to a single primary"},
 	{Condition: "ClusterFormed", Reason: "UnsupportedSystemScaleUp", Severity: "error", Summary: "Cannot grow system DB from 1 primary via ENABLE alone"},

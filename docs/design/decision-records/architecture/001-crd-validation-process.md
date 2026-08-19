@@ -119,7 +119,7 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 
 - **Required fields** conditional on `topology.mode`
 - **Forbidden fields** per mode (Standalone vs Cluster)
-- **Topology** — odd `primaries.members`, unique pool names, `defaultPrimariesCount` bounds *when expressible from spec alone* (the `minimumMembers` bounds this listed were withdrawn with the field — see the [BDR-002](../business/neo4j/002-neo4j-crd-topology.md) amendment)
+- **Topology** — odd `primaries.members`, unique pool names, `minimumMembers` / `defaultPrimariesCount` bounds *when expressible from spec alone*
 - **Plugin placement** — GDS/Bloom forbidden on `primaries.plugins` in Cluster; `licenseSecretRef` required when `gds` referenced
 - **Edition / enum** guards — V1 `enterprise` only, `license.accept` values
 - **TLS structure** — `trust.enabled` + Cluster ⇒ `cluster` cert ref; HTTPS port ⇒ `trust.enabled`
@@ -211,7 +211,7 @@ Full per-rule assignment: [`09-crd-spec/neo4j/validation.md`](../../09-crd-spec/
 
 - Two authoring surfaces (CEL markers + Go webhook) — new rules need an explicit mechanism choice.
 - CEL debugging can be opaque — messages must be clear; keep expressions short.
-- ~~`TOPO-009` (`minimumMembers > total`)~~ — withdrawn: the gate is derived, so it can never exceed the pool.
+- `TOPO-009` (`minimumMembers > primaries.members`) — webhook, and at **create** only: the field is immutable, so an always-on rule would turn a bootstrap bar into a permanent scale floor. CEL cannot express create-only with our controller-gen, hence the webhook.
 
 ### Neutral
 

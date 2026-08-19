@@ -19662,6 +19662,20 @@ spec:
                     maximum: 15
                     minimum: 1
                     type: integer
+                  minimumMembers:
+                    description: |-
+                      MinimumMembers is the bootstrap gate (dbms.cluster.minimum_initial_system_primaries_count):
+                      how many primaries must discover each other before the system database bootstraps and the
+                      DBMS comes online. Unset derives 1 for a single-primary cluster and 3 otherwise, which is
+                      what almost every deployment wants — set it only to raise the bar, typically to hold
+                      bootstrap until members are spread across availability zones. It buys no redundancy: the
+                      system database spans every member whatever the gate, since server.cluster.system_database_mode
+                      defaults to PRIMARY. Read at first bootstrap only, hence immutable; the value may exceed the
+                      pool after a later scale-in and formation caps its quorum floor accordingly.
+                    format: int32
+                    maximum: 15
+                    minimum: 1
+                    type: integer
                   mode:
                     description: TopologyMode is Standalone or Cluster (immutable
                       after create).
@@ -20907,9 +20921,10 @@ spec:
                   insecureAdminConnection:
                     description: |-
                       InsecureAdminConnection allows the operator to dial Bolt without TLS
-                      (cleartext admin password on the pod network). Required for cluster formation
-                      when certificates.bolt is unset (NEO-004). Prefer enabling bolt TLS instead.
-                      Emits a Warning event when used.
+                      (cleartext admin password on the pod network). Cluster mode needs one of the two admin Bolt
+                      paths — this flag or certificates.bolt — and admission rejects a Cluster that has neither,
+                      since formation, scale-out and scale-in all run over that session (NEO-004). Prefer enabling
+                      bolt TLS instead. Emits a Warning event when used.
                     type: boolean
                   reload:
                     description: TrustReloadSpec configures dbms.security.tls_reload_enabled.
@@ -20931,7 +20946,8 @@ spec:
             x-kubernetes-validations:
             - message: members fields are not allowed when mode is Standalone
               rule: self.topology.mode != 'Standalone' || (!has(self.topology.primaries)
-                && !has(self.topology.secondaries) && !has(self.topology.defaultPrimariesCount))
+                && !has(self.topology.secondaries) && !has(self.topology.minimumMembers)
+                && !has(self.topology.defaultPrimariesCount))
             - message: primaries.members is required when mode is Cluster
               rule: self.topology.mode != 'Cluster' || (has(self.topology.primaries)
                 && has(self.topology.primaries.members) && self.topology.primaries.members
@@ -20955,6 +20971,13 @@ spec:
             - message: read pool members must be at least 1 when pool is configured
               rule: '!has(self.topology.secondaries) || !has(self.topology.secondaries.read)
                 || self.topology.secondaries.read.members >= 1'
+            - message: minimumMembers not allowed in Standalone
+              rule: self.topology.mode != 'Standalone' || !has(self.topology.minimumMembers)
+            - message: minimumMembers 1 requires primaries.members 1 (a multi-primary
+                system database cannot bootstrap on a single server)
+              rule: '!has(self.topology.minimumMembers) || self.topology.minimumMembers
+                > 1 || (has(self.topology.primaries) && has(self.topology.primaries.members)
+                && self.topology.primaries.members == 1)'
             - message: defaultPrimariesCount not allowed in Standalone
               rule: self.topology.mode != 'Standalone' || !has(self.topology.defaultPrimariesCount)
             - message: defaultPrimariesCount cannot exceed primaries.members
@@ -21001,6 +21024,13 @@ spec:
               rule: self.topology.mode != 'Standalone' || !has(self.trust) || !has(self.trust.enabled)
                 || self.trust.enabled != true || (has(self.trust.certificates) &&
                 (has(self.trust.certificates.bolt) || has(self.trust.certificates.https)))
+            - message: 'Cluster mode needs an admin Bolt path for the operator: set
+                trust.certificates.bolt with trust.enabled: true (verified TLS) or
+                trust.insecureAdminConnection: true (NEO-004)'
+              rule: self.topology.mode != 'Cluster' || (has(self.trust) && ((has(self.trust.enabled)
+                && self.trust.enabled == true && has(self.trust.certificates) && has(self.trust.certificates.bolt))
+                || (has(self.trust.insecureAdminConnection) && self.trust.insecureAdminConnection
+                == true)))
             - message: multi-cluster not in V1
               rule: '!has(self.connectivity) || !has(self.connectivity.multiCluster)
                 || !has(self.connectivity.multiCluster.enabled) || self.connectivity.multiCluster.enabled
@@ -21351,6 +21381,11 @@ spec:
         x-kubernetes-validations:
         - message: topology.mode cannot change
           rule: self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode
+        - message: topology.minimumMembers cannot change after create (it is read
+            at bootstrap only)
+          rule: self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers))
+            || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers)
+            && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
     served: true
     storage: true
     subresources:

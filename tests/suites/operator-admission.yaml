@@ -24,6 +24,22 @@ cases:
     expect_contains: edition
     cr_name: e2e-bad-edition
 
+  - id: cluster-without-admin-bolt-path
+    comment: TLS-011 — a Cluster with neither trust.certificates.bolt nor trust.insecureAdminConnection is refused at admission, since the operator drives formation and scaling over an admin Bolt session it could never open (NEO-004).
+    fixture: tests/fixtures/neo4j-cluster-no-admin-trust.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: admin Bolt path
+    cr_name: e2e-no-admin-bolt
+
+  - id: min-members-single-on-multi-primary
+    comment: TOPO-008 — minimumMembers 1 on a 3-primary cluster is refused at admission, because a multi-primary system database cannot bootstrap on a single server.
+    fixture: tests/fixtures/neo4j-cluster-bad-minmembers.yaml
+    assert: admission-rejected
+    expect: failure
+    expect_contains: minimumMembers
+    cr_name: e2e-bad-minmembers
+
   - id: multicluster-enabled
     comment: NEO-3-007-MULTI-01 — connectivity.multiCluster.enabled is rejected at admission whatever the topology mode, Standalone included, because the operator acts on nothing.
     fixture: tests/fixtures/neo4j-multicluster-enabled.yaml

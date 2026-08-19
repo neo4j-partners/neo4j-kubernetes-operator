@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -155,6 +156,46 @@ func TestReconcileEnablesAllFreeInOnePass(t *testing.T) {
 		if !ok || !intneo4j.IsEnabled(s.State) {
 			t.Fatalf("%s = %#v", addr, s)
 		}
+	}
+}
+
+// topology.minimumMembers is immutable, so a pool scaled below it must still form: the gate was a
+// bootstrap bar, not a permanent quorum floor.
+func TestReconcileFormsWhenGateExceedsShrunkPool(t *testing.T) {
+	neo4j := testClusterCR(3)
+	neo4j.Spec.Topology.MinimumMembers = ptr(int32(5))
+	if got := systemQuorumFloor(neo4j); got != 3 {
+		t.Fatalf("quorum floor = %d, want the pool size 3", got)
+	}
+
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	replicas := int32(3)
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
+		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
+	admin := &fakeAdmin{servers: []intneo4j.Server{
+		{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+		{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+		{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+	}}
+	r := &Reconciler{
+		Client: c,
+		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			return admin, nil
+		},
+	}
+
+	out := r.Reconcile(t.Context(), neo4j)
+	if out.Err != nil {
+		t.Fatal(out.Err)
+	}
+	cond := meta.FindStatusCondition(neo4j.Status.Conditions, ConditionClusterFormed)
+	if cond == nil || cond.Status != metav1.ConditionTrue {
+		t.Fatalf("ClusterFormed = %#v, want True (a gate above the pool must not wedge formation)", cond)
 	}
 }
 

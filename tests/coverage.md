@@ -27,6 +27,9 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
 - [x] Reject Cluster on Community edition — NEO-2-001-EDT-01 · AC-NEO-LICENSE (edition guard)
 - [x] Reject `connectivity.multiCluster.enabled` in every topology mode — NEO-3-007-MULTI-01 (CEL)
+- [x] Reject a Cluster with no admin Bolt path — neither `trust.certificates.bolt` nor `trust.insecureAdminConnection` — NEO-2-005 · TLS-011 (CEL)
+- [x] Reject `minimumMembers: 1` on a multi-primary cluster (a multi-primary `system` database cannot bootstrap on one server) — NEO-2-002-CSZ-01 · TOPO-008 (CEL)
+- [ ] Reject `minimumMembers > primaries.members` at create — TOPO-009 (webhook only; the harness runs the operator without webhooks, so this case cannot be asserted here)
 - [x] Accept a valid minimal Standalone CR (sanity)
 
 ### `workload-standalone` — NEO-1-001
@@ -52,7 +55,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail 
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
 - [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE
-- [x] Scaling leaves the surviving members alone: identical pod UIDs, no container restarts and an unchanged pool config checksum on both halves, since the system bootstrap gate is a derived constant rather than a function of `primaries.members`
+- [x] Scaling leaves the surviving members alone: identical pod UIDs, no container restarts and an unchanged pool config checksum on both halves, since the system bootstrap gate never follows `primaries.members` — derived when `minimumMembers` is unset, immutable when it is set
 - [x] Scale-in drains Neo4j first: the StatefulSet is held until `status.drainOK` confirms the tail was deallocated and dropped — ADD-02
 - [x] The tail is drained one member at a time, highest ordinal first (operator log order), and the drained ordinals are no longer `Enabled`
 - [x] A database requesting more primaries than the scale-in target does not block the shrink; it is narrowed to the target count and stays online

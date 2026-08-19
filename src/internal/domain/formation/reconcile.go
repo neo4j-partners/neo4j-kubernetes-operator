@@ -53,6 +53,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 	admin, err := connect(ctx, neo4j)
 	if err != nil {
+		// A declared gate above the declared pool is fatal at first bootstrap: Neo4j waits for
+		// primaries that will never appear, so nothing answers on Bolt. Say so instead of the generic
+		// lag message — admission only catches it when webhooks are enabled. Only the explicit field
+		// is tested, since the derived gate cannot outgrow a healthy pool. Harmless once formed: a
+		// running cluster answers and never reaches this branch.
+		gate, pool := neo4j.Spec.Topology.MinimumMembers, neo4j.Spec.Topology.Primaries
+		if gate != nil && pool != nil && *gate > pool.Members {
+			msg := fmt.Sprintf("topology.minimumMembers %d exceeds the %d primaries in the pool: the system database cannot bootstrap, so Bolt never answers (%v)", *gate, pool.Members, err)
+			log.Info("bootstrap gate above pool, requeue", "bootstrapGate", *gate, "primaryPool", pool.Members)
+			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BootstrapGateTooHigh", msg)
+			return shared.Requeue(requeueAfter)
+		}
 		// Cluster not reachable yet (formation / auth lag).
 		log.Info("bolt unavailable, requeue", "err", err.Error())
 		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BoltUnavailable", err.Error())
@@ -238,7 +250,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	// Neo4j's own default to hold — see applyDefaultAllocation below.
 	// Secondary check only: every desired member is already enabled by the time we get here, so this
 	// guards against a pool that reports fewer primaries than the system database needs to exist.
-	min := render.ClientServiceContext(neo4j).MinimumMembers()
+	// The gate is capped by the pool because topology.minimumMembers is immutable and a later
+	// scale-in may leave it above the pool — it was a bootstrap bar, not a permanent floor.
+	min := systemQuorumFloor(neo4j)
 	enabledPrimaries := countEnabledPrimaries(neo4j, servers)
 	if enabledPrimaries < min {
 		log.Info("waiting for primary quorum", "enabledPrimaries", enabledPrimaries, "bootstrapGate", min)
@@ -490,6 +504,17 @@ var errUnsupportedSinglePrimary = fmt.Errorf("Neo4j cannot automatically shrink 
 func isUnsupportedSinglePrimary(err error) bool {
 	return err != nil && (strings.Contains(err.Error(), errUnsupportedSinglePrimary.Error()) ||
 		strings.Contains(err.Error(), "multiple primaries to one primary"))
+}
+
+// systemQuorumFloor is how many enabled primaries formation waits for: the bootstrap gate
+// (topology.minimumMembers or its derived value), capped by what the primary pool can still offer.
+func systemQuorumFloor(neo4j *neo4jv1beta1.Neo4j) int32 {
+	gate := render.ClientServiceContext(neo4j).MinimumMembers()
+	poolP, _ := hostingCapacity(neo4j)
+	if int64(gate) > poolP {
+		return int32(poolP)
+	}
+	return gate
 }
 
 // hostingCapacity returns how many hosts of each kind the pools offer: the primary pool size

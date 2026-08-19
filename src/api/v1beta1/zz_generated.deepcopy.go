@@ -1809,6 +1809,11 @@ func (in *TopologySpec) DeepCopyInto(out *TopologySpec) {
 		*out = new(SecondariesSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.MinimumMembers != nil {
+		in, out := &in.MinimumMembers, &out.MinimumMembers
+		*out = new(int32)
+		**out = **in
+	}
 	if in.DefaultPrimariesCount != nil {
 		in, out := &in.DefaultPrimariesCount, &out.DefaultPrimariesCount
 		*out = new(int32)

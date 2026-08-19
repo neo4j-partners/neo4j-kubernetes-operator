@@ -274,13 +274,17 @@ func (c Context) Neo4jEditionK8SEnv() string {
 }
 
 // MinimumMembers returns the system bootstrap gate
-// (dbms.cluster.minimum_initial_system_primaries_count, Helm minimumClusterSize): 1 for a
-// single-primary cluster, 3 for any multi-primary one. Not derived from primaries.members on
-// purpose — the value would then change on every scale, rewriting neo4j.conf and rolling the pool
-// during a resize. A constant 3 costs no redundancy: the system database has no explicit topology
-// and spreads to every enabled primary, so a 5-primary cluster still ends up with system on all 5.
-// Values above 3 only delay formation, since bootstrap then waits for more members at once.
+// (dbms.cluster.minimum_initial_system_primaries_count, Helm minimumClusterSize):
+// spec.topology.minimumMembers when the user set it, otherwise 1 for a single-primary cluster and
+// 3 for any multi-primary one. The derived value deliberately ignores primaries.members — tracking
+// the pool would move the gate on every scale, rewriting neo4j.conf and rolling the pool during a
+// resize. Staying at 3 costs no redundancy: the system database has no explicit topology and spans
+// every member, so a 5-primary cluster still ends up with system on all 5. A user value only
+// raises the bootstrap bar, since the DBMS then waits for that many primaries to meet.
 func (c Context) MinimumMembers() int32 {
+	if n := c.Neo4j.Spec.Topology.MinimumMembers; n != nil && *n > 0 {
+		return *n
+	}
 	primaries := int32(1)
 	if c.Neo4j.Spec.Topology.Primaries != nil && c.Neo4j.Spec.Topology.Primaries.Members > 0 {
 		primaries = c.Neo4j.Spec.Topology.Primaries.Members
