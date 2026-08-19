@@ -95,14 +95,22 @@ runs:
     #
     # Neither mode hardcodes the list: it comes from tests/suites/*.yaml, so adding a suite
     # file is all it takes to get it into CI.
+    # CLOUD selects the harness config (StorageClass, operator image and pull policy, cluster
+    # naming). It has to be repeated on both steps: a composite action has no place to declare env
+    # once, and run-e2e.sh defaults to local-kind, so omitting it does not fail — it runs the
+    # local-kind config against whatever cluster kubectl points at.
     - name: "Suite: ${{ inputs.suite }}"
       if: inputs.suite != ''
       shell: bash
+      env:
+        CLOUD: ${{ inputs.cloud }}
       run: ./tests/bin/run-e2e.sh "${{ inputs.suite }}"
 
     - name: All suites
       if: inputs.suite == ''
       shell: bash
+      env:
+        CLOUD: ${{ inputs.cloud }}
       run: |
         set -uo pipefail
         fail=0

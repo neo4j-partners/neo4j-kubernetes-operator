@@ -7,6 +7,14 @@ set -euo pipefail
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="$(cd "${BIN_DIR}/.." && pwd)"
 
+# Defaulting is for laptops. In CI it hides a workflow that forgot to pass the target: the run
+# then applies the local-kind config — its StorageClass, its operator image and pull policy — to
+# whatever cluster kubectl happens to point at, and every suite fails on the operator never
+# becoming ready instead of on the missing variable.
+if [[ -n "${CI:-}" && -z "${CLOUD:-}" ]]; then
+  echo "CLOUD must be set explicitly in CI (local-kind or azure-aks)" >&2
+  exit 1
+fi
 CLOUD="${CLOUD:-local-kind}"
 E2E_PROFILE="${E2E_PROFILE:-happy-path}"
 SUITE="${1:-workload-standalone}"
