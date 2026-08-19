@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
-# assert/plugins-gds — BDR-004: GDS assigned via spec.plugins is usable on the running
-# server, with no licence Secret.
+# assert/plugins-gds — BDR-004: GDS is callable with no licenceSecretRef. GDS Community runs
+# licence-free; the CEL rule that once demanded one was removed in 4a12e88, and
+# api/v1beta1/neo4j_validation_test.go asserts it stays removed. This pins the runtime half.
 #
-# GDS Community runs licence-free — the CEL rule that once demanded a licenceSecretRef was
-# removed in 4a12e88 and src/api/v1beta1/neo4j_validation_test.go asserts it stays removed.
-# This case pins that: a GDS CR with pluginDefinitions.gds: {} must boot and serve.
-#
-# Same registration-not-version reasoning as assert/plugins-apoc.
-#
-# Inputs: NEO4J_CR_NAME, NEO4J_NAMESPACE, NEO4J_STS_NAME, NEO4J_AUTH_SECRET
+# SHOW PROCEDURES rather than gds.version() — see assert/plugins-apoc for why.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +25,5 @@ conn_assert_cypher localhost "${password}" \
   "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'gds.' RETURN count(*) > 0 AS ok;" \
   "TRUE" "plugins-gds"
 
-# Diagnostic only — also shows whether the server considers itself Community or Enterprise GDS.
+# Diagnostic: also shows whether the server considers itself Community or Enterprise GDS.
 log "gds.version() -> $(conn_run_cypher localhost "${password}" "RETURN gds.version();" 2>&1 | tail -1)"
-
-log "GDS assigned without a licence Secret is installed and its procedures are callable (BDR-004)"
