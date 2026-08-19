@@ -1,0 +1,127 @@
+name: E2E
+description: Run the e2e harness against one platform, either a single suite or all of them.
+
+# A composite action rather than a reusable workflow, deliberately. A reusable workflow adds a
+# second job level to every check name ("feature-config / local-kind"), and the checks list
+# truncates the left half — which is exactly where the suite name ends up. As an action the
+# matrix leg is a plain job, so the check reads "CI / feature-config" and nothing is elided.
+#
+# Callers keep whatever must outlive a cancelled job — Azure login and teardown — because `if:`
+# inside a composite is evaluated against this action's own status, not the job's, so a cancelled
+# job would skip a teardown step placed here.
+inputs:
+  cloud:
+    description: "Target platform — local-kind or azure-aks"
+    required: true
+  suite:
+    description: "Single suite to run. Empty runs every suite in this one job (the azure path)."
+    required: false
+    default: ""
+  images-artifact:
+    description: "Artifact holding pre-built operator + Neo4j images. Empty builds and pulls in-job."
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v6
+      with:
+        go-version: "1.26.6"
+
+    - uses: docker/setup-buildx-action@v4
+
+    - name: Prepare scripts
+      shell: bash
+      run: find tests -name '*.sh' -exec chmod +x {} +
+
+    # ---------------------------------------------------------------- kind
+    - name: Install kind
+      if: inputs.cloud == 'local-kind'
+      uses: helm/kind-action@v1
+      with:
+        install_only: true
+
+    # One operator build and one Docker Hub pull per RUN, not per suite. Without this the
+    # matrix would rebuild the operator and re-pull Neo4j for every suite; the pull is
+    # rate-limited on CI runners, which is the very thing setup-local-kind.sh pre-loads
+    # to avoid.
+    - name: Restore shared images
+      if: inputs.cloud == 'local-kind' && inputs.images-artifact != ''
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.images-artifact }}
+        path: /tmp/e2e-images
+
+    - name: Load shared images into the daemon
+      if: inputs.cloud == 'local-kind' && inputs.images-artifact != ''
+      shell: bash
+      run: |
+        for tar in /tmp/e2e-images/*.tar; do
+          echo "loading ${tar}"
+          docker load -i "${tar}"
+        done
+        echo "E2E_REUSE_LOCAL_IMAGES=true" >> "${GITHUB_ENV}"
+
+    - name: Create kind cluster and load operator image
+      if: inputs.cloud == 'local-kind'
+      shell: bash
+      run: bash tests/bin/setup-local-kind.sh
+
+    # --------------------------------------------------------------- azure
+    # The caller has already run azure/login and exported the AZURE_* environment, since only it
+    # can read the secrets.
+    - name: Ensure AKS cluster and ACR
+      if: inputs.cloud == 'azure-aks'
+      shell: bash
+      run: |
+        # Creates the resource group, ACR and AKS cluster if missing, then wires kubectl.
+        . tests/azure/ensure-aks.sh
+        echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}" >> "${GITHUB_ENV}"
+        echo "AZURE_ACR_NAME=${AZURE_ACR_NAME}" >> "${GITHUB_ENV}"
+        # Persist the resolved resource group (script default applies when the Variable is unset) for teardown.
+        echo "AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}" >> "${GITHUB_ENV}"
+
+    - name: Push operator image to ACR
+      if: inputs.cloud == 'azure-aks'
+      shell: bash
+      run: bash tests/azure/push-operator-image.sh
+
+    # --------------------------------------------------------------- suites
+    # Two modes. `suite` set: this job runs exactly one suite, and the caller fans the matrix
+    # out — each suite gets its own job, its own log and its own re-run button. `suite` empty:
+    # every suite runs in this one job, which is what the azure target needs because all its
+    # jobs would otherwise race to provision and tear down the same AKS cluster.
+    #
+    # Neither mode hardcodes the list: it comes from tests/suites/*.yaml, so adding a suite
+    # file is all it takes to get it into CI.
+    - name: "Suite: ${{ inputs.suite }}"
+      if: inputs.suite != ''
+      shell: bash
+      run: ./tests/bin/run-e2e.sh "${{ inputs.suite }}"
+
+    - name: All suites
+      if: inputs.suite == ''
+      shell: bash
+      run: |
+        set -uo pipefail
+        fail=0
+        for f in tests/suites/*.yaml; do
+          s="$(basename "${f}" .yaml)"
+          echo "::group::${s}"
+          # Keep going so every suite reports, then fail the step if any did.
+          ./tests/bin/run-e2e.sh "${s}" || fail=1
+          echo "::endgroup::"
+        done
+        exit "${fail}"
+
+    # failure() here means "a step of THIS action failed", which covers the suite steps above —
+    # the only ones that can fail once the platform is up.
+    - name: Upload e2e results (on failure)
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: e2e-results-${{ inputs.cloud }}-${{ inputs.suite || 'all' }}-${{ github.run_id }}
+        path: tests/results/
+        if-no-files-found: warn
+        retention-days: 14

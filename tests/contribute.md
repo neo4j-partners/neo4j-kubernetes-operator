@@ -110,15 +110,18 @@ decision record) stays a `#` comment above the case.
 | `e2e-all-platforms.yml` | 05:00 UTC daily, plus manual dispatch | Unit and audit, then every suite on kind **and** on AKS, in parallel |
 | `azure-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes the Azure CI resource group if it outlived its run |
 
-The first two delegate to the same reusable workflows, so the suite list exists once:
-`unit.yml` and `e2e.yml` (which takes a `cloud` input of `local-kind` or `azure-aks`).
+The first two share `unit.yml` and the `.github/actions/e2e` composite action, which takes a
+`cloud` input of `local-kind` or `azure-aks` and an optional `suite`. CI passes a suite per job so
+each one reports on its own; the scheduled workflow passes none and runs them all in one job per
+platform. Neither hardcodes the list — it comes from `tests/suites/*.yaml`.
 
 The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
 and 06:00 in winter.
 
 ### Leftover Azure resources
 
-`e2e.yml` tears the resource group down with `if: always()`, which also covers a cancelled run.
+`e2e-all-platforms.yml` tears the resource group down with `if: always()`, which also covers a
+cancelled run.
 It cannot cover a **force-cancel** (documented to bypass `always()`) or a lost runner, and an AKS
 cluster bills by the hour. `azure-cleanup.yml` is the net: it deletes the group daily, skipping
 itself while an e2e run is in flight. If a run is stuck holding the cluster, dispatch it with
