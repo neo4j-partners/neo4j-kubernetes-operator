@@ -90,7 +90,10 @@ We will implement **Option A** for V1; revisit Option B if in-pod bootstrap prov
 1. Wait pod Ready + Bolt port open on new member.
 2. `ENABLE SERVER` / equivalent for server name derived from [ADR-005](005-render-conventions.md) pod name.
 3. Poll `SHOW SERVERS` until `Enabled` + `Available`.
-4. Set `ClusterFormed` / clear `Reconciling` when `minimumMembers` satisfied.
+4. Set `ClusterFormed` / clear `Reconciling` once every desired member is enabled and the system
+   bootstrap gate is satisfied — `topology.minimumMembers`, or 1/3 derived when unset, capped by the
+   primary pool since the immutable field may sit above it after a scale-in
+   (see the [BDR-002](../business/neo4j/002-neo4j-crd-topology.md) amendment).
 
 **Scale in** ([BDR-009](../business/neo4j/009-scale-pool-ordinal-semantics.md)):
 

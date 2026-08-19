@@ -53,6 +53,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 	admin, err := connect(ctx, neo4j)
 	if err != nil {
+		// A declared gate above the declared pool is fatal at first bootstrap: Neo4j waits for
+		// primaries that will never appear, so nothing answers on Bolt. Say so instead of the generic
+		// lag message — admission only catches it when webhooks are enabled. Only the explicit field
+		// is tested, since the derived gate cannot outgrow a healthy pool. Harmless once formed: a
+		// running cluster answers and never reaches this branch.
+		gate, pool := neo4j.Spec.Topology.MinimumMembers, neo4j.Spec.Topology.Primaries
+		if gate != nil && pool != nil && *gate > pool.Members {
+			msg := fmt.Sprintf("topology.minimumMembers %d exceeds the %d primaries in the pool: the system database cannot bootstrap, so Bolt never answers (%v)", *gate, pool.Members, err)
+			log.Info("bootstrap gate above pool, requeue", "bootstrapGate", *gate, "primaryPool", pool.Members)
+			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BootstrapGateTooHigh", msg)
+			return shared.Requeue(requeueAfter)
+		}
 		// Cluster not reachable yet (formation / auth lag).
 		log.Info("bolt unavailable, requeue", "err", err.Error())
 		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BoltUnavailable", err.Error())
@@ -104,7 +116,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	// Shrink DB topologies to fit remaining servers before DEALLOCATE (else Neo4j ArgumentError).
 	if scalingIn {
-		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j, true)
+		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j)
 		if err != nil {
 			if isUnsupportedSinglePrimary(err) {
 				log.Error(err, "scale-in blocked", "reason", "UnsupportedSinglePrimary")
@@ -232,35 +244,33 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Requeue(5 * time.Minute)
 	}
 
-	// Align standard DB topologies to defaultPrimariesCount + secondary pools.
-	if !scalingIn {
-		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j, false)
-		if err != nil {
-			if isUnsupportedSinglePrimary(err) {
-				setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "UnsupportedSinglePrimary", err.Error())
-				return shared.Requeue(5 * time.Minute)
-			}
-			return adminErrResult(neo4j, err)
-		}
-		if !ok {
-			log.Info("aligning database topologies")
-			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "AligningTopology",
-				"altering database topologies to match primary/secondary pool sizes")
-			return shared.Requeue(requeueAfter)
-		}
-	}
-
-	min := render.ClientServiceContext(neo4j).MinimumMembers()
+	// No steady-state topology pass here on purpose: existing databases are left exactly as their
+	// owner declared them, and the scale-in path above is the only place the operator rewrites one.
+	// topology.defaultPrimariesCount only decides what a database gets when it is created, which is
+	// Neo4j's own default to hold — see applyDefaultAllocation below.
+	// Secondary check only: every desired member is already enabled by the time we get here, so this
+	// guards against a pool that reports fewer primaries than the system database needs to exist.
+	// The gate is capped by the pool because topology.minimumMembers is immutable and a later
+	// scale-in may leave it above the pool — it was a bootstrap bar, not a permanent floor.
+	min := systemQuorumFloor(neo4j)
 	enabledPrimaries := countEnabledPrimaries(neo4j, servers)
 	if enabledPrimaries < min {
-		log.Info("waiting for primary quorum", "enabledPrimaries", enabledPrimaries, "minimumMembers", min)
+		log.Info("waiting for primary quorum", "enabledPrimaries", enabledPrimaries, "bootstrapGate", min)
 		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "WaitingQuorum",
-			fmt.Sprintf("enabled primaries %d < minimumMembers %d", enabledPrimaries, min))
+			fmt.Sprintf("enabled primaries %d, the system database needs %d", enabledPrimaries, min))
 		return shared.Requeue(requeueAfter)
 	}
 
-	log.Info("cluster formed", "enabledPrimaries", enabledPrimaries, "minimumMembers", min)
+	log.Info("cluster formed", "enabledPrimaries", enabledPrimaries, "bootstrapGate", min)
 	setCondition(neo4j, ConditionClusterFormed, metav1.ConditionTrue, "Formed", "All desired servers enabled")
+
+	// Only past quorum: the creation defaults live in the system database, which needs a leader.
+	// A failure is retried rather than surfaced — it leaves the DBMS defaults on their previous
+	// value and unforms nothing.
+	if err := r.applyDefaultAllocation(ctx, admin, neo4j); err != nil {
+		log.Info("creation defaults not applied, will retry", "err", err.Error())
+		return shared.Requeue(requeueAfter)
+	}
 	return shared.Done()
 }
 
@@ -394,13 +404,13 @@ func (r *Reconciler) ensureDropped(ctx context.Context, admin intneo4j.Admin, se
 	return false, nil
 }
 
-// ensureDatabaseTopologies aligns standard databases to topology.defaultPrimariesCount
-// (not primaries.members) and analytics+read pool sizes for secondaries.
-// On scale-in, only shrinks primaries when they exceed the remaining primary pool
-// (so defaultPrimariesCount=1 does not block draining servers after a manual ALTER to 3).
-// Skips system/composite.
-func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1beta1.Neo4j, scalingIn bool) (bool, error) {
-	targetP, targetS, poolP := desiredHostingCapacity(neo4j)
+// ensureDatabaseTopologies caps standard database topologies to what the pools still hold.
+// Scale-in only: Neo4j refuses to DEALLOCATE a server while a database claims more hosts than
+// remain, so a topology wider than the target pool has to come down first. It never widens a
+// topology and never pushes one toward topology.defaultPrimariesCount — a topology chosen by
+// its owner is theirs (TOPO-006). Skips system/composite.
+func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1beta1.Neo4j) (bool, error) {
+	poolP, poolS := hostingCapacity(neo4j)
 	dbs, err := admin.ShowDatabaseTopologies(ctx)
 	if err != nil {
 		return false, err
@@ -414,27 +424,20 @@ func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4
 		if typ == "system" || typ == "composite" {
 			continue
 		}
-		wantP, wantS := targetP, targetS
-		if scalingIn {
-			// Fit remaining servers only — do not force toward defaultPrimariesCount.
-			if db.RequestedPrimaries > poolP {
-				wantP = poolP
-			} else {
-				wantP = db.RequestedPrimaries
-			}
-			if db.RequestedSecondaries > targetS {
-				wantS = targetS
-			} else {
-				wantS = db.RequestedSecondaries
-			}
+		wantP, wantS := db.RequestedPrimaries, db.RequestedSecondaries
+		if wantP > poolP {
+			wantP = poolP
+		}
+		if wantS > poolS {
+			wantS = poolS
 		}
 		if wantP < 1 {
 			wantP = 1
 		}
 		// Neo4j forbids ALTER DATABASE from multiple primaries → 1 primary (Raft quorum).
 		if wantP < 2 && db.RequestedPrimaries > 1 {
-			return false, fmt.Errorf("%w: database %q has %d primaries; set topology.defaultPrimariesCount >= 3 before shrinking hosting, or recreate the database manually (dbms.cluster.recreateDatabase)",
-				errUnsupportedSinglePrimary, db.Name, db.RequestedPrimaries)
+			return false, fmt.Errorf("%w: database %q has %d primaries and the scale-in would leave %d primary server(s); keep topology.primaries.members >= 3, or drop and recreate the database yourself (dbms.cluster.recreateDatabase)",
+				errUnsupportedSinglePrimary, db.Name, db.RequestedPrimaries, poolP)
 		}
 		if wantP != db.RequestedPrimaries || wantS != db.RequestedSecondaries {
 			if err := admin.SetDatabaseTopology(ctx, db.Name, wantP, wantS); err != nil {
@@ -443,6 +446,7 @@ func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4
 				}
 				return false, fmt.Errorf("ALTER DATABASE %s SET TOPOLOGY: %w", db.Name, err)
 			}
+			r.reportTopologyResized(ctx, neo4j, db, wantP, wantS)
 			pending = true
 			continue
 		}
@@ -453,6 +457,48 @@ func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4
 	return !pending, nil
 }
 
+// applyDefaultAllocation puts topology.defaultPrimariesCount (and the secondary pool total) in
+// charge of databases created from now on, by writing the DBMS-wide defaults Neo4j applies to a
+// CREATE DATABASE with no TOPOLOGY clause. The matching initial.dbms.default_*_count keys only
+// seed those defaults at DBMS initialisation, so without this call editing the field would be a
+// silent no-op on a running cluster. Existing databases are untouched.
+func (r *Reconciler) applyDefaultAllocation(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1beta1.Neo4j) error {
+	poolP, poolS := hostingCapacity(neo4j)
+	primaries := int64(render.ClientServiceContext(neo4j).DefaultPrimariesCount())
+	if primaries > poolP {
+		primaries = poolP
+	}
+	if primaries < 1 {
+		primaries = 1
+	}
+	if err := admin.SetDefaultAllocationNumbers(ctx, primaries, poolS); err != nil {
+		return fmt.Errorf("dbms.setDefaultAllocationNumbers(%d, %d): %w", primaries, poolS, err)
+	}
+	ctrllog.FromContext(ctx).V(1).Info("default allocation numbers applied",
+		"primaries", primaries, "secondaries", poolS)
+	return nil
+}
+
+// reportTopologyResized makes an operator-decided ALTER DATABASE visible. A scale-in caps the
+// databases hosted on the pool, which rewrites a topology its owner set, so it is never silent:
+// one operator log entry and one Warning Event naming the database, both counts before and after,
+// and why. Reason comes from the oracle (ReasonDatabaseTopologyResized).
+func (r *Reconciler) reportTopologyResized(ctx context.Context, neo4j *neo4jv1beta1.Neo4j,
+	db intneo4j.DatabaseTopology, toPrimaries, toSecondaries int64) {
+	const cause = "the scale-in leaves fewer servers than the topology claimed"
+	ctrllog.FromContext(ctx).Info("database topology resized",
+		"database", db.Name,
+		"fromPrimaries", db.RequestedPrimaries, "fromSecondaries", db.RequestedSecondaries,
+		"toPrimaries", toPrimaries, "toSecondaries", toSecondaries,
+		"cause", cause)
+	if r.Recorder == nil {
+		return
+	}
+	r.Recorder.Eventf(neo4j, corev1.EventTypeWarning, ReasonDatabaseTopologyResized,
+		"database %q: requested topology rewritten from %d primaries / %d secondaries to %d / %d — %s",
+		db.Name, db.RequestedPrimaries, db.RequestedSecondaries, toPrimaries, toSecondaries, cause)
+}
+
 var errUnsupportedSinglePrimary = fmt.Errorf("Neo4j cannot automatically shrink a multi-primary database to one primary")
 
 func isUnsupportedSinglePrimary(err error) bool {
@@ -460,24 +506,27 @@ func isUnsupportedSinglePrimary(err error) bool {
 		strings.Contains(err.Error(), "multiple primaries to one primary"))
 }
 
-// desiredHostingCapacity returns steady-state ALTER DATABASE targets for standard DBs.
-// Primaries follow topology.defaultPrimariesCount (default 1), clamped to the primary
-// pool size. Secondaries follow analytics+read pool members. poolP is the primary
-// pool ceiling used on scale-in to fit remaining servers.
-func desiredHostingCapacity(neo4j *neo4jv1beta1.Neo4j) (primaries, secondaries, poolP int64) {
+// systemQuorumFloor is how many enabled primaries formation waits for: the bootstrap gate
+// (topology.minimumMembers or its derived value), capped by what the primary pool can still offer.
+func systemQuorumFloor(neo4j *neo4jv1beta1.Neo4j) int32 {
+	gate := render.ClientServiceContext(neo4j).MinimumMembers()
+	poolP, _ := hostingCapacity(neo4j)
+	if int64(gate) > poolP {
+		return int32(poolP)
+	}
+	return gate
+}
+
+// hostingCapacity returns how many hosts of each kind the pools offer: the primary pool size
+// (capped while system is still single-primary) and the analytics+read total. It is a ceiling for
+// database topologies, never a target.
+func hostingCapacity(neo4j *neo4jv1beta1.Neo4j) (poolP, poolS int64) {
 	poolP = int64(render.ContextForPool(neo4j, render.PoolPrimary).PoolReplicas())
 	if cap, ok := PrimaryReplicasCap(neo4j); ok && int64(cap) < poolP {
 		poolP = int64(cap)
 	}
-	primaries = int64(render.ClientServiceContext(neo4j).DefaultPrimariesCount())
-	if primaries > poolP {
-		primaries = poolP
-	}
-	if primaries < 1 {
-		primaries = 1
-	}
 	for _, pool := range []render.PoolID{render.PoolAnalytics, render.PoolRead} {
-		secondaries += int64(render.ContextForPool(neo4j, pool).PoolReplicas())
+		poolS += int64(render.ContextForPool(neo4j, pool).PoolReplicas())
 	}
 	return
 }

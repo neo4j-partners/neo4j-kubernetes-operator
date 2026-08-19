@@ -21,7 +21,10 @@ spec:
       read:
         members: 1
         plugins: [apoc]
-    minimumMembers: 3
+  # Cluster mode requires one admin Bolt path for the operator (TLS-011): plaintext opt-in here,
+  # or trust.certificates.bolt with trust.enabled: true for verified TLS.
+  trust:
+    insecureAdminConnection: true
   pluginDefinitions:
     apoc: {}
     gds:

@@ -159,6 +159,18 @@ func (a *driverAdmin) SetDatabaseTopology(ctx context.Context, name string, prim
 	return err
 }
 
+// SetDefaultAllocationNumbers writes the DBMS-wide creation defaults. initial.dbms.default_*_count
+// only seeds them when the DBMS is initialised, so this procedure is the only way to move them on
+// a running cluster.
+func (a *driverAdmin) SetDefaultAllocationNumbers(ctx context.Context, primaries, secondaries int64) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"CALL dbms.setDefaultAllocationNumbers($primaries, $secondaries)",
+		map[string]any{"primaries": primaries, "secondaries": secondaries},
+		neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
 func asInt64(rec *neo4j.Record, key string) (int64, bool) {
 	v, ok := rec.Get(key)
 	if !ok || v == nil {

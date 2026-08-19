@@ -11,6 +11,9 @@ spec:
     mode: Cluster
     primaries:
       members: 1
+  # Present only so the edition is the single reason this CR is refused (TLS-011).
+  trust:
+    insecureAdminConnection: true
   storage:
     volumes:
       data:

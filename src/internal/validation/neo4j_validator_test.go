@@ -48,27 +48,6 @@ func TestValidateNeo4jRejectsPrivileged(t *testing.T) {
 	}
 }
 
-func TestValidateMinimumMembersImmutable(t *testing.T) {
-	oldN := validStandalone()
-	oldN.Spec.Topology = neo4jv1beta1.TopologySpec{
-		Mode:           neo4jv1beta1.TopologyModeCluster,
-		Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
-		MinimumMembers: ptr(int32(3)),
-	}
-	newN := oldN.DeepCopy()
-	*newN.Spec.Topology.MinimumMembers = 1
-	err := validateMinimumMembersImmutable(oldN, newN)
-	if err == nil || !strings.Contains(err.Error(), "minimumMembers cannot change") {
-		t.Fatalf("got %v", err)
-	}
-	newSame := oldN.DeepCopy()
-	if err := validateMinimumMembersImmutable(oldN, newSame); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func ptr[T any](v T) *T { return &v }
-
 func TestValidateUpdateSkipsSpecOnDelete(t *testing.T) {
 	n := validStandalone()
 	n.Spec.Security = &neo4jv1beta1.SecuritySpec{
@@ -79,6 +58,47 @@ func TestValidateUpdateSkipsSpecOnDelete(t *testing.T) {
 	v := &Neo4jValidator{}
 	if _, err := v.ValidateUpdate(t.Context(), n, n); err != nil {
 		t.Fatalf("deleting object must skip spec validation, got %v", err)
+	}
+}
+
+// The gate is read once at bootstrap, so it cannot move afterwards.
+func TestValidateMinimumMembersImmutable(t *testing.T) {
+	v := &Neo4jValidator{}
+	three, five := int32(3), int32(5)
+	old := validStandalone()
+	old.Spec.Topology = neo4jv1beta1.TopologySpec{
+		Mode:           neo4jv1beta1.TopologyModeCluster,
+		Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 5},
+		MinimumMembers: &five,
+	}
+	updated := old.DeepCopy()
+	updated.Spec.Topology.MinimumMembers = &three
+	if _, err := v.ValidateUpdate(t.Context(), old, updated); err == nil ||
+		!strings.Contains(err.Error(), "minimumMembers cannot change") {
+		t.Fatalf("got %v", err)
+	}
+
+	// Scaling the pool below the immutable gate is allowed: the value is inert after bootstrap.
+	shrunk := old.DeepCopy()
+	shrunk.Spec.Topology.Primaries.Members = 3
+	if _, err := v.ValidateUpdate(t.Context(), old, shrunk); err != nil {
+		t.Fatalf("scale-in below the gate must pass, got %v", err)
+	}
+}
+
+// At create the gate must fit the pool it has to bootstrap, or the DBMS never comes online.
+func TestValidateCreateRejectsGateAbovePool(t *testing.T) {
+	v := &Neo4jValidator{}
+	five := int32(5)
+	n := validStandalone()
+	n.Spec.Topology = neo4jv1beta1.TopologySpec{
+		Mode:           neo4jv1beta1.TopologyModeCluster,
+		Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
+		MinimumMembers: &five,
+	}
+	if _, err := v.ValidateCreate(t.Context(), n); err == nil ||
+		!strings.Contains(err.Error(), "cannot exceed topology.primaries.members") {
+		t.Fatalf("got %v", err)
 	}
 }
 

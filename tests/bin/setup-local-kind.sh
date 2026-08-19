@@ -37,10 +37,22 @@ else
   NEO4J_IMAGE="neo4j:${NEO4J_VERSION}"
 fi
 log "Pre-loading Neo4j image ${NEO4J_IMAGE} into kind (avoids per-pod Docker Hub pulls)"
-if docker pull "${NEO4J_IMAGE}"; then
-  kind load docker-image "${NEO4J_IMAGE}" --name "${KIND_CLUSTER_NAME}"
+# Both steps have to be inside the condition for this to stay best-effort under `set -e`. The load
+# is the one that fails in practice: on Docker Desktop for Apple silicon, containerd refuses the
+# multi-arch manifest with "content digest ... not found". Falling back to a single-platform archive
+# fixes that; if even that fails, the run continues and pods pull from Docker Hub on demand.
+if ! docker pull "${NEO4J_IMAGE}" ||
+  kind load docker-image "${NEO4J_IMAGE}" --name "${KIND_CLUSTER_NAME}"; then
+  :
+elif archive="$(mktemp -t neo4j-image-XXXXXX.tar)" &&
+  docker save --platform "linux/$(docker version --format '{{.Server.Arch}}')" \
+    -o "${archive}" "${NEO4J_IMAGE}" &&
+  kind load image-archive "${archive}" --name "${KIND_CLUSTER_NAME}"; then
+  log "Loaded ${NEO4J_IMAGE} as a single-platform archive"
+  rm -f "${archive}"
 else
-  log "WARN: could not pre-pull ${NEO4J_IMAGE}; Neo4j pods will pull it on demand"
+  rm -f "${archive:-}"
+  log "WARN: could not pre-load ${NEO4J_IMAGE}; Neo4j pods will pull it on demand"
 fi
 
 log "kind cluster ready"

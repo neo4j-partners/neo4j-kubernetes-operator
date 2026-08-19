@@ -12,7 +12,6 @@ spec:
     primaries:
       members: 3
       plugins: ["apoc"]
-    minimumMembers: 3
   features:
     backup:
       enabled: true

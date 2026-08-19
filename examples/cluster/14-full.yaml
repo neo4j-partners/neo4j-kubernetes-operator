@@ -29,6 +29,8 @@ spec:
       read:
         members: 1
         plugins: [apoc]
+    # Immutable bootstrap gate: hold the DBMS offline until all 3 primaries have met. Omit it and
+    # the operator derives the same 3; a single-primary cluster derives 1.
     minimumMembers: 3
   pluginDefinitions:
     apoc: {}

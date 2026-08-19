@@ -71,8 +71,12 @@ is required too, since a database with no data volume is not useful.
 | `spec.topology.secondaries.analytics.plugins` | []string | — | The pool for `gds` and `bloom` |
 | `spec.topology.secondaries.read.members` | int32 | — | Minimum 1 when the pool is declared; maximum 25; target of `kubectl scale` |
 | `spec.topology.secondaries.read.plugins` | []string | — | `gds` and `bloom` are rejected here |
-| `spec.topology.minimumMembers` | int32 | `primaries.members` | Primaries required to form the `system` database. Maximum 15. Cannot exceed `primaries.members`. **Immutable** |
-| `spec.topology.defaultPrimariesCount` | int32 | `1` | Primaries hosting each standard database. Minimum 1, maximum 15, cannot exceed `primaries.members` |
+| `spec.topology.defaultPrimariesCount` | int32 | `1` | Primaries given to a standard database created without an explicit topology. Existing databases are not rewritten to match. Minimum 1, maximum 15, cannot exceed `primaries.members` |
+| `spec.topology.minimumMembers` | int32 | `1` with one primary, `3` otherwise | Primaries that must meet before the `system` database bootstraps. Minimum 1, maximum 15; odd and even values both accepted; `1` only on a single-primary cluster. At creation it cannot exceed `primaries.members`. **Immutable** — a later scale-in may leave it above the pool, which is harmless |
+
+The derived default ignores the pool size on purpose, so scaling never rewrites `neo4j.conf`. Raising
+the gate is the only reason to set the field. See
+[Clustering](../03-neo4j/02-clustering.md#the-system-bootstrap-gate).
 
 Standalone mode rejects `primaries`, `secondaries`, `minimumMembers` and `defaultPrimariesCount`.
 Cluster mode requires `primaries.members`, and `secondaries` requires `primaries.members` to be set
@@ -176,6 +180,7 @@ See [Connectivity](../03-neo4j/04-connectivity.md).
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `spec.trust.enabled` | bool | `false` | |
+| `spec.trust.insecureAdminConnection` | bool | `false` | Lets the operator open its admin Bolt session in cleartext. **Cluster mode requires either this or `trust.certificates.bolt` with `trust.enabled: true`**, and a Cluster with neither is rejected at admission |
 | `spec.trust.certificates.{bolt,https,cluster}.privateKey` | object | — | `secretName`, optional `subPath` |
 | `spec.trust.certificates.{bolt,https,cluster}.publicCertificate` | object | — | `secretName`, optional `subPath` |
 | `spec.trust.certificates.*.secretName` | string | — | A Secret holding both key and certificate |
@@ -288,7 +293,7 @@ decisions cannot be forged from outside. Do not write them.
 | Change | Result |
 |--------|--------|
 | `spec.topology.mode` | Rejected — create a new resource instead |
-| `spec.topology.minimumMembers` | Rejected after creation |
+| `spec.topology.minimumMembers` | Rejected after creation — Neo4j reads it at first bootstrap only |
 | Cluster primaries from several to exactly 1 | Held with reason `UnsupportedSinglePrimary` |
 | Cluster primaries from 1 upwards | Held with reason `UnsupportedSystemScaleUp` |
 | `whenDeleted: Delete` patched after creation | Accepted but not armed; the pinned value stands |

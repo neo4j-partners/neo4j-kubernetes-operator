@@ -32,12 +32,14 @@ See [Operator logs](../04-troubleshooting/02-operator-logs.md).
 | Error | SecretNotDelegated | error | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
 | Error | AuthSecretInvalid | error | Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop |
 | — (Event only) | DuplicateEntry | warn | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
+| — (Event only) | DatabaseTopologyResized | warn | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | Ready | ReconcileError | error | Ready cleared because reconcile failed |
 | Reconciling | Failed | error | Reconciling stopped after failure |
 | TLSReady | SecretMissing | error | Required TLS/auth Secret is missing or incomplete |
 | StorageReady | PVCPending | warn | Data PVC not Bound yet (or missing StorageClass) |
 | Ready | OfflineMaintenance | info | `spec.maintenance.offlineMode` is true |
 | ClusterFormed | BoltUnavailable | warn | Cannot reach Bolt to form/align the cluster |
+| ClusterFormed | BootstrapGateTooHigh | error | `topology.minimumMembers` asks for more primaries than the pool has, so the system database never bootstraps and Bolt never answers |
 | ClusterFormed | ShowServersFailed | error | `SHOW SERVERS` failed over Bolt |
 | ClusterFormed | UnsupportedSinglePrimary | error | Neo4j forbids shrinking to a single primary |
 | ClusterFormed | UnsupportedSystemScaleUp | error | Cannot grow system DB from 1 primary via ENABLE alone |
@@ -69,10 +71,32 @@ Two directions matter. `kept (user)` means your value won as intended, over an o
 `dbms.security.procedures.*`) or a plugin definition. `kept (operator-injected)` means the key
 is operator-owned and your setting was discarded — cluster discovery, routing and advertised
 addresses (`dbms.cluster.*`, `dbms.routing.*`, `dbms.kubernetes.*`, `server.*.advertised_address`,
-`initial.dbms.default_primaries_count`), TLS policies derived from `spec.trust`
+`initial.dbms.default_primaries_count`, `initial.dbms.default_secondaries_count`), TLS policies derived from `spec.trust`
 (`dbms.ssl.policy.*`, `server.bolt.tls_level`), log config paths (`server.logs.*.config`) and the
 listener toggles not already refused by CEL (`server.backup.enabled`,
 `server.metrics.prometheus.*`). Set those through the dedicated spec fields instead.
+
+## DatabaseTopologyResized
+
+A scale-in is the one occasion where the operator rewrites a database topology: a database cannot
+keep asking for five primaries on a pool that now holds three, and Neo4j refuses to release the
+servers while it does. So the operator runs `ALTER DATABASE ... SET TOPOLOGY` first — on topologies
+you may have set yourself. That rewrite is deliberate, but never silent, so each one produces an
+Event and a matching operator log entry:
+
+```text
+Warning  DatabaseTopologyResized  database "orders": requested topology rewritten from
+5 primaries / 0 secondaries to 3 / 0 — the scale-in leaves fewer servers than the topology claimed
+```
+
+Nothing else triggers it. Growing a pool, or setting `topology.defaultPrimariesCount` to something
+wider than an existing database, leaves that database exactly as it is; the field only decides what
+the *next* database gets. Databases are only ever narrowed to the number of servers the pool still
+holds, never further, and the `system` and composite databases are never touched.
+
+A database with several primaries cannot be narrowed to exactly one — Neo4j forbids it — which
+surfaces as `UnsupportedSinglePrimary` instead. See
+[Clustering](../03-neo4j/02-clustering.md) for the scale-in sequence around it.
 
 ## AuthSecretInvalid
 

@@ -1,5 +1,7 @@
 # Purpose: Scale a cluster by editing topology.primaries.members (here: 5).
-#   Leave topology.minimumMembers unchanged (immutable after create; usually 3).
+#   That field is the only one to touch: the bootstrap gate (topology.minimumMembers, left unset
+#   here so the operator derives it) is immutable, so scaling never rewrites neo4j.conf nor rolls
+#   the pool.
 #
 # The operator automates Neo4j membership (NEO-3-011-SRV-01 / BDR-009):
 #   Scale-out — STS grows, then ENABLE SERVER (PRIMARY) for each new Free member.
@@ -39,7 +41,6 @@ spec:
     mode: Cluster
     primaries:
       members: 5
-    minimumMembers: 3
   storage:
     volumeClaimRetention:
       whenScaled: Delete # required for elastic scale-in then scale-out (NEO-007)

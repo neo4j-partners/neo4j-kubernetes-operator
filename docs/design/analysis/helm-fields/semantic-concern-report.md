@@ -56,7 +56,7 @@
 
 - Map Helm `analytics.type: secondary` + GDS config → `secondaries.analytics`
 - Map read scaling (no GDS on primaries) → `secondaries.read`
-- Map `minimumClusterSize: 3` → `primaries.members: 3`, `minimumMembers: 3`
+- Map `minimumClusterSize: 3` → `primaries.members: 3`; `minimumMembers` carries the gate itself but can be omitted, since the operator derives 1/3 (see the BDR-002 amendment)
 - Map `minimumClusterSize: 1` + analytics primary → `primaries.members: 1` + `secondaries.analytics`
 - Document **multi-release → single STS** as intentional operator divergence in `11-helm-mapping.md`
 

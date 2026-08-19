@@ -574,9 +574,10 @@ type TrustReloadSpec struct {
 type TrustSpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// InsecureAdminConnection allows the operator to dial Bolt without TLS
-	// (cleartext admin password on the pod network). Required for cluster formation
-	// when certificates.bolt is unset (NEO-004). Prefer enabling bolt TLS instead.
-	// Emits a Warning event when used.
+	// (cleartext admin password on the pod network). Cluster mode needs one of the two admin Bolt
+	// paths — this flag or certificates.bolt — and admission rejects a Cluster that has neither,
+	// since formation, scale-out and scale-in all run over that session (NEO-004). Prefer enabling
+	// bolt TLS instead. Emits a Warning event when used.
 	InsecureAdminConnection bool                   `json:"insecureAdminConnection,omitempty"`
 	Reload                  *TrustReloadSpec       `json:"reload,omitempty"`
 	CertManager             *CertManagerSpec       `json:"certManager,omitempty"`
@@ -615,19 +616,25 @@ type TopologySpec struct {
 	Mode TopologyMode `json:"mode"`
 	Primaries   *PrimariesSpec   `json:"primaries,omitempty"`
 	Secondaries *SecondariesSpec `json:"secondaries,omitempty"`
-	// MinimumMembers is the system formation gate (enabled primaries before Ready)
-	// and maps to dbms.cluster.minimum_initial_system_primaries_count.
-	// Defaults to primaries.members when unset. Immutable after create — changing it
-	// rewrites neo4j.conf and rolls the StatefulSet; scale via primaries.members only.
+	// MinimumMembers is the bootstrap gate (dbms.cluster.minimum_initial_system_primaries_count):
+	// how many primaries must discover each other before the system database bootstraps and the
+	// DBMS comes online. Unset derives 1 for a single-primary cluster and 3 otherwise, which is
+	// what almost every deployment wants — set it only to raise the bar, typically to hold
+	// bootstrap until members are spread across availability zones. It buys no redundancy: the
+	// system database spans every member whatever the gate, since server.cluster.system_database_mode
+	// defaults to PRIMARY. Read at first bootstrap only, hence immutable; the value may exceed the
+	// pool after a later scale-in and formation caps its quorum floor accordingly.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=15
 	MinimumMembers *int32 `json:"minimumMembers,omitempty"`
-	// DefaultPrimariesCount is the desired primary count for standard databases
-	// (bootstrap initial.dbms.default_primaries_count and ongoing ALTER DATABASE
-	// SET TOPOLOGY). Defaults to 1 when unset. Clamped to primaries.members.
-	// System Raft size stays on minimumMembers. Cypher CREATE DATABASE can still
-	// request an explicit TOPOLOGY; the operator does not force every DB onto
-	// all primary servers.
+
+	// DefaultPrimariesCount is the primary count a database gets when it is created without an
+	// explicit TOPOLOGY clause (initial.dbms.default_primaries_count at bootstrap, then
+	// dbms.setDefaultAllocationNumbers). Defaults to 1 when unset, clamped to primaries.members.
+	// It is a default, not a constraint: a topology set with CREATE/ALTER DATABASE is never
+	// rewritten to follow this field. Only a scale-in caps a database, and only down to the
+	// primaries the pool still has. The system database is not affected: it always spans every
+	// enabled primary.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=15
 	DefaultPrimariesCount *int32 `json:"defaultPrimariesCount,omitempty"`

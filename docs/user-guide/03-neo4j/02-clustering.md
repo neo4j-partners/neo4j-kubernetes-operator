@@ -78,15 +78,53 @@ Because addresses are derived from Kubernetes names, listen and advertised addre
 operator-owned: setting them in `spec.config.neo4j` is either rejected or overridden. See
 [Operator-owned settings](../05-reference/operator-owned-config.md).
 
+## The operator needs an admin session
+
+Everything the operator does to a cluster it does through an authenticated Bolt session as `neo4j` on
+the `system` database: `ENABLE SERVER` when a member joins, `SHOW SERVERS` and `SHOW DATABASES` to
+observe, `DEALLOCATE`/`DROP SERVER` when one leaves. Without that session there is no formation, no
+scale-out and no scale-in — Neo4j would still start, but the resource would sit on
+`ClusterFormed=False` and the operator would drive nothing.
+
+So a Cluster has to declare how the operator may open it, one of two ways. Either give Bolt real
+certificates, which is what production should do:
+
+```yaml
+spec:
+  trust:
+    enabled: true
+    certificates:
+      bolt:
+        privateKey:
+          secretName: prod-bolt-key
+        publicCertificate:
+          secretName: prod-bolt-cert
+```
+
+Or accept an unencrypted session on the pod network, which is what every example in `examples/cluster`
+does:
+
+```yaml
+spec:
+  trust:
+    insecureAdminConnection: true
+```
+
+A Cluster with neither is **rejected at admission** — it could never be operated, so there is no
+point letting it start. Be clear-eyed about what the flag does and does not do: it does not open
+anything on the network. If Bolt has no TLS, the port is already in cleartext for every client. The
+flag is your acknowledgement that the operator's own admin password will travel that way too. It has
+no effect in Standalone mode, where the operator opens no admin session at all.
+
 ## Formation and readiness
 
 Two separate numbers decide how a cluster comes up, and conflating them is the most common
-misunderstanding.
+misunderstanding. Only one of them is yours to set.
 
-| Field | Controls | Default |
-|-------|----------|---------|
-| `topology.minimumMembers` | How many primaries must be enabled before the `system` database can form. Maps to Neo4j's minimum initial system primaries count | `primaries.members` |
-| `topology.defaultPrimariesCount` | How many primaries host each **standard** database, at bootstrap and afterwards | `1` |
+| Number | Controls | Value |
+|--------|----------|-------|
+| `topology.minimumMembers` | How many primaries must meet before the `system` database can form | Derived when unset: `1` for a single primary, `3` for any larger cluster |
+| `topology.defaultPrimariesCount` | How many primaries host a **standard** database created without an explicit topology | `1` unless you set it |
 
 So a three-primary cluster forms its `system` database across all three, but by default the `neo4j`
 database lives on **one** of them. That is intentional: it keeps write latency low and lets you
@@ -101,6 +139,13 @@ spec:
     defaultPrimariesCount: 3
 ```
 
+`defaultPrimariesCount` is a default, not a rule imposed on your databases. Once a database exists,
+its topology belongs to whoever set it: `CREATE DATABASE orders TOPOLOGY 3 PRIMARIES` or a later
+`ALTER DATABASE` stands, whatever the field says, and the operator will not pull it back. The one
+exception is a scale-in, described under [Scaling members](#scaling-members). Editing the field
+changes what the databases you create *next* get, and applies to a running cluster — the operator
+carries the new value to Neo4j itself.
+
 Check what you actually got:
 
 ```bash
@@ -109,9 +154,54 @@ kubectl exec -n default prod-primary-0 -- \
   "SHOW DATABASES YIELD name, currentPrimariesCount, requestedPrimariesCount"
 ```
 
-`minimumMembers` cannot exceed `primaries.members`, and it is **immutable after creation**. Changing
-it would rewrite `neo4j.conf` on every primary and roll the whole pool, which can strand members
-waiting for a system snapshot. Scale with `primaries.members` instead.
+### The system bootstrap gate
+
+Neo4j needs a minimum number of primaries to have found each other before it will create the
+`system` database. Leave `topology.minimumMembers` unset and the operator picks that number for you:
+`1` for a single-primary cluster, `3` for every larger one, whatever the pool size.
+
+The derived value deliberately ignores `primaries.members`, for two reasons. First, the gate is
+written into `neo4j.conf`, so a value that followed the pool would change the file every time you
+scaled, rolling the whole primary pool in the middle of a resize — precisely when you least want
+members restarting. Held at `3`, scaling `3 → 5 → 3` leaves the configuration untouched and no pod
+restarts.
+
+Second, a lower gate costs no redundancy. The `system` database has no topology of its own; it
+spreads to every primary the operator enables. A five-primary cluster gated at `3` forms as soon as
+three members meet, then extends `system` onto the fourth and fifth as they are enabled — you can
+see it yourself, `SHOW DATABASES` reports `system` with a `currentPrimariesCount` of 5.
+
+Set the field only to **raise** the bar, when you would rather have the DBMS refuse to come online
+than form on too few members — typically to hold bootstrap until members are spread across
+availability zones:
+
+```yaml
+spec:
+  topology:
+    primaries:
+      members: 5
+    minimumMembers: 5
+```
+
+Any value from `1` to `primaries.members` is accepted, even ones — Neo4j takes any integer here, and
+a two-server cluster has to be gated at `2`. A gate of `1` is only valid on a single-primary cluster,
+since a multi-primary `system` database cannot bootstrap on one server.
+
+The field is **immutable**: Neo4j reads it at first bootstrap and ignores it afterwards, so changing
+it would rewrite `neo4j.conf` and roll every member for no effect. It follows that a later scale-in
+may leave the gate above the pool — `minimumMembers: 5` with `primaries.members` back to `3` is
+accepted and harmless, and the operator caps its own quorum check accordingly.
+
+The one way to get this wrong is to gate a cluster above the pool **at creation**. Neo4j then waits
+for primaries that will never exist, the `system` database is never created, and nothing answers on
+Bolt. The API server refuses it when the validating webhook is enabled; otherwise the operator says
+so on the resource:
+
+```
+ClusterFormed=False (BootstrapGateTooHigh)
+  topology.minimumMembers 5 exceeds the 3 primaries in the pool: the system database cannot
+  bootstrap, so Bolt never answers
+```
 
 Cluster formation is slow compared to a single instance — several minutes is normal, more on large
 stores — and the default probes are sized for that. Follow progress on the resource:
@@ -149,25 +239,63 @@ spec:
       members: 5
 ```
 
-Do **not** touch `minimumMembers`, for the reason given above.
+That is the only field to touch. Nothing else about the cluster shape needs to follow, and in
+particular the [system bootstrap gate](#the-system-bootstrap-gate) stays where it is, so a scale does
+not rewrite `neo4j.conf` and does not restart the members that are staying.
 
-**Scaling out** grows the StatefulSet, waits for the new members to appear as Free servers, runs
-`ENABLE SERVER` for each, then adjusts database topologies so allocation matches the new pool sizes.
+A shrink must keep room for `defaultPrimariesCount`: the API server refuses any update where
+`defaultPrimariesCount` would end up above `primaries.members`, since no standard database could be
+allocated on that pool. Lower both in one patch when you shrink past the current default:
 
-**Scaling in** works in reverse, and does so before any pod disappears: it shrinks database
-topologies to fit the smaller pool, deallocates and drops the tail servers, and only then allows the
-StatefulSet to shrink. That ordering is what prevents a member from vanishing while it still holds
-the only copy of a database. The gate lives in operator-owned status (`status.drainOK`), so it
-cannot be forced from an annotation on the resource. Watch `ServersPendingDrain` while it runs.
+```bash
+kubectl patch neo4j prod -n default --type merge \
+  -p '{"spec":{"topology":{"primaries":{"members":3},"defaultPrimariesCount":3}}}'
+```
+
+**Scaling out** grows the StatefulSet, waits for the new members to appear as Free servers and runs
+`ENABLE SERVER` for each. Existing databases stay where they are: the new servers are available
+hosts, and it is up to you to use them with `ALTER DATABASE ... SET TOPOLOGY` on the databases that
+should spread wider.
+
+**Scaling in** works in reverse, and does so before any pod disappears: it narrows the database
+topologies that no longer fit the smaller pool, deallocates and drops the tail servers — one at a
+time, highest ordinal first — and only then allows the StatefulSet to shrink. That ordering is what
+prevents a member from vanishing while it still holds the only copy of a database. The gate lives in
+operator-owned status (`status.drainOK`), so it cannot be forced from an annotation on the resource.
+Watch `ServersPendingDrain` while it runs.
+
+That narrowing is the only case where the operator rewrites a topology you own, and it goes no
+further than the number of servers left in the pool. It is not quiet either: every rewrite emits a
+`DatabaseTopologyResized` Warning Event naming the database and both counts, plus a matching
+operator log entry. After a scale-in, read them back with:
+
+```bash
+kubectl describe neo4j prod -n default | grep DatabaseTopologyResized
+```
+
+See [Errors and conditions](../05-reference/errors.md#databasetopologyresized).
 
 Example: [`examples/cluster/13-scale-out.yaml`](../../../examples/cluster/13-scale-out.yaml).
 
 ### Primary counts that cannot change
 
 Neo4j cannot move a database from several primaries down to exactly one, because that dissolves the
-Raft group. The operator detects the attempt and refuses instead of draining, reporting reason
-`UnsupportedSinglePrimary` on `ClusterFormed` and `ServersPendingDrain`. Keep `primaries.members` at
-three or more, or recreate the deployment at the size you want.
+Raft group. This is a database-level rule, not a consequence of the cluster size: on a five-server
+cluster with room to spare, narrowing a three-primary database to one is still refused, by Neo4j
+itself rather than by the operator.
+
+```text
+51N49: cannot alter database `orders`.
+  51N41: Reason: Can't go from multiple primaries to one primary.
+```
+
+Widening is not restricted — `ALTER DATABASE orders SET TOPOLOGY 3 PRIMARIES` on a single-primary
+database is routine. To go the other way, use `CALL dbms.cluster.recreateDatabase('orders', ...)`,
+or drop and recreate the database.
+
+A scale-in that would force that narrowing is therefore refused too: the operator stops before
+draining and reports reason `UnsupportedSinglePrimary` on `ClusterFormed` and `ServersPendingDrain`.
+Keep `primaries.members` at three or more, or recreate the deployment at the size you want.
 
 The mirror case also holds: a cluster created with `primaries.members: 1` — a legitimate shape for a
 lab or an analytics-only deployment — cannot grow its primaries later. That attempt reports

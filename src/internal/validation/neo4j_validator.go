@@ -26,6 +26,9 @@ type Neo4jValidator struct {
 var _ admission.CustomValidator = &Neo4jValidator{}
 
 func (v *Neo4jValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	if err := validateBootstrapGateFitsPool(obj); err != nil {
+		return nil, err
+	}
 	return nil, v.validate(ctx, obj)
 }
 
@@ -39,6 +42,26 @@ func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 		return nil, err
 	}
 	return nil, v.validate(ctx, newObj)
+}
+
+// validateBootstrapGateFitsPool rejects a gate larger than the pool it must bootstrap. Create-only:
+// a later scale-in may legitimately leave topology.minimumMembers above primaries.members, since the
+// gate is read once at bootstrap. Deliberately not a CEL rule — an always-on rule would also reject
+// that scale-in, and controller-gen has no create-only form.
+func validateBootstrapGateFitsPool(obj runtime.Object) error {
+	n, ok := obj.(*neo4jv1beta1.Neo4j)
+	if !ok {
+		return nil
+	}
+	t := n.Spec.Topology
+	if t.MinimumMembers == nil || t.Primaries == nil {
+		return nil
+	}
+	if *t.MinimumMembers > t.Primaries.Members {
+		return fmt.Errorf("topology.minimumMembers %d cannot exceed topology.primaries.members %d at create (only primaries bootstrap the system database)",
+			*t.MinimumMembers, t.Primaries.Members)
+	}
+	return nil
 }
 
 // validateMinimumMembersImmutable rejects updates that change topology.minimumMembers
@@ -55,7 +78,7 @@ func validateMinimumMembersImmutable(oldObj, newObj runtime.Object) error {
 	case oldM == nil && newM == nil:
 		return nil
 	case oldM == nil || newM == nil || *oldM != *newM:
-		return fmt.Errorf("topology.minimumMembers cannot change after create (scale via topology.primaries.members)")
+		return fmt.Errorf("topology.minimumMembers cannot change after create (it is read at bootstrap only; scale via topology.primaries.members)")
 	default:
 		return nil
 	}

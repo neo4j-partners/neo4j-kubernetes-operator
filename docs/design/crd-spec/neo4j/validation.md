@@ -19,20 +19,20 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| TOPO-001 | `mode: Standalone` → `primaries`, `secondaries`, `minimumMembers` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
+| TOPO-001 | `mode: Standalone` → `primaries`, `secondaries` absent | Error | CEL | `members` fields not allowed when `mode` is `Standalone` |
 | TOPO-002 | `mode: Cluster` → `primaries.members` required (≥ 1) | Error | CEL | `primaries.members` is required when `mode` is `Cluster` |
 | TOPO-003 | `secondaries` without `primaries` | Error | CEL | `primaries.members` must be set before secondaries |
 | TOPO-004 | `secondaries` when `mode: Standalone` | Error | CEL | Secondaries require `mode: Cluster` |
 | TOPO-005 | `gds` or `bloom` in `secondaries.read.plugins` | Error | CEL | GDS/Bloom must use secondaries.analytics pool |
 | TOPO-006 | `primaries.members` even and > 0 | Error | CEL | Primary count must be odd for quorum |
 | TOPO-007 | `secondaries.analytics` or `secondaries.read` present with `members < 1` | Error | CEL | pool members must be at least 1 when pool is configured |
-| TOPO-008 | `minimumMembers` when `mode: Standalone` | Error | CEL | `minimumMembers` not allowed in Standalone |
-| TOPO-009 | `minimumMembers > primaries.members` | Error | CEL | `minimumMembers` cannot exceed `primaries.members` (only primaries form the system quorum; secondaries analytics/read do not count) |
+| TOPO-008 | `minimumMembers` when `mode: Standalone`, or `minimumMembers: 1` on a multi-primary cluster | Error | CEL | `minimumMembers` not allowed in Standalone / `minimumMembers 1 requires primaries.members 1` |
+| TOPO-009 | `minimumMembers > primaries.members` **at create** | Error | Webhook (+ reconciler fallback) | `minimumMembers cannot exceed primaries.members at create`. Not CEL: an always-on rule would also reject a legitimate scale-in below the immutable gate, and controller-gen has no create-only form. Without webhooks the operator reports `ClusterFormed=False/BootstrapGateTooHigh` |
 | TOPO-010 | Primary scale-in below quorum / unsafe pool scale-in | Error | Webhook | Scale-in would break primary quorum or remove members before drain completes |
 | TOPO-011 | STS scale-down gated by `status.drainOK` + matching `drainOKGeneration` (not CR annotations) | — | Reconciler | (ADD-02; forgeable `neo4j.com/drain-ok` ignored) |
 | TOPO-012 | Scale primaries from 1→N or N→1 | Error | Reconciler | `UnsupportedSystemScaleUp` / `UnsupportedSinglePrimary` — deploy at final size |
 | TOPO-013 | `mode` immutable | Error | CEL | `topology.mode` cannot change |
-| TOPO-014 | `minimumMembers` immutable after create | Error | CEL (+ webhook) | `topology.minimumMembers cannot change after create` — scale via `primaries.members` only |
+| TOPO-014 | `minimumMembers` immutable after create | Error | CEL (+ webhook) | `topology.minimumMembers cannot change after create` — Neo4j reads it at first bootstrap only |
 | TOPO-015 | `primaries.members` ≤ 15; each secondary pool ≤ 25 | Error | CEL + Webhook | exceeds maximum (NEO-014) |
 
 ### CEL sketches (topology)
@@ -42,7 +42,7 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
 - rule: |
     !(self.topology.mode == 'Standalone') ||
     !has(self.topology.primaries) && !has(self.topology.secondaries) &&
-    !has(self.topology.minimumMembers)
+    !has(self.topology.minimumMembers) && !has(self.topology.defaultPrimariesCount)
   message: members fields are not allowed when mode is Standalone
 
 # TOPO-002 — Cluster requires primaries.members
@@ -66,20 +66,23 @@ Per-pool StatefulSets ([BDR-009](../../decision-records/business/009-scale-pool-
     self.topology.primaries.members % 2 == 1
   message: primary count must be odd for quorum
 
-# TOPO-009 — minimumMembers cannot exceed primaries (only primaries form the system quorum)
+# TOPO-008 — a gate of 1 only makes sense on a single-primary cluster
 - rule: |
-    !has(self.topology.minimumMembers) || !has(self.topology.primaries) ||
-    !has(self.topology.primaries.members) ||
-    self.topology.minimumMembers <= self.topology.primaries.members
-  message: minimumMembers cannot exceed primaries.members (only primaries can form system quorum)
+    !has(self.topology.minimumMembers) || self.topology.minimumMembers > 1 || (
+      has(self.topology.primaries) && has(self.topology.primaries.members) &&
+      self.topology.primaries.members == 1
+    )
+  message: minimumMembers 1 requires primaries.members 1
 
-# TOPO-014 — minimumMembers immutable (bootstrap / system formation size only)
+# TOPO-014 — minimumMembers immutable (read at first bootstrap only)
 - rule: |
     self == oldSelf ||
     ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) ||
      (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) &&
       self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
   message: topology.minimumMembers cannot change after create
+
+# TOPO-009 — no CEL sketch on purpose: the create-only bound lives in the webhook.
 ```
 
 ---
@@ -214,6 +217,7 @@ Plugin **assignment** is `[]string` catalog ids on `spec.plugins` (Standalone), 
 | TLS-008 | `trustedCerts.sources` allow only `secret` or `configMap` (no `serviceAccountToken` / `downwardAPI` / `clusterTrustBundle`) | Error | Webhook / Reconciler | projection type not allowed (NEO-005) |
 | TLS-009 | `trustedCerts.sources[].secret|configMap.items` required | Error | Webhook / Reconciler | items is required (NEO-005) |
 | TLS-010 | BYO TLS Secrets must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
+| TLS-011 | `mode: Cluster` → `trust.certificates.bolt` (with `trust.enabled`) **or** `trust.insecureAdminConnection: true` | Error | CEL | `Cluster mode needs an admin Bolt path for the operator` (NEO-004). Formation, scale-out and scale-in all run over that session, so a Cluster with neither is inoperable — fail at admission rather than settle on `ClusterFormed=False/BoltUnavailable` |
 
 ---
 
@@ -353,7 +357,6 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 | `secondaries.analytics.plugins` | `[]` |
 | `secondaries.read.plugins` | `[]` |
 | `spec.plugins` | `[]` (Standalone) |
-| `topology.minimumMembers` | `primaries.members` (Cluster) |
 | `image.pullPolicy` | `IfNotPresent` |
 | `auth.generatePassword` | `true` if no `passwordSecretRef` |
 | `trust.enabled` | `false` |
@@ -369,6 +372,9 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 | `maintenance.offlineMode` | `false` |
 
 **Standalone**: mutating webhook must **not** inject `primaries` / `secondaries` / `minimumMembers`.
+
+`minimumMembers` is not defaulted into the resource either: leaving it absent is what lets the
+rendered gate stay `1`/`3` without pinning a value the user could never change afterwards.
 
 **Cluster**: mutating webhook may inject empty `pluginDefinitions` entries for referenced `apoc` ids only when `pluginDefinitions` is present but key missing (optional convenience — prefer explicit `{}`).
 
@@ -399,6 +405,6 @@ Port-owned keys: **CFG-LISTENER-001..004** above. Feature coherence: **CFG-FEAT-
 | ADR-001 | Mechanism choice (CEL / webhook / reconciler) |
 | BDR-004 Option E | TOPO-001…013, PLG-001…013 |
 | `03-variant_matrix` Edition | EDT-001…006 |
-| `NEO-2-005` TLS | TLS-001…007 |
+| `NEO-2-005` TLS | TLS-001…007, TLS-011 |
 | `NEO-2-006` Storage | STO-001…005 |
 | `NEO-2-011` Scale | TOPO-009, TOPO-010 |

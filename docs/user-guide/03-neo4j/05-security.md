@@ -191,6 +191,25 @@ which is why a cluster cannot opt out of the `cluster` policy.
 
 Serving HTTPS also needs the listener enabled — see [Connectivity](04-connectivity.md#listeners).
 
+### The operator's own admin session
+
+In Cluster mode the operator drives membership over an authenticated Bolt session as `neo4j`, so it
+needs to know how it may open one. Give Bolt certificates as above, or state explicitly that the
+session may run unencrypted:
+
+```yaml
+spec:
+  trust:
+    insecureAdminConnection: true
+```
+
+A Cluster declaring neither is rejected at admission, since the operator could form nothing. The flag
+opens no port and weakens no protocol — without `bolt` TLS the connector is already in the clear for
+every client — it only records that you accept the operator's password travelling that way, and it
+raises a Warning event each time the session is opened. In Standalone mode the operator opens no admin
+session, so the field does nothing. See
+[Clustering](02-clustering.md#the-operator-needs-an-admin-session).
+
 ### Client certificates
 
 Require or accept client certificates, and supply the CA bundle used to validate them:

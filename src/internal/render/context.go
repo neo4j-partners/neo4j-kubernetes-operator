@@ -273,29 +273,49 @@ func (c Context) Neo4jEditionK8SEnv() string {
 	return strings.ToUpper(string(c.Neo4j.Spec.Edition)) + "_K8S"
 }
 
-// MinimumMembers returns the cluster formation gate (Helm minimumClusterSize).
-// Defaults to primaries.members when unset. Never exceeds primaries.members —
-// only the primary pool hosts system as PRIMARY; asking for more hangs formation.
+// MinimumMembers returns the system bootstrap gate
+// (dbms.cluster.minimum_initial_system_primaries_count, Helm minimumClusterSize):
+// spec.topology.minimumMembers when the user set it, otherwise 1 for a single-primary cluster and
+// 3 for any multi-primary one. The derived value deliberately ignores primaries.members — tracking
+// the pool would move the gate on every scale, rewriting neo4j.conf and rolling the pool during a
+// resize. Staying at 3 costs no redundancy: the system database has no explicit topology and spans
+// every member, so a 5-primary cluster still ends up with system on all 5. A user value only
+// raises the bootstrap bar, since the DBMS then waits for that many primaries to meet.
 func (c Context) MinimumMembers() int32 {
+	if n := c.Neo4j.Spec.Topology.MinimumMembers; n != nil && *n > 0 {
+		return *n
+	}
 	primaries := int32(1)
 	if c.Neo4j.Spec.Topology.Primaries != nil && c.Neo4j.Spec.Topology.Primaries.Members > 0 {
 		primaries = c.Neo4j.Spec.Topology.Primaries.Members
 	}
-	min := primaries
-	if c.Neo4j.Spec.Topology.MinimumMembers != nil {
-		min = *c.Neo4j.Spec.Topology.MinimumMembers
-	}
-	if min > primaries {
-		return primaries
-	}
-	if min < 1 {
+	if primaries < 3 {
 		return 1
 	}
-	return min
+	return 3
+}
+
+// DefaultSecondariesCount returns initial.dbms.default_secondaries_count: the analytics+read
+// members, so a database created without a TOPOLOGY clause is readable from the secondary pools
+// the CR asked for. Existing databases are never rewritten to follow it.
+func (c Context) DefaultSecondariesCount() int32 {
+	var n int32
+	sec := c.Neo4j.Spec.Topology.Secondaries
+	if sec == nil {
+		return 0
+	}
+	if sec.Analytics != nil && sec.Analytics.Members > 0 {
+		n += sec.Analytics.Members
+	}
+	if sec.Read != nil && sec.Read.Members > 0 {
+		n += sec.Read.Members
+	}
+	return n
 }
 
 // DefaultPrimariesCount returns initial.dbms.default_primaries_count.
-// Defaults to 1 when unset (decoupled from minimumMembers / HA formation size).
+// Defaults to 1 when unset, independently of the system bootstrap gate: how many primaries must meet
+// to create the system database says nothing about how wide a user database should be.
 // Clamped to [1, primaries.members].
 func (c Context) DefaultPrimariesCount() int32 {
 	primaries := int32(1)
