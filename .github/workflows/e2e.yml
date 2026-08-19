@@ -43,8 +43,11 @@ permissions:
   contents: read
 
 jobs:
+  # The UI shows "<caller job> / <this job>", so this half names the platform only — the caller
+  # already names what is being run (the suite under ci.yml). Repeating the suite here is what
+  # produced "E2E (feature-config) / feature-config", long enough to be elided in the checks list.
   e2e:
-    name: ${{ inputs.suite && inputs.suite || inputs.cloud }}
+    name: ${{ inputs.cloud }}
     runs-on: ubuntu-latest
     env:
       CLOUD: ${{ inputs.cloud }}
@@ -82,7 +85,7 @@ jobs:
       # to avoid.
       - name: Restore shared images
         if: inputs.cloud == 'local-kind' && inputs.images_artifact != ''
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.images_artifact }}
           path: /tmp/e2e-images

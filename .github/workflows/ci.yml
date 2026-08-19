@@ -51,7 +51,7 @@ jobs:
       # version moves.
       - name: Cache the Neo4j image
         id: neo4j-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/e2e-images/neo4j.tar
           key: neo4j-image-${{ steps.neo4j.outputs.image }}
@@ -95,7 +95,9 @@ jobs:
           echo "Suites: ${list}"
 
   e2e-local-kind:
-    name: E2E
+    # Naming the leg after the suite keeps the check readable ("feature-config / local-kind") and
+    # drops the "(feature-config)" GitHub appends when every leg carries the same static name.
+    name: ${{ matrix.suite }}
     needs: [unit, images, suites]
     strategy:
       # Every suite reports independently; one red suite must not hide the rest.

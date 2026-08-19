@@ -31,14 +31,14 @@ jobs:
   # they start together as soon as unit passes. Gating on unit avoids creating
   # an AKS cluster for code that does not compile.
   e2e-local-kind:
-    name: kind
+    name: all suites
     needs: unit
     uses: ./.github/workflows/e2e.yml
     with:
       cloud: local-kind
 
   e2e-azure-aks:
-    name: Azure
+    name: all suites
     needs: unit
     uses: ./.github/workflows/e2e.yml
     with:
