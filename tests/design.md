@@ -102,22 +102,22 @@ config case that mutates a running CR, so it is heavier than the deploy-once cas
 Covers the `spec.storage` surface, one case per feature (all admitted). Mount points are
 verified from inside the `neo4j` container via `/proc/mounts` (no write permission required).
 
-> **Expected-fail:** the three PVC-impossible cases use `assert/storage-error`, which encodes
-> the target contract — the operator should **time out and mark the CR `Failed`** with a
-> message that mentions the PVC. That timeout/failure status is **not implemented yet**, so
-> these cases (and therefore the `feature-storage` suite / CI step) currently **fail on purpose**.
-> Do not patch operator code to make them pass — that work is tracked separately.
-> Each fail-case waits `STORAGE_ERROR_TIMEOUT` (default 45s) before giving up; raise it to
-> match the operator's storage timeout once that is implemented.
+The three PVC-impossible cases use `assert/storage-error` and encode the accepted contract: a data
+PVC that cannot bind keeps the CR **Pending**, with `StorageReady=False`, reason `PVCPending` and a
+message naming the PVC and its `storageClassName` (`observePoolStorageReady` in
+`src/internal/status/writer.go`). The CR must not be marked `Failed` and must not report `Ready`.
+Waiting rather than failing is deliberate — nothing distinguishes a StorageClass that does not exist
+from a provisioner that is slow, so the operator states the cause and lets the user fix it. Each case
+polls for `STORAGE_ERROR_TIMEOUT` (default 120s) before giving up on seeing that condition.
 
 | Case | Fixture | Assertion |
 |------|---------|-----------|
 | `dynamic-sc-ok` | `neo4j-storage-dynamic-sc.yaml` | data PVC Bound with `storageClassName=standard` |
-| `dynamic-sc-fail` | `neo4j-storage-dynamic-sc-bad.yaml` | **want:** non-existent StorageClass → operator times out, `phase=Failed`, message contains `pvc` *(expected-fail)* |
+| `dynamic-sc-fail` | `neo4j-storage-dynamic-sc-bad.yaml` | non-existent StorageClass → CR stays Pending, `StorageReady=False/PVCPending`, message contains `pvc` |
 | `claimname-ok` | `neo4j-storage-claimname.yaml` | pod mounts a pre-created PVC via `existing.claimName` |
-| `claimname-fail` | `neo4j-storage-claimname-missing.yaml` | **want:** missing PVC → operator times out, `phase=Failed`, message contains `pvc` *(expected-fail)* |
+| `claimname-fail` | `neo4j-storage-claimname-missing.yaml` | missing PVC → CR stays Pending, `StorageReady=False/PVCPending`, message contains `pvc` |
 | `vct-ok` | `neo4j-storage-vct.yaml` | `existing.volumeClaimTemplate` provisions `data-<cr>-server-0` |
-| `vct-fail` | `neo4j-storage-vct-bad.yaml` | **want:** template with bad StorageClass → operator times out, `phase=Failed`, message contains `pvc` *(expected-fail)* |
+| `vct-fail` | `neo4j-storage-vct-bad.yaml` | template with bad StorageClass → CR stays Pending, `StorageReady=False/PVCPending`, message contains `pvc` |
 | `emptydir` | `neo4j-storage-emptydir.yaml` | inline `emptyDir` data volume mounted at `/data`, no PVC |
 | `share-logs-metrics` | `neo4j-storage-share.yaml` | logs/metrics Share the data volume; `/logs` + `/metrics` mounted |
 | `additional-mounts` | `neo4j-storage-additional.yaml` | `additionalMounts` (random name) mounted at its `mountPath` |

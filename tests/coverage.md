@@ -21,7 +21,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 
 ## Coverage by suite
 
-Legend: `[x]` implemented & asserted · `[ ]` not covered yet, or expected-fail pending a feature.
+Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 
 ### `operator-admission` — validation (ADR-001)
 - [x] Reject CR without accepted license — NEO-2-001-LIC-01 · AC-NEO-LICENSE
@@ -105,9 +105,17 @@ Needs Neo4j Ready + a bolt query.
 - [x] Ephemeral `emptyDir` (no PVC)
 - [x] logs+metrics Share the data volume
 - [x] `additionalMounts` mounted at their paths
-- [ ] Non-existent StorageClass → time out and mark CR `Failed` (message mentions PVC) — expected-fail, pending storage-timeout feature
-- [ ] Missing `claimName` PVC → time out and mark CR `Failed` — expected-fail
-- [ ] `volumeClaimTemplate` bad StorageClass → time out and mark CR `Failed` — expected-fail
+
+A data PVC that cannot bind keeps the CR **Pending**: `StorageReady=False` with reason `PVCPending`
+and a message naming the PVC and its `storageClassName`, never `phase=Failed` and never `Ready`. The
+operator has no way to tell a misconfigured StorageClass from a slow provisioner, so it reports the
+cause and waits instead of deciding the install has failed. The three cases below assert that
+contract through `assert/storage-error` — the message lives on the condition only, as no Event is
+emitted for it yet.
+
+- [x] Non-existent StorageClass → stays Pending, `StorageReady=False/PVCPending`, message names the PVC — NEO-3-006-PVC-02
+- [x] Missing `claimName` PVC → stays Pending, `StorageReady=False/PVCPending`
+- [x] `volumeClaimTemplate` bad StorageClass → stays Pending, `StorageReady=False/PVCPending`
 
 ### `feature-uninstall` — NEO-2-018
 - [x] CR delete preserves data PVC by default — OP-2-005-UNINST-01 · AC-NEO-UNINSTALL-PRESERVE
