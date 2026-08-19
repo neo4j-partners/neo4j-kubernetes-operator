@@ -1,0 +1,87 @@
+name: Release
+
+# Cut a public release from a semver tag (e.g. v0.1.0):
+#   - operator image  -> ghcr.io/<owner>/neo4j-kubernetes-operator:<version>
+#   - Helm chart (OCI) -> oci://ghcr.io/<owner>/charts/neo4j-operator:<version>
+#   - GitHub Release   -> the 1.5 MB CRD as a downloadable asset (server-side apply)
+#
+# The CRD is deliberately NOT bundled in the chart: at ~1.5 MB it flirts with the
+# etcd object limit, and Helm never upgrades crds/ on `helm upgrade`. Shipping it
+# as a release asset keeps a stable URL for `kubectl apply --server-side`.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to cut (e.g. v0.1.0)"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the GitHub Release + upload the CRD asset
+  packages: write # push image + chart to GHCR
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  CHART_OCI: oci://ghcr.io/${{ github.repository_owner }}/charts
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # One source of truth for the release identifiers: `tag` keeps the leading v
+      # (GitHub Release + git tag), `version` drops it (semver for image + chart).
+      - name: Resolve version
+        id: v
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${tag#v}" >> "${GITHUB_OUTPUT}"
+          echo "Releasing ${tag}"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN }}
+
+      - name: Build & push operator image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          # Keep it a plain single-arch image, not an index with attestations,
+          # so older runtimes pull it cleanly.
+          provenance: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.v.outputs.version }}
+
+      # helm push authenticates against its own registry config, not docker login.
+      - name: Package & push Helm chart (OCI)
+        run: |
+          helm registry login "${REGISTRY}" -u "${{ github.actor }}" -p "${{ secrets.GH_TOKEN }}"
+          helm package charts/neo4j-operator \
+            --version "${{ steps.v.outputs.version }}" \
+            --app-version "${{ steps.v.outputs.version }}"
+          helm push "neo4j-operator-${{ steps.v.outputs.version }}.tgz" "${CHART_OCI}"
+
+      # `gh release create` uses the pushed tag, or creates it at HEAD on manual dispatch.
+      - name: Publish GitHub Release with CRD asset
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          cp config/crd/bases/neo4j.com_neo4js.yaml "neo4j-crd-${{ steps.v.outputs.version }}.yaml"
+          gh release create "${{ steps.v.outputs.tag }}" \
+            "neo4j-crd-${{ steps.v.outputs.version }}.yaml" \
+            --title "${{ steps.v.outputs.tag }}" \
+            --generate-notes

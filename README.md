@@ -55,8 +55,11 @@ silently.
 - The operator watches **one namespace by default**, set through `WATCH_NAMESPACE`. Cluster-wide watch
   is deliberately refused — see [operator scope](docs/user-guide/02-operator-installation/04-operator-scope.md).
 
-There is no public operator image: the Helm chart defaults to an internal registry
-(`neo4joperatoracr.azurecr.io`), so installing starts by building and publishing your own.
+The operator image and Helm chart are published to GHCR under `neo4j-partners`
+(`ghcr.io/neo4j-partners/neo4j-kubernetes-operator` and
+`oci://ghcr.io/neo4j-partners/charts/neo4j-operator`), so you can install from the
+released chart directly — see `charts/neo4j-operator/README.md`. Building and
+publishing your own image is only needed for development.
 
 ## Quick start
 

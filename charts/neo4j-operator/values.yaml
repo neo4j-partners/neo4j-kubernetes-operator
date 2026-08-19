@@ -2,7 +2,7 @@
 # Install CRDs first (server-side apply) — see chart README / make helm-install.
 
 image:
-  repository: neo4joperatoracr.azurecr.io/neo4j-operator
+  repository: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
   # Empty → Chart.appVersion (immutable semver). Avoid latest in production.
   tag: ""
   # Optional sha256:... — when set, rendered as repository@digest (ignores tag).

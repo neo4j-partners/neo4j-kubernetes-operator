@@ -1,8 +1,11 @@
 1. CRD (required — large OpenAPI schema needs server-side apply):
 
-   kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+   From a release asset:
+   kubectl apply --server-side --force-conflicts \
+     -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v{{ .Chart.AppVersion }}/neo4j-crd-{{ .Chart.AppVersion }}.yaml
 
-   Or from the repo:  make install
+   From a local checkout:
+   kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml   # or: make install
 
 2. Verify the controller:
 

@@ -10,7 +10,30 @@ This is not the Neo4j *workload* chart (`helm-charts/neo4j`).
 - Kubernetes 1.28+
 - Operator image reachable by the cluster (`image.repository` / `tag`)
 
-## Install
+## Install from the published chart (OCI)
+
+Released charts and images are published to GHCR under `neo4j-partners`. The CRD is
+**not** bundled (it is ~1.5 MB — near the etcd object limit — and Helm never upgrades
+`crds/`), so apply it once with **server-side apply** from the release asset, then
+install or upgrade the chart. `VERSION` is the release without the leading `v`.
+
+```bash
+VERSION=0.1.0
+
+# 1. CRD (once per version; safe to re-run on upgrade)
+kubectl apply --server-side --force-conflicts \
+  -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
+
+# 2. Operator (install or upgrade — same command)
+helm upgrade --install neo4j-operator \
+  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version ${VERSION} \
+  --namespace neo4j-operator-system --create-namespace
+```
+
+The chart defaults `image.repository` to `ghcr.io/neo4j-partners/neo4j-kubernetes-operator` and
+resolves the tag from `Chart.appVersion`, so no `--set image.*` is needed.
+
+## Install from a local checkout (development)
 
 The Neo4j CRD OpenAPI schema is large; install it with **server-side apply** first:
 
@@ -20,14 +43,14 @@ make install
 
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace \
-  --set image.repository=YOUR_REGISTRY/neo4j-operator \
+  --set image.repository=YOUR_REGISTRY/neo4j-kubernetes-operator \
   --set image.tag=YOUR_TAG
 ```
 
 Or one shot:
 
 ```bash
-make helm-install IMG=YOUR_REGISTRY/neo4j-operator:YOUR_TAG
+make helm-install IMG=YOUR_REGISTRY/neo4j-kubernetes-operator:YOUR_TAG
 ```
 
 ## Values
