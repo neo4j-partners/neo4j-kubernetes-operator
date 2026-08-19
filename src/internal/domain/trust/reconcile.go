@@ -6,6 +6,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -15,25 +17,54 @@ import (
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
-// Reconciler validates TLS Secrets for BYO trust (BDR-006 / BDR-011).
+// certManagerConfigured is true when the CR has a trust.certManager block at all,
+// enabled or not — the signal that Certificates may need applying or pruning.
+func certManagerConfigured(neo4j *neo4jv1beta1.Neo4j) bool {
+	return neo4j.Spec.Trust != nil && neo4j.Spec.Trust.CertManager != nil
+}
+
+// Reconciler owns cert-manager Certificates and validates TLS Secrets (BDR-006 / BDR-011).
 // Volume mounts and conf keys are applied by workload/serverconfig render.
 type Reconciler struct {
 	Client client.Client
+	Scheme *runtime.Scheme
 }
 
-func New(c client.Client) *Reconciler {
-	return &Reconciler{Client: c}
+func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
+	return &Reconciler{Client: c, Scheme: scheme}
+}
+
+// OwnedTypes returns types watched via Owns(). Certificate is registered as unstructured
+// so the watch is skipped cleanly when cert-manager is not installed.
+func OwnedTypes() []client.Object {
+	cert := &unstructured.Unstructured{}
+	cert.SetGroupVersionKind(rendertrust.CertificateGVK)
+	return []client.Object{cert}
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
-	if err := rendertrust.ValidateBYO(neo4j); err != nil {
+	if err := rendertrust.Validate(neo4j); err != nil {
 		log.Error(err, "trust validation failed")
 		return shared.Failed(err)
+	}
+	// Runs even when trust is disabled so turning it off prunes Certificates. Skipped
+	// entirely when the CR never mentions cert-manager, to avoid a List on every reconcile.
+	//
+	// ponytail: dropping the whole trust.certManager block therefore leaves its
+	// Certificates until the CR is deleted and owner-reference GC removes them.
+	// Upgrade path: gate on a status-recorded "certManager was used" flag instead.
+	if certManagerConfigured(neo4j) {
+		if out := r.reconcileCertificates(ctx, neo4j); out.Err != nil || out.Result.Requeue || out.Result.RequeueAfter > 0 {
+			return out
+		}
 	}
 	if !rendertrust.TrustEnabled(neo4j) {
 		log.V(1).Info("trust disabled, skip secret checks")
 		return shared.Done()
+	}
+	if out := r.awaitIssuedSecrets(ctx, neo4j); out.Err != nil || out.Result.RequeueAfter > 0 {
+		return out
 	}
 	for _, name := range rendertrust.BYOSecretNames(neo4j) {
 		if _, err := r.getSecret(ctx, neo4j.Namespace, name); err != nil {

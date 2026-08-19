@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
@@ -79,6 +80,7 @@ func NormalizeMaxConcurrentReconciles(n int) (int, error) {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
 func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4j")
@@ -258,12 +260,24 @@ func (r *Neo4jReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	for _, obj := range serverconfig.OwnedTypes() {
 		builder = builder.Owns(obj)
 	}
+	if mgr.GetRESTMapper() != nil {
+		for _, obj := range trust.OwnedTypes() {
+			// cert-manager is optional: only watch Certificates when the CRD is installed,
+			// or the cache would fail to start for every user who does not run cert-manager.
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			if _, err := mgr.GetRESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+				continue
+			}
+			builder = builder.Owns(obj)
+		}
+	}
 	for _, obj := range workload.OwnedTypes() {
 		builder = builder.Owns(obj)
 	}
 	for _, obj := range connectivity.OwnedTypes() {
 		builder = builder.Owns(obj)
 	}
+	builder = builder.Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.mapSecretToNeo4j))
 	n, err := NormalizeMaxConcurrentReconciles(r.MaxConcurrentReconciles)
 	if err != nil {
 		return err
@@ -279,7 +293,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		Scheme:       scheme,
 		Recorder:     mgr.GetEventRecorderFor("neo4j-controller"),
 		Persistence:  persistence.New(c),
-		Trust:        trust.New(c),
+		Trust:        trust.New(c, scheme),
 		ServerConfig: serverconfig.New(c, scheme),
 		Workload:     workload.New(c, scheme),
 		Connectivity: connectivity.New(c, scheme),

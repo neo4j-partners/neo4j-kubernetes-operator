@@ -53,6 +53,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] Default database reachable via `neo4j://` from members that do not host it (direct `bolt://` may be refused)
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
 - [ ] Cluster TLS material (`spec.trust`) — NEO-3-005-TLS-03 · AC-NEO-TLS (no TLS case yet)
+- [ ] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady` moves `CertificatePending` → `SecretsPresent`, cluster forms over the issued material — NEO-2-005 · AC-NEO-TLS (unit-tested only)
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
 - [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE

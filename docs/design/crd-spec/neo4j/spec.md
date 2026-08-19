@@ -666,7 +666,7 @@ Empty → operator applies Neo4j-tuned defaults (`NEO-3-009-PROBE-01`).
 |-------|-------------|
 | `podSecurityContext` | Override pod SC; omit for Neo4j defaults (`runAsUser`/`fsGroup` 7474). |
 | `containerSecurityContext` | Override container SC; omit for defaults (`drop: [ALL]`). |
-| `serviceAccount.annotations` | IRSA / Workload Identity annotations on the operand SA. |
+| `serviceAccount.annotations` | Annotations on the operand SA. Cloud workload-identity keys (IRSA, GKE WI, Azure MI) are rejected — out of scope per NEO-002. |
 | `serviceAccount.create` | Reserved — operator always creates the workload SA. |
 | `networkPolicy.enabled` | Opt-in NetworkPolicy (default off). Requires `ingressFrom` when true (NEO-010). |
 | `networkPolicy.ingressFrom` | Peers for Bolt/HTTP/HTTPS — required when enabled; empty `From` is rejected. |

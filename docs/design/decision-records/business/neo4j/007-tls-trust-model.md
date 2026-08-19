@@ -514,6 +514,21 @@ Options A, C, and D are rejected or deferred. Option A residual (`revokedCerts`)
 
 - `revokedCerts` still V1.1 — rare CRL use cases via `additionalMounts` until then.
 
+### Known deviation — in-place rotation does not reach the pod
+
+Decision item 3 recommends `reload.enabled: true` for cert-manager renewal and in-place BYO Secret
+rotation. As implemented (and as the Helm chart behaves), the leaf key and certificate are mounted
+with `subPath`, because the Secret data key is user-named while Neo4j requires the files at
+`private.key` and `public.crt`. Kubernetes does not propagate Secret updates into `subPath` mounts,
+so `dbms.security.tls_reload_enabled` has nothing to pick up for a rotated leaf: the pods must
+restart. `trustedCerts` are projected per item and do propagate, so CA bundle changes reload.
+
+Removing the deviation means mounting each policy directory as a single projected volume with item
+renames instead of `subPath`. That is deferred because it changes the rendered StatefulSet (forcing a
+restart on operator upgrade) and makes the policy directory read-only, which needs verification
+against the Neo4j image — the entrypoint expects to be able to create `trusted/` and `revoked/`
+under `certificates/{policy}/`.
+
 ---
 
 ## References

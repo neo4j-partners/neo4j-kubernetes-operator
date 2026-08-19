@@ -70,6 +70,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`cluster/05-service-nodeport.yaml`](cluster/05-service-nodeport.yaml) | `connectivity.service.type: NodePort` |
 | [`cluster/06-tls-full.yaml`](cluster/06-tls-full.yaml) | Cluster mTLS + HTTPS + Bolt TLS + backup (`prod-tls`) |
 | [`cluster/07-tls-cluster-only.yaml`](cluster/07-tls-cluster-only.yaml) | Cluster mTLS only, no client-facing TLS (`prod-mtls`) |
+| [`cluster/08-tls-cert-manager.yaml`](cluster/08-tls-cert-manager.yaml) | Certificates issued by cert-manager instead of BYO Secrets (`prod-cm`) |
 | [`cluster/08-scheduling.yaml`](cluster/08-scheduling.yaml) | Hard pod anti-affinity, tolerations, topology spread |
 | [`cluster/09-probes-custom.yaml`](cluster/09-probes-custom.yaml) | Custom probes tuned for cluster formation |
 | [`cluster/10-config-jvm.yaml`](cluster/10-config-jvm.yaml) | `config.neo4j`, `config.jvm`, `config.apoc` |
@@ -115,6 +116,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Bolt + HTTPS TLS | [`standalone/07`](standalone/07-tls-https-bolt.yaml) | [`cluster/06`](cluster/06-tls-full.yaml) |
 | Bolt-only TLS | [`standalone/08`](standalone/08-tls-bolt-only.yaml) | *(bolt TLS bundled in `cluster/06`)* |
 | Cluster mTLS | n/a (Standalone has no cluster policy) | [`cluster/06`](cluster/06-tls-full.yaml), [`cluster/07`](cluster/07-tls-cluster-only.yaml) |
+| cert-manager issued certificates | n/a | [`cluster/08`](cluster/08-tls-cert-manager.yaml) |
 | Backup listener/feature | [`standalone/09`](standalone/09-listeners-backup-metrics.yaml) | [`cluster/12`](cluster/12-backup-and-metrics.yaml) |
 | Prometheus metrics listener/feature | [`standalone/09`](standalone/09-listeners-backup-metrics.yaml) | [`cluster/12`](cluster/12-backup-and-metrics.yaml) |
 | Scheduling (affinity/tolerations/spread) | [`standalone/10`](standalone/10-scheduling.yaml) | [`cluster/08`](cluster/08-scheduling.yaml) |

@@ -197,4 +197,17 @@ rules:
   - patch
   - update
   - watch
+# Only used when spec.trust.certManager.enabled; harmless if cert-manager is not installed.
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 {{- end }}

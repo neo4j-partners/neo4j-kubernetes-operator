@@ -22,8 +22,14 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
+	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
+
+// kubectlRestartedAt is what `kubectl rollout restart` writes. The operator
+// replaces the pod template every reconcile, so it must copy this through or
+// a manual restart is undone before any pod is replaced.
+const kubectlRestartedAt = "kubectl.kubernetes.io/restartedAt"
 
 // Reconciler applies workload objects for each active pool.
 type Reconciler struct {
@@ -100,9 +106,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Failed(err)
 	}
 
+	tlsSum := r.tlsChecksum(ctx, neo4j)
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		stsDesired := renderwl.PoolStatefulSet(ctxRender)
+		stampTLSChecksum(stsDesired, tlsSum)
 		sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: stsDesired.Name, Namespace: stsDesired.Namespace}}
 		var existing appsv1.StatefulSet
 		exists := r.Client.Get(ctx, types.NamespacedName{Name: stsDesired.Name, Namespace: stsDesired.Namespace}, &existing) == nil
@@ -123,6 +131,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			sts.Labels = stsDesired.Labels
 			// StatefulSet forbids changing serviceName, selector, volumeClaimTemplates,
 			// podManagementPolicy after create — only patch mutable fields on update.
+			preserveRolloutRestart(&sts.Spec.Template, &stsDesired.Spec.Template)
 			if sts.CreationTimestamp.IsZero() {
 				sts.Spec = stsDesired.Spec
 				return nil
@@ -361,6 +370,43 @@ func randomPassword(n int) (string, error) {
 		}
 	}
 	return string(out), nil
+}
+
+func (r *Reconciler) tlsChecksum(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) string {
+	keys := rendertrust.MountedSecretKeys(neo4j)
+	if len(keys) == 0 {
+		return ""
+	}
+	ns := neo4j.Namespace
+	return rendertrust.MaterialChecksum(keys, func(name, key string) []byte {
+		var secret corev1.Secret
+		if err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, &secret); err != nil {
+			return nil
+		}
+		return secret.Data[key]
+	})
+}
+
+func stampTLSChecksum(sts *appsv1.StatefulSet, sum string) {
+	if sum == "" {
+		return
+	}
+	if sts.Spec.Template.Annotations == nil {
+		sts.Spec.Template.Annotations = map[string]string{}
+	}
+	sts.Spec.Template.Annotations[rendertrust.ChecksumAnnotation] = sum
+}
+
+func preserveRolloutRestart(live, desired *corev1.PodTemplateSpec) {
+	if live.Annotations == nil {
+		return
+	}
+	if v := live.Annotations[kubectlRestartedAt]; v != "" {
+		if desired.Annotations == nil {
+			desired.Annotations = map[string]string{}
+		}
+		desired.Annotations[kubectlRestartedAt] = v
+	}
 }
 
 // OwnedTypes returns types watched via Owns().

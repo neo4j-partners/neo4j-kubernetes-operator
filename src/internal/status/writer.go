@@ -220,6 +220,22 @@ func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			return false, "SecretMissing", fmt.Sprintf("trust secret %q missing data key %q", need.SecretName, need.Key)
 		}
 	}
+	// cert-manager material gets its own reason: the Secret is operator-provisioned, so a
+	// gap here means issuance is in flight rather than something the user must fix.
+	for _, need := range rendertrust.ProvisionedSecretKeys(neo4j) {
+		var secret corev1.Secret
+		if err := w.Client.Get(ctx, types.NamespacedName{Name: need.SecretName, Namespace: neo4j.Namespace}, &secret); err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, "CertificatePending", fmt.Sprintf(
+					"waiting for cert-manager to issue certificate into secret %q", need.SecretName)
+			}
+			return false, "CertificatePending", err.Error()
+		}
+		if secret.Data == nil || len(secret.Data[need.Key]) == 0 {
+			return false, "CertificatePending", fmt.Sprintf(
+				"cert-manager secret %q does not carry %q yet", need.SecretName, need.Key)
+		}
+	}
 	return true, "SecretsPresent", "required TLS secrets and keys present"
 }
 

@@ -1,5 +1,5 @@
-# Purpose: security contexts, workload SA annotations (e.g. AKS Workload Identity),
-#   and opt-in NetworkPolicy for Neo4j pods.
+# Purpose: security contexts, operand ServiceAccount annotations, and opt-in NetworkPolicy
+#   for Neo4j pods.
 # Apply: kubectl apply -f examples/standalone/22-security.yaml
 # Related README: ../README.md#standalone
 apiVersion: neo4j.com/v1beta1
@@ -16,8 +16,11 @@ spec:
   security:
     # Omit pod/container securityContext to keep Neo4j defaults (uid/gid 7474, drop ALL).
     serviceAccount:
+      # Cloud workload-identity annotations (azure.workload.identity/client-id,
+      # eks.amazonaws.com/role-arn, iam.gke.io/gcp-service-account) are rejected here by
+      # NEO-002 — bind the identity on a pre-created ServiceAccount instead.
       annotations:
-        azure.workload.identity/client-id: "REPLACE_WITH_MANAGED_IDENTITY_CLIENT_ID"
+        example.com/owner: platform-team
     networkPolicy:
       enabled: true
       # Required when enabled (NEO-010) — never an empty From on client ports.

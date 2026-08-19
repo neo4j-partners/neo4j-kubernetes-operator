@@ -11,6 +11,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
+	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
 // adminConnectOpts builds NEO-004 dial options: verified TLS when bolt material exists,
@@ -61,22 +62,20 @@ func loadBoltRootCAs(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.N
 	}
 
 	// Self-signed / leaf-as-trust: use the public certificate when no CA pool was projected.
-	if added == 0 && bolt.PublicCertificate != nil && bolt.PublicCertificate.SecretName != "" {
+	// Resolved through render/trust so the cert-manager shape (one Secret holding tls.crt)
+	// works here too, not just BYO privateKey/publicCertificate.
+	if mat, ok := rendertrust.PolicyMaterial(neo4j, "bolt"); ok && added == 0 {
 		var secret corev1.Secret
-		key := types.NamespacedName{Name: bolt.PublicCertificate.SecretName, Namespace: neo4j.Namespace}
+		key := types.NamespacedName{Name: mat.CertSecret, Namespace: neo4j.Namespace}
 		if err := c.Get(ctx, key, &secret); err != nil {
-			return nil, fmt.Errorf("trust.certificates.bolt.publicCertificate: %w", err)
+			return nil, fmt.Errorf("trust.certificates.bolt public certificate: %w", err)
 		}
-		certKey := "public.crt"
-		if bolt.PublicCertificate.SubPath != "" {
-			certKey = bolt.PublicCertificate.SubPath
-		}
-		pemBytes, ok := secret.Data[certKey]
+		pemBytes, ok := secret.Data[mat.CertPath]
 		if !ok || len(pemBytes) == 0 {
-			return nil, fmt.Errorf("trust.certificates.bolt.publicCertificate: secret %q missing key %q", secret.Name, certKey)
+			return nil, fmt.Errorf("trust.certificates.bolt public certificate: secret %q missing key %q", secret.Name, mat.CertPath)
 		}
 		if !pool.AppendCertsFromPEM(pemBytes) {
-			return nil, fmt.Errorf("trust.certificates.bolt.publicCertificate: no certificates parsed from %q", certKey)
+			return nil, fmt.Errorf("trust.certificates.bolt public certificate: no certificates parsed from %q", mat.CertPath)
 		}
 		added++
 	}

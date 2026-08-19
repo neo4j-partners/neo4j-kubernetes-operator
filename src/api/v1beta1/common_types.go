@@ -553,7 +553,12 @@ type TLSTrustedCertsSpec struct {
 }
 
 // TLSPolicySpec holds TLS configuration for bolt, https, or cluster policy.
-// BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced at webhook.
+// BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced by CEL
+// (TLS-002c, TLS-002d) and re-checked in the trust reconciler.
+//
+// TLS-002d lives here rather than on Neo4jSpec so it applies to bolt, https and cluster
+// from one rule, and so the failure names the offending policy in its field path.
+// +kubebuilder:validation:XValidation:rule="!has(self.secretName) || (!has(self.privateKey) && !has(self.publicCertificate))",message="invalid trust certificate shape: use privateKey plus publicCertificate (BYO) or secretName (cert-manager), not both"
 type TLSPolicySpec struct {
 	PrivateKey        *TLSSecretKeyRef `json:"privateKey,omitempty"`
 	PublicCertificate *TLSSecretKeyRef `json:"publicCertificate,omitempty"`
@@ -576,6 +581,11 @@ type TrustReloadSpec struct {
 }
 
 // TrustSpec embeds TLS / mTLS configuration (BDR-006 Option B).
+//
+// TLS-002c is written out per policy rather than over a list literal: CEL's has() macro
+// only accepts a field selection, so has() cannot test a comprehension variable bound to
+// a policy that may be absent.
+// +kubebuilder:validation:XValidation:rule="!has(self.certManager) || self.certManager.enabled != true || !has(self.certificates) || ((!has(self.certificates.bolt) || (has(self.certificates.bolt.secretName) && self.certificates.bolt.secretName != '')) && (!has(self.certificates.https) || (has(self.certificates.https.secretName) && self.certificates.https.secretName != '')) && (!has(self.certificates.cluster) || (has(self.certificates.cluster.secretName) && self.certificates.cluster.secretName != '')))",message="cert-manager target secretName is required on each configured trust.certificates policy"
 type TrustSpec struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// InsecureAdminConnection allows the operator to dial Bolt without TLS

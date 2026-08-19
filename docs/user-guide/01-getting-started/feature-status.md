@@ -76,8 +76,8 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Bring your own TLS for Bolt, HTTPS and cluster traffic | Implemented | [Security](../03-neo4j/05-security.md#transport-security) |
 | Client certificate authentication and trusted certificate bundles | Implemented | [Security](../03-neo4j/05-security.md#transport-security) |
 | Pod and container security contexts, ServiceAccount, NetworkPolicy | Implemented | [Security](../03-neo4j/05-security.md#pod-and-container-hardening) |
-| TLS certificate reload without restart | Implemented | `spec.trust.reload.enabled` |
-| cert-manager issued certificates | Planned | Fields exist under `spec.trust.certManager`; no Certificate is created |
+| TLS certificate reload without restart | Partial | `spec.trust.reload.enabled` turns on Neo4j's reload for CA bundles. Leaf key/cert are `subPath` mounts, so the operator rolls the StatefulSet when those Secret bytes change — see [Certificate renewal](../03-neo4j/05-security.md#certificate-renewal) |
+| cert-manager issued certificates | Implemented | [Security](../03-neo4j/05-security.md#certificates-issued-by-cert-manager) |
 | Neo4j users, roles and privileges | Not decided | Dedicated resources, after backup and restore. Use Cypher meanwhile |
 | LDAP and external auth providers | Not decided | `spec.auth.ldap` is ignored; configure providers through `spec.config` instead |
 

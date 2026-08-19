@@ -210,20 +210,35 @@ them would produce a pod that crash-loops rather than a rejected resource.
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| TLS-001 | `trust.certManager.enabled: true` requires `issuerRef` | Error | CEL | cert-manager issuerRef is required |
-| TLS-002 | BYO: `privateKey.secretName` + `publicCertificate.secretName` must exist when policy enabled | Error | Webhook | TLS secret not found |
-| TLS-002b | BYO: both key and cert `secretName` required per enabled policy | Error | CEL | missing TLS certificate pairing |
-| TLS-002c | cert-manager: `certificates.{policy}.secretName` required when `certManager.enabled` | Error | CEL | cert-manager target secretName required |
-| TLS-002d | Per policy: BYO shape XOR cert-manager `secretName` (not both) | Error | CEL | invalid trust certificate shape |
+| TLS-001 | `trust.certManager.enabled: true` requires `issuerRef` | Error | CEL + Reconciler | cert-manager issuerRef is required |
+| TLS-002 | BYO: `privateKey.secretName` + `publicCertificate.secretName` must exist when policy enabled | Error | Reconciler | TLS secret not found |
+| TLS-002b | BYO: both key and cert `secretName` required per enabled policy | Error | Reconciler | missing TLS certificate pairing |
+| TLS-002c | cert-manager: `certificates.{policy}.secretName` required when `certManager.enabled` | Error | CEL (on `spec.trust`) + Reconciler | cert-manager target secretName required |
+| TLS-002d | Per policy: BYO shape XOR cert-manager `secretName` (not both) | Error | CEL (on each policy) | invalid trust certificate shape |
+| TLS-002e | cert-manager: target Secret must carry `neo4j.com/mountable-by-operator=true` before it is mounted; the operator stamps it via `secretTemplate` so a CR cannot redirect `secretName` at an unrelated Secret | Error | Reconciler | missing mountable-by-operator label (NEO-005) |
 | TLS-003 | `mode: Cluster` + `trust.enabled` → cluster TLS material required | Error | CEL | cluster TLS is required for clustered deployments |
-| TLS-004 | bolt/https: `clientAuth` `Optional` or `Require` → `trustedCerts.sources` non-empty | Error | CEL | mTLS requires trustedCerts sources |
-| TLS-005 | `mode: Cluster` + cluster policy enabled → `clientAuth` cannot be `None` | Error | CEL | cluster mTLS requires clientAuth Require |
-| TLS-006 | `clientAuth` set on a policy requires that policy's TLS material (key/cert or cert-manager secretName) | Error | CEL | clientAuth requires enabled TLS policy |
-| TLS-007 | `certManager.includeIngressHosts: true` requires at least one `connectivity.ingress.rules[].host` | Error | CEL | includeIngressHosts requires ingress rule hosts |
+| TLS-004 | bolt/https: `clientAuth` `Optional` or `Require` → `trustedCerts.sources` non-empty | Error | Reconciler | mTLS requires trustedCerts sources |
+| TLS-005 | `mode: Cluster` + cluster policy enabled → `clientAuth` cannot be `None` | Error | Reconciler | cluster mTLS requires clientAuth Require |
+| TLS-006 | `clientAuth` set on a policy requires that policy's TLS material (key/cert or cert-manager secretName) | Error | Reconciler | clientAuth requires enabled TLS policy |
+| TLS-007 | `certManager.includeIngressHosts: true` requires at least one `connectivity.ingress.rules[].host` | Error | CEL + Reconciler | includeIngressHosts requires ingress rule hosts |
 | TLS-008 | `trustedCerts.sources` allow only `secret` or `configMap` (no `serviceAccountToken` / `downwardAPI` / `clusterTrustBundle`) | Error | Webhook / Reconciler | projection type not allowed (NEO-005) |
 | TLS-009 | `trustedCerts.sources[].secret|configMap.items` required | Error | Webhook / Reconciler | items is required (NEO-005) |
 | TLS-010 | BYO TLS Secrets must have label `neo4j.com/mountable-by-operator=true` | Error | Webhook / Reconciler | missing mountable-by-operator label (NEO-005) |
 | TLS-011 | `mode: Cluster` → `trust.certificates.bolt` (with `trust.enabled`) **or** `trust.insecureAdminConnection: true` | Error | CEL | `Cluster mode needs an admin Bolt path for the operator` (NEO-004). Formation, scale-out and scale-in all run over that session, so a Cluster with neither is inoperable — fail at admission rather than settle on `ClusterFormed=False/BoltUnavailable` |
+
+**Mechanism note.** Only TLS-001, TLS-002c, TLS-002d, TLS-003 and TLS-007 are CEL rules on the CRD.
+The rest are Go checks in `render/trust`, run from the `trust` pipeline step — the operator ships no
+webhook by default, so a bad TLS spec is admitted and then surfaces as a failed reconcile with
+`TLSReady=False`, not as an admission rejection. Rules that CEL and the reconciler both cover are
+marked "CEL + Reconciler" so the coupling still holds against an older CRD.
+
+**Where a CEL rule is attached matters.** TLS-002d is declared on `TLSPolicySpec`, so one rule covers
+bolt, https and cluster and the rejection names the offending policy in its field path. TLS-002c
+depends on `certManager.enabled`, which a policy cannot see, so it sits on `TrustSpec` and repeats the
+check per policy. It cannot be folded into a list comprehension: CEL's `has()` only accepts a field
+selection, so `has(p)` over `[bolt, https, cluster]` fails to compile and the apiserver then rejects
+the entire CRD, not just that rule. `TestCELRulesCompile` in `src/api/v1beta1` compiles every rule in
+the generated manifest to keep that from reaching `kubectl apply`.
 
 ---
 
@@ -240,12 +255,13 @@ them would produce a pod that crash-loops rather than a rejected resource.
 | LISTENER-001 | `connectivity.listeners.backup` set ⇒ `features.backup.enabled` | Error | CEL | backup listener requires feature |
 | LISTENER-002 | `connectivity.listeners.metrics` set ⇒ `features.monitoring.prometheus.enabled` | Error | CEL | metrics listener requires prometheus feature |
 | LISTENER-003 | `connectivity.listeners.*` in 1–65535 when set | Error | CEL + Webhook | invalid listen port (NEO-014) |
-| TLS-LISTENER-001 | `connectivity.listeners.https` set ⇒ `trust.enabled` + https cert material | Error | CEL | HTTPS listen port requires trust |
+| TLS-LISTENER-001 | `connectivity.listeners.https` set ⇒ `trust.enabled` + https cert material | Error | Reconciler | HTTPS listen port requires trust |
 | TLS-LISTENER-002 | `https` ∈ `service.expose` ⇒ `connectivity.listeners.https` set | Error | CEL | cannot expose disabled HTTPS connector |
 | TLS-LISTENER-003 | `connectivity.listeners.https` set ⇏ `https` ∈ `service.expose` | — | — | in-cluster HTTPS without LB port is valid |
 | TLS-LISTENER-004 | mTLS only via `trust.certificates.https.clientAuth` + `trustedCerts` | — | — | not on `connectivity` |
-| TLS-LISTENER-005 | `clientAuth: Require` on https ⇒ `trustedCerts.sources` non-empty | Error | CEL | HTTPS mTLS requires trustedCerts |
+| TLS-LISTENER-005 | `clientAuth: Require` on https ⇒ `trustedCerts.sources` non-empty | Error | Reconciler | HTTPS mTLS requires trustedCerts |
 | TLS-LISTENER-006 | `http` and `https` independent on Service | — | — | `expose` may list both |
+| TLS-LISTENER-007 | `connectivity.listeners.https` set ⇒ bolt cert material too | Error | Reconciler | Browser is served over HTTPS and browsers block its plaintext WebSocket to Bolt as mixed content, so HTTPS without `bolt+s` yields a Browser that cannot connect |
 
 ### Config vs ports (no contradictions)
 

@@ -105,20 +105,20 @@ func TestNeo4jConfKeysBoltAndHTTPS(t *testing.T) {
 	}
 }
 
-func TestValidateClusterBYOShape(t *testing.T) {
-	if err := ValidateClusterBYOShape(clusterWithTrust()); err != nil {
+func TestValidateClusterShape(t *testing.T) {
+	if err := ValidateClusterShape(clusterWithTrust()); err != nil {
 		t.Fatal(err)
 	}
 	bad := clusterWithTrust()
 	bad.Spec.Trust.Certificates.Cluster.PrivateKey = nil
-	if err := ValidateClusterBYOShape(bad); err == nil {
+	if err := ValidateClusterShape(bad); err == nil {
 		t.Fatal("expected missing key error")
 	}
 }
 
 func TestValidateStandaloneTrust(t *testing.T) {
 	neo4j := standaloneWithBoltTrust()
-	if err := ValidateBYO(neo4j); err != nil {
+	if err := Validate(neo4j); err != nil {
 		t.Fatal(err)
 	}
 	ctx := render.ContextForPool(neo4j, render.PoolPrimary)
@@ -150,12 +150,12 @@ func TestValidateStandaloneTrust(t *testing.T) {
 		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-key"},
 		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-cert"},
 	}
-	if err := ValidateClusterBYOShape(withCluster); err == nil {
+	if err := ValidateClusterShape(withCluster); err == nil {
 		t.Fatal("expected cluster policy rejected on standalone")
 	}
 }
 
-func TestValidateHTTPSBYOShapeRequiresBolt(t *testing.T) {
+func TestValidateHTTPSShapeRequiresBolt(t *testing.T) {
 	httpsPort := int32(7473)
 	neo4j := clusterWithTrust()
 	neo4j.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{
@@ -165,14 +165,14 @@ func TestValidateHTTPSBYOShapeRequiresBolt(t *testing.T) {
 		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-key"},
 		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-cert"},
 	}
-	if err := ValidateHTTPSBYOShape(neo4j); err == nil {
+	if err := ValidateHTTPSShape(neo4j); err == nil {
 		t.Fatal("expected missing bolt certs error")
 	}
 	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1beta1.TLSPolicySpec{
 		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-key"},
 		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-cert"},
 	}
-	if err := ValidateHTTPSBYOShape(neo4j); err != nil {
+	if err := ValidateHTTPSShape(neo4j); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -1,0 +1,148 @@
+# Purpose: Cluster TLS with certificates issued by cert-manager instead of BYO Secrets — the
+#   operator creates one Certificate per policy and mounts the Secret cert-manager writes.
+#
+# This header is a full runbook: follow it top to bottom to stand the example up and connect
+# to it. Commands assume you applied the CR into the namespace the operator watches (default).
+#
+# ─── 1. Operator ────────────────────────────────────────────────────────────────────────────
+# Install the operator with the Helm chart. Its Role must allow cert-manager.io/certificates,
+# or every Certificate create is denied (RBAC ships in the chart; verify after install):
+#   kubectl -n default get role neo4j-operator-manager-role -o json \
+#     | jq -r '.rules[] | select(.apiGroups[]? == "cert-manager.io")'
+#
+# ─── 2. cert-manager ────────────────────────────────────────────────────────────────────────
+# Install cert-manager BEFORE the operator starts — the operator only watches Certificates when
+# the CRD exists at boot; otherwise it falls back to a 10s poll. The reconcile fails outright if
+# the cert-manager.io/v1 CRD is absent when a CR asks for it.
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+#   kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+#
+# ─── 3. A CA ClusterIssuer named "corp-ca" ──────────────────────────────────────────────────
+# A self-signed root that signs a CA cert, exposed as a CA ClusterIssuer. Lab-grade:
+#   kubectl apply -f - <<'EOF'
+#   apiVersion: cert-manager.io/v1
+#   kind: ClusterIssuer
+#   metadata: { name: corp-ca-root }
+#   spec: { selfSigned: {} }
+#   ---
+#   apiVersion: cert-manager.io/v1
+#   kind: Certificate
+#   metadata: { name: corp-ca, namespace: cert-manager }
+#   spec:
+#     isCA: true
+#     commonName: corp-ca
+#     secretName: corp-ca-tls
+#     issuerRef: { name: corp-ca-root, kind: ClusterIssuer, group: cert-manager.io }
+#   ---
+#   apiVersion: cert-manager.io/v1
+#   kind: ClusterIssuer
+#   metadata: { name: corp-ca }
+#   spec: { ca: { secretName: corp-ca-tls } }
+#   EOF
+#   kubectl wait --for=condition=Ready clusterissuer/corp-ca --timeout=120s
+#
+# ─── 4. Deploy this example ─────────────────────────────────────────────────────────────────
+#   kubectl apply -f examples/cluster/08-tls-cert-manager.yaml
+#
+# ─── 5. Watch issuance ──────────────────────────────────────────────────────────────────────
+# Three Certificates appear within seconds, owned by the CR (GC'd with it):
+#   kubectl get certificate -l app.kubernetes.io/instance=prod-cm
+# TLSReady is CertificatePending (operator requeues every 10s) until cert-manager writes
+# tls.crt/tls.key, then flips to SecretsPresent:
+#   kubectl get neo4j prod-cm -o jsonpath='{range .status.conditions[?(@.type=="TLSReady")]}{.status} {.reason}: {.message}{"\n"}{end}'
+#
+# ─── 6. Verify the cluster formed over the issued material ──────────────────────────────────
+# ClusterFormed=True is the real proof: the operator's own admin dial uses bolt+s on the issued
+# certs. Give three enterprise pods with 10Gi PVCs a few minutes:
+#   kubectl rollout status sts/prod-cm-primary --timeout=900s
+#   kubectl get neo4j prod-cm -o jsonpath='{range .status.conditions[*]}{.type}={.status} ({.reason}){"\n"}{end}'
+#
+# ─── 7. Connect with cypher-shell (inside a pod) ────────────────────────────────────────────
+# The CA (corp-ca) is not in the pod trust store, so bolt+s full verification fails; bolt+ssc
+# encrypts and trusts the self-signed cert. SHOW SERVERS is system-scoped, so pass -d system:
+#   PW=$(kubectl get secret prod-cm-auth -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d | cut -d/ -f2)
+#   kubectl exec -it prod-cm-primary-0 -- cypher-shell \
+#     -a "bolt+ssc://prod-cm.default.svc:7687" -u neo4j -p "$PW" -d system \
+#     "SHOW SERVERS YIELD name, address, state;"
+#
+# ─── 8. Connect from a browser (from your laptop) ───────────────────────────────────────────
+# Service is ClusterIP and SANs are prod-cm.default.svc (not localhost), and Browser reaches the
+# DB over a bolt WebSocket the browser blocks unless it trusts the cert. So:
+#   a. Map the SAN to localhost (once):    sudo sh -c 'echo "127.0.0.1 prod-cm.default.svc" >> /etc/hosts'
+#   b. Forward Browser (7473) and Bolt (7687):
+#        kubectl port-forward svc/prod-cm 7473:7473 7687:7687
+#   c. Pre-accept the bolt cert: open https://prod-cm.default.svc:7687 and click through the
+#      warning (page looks broken — you only need the stored exception).
+#   d. Open Browser at https://prod-cm.default.svc:7473 and accept the same warning.
+#   e. Connect URL bolt+s://prod-cm.default.svc:7687 (direct, NOT neo4j+s — routing returns
+#      internal FQDNs that do not resolve off-cluster), user neo4j, password from step 7.
+# Clean alternative to (a),(c),(d): trust corp-ca in your OS/browser once —
+#   kubectl get secret prod-cm-bolt-tls -o jsonpath='{.data.ca\.crt}' | base64 -d > corp-ca.crt
+#
+# Cleanup: kubectl delete -f examples/cluster/08-tls-cert-manager.yaml   # then delete the PVCs:
+#          kubectl delete pvc -l app.kubernetes.io/instance=prod-cm
+# Related README: ../README.md#tls--auth--plugin-prerequisites
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: prod-cm
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      https: 7473
+    service:
+      expose: [bolt, http, https]
+  auth:
+    generatePassword: true
+  trust:
+    enabled: true
+    # CA bundle changes propagate in place. A renewed leaf certificate rolls the
+    # StatefulSet — subPath mounts do not update in place. See the user guide,
+    # "Certificate renewal".
+    reload:
+      enabled: true
+    certManager:
+      enabled: true
+      issuerRef:
+        name: corp-ca
+        kind: ClusterIssuer
+      # includeIngressHosts is omitted: it requires connectivity.ingress.rules[].host.
+    # cert-manager shape: target secretName only. Adding privateKey or publicCertificate
+    # here is rejected (TLS-002d) — pick one shape per policy.
+    #
+    # SANs are derived by the operator: the client Service for bolt/https and the per-member
+    # internals Services for cluster traffic. No dnsNames needed for in-cluster access.
+    certificates:
+      cluster:
+        secretName: prod-cm-cluster-tls
+        clientAuth: Require
+        # Member certificates are validated against the issuing CA. cert-manager publishes
+        # ca.crt alongside the leaf in the same Secret.
+        trustedCerts:
+          sources:
+            - secret:
+                name: prod-cm-cluster-tls
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+      https:
+        secretName: prod-cm-https-tls
+      bolt:
+        secretName: prod-cm-bolt-tls

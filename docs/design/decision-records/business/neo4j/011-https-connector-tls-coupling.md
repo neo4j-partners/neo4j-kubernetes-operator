@@ -7,6 +7,7 @@
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-007](006-service-exposure-connectivity.md) — `connectivity.listeners` + `connectivity.service` (accepted) · [BDR-006](007-tls-trust-model.md) — `spec.trust` (accepted) |
 | **Constraints** | `NEO-2-005`, `NEO-3-005-TLS-01..04`; AC `AC-NEO-TLS`; [Neo4j SSL framework](https://neo4j.com/docs/operations-manual/current/security/ssl-framework/) |
+| **Amendments** | 2026-08-18 — added TLS-LISTENER-007 (see [Amendment](#amendment-2026-08-18--tls-listener-007-https-requires-bolt-material)) |
 
 ---
 
@@ -67,6 +68,22 @@ connectivity.service.expose includes https   [optional — in-cluster only OK]
 | TLS-LISTENER-004 | mTLS only via `trust.certificates.https.clientAuth` + `trustedCerts` | Parity with bolt mTLS ([BDR-006](007-tls-trust-model.md)); not on `connectivity` |
 | TLS-LISTENER-005 | `clientAuth: Require` on https ⇒ `trustedCerts.sources` non-empty | Same as bolt TLS-004 |
 | TLS-LISTENER-006 | HTTP and HTTPS independent on Service | `expose` may list both `http` and `https`; cleartext HTTP does not disable HTTPS |
+| TLS-LISTENER-007 | `connectivity.listeners.https` set ⇒ **bolt** cert material as well | See amendment below |
+
+### Amendment 2026-08-18 — TLS-LISTENER-007: HTTPS requires bolt material
+
+The original rule set required only https material for the https listener. In practice that
+produces a Browser that cannot connect: Browser is served from the https listener and reaches the
+database over a WebSocket to Bolt, and a browser blocks a plaintext `ws://` socket opened from an
+`https://` page as mixed content. Enabling HTTPS without `bolt+s` therefore ships a UI that loads
+and then fails to log in, with no diagnostic pointing at the cause.
+
+The reconciler consequently rejects `connectivity.listeners.https` unless bolt material is also
+present. This narrows what TLS-LISTENER-001 accepts; it does not change the three-layer model —
+`spec.trust` still owns crypto and `connectivity` still owns listening and routing.
+
+Layer independence is unaffected for the reverse direction: bolt TLS without an https listener
+remains valid (see [`examples/standalone/08-tls-bolt-only.yaml`](../../../../examples/standalone/08-tls-bolt-only.yaml)).
 
 ### mTLS scenarios
 

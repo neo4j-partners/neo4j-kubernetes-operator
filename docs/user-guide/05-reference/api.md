@@ -183,14 +183,15 @@ See [Connectivity](../03-neo4j/04-connectivity.md).
 | `spec.trust.insecureAdminConnection` | bool | `false` | Lets the operator open its admin Bolt session in cleartext. **Cluster mode requires either this or `trust.certificates.bolt` with `trust.enabled: true`**, and a Cluster with neither is rejected at admission |
 | `spec.trust.certificates.{bolt,https,cluster}.privateKey` | object | — | `secretName`, optional `subPath` |
 | `spec.trust.certificates.{bolt,https,cluster}.publicCertificate` | object | — | `secretName`, optional `subPath` |
-| `spec.trust.certificates.*.secretName` | string | — | A Secret holding both key and certificate |
-| `spec.trust.certificates.*.dnsNames` | []string | — | Names expected in the certificate |
-| `spec.trust.certificates.*.clientAuth` | string | `None` | `None`, `Optional` or `Require` |
+| `spec.trust.certificates.*.secretName` | string | — | cert-manager target Secret (`tls.crt` + `tls.key`); mutually exclusive with `privateKey`/`publicCertificate` |
+| `spec.trust.certificates.*.dnsNames` | []string | — | Extra SANs on that policy's cert-manager Certificate |
+| `spec.trust.certificates.*.clientAuth` | string | `None` | `None`, `Optional` or `Require`; `Optional` and `Require` both require `trustedCerts.sources` |
 | `spec.trust.certificates.*.trustedCerts.sources` | []VolumeProjection | — | CA bundles; items must be named |
-| `spec.trust.reload.enabled` | bool | `false` | Reload certificates without restart |
-| `spec.trust.certManager.enabled` | bool | `false` | Ignored — planned; `issuerRef.name` required if set to true |
+| `spec.trust.reload.enabled` | bool | `false` | Turns on Neo4j TLS reload. Leaf key/cert are `subPath` mounts; the operator rolls pods when those Secret bytes change — see [Security](../03-neo4j/05-security.md#certificate-renewal) |
+| `spec.trust.certManager.enabled` | bool | `false` | Operator creates one `Certificate` per policy; requires cert-manager installed and `issuerRef.name` |
 | `spec.trust.certManager.issuerRef` | object | — | `name`, `kind` (`Issuer` or `ClusterIssuer`, default `ClusterIssuer`) |
-| `spec.trust.certManager.dnsNames`, `.includeIngressHosts` | — | — | Ignored — planned |
+| `spec.trust.certManager.dnsNames` | []string | — | Extra SANs merged into the bolt and https Certificates only |
+| `spec.trust.certManager.includeIngressHosts` | bool | `false` | Merge `connectivity.ingress.rules[].host` into bolt/https SANs; requires at least one host |
 
 With `trust.enabled: true`, Cluster mode requires `certificates.cluster`, and Standalone requires at
 least one of `certificates.bolt` or `certificates.https` while rejecting `cluster`.

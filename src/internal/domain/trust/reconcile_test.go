@@ -46,7 +46,7 @@ func TestReconcileRequiresSecretKeys(t *testing.T) {
 		},
 	).Build()
 
-	out := New(c).Reconcile(t.Context(), neo4j)
+	out := New(c, scheme).Reconcile(t.Context(), neo4j)
 	if out.Err == nil || !strings.Contains(out.Err.Error(), "private.key") {
 		t.Fatalf("expected missing private.key error, got %v", out.Err)
 	}
@@ -60,7 +60,7 @@ func TestReconcileRequiresSecretKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out = New(c).Reconcile(t.Context(), neo4j)
+	out = New(c, scheme).Reconcile(t.Context(), neo4j)
 	if out.Err != nil {
 		t.Fatalf("expected success, got %v", out.Err)
 	}

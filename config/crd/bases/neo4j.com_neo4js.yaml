@@ -19792,7 +19792,11 @@ spec:
                       bolt:
                         description: |-
                           TLSPolicySpec holds TLS configuration for bolt, https, or cluster policy.
-                          BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced at webhook.
+                          BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced by CEL
+                          (TLS-002c, TLS-002d) and re-checked in the trust reconciler.
+
+                          TLS-002d lives here rather than on Neo4jSpec so it applies to bolt, https and cluster
+                          from one rule, and so the failure names the offending policy in its field path.
                         properties:
                           clientAuth:
                             description: TLSClientAuth maps to dbms.ssl.policy.{policy}.client_auth.
@@ -20166,10 +20170,20 @@ spec:
                                 type: array
                             type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: 'invalid trust certificate shape: use privateKey
+                            plus publicCertificate (BYO) or secretName (cert-manager),
+                            not both'
+                          rule: '!has(self.secretName) || (!has(self.privateKey) &&
+                            !has(self.publicCertificate))'
                       cluster:
                         description: |-
                           TLSPolicySpec holds TLS configuration for bolt, https, or cluster policy.
-                          BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced at webhook.
+                          BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced by CEL
+                          (TLS-002c, TLS-002d) and re-checked in the trust reconciler.
+
+                          TLS-002d lives here rather than on Neo4jSpec so it applies to bolt, https and cluster
+                          from one rule, and so the failure names the offending policy in its field path.
                         properties:
                           clientAuth:
                             description: TLSClientAuth maps to dbms.ssl.policy.{policy}.client_auth.
@@ -20543,10 +20557,20 @@ spec:
                                 type: array
                             type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: 'invalid trust certificate shape: use privateKey
+                            plus publicCertificate (BYO) or secretName (cert-manager),
+                            not both'
+                          rule: '!has(self.secretName) || (!has(self.privateKey) &&
+                            !has(self.publicCertificate))'
                       https:
                         description: |-
                           TLSPolicySpec holds TLS configuration for bolt, https, or cluster policy.
-                          BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced at webhook.
+                          BYO (privateKey+publicCertificate) XOR cert-manager (secretName) — enforced by CEL
+                          (TLS-002c, TLS-002d) and re-checked in the trust reconciler.
+
+                          TLS-002d lives here rather than on Neo4jSpec so it applies to bolt, https and cluster
+                          from one rule, and so the failure names the offending policy in its field path.
                         properties:
                           clientAuth:
                             description: TLSClientAuth maps to dbms.ssl.policy.{policy}.client_auth.
@@ -20920,6 +20944,12 @@ spec:
                                 type: array
                             type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: 'invalid trust certificate shape: use privateKey
+                            plus publicCertificate (BYO) or secretName (cert-manager),
+                            not both'
+                          rule: '!has(self.secretName) || (!has(self.privateKey) &&
+                            !has(self.publicCertificate))'
                     type: object
                   enabled:
                     type: boolean
@@ -20938,6 +20968,16 @@ spec:
                         type: boolean
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: cert-manager target secretName is required on each configured
+                    trust.certificates policy
+                  rule: '!has(self.certManager) || self.certManager.enabled != true
+                    || !has(self.certificates) || ((!has(self.certificates.bolt) ||
+                    (has(self.certificates.bolt.secretName) && self.certificates.bolt.secretName
+                    != '''')) && (!has(self.certificates.https) || (has(self.certificates.https.secretName)
+                    && self.certificates.https.secretName != '''')) && (!has(self.certificates.cluster)
+                    || (has(self.certificates.cluster.secretName) && self.certificates.cluster.secretName
+                    != '''')))'
               version:
                 description: Version is the Neo4j image tag driving deploy and rolling
                   upgrade.
@@ -21021,6 +21061,12 @@ spec:
               rule: '!has(self.trust) || !has(self.trust.certManager) || self.trust.certManager.enabled
                 != true || (has(self.trust.certManager.issuerRef) && has(self.trust.certManager.issuerRef.name)
                 && self.trust.certManager.issuerRef.name != '''')'
+            - message: includeIngressHosts requires at least one connectivity.ingress.rules[].host
+              rule: '!has(self.trust) || !has(self.trust.certManager) || !has(self.trust.certManager.includeIngressHosts)
+                || self.trust.certManager.includeIngressHosts != true || (has(self.connectivity)
+                && has(self.connectivity.ingress) && has(self.connectivity.ingress.rules)
+                && self.connectivity.ingress.rules.exists(r, has(r.host) && r.host
+                != ''''))'
             - message: cluster TLS is required for clustered deployments when trust
                 is enabled
               rule: self.topology.mode != 'Cluster' || !has(self.trust) || !has(self.trust.enabled)

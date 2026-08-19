@@ -230,7 +230,9 @@ spec:
                     path: ca.crt
 ```
 
-`clientAuth` is `None`, `Optional` or `Require`. Trusted certificate sources are projected volume
+`clientAuth` is `None`, `Optional` or `Require`. Both `Optional` and `Require` need a non-empty
+`trustedCerts.sources`: `Optional` still validates any certificate a client presents, so without a CA
+bundle every presented certificate is rejected. Trusted certificate sources are projected volume
 sources, so they must name their items explicitly, and Secrets among them need the mountable label.
 Sources that would expose ambient cluster identity — service account tokens, the downward API,
 cluster trust bundles — are rejected.
@@ -244,14 +246,71 @@ spec:
       enabled: true
 ```
 
-This turns on Neo4j's own TLS reload, so replacing the certificate files does not require restarting
-the server. Without it, a renewed certificate takes effect on the next restart.
+This turns on Neo4j's own TLS reload (`dbms.security.tls_reload_enabled`), so Neo4j picks up changed
+certificate files without a restart.
 
-`spec.trust.certManager` exists in the schema and creates nothing today: the operator will not issue
-certificates for you. If you use cert-manager, let it write a Secret and reference that Secret from
-the policies above.
+There is a Kubernetes-level caveat you need to plan around. The key and certificate are mounted with
+`subPath`, because the data key inside your Secret can be named anything while Neo4j requires the
+files at `private.key` and `public.crt`. Kubernetes does not propagate Secret updates into `subPath`
+mounts, so **editing a certificate Secret in place does not reach the running pod** and there is
+nothing for the reload to pick up. This matches the Helm chart's behaviour, which mounts the same way.
+
+In practice that means:
+
+- **Trusted CA bundles do propagate.** `trustedCerts.sources` are projected per item, so adding or
+  rotating a CA reaches the pod and the reload applies it.
+- **Renewing a leaf certificate rolls the pods.** The operator hashes the mounted key and certificate
+  bytes onto the StatefulSet (`neo4j.com/tls-checksum`) and watches those Secrets, so a cert-manager
+  reissue or an in-place Secret edit starts a rolling restart. `kubectl rollout restart` also works —
+  the operator keeps `kubectl.kubernetes.io/restartedAt` instead of overwriting it on the next
+  reconcile.
+
+### Certificates issued by cert-manager
+
+Instead of supplying key and certificate Secrets yourself, let the operator provision them. Set
+`certManager.enabled` and give each policy a target `secretName` only — no `privateKey` or
+`publicCertificate`:
+
+```yaml
+spec:
+  trust:
+    enabled: true
+    reload:
+      enabled: true
+    certManager:
+      enabled: true
+      issuerRef:
+        name: corp-ca
+        kind: ClusterIssuer     # or Issuer
+      includeIngressHosts: true # merge ingress hosts into bolt/https SANs
+      dnsNames:
+        - bolt.prod.example.com # extra SANs, e.g. an external load balancer
+    certificates:
+      bolt:
+        secretName: prod-bolt-tls
+      cluster:
+        secretName: prod-cluster-tls
+```
+
+The operator creates one `cert-manager.io/v1` `Certificate` per configured policy, named
+`{cr-name}-{policy}-tls` and owned by the Neo4j resource, so it is garbage collected with the CR.
+cert-manager writes `tls.crt` and `tls.key` into your `secretName`, and the operator mounts them at
+the paths Neo4j expects. This needs cert-manager installed in the cluster: if the `Certificate` CRD
+is absent the reconcile fails rather than silently doing nothing.
+
+The certificate SANs are derived, not guessed. Every policy gets the in-cluster DNS names Neo4j
+actually advertises — the client Service for Bolt and HTTPS, the per-member internals Services for
+cluster traffic — enumerated per member rather than covered by a namespace wildcard. `dnsNames` and
+ingress hosts are added to the bolt and https certificates only; the cluster certificate stays on
+member discovery names. Scaling the deployment updates the `Certificate` and cert-manager reissues.
+
+While issuance is in flight, `TLSReady` reports `CertificatePending` and the operator requeues.
+
+A cert-manager policy and a bring-your-own policy are mutually exclusive: setting `secretName`
+alongside `privateKey` or `publicCertificate` is rejected.
 
 Examples: [`examples/standalone/07-tls-https-bolt.yaml`](../../../examples/standalone/07-tls-https-bolt.yaml),
+[`examples/cluster/08-tls-cert-manager.yaml`](../../../examples/cluster/08-tls-cert-manager.yaml),
 [`examples/cluster/06-tls-full.yaml`](../../../examples/cluster/06-tls-full.yaml),
 [`examples/cluster/07-tls-cluster-only.yaml`](../../../examples/cluster/07-tls-cluster-only.yaml).
 
