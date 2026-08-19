@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 # assert/plugins-config — BDR-004: pluginDefinitions.<id>.config reaches the running server.
+# It merges into neo4j.conf, unlike spec.config.apoc which renders the separate apoc.conf
+# (covered by feature-config).
 #
-# This is the per-plugin config layer, distinct from spec.config.apoc: apoc.* keys render
-# into the separate <cr>-apoc-config / apoc.conf (covered by feature-config), whereas
-# pluginDefinitions.<id>.config merges straight into neo4j.conf, between the operator
-# defaults and spec.config.neo4j (render/serverconfig/cluster_defaults.go).
-#
-# The fixture sets a core-namespaced key on purpose — SHOW SETTINGS does not expose
-# plugin-namespaced settings, which is exactly why apoc.conf exists, so an apoc.* key here
-# would be unobservable over bolt and could not prove the merge happened.
-#
-# Inputs: NEO4J_CR_NAME, NEO4J_NAMESPACE, NEO4J_STS_NAME, NEO4J_AUTH_SECRET
+# The fixture uses a core-namespaced key on purpose: SHOW SETTINGS does not expose
+# plugin-namespaced settings — the reason apoc.conf exists — so an apoc.* key here would be
+# invisible over bolt and prove nothing.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,6 +27,6 @@ conn_exec_serverpod() { kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -
 CONN_EXEC_FN=conn_exec_serverpod
 password="$(neo4j_password)"
 
-conn_assert_setting localhost "${password}" "${CONFIG_KEY}" "${CONFIG_VALUE}" "plugins-config"
+conn_assert_setting localhost "${password}" "${CONFIG_KEY}" "${CONFIG_VALUE}" plugins-config
 
-log "pluginDefinitions config (${CONFIG_KEY}=${CONFIG_VALUE}) merged into neo4j.conf and effective at runtime (BDR-004)"
+log "pluginDefinitions config (${CONFIG_KEY}=${CONFIG_VALUE}) effective at runtime"
