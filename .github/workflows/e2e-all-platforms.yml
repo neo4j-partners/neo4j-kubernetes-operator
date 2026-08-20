@@ -39,6 +39,11 @@ jobs:
     name: kind
     needs: unit
     runs-on: ubuntu-latest
+    # Plugin licence material for feature-plugins. Unset on fork PRs, where secrets are not
+    # exposed — the suite falls back to a dummy licence and skips the acceptance checks.
+    env:
+      LICENSE_GDS: ${{ secrets.LICENSE_GDS }}
+      LICENSE_BLOOM: ${{ secrets.LICENSE_BLOOM }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/e2e
@@ -50,6 +55,9 @@ jobs:
     needs: unit
     runs-on: ubuntu-latest
     env:
+      # Plugin licence material for feature-plugins; see the kind job above.
+      LICENSE_GDS: ${{ secrets.LICENSE_GDS }}
+      LICENSE_BLOOM: ${{ secrets.LICENSE_BLOOM }}
       # Azure resource names — override via repository Variables
       # (Settings > Secrets and variables > Actions > Variables).
       # Unset falls back to the defaults in tests/config/cloud/azure-aks.sh.
