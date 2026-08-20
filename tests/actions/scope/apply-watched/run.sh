@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
-# scope/apply-watched — positive control for the scope suite (AC-OP-SCOPE-SINGLE-002):
-# apply a valid Neo4j CR into a WATCHED namespace (NEO4J_NAMESPACE, default "default")
-# so assert/reconciled-in-namespace can confirm the operator DOES reconcile it.
-# Paired with the negative control (scope/apply-unwatched) this proves the scope
-# boundary in both directions within one suite.
+# scope/apply-watched — positive control for the scope suite: apply the same Neo4j CR into every
+# WATCHED namespace, so assert/reconciled-in-namespace can confirm the operator reconciles each
+# entry of WATCH_NAMESPACE and not merely the first one. Paired with the negative control
+# (scope/apply-unwatched) this proves the scope boundary in both directions within one case.
+#
+# Inputs:
+#   E2E_SCOPE_WATCHED_NAMESPACES — comma-separated watched namespaces
+#   E2E_SCOPE_WATCHED_CR         — CR name, identical in each namespace
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../../lib/common.sh
 source "${SCRIPT_DIR}/../../../lib/common.sh"
 
-NS="${NEO4J_NAMESPACE:-default}"
+WATCHED="${E2E_SCOPE_WATCHED_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
 CR="${E2E_SCOPE_WATCHED_CR:-e2e-scope-watched}"
 
-log "Applying Neo4j CR ${CR} into watched namespace ${NS} (operator should reconcile it)"
-kubectl apply -n "${NS}" -f - <<EOF
+IFS=',' read -r -a watched_list <<<"${WATCHED}"
+for ns in "${watched_list[@]}"; do
+  ns="${ns// /}"
+  [[ -n "${ns}" ]] || continue
+
+  log "Applying Neo4j CR ${CR} into watched namespace ${ns} (operator should reconcile it)"
+  kubectl apply -n "${ns}" -f - <<EOF
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j
 metadata:
@@ -35,5 +43,6 @@ spec:
   auth:
     generatePassword: true
 EOF
+done
 
-log "CR ${CR} applied in watched namespace ${NS}"
+log "CR ${CR} applied in every watched namespace (${WATCHED})"
