@@ -21,8 +21,9 @@ on_case_failure: continue
 # Standalone only: every catalog plugin is legal in spec.plugins, and staying on one topology
 # keeps NEO4J_POOL at its "server" default for every case.
 #
-# Licences are dummies — this suite asserts the operator's plumbing, never that GDS or Bloom
-# validate a licence, so it runs in CI without any licence material.
+# Licence material is optional. The licensed-plugins fixture takes its Secret bodies from the
+# LICENSE_GDS / LICENSE_BLOOM repository secrets when CI exports them, and a dummy otherwise, so
+# the suite still runs locally and on fork PRs — it just cannot prove acceptance there.
 pipeline:
   case_assert:
     - assert/{{assert}}
@@ -51,12 +52,12 @@ cases:
     expect: success
     cr_name: plg-allow
 
-  - id: bloom-license-mounted
-    comment: Bloom assigned with a licence Secret — the Secret is mounted onto the workload at /licenses/bloom. Content is not inspected.
-    fixture: tests/fixtures/neo4j-plugins-bloom.yaml
+  - id: licensed-plugins
+    comment: GDS and Bloom each with a licence Secret — both mounted at /licenses/<id>, both license_file settings effective, and both plugins accept the licence when CI supplies real material.
+    fixture: tests/fixtures/neo4j-plugins-licensed.yaml
     assert: plugins-license
     expect: success
-    cr_name: plg-bloom
+    cr_name: plg-lic
 
   - id: plugin-config-runtime
     comment: pluginDefinitions.apoc.config merges into neo4j.conf and the value is effective at runtime.
