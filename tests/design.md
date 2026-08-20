@@ -165,15 +165,31 @@ apoc, gds and bloom. In Cluster mode GDS/Bloom are CEL-forbidden on primaries an
 4-pod boot here. Staying on one topology also keeps `NEO4J_POOL` at its `server` default for
 every case.
 
-**Licences are dummies, and the mount is all that is checked.** The licence case asserts that
-the operator wires the Secret onto the workload at `/licenses/<pluginID>` — not the file
-contents, not the file mode, and not that the plugin accepts the licence. Content and
-functional checks both need real licence material, which cannot live in CI.
+**Licence material is optional, and the case degrades when it is absent.** `licensed-plugins`
+carries GDS and Bloom in one CR and always asserts the two halves the operator owns: the Secret
+is mounted at `/licenses/<pluginID>`, and `pluginDefinitions.<id>.config` put the matching
+`*.license_file` path into `neo4j.conf`. Whether each plugin then *accepts* the file is asserted
+only when CI exported `LICENSE_GDS` / `LICENSE_BLOOM` from the repository secrets; without them
+`actions/deploy/neo4j` substitutes a dummy, which mounts fine and is rejected at runtime, so
+those two checks log a SKIP. Local runs and fork PRs take that path.
+
+The acceptance checks read a boolean — `gds.isLicensed()`, and the `success` field of
+`bloom.checkLicenseCompliance()` — rather than matching the procedure's own words: its `status`
+field reports `"invalid"` for a rejected licence, which contains `valid`.
+
+The fixture also turns `server.config.strict_validation.enabled` off, which is a workaround and
+not part of the subject. Both `*.license_file` keys are plugin-namespaced, and the image validates
+`neo4j.conf` before the plugin that declares them is on the validator's classpath — the server
+crash-loops with `No declared setting with name: gds.enterprise.license_file`. The image normally
+escapes this by rewriting plugin defaults into `neo4j.conf`, which cannot work against the
+operator's read-only projected ConfigMap. Passing the two settings as `NEO4J_*` env vars instead
+would fix it at the source; the CRD exposes no env passthrough, so a user cannot work around it
+the way this fixture does.
 
 Worth knowing when reading `render/workload/plugin_volumes.go`: it projects the **whole**
-Secret (no `items`), so the file is named after the Secret key — `/licenses/bloom/license.key`
-— whereas `crd-spec/neo4j/spec.md` documents `/licenses/gds.key`. The suite does not assert
-that filename; the mismatch is tracked as a doc bug instead.
+Secret (no `items`), so the file is named after the Secret key. The fixture's keys are therefore
+`gds.license` / `bloom.license`, matching the paths its config points at — whereas
+`crd-spec/neo4j/spec.md` documents `/licenses/gds.key`, a doc bug tracked separately.
 
 **Procedure assertions avoid version strings.** A missing function makes `cypher-shell` print
 `Unknown function 'apoc.version'`, which contains `apoc.version` and would pass a naive

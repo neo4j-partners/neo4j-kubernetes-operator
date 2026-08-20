@@ -96,18 +96,21 @@ three. The operator has no install logic: it sets `NEO4J_PLUGINS` and the image 
 installs the JAR at container start. All three ship inside the Enterprise image (`apoc` in
 `/var/lib/neo4j/labs`, `gds` and `bloom` in `/var/lib/neo4j/products`), so the suite is
 hermetic — no outbound network required.
-Licence Secrets carry dummy content: the suite asserts the operator's plumbing, never that
-GDS or Bloom validate a licence.
+Licence Secrets take their content from the `LICENSE_GDS` / `LICENSE_BLOOM` repository secrets
+when CI exports them, and a dummy otherwise; the acceptance checks are skipped in the dummy case
+(local runs, fork PRs), the mount and config checks are not.
 
 - [x] APOC assigned: `apoc.*` procedures callable at runtime — NEO-3-003-APOC-01
 - [x] GDS assigned: `gds.*` procedures available, with no `licenseSecretRef` (Community runs licence-free) — BDR-004 (no dedicated FR)
-- [x] Bloom assigned: JAR installed from the image, server boots, and the licence Secret is mounted at `/licenses/bloom` — BDR-004. Licence *content* is not inspected and Bloom functionality is not asserted (both need a real licence)
+- [x] GDS and Bloom assigned with a licence Secret each: both mounted at `/licenses/<id>`, and `pluginDefinitions.<id>.config` makes `gds.enterprise.license_file` / `dbms.bloom.license_file` effective on the running server — BDR-004
+- [x] Both plugins accept the mounted licence at runtime (`gds.isLicensed()`, `bloom.checkLicenseCompliance()`) — asserted only when CI supplies real licence material, skipped on the dummy
+- [ ] Licence config without disabling `server.config.strict_validation.enabled` — the operator renders plugin-namespaced `*.license_file` keys into a read-only `neo4j.conf` and the server crash-loops; the fixture disables strict validation to get past it, so the documented licence setup in `docs/user-guide/03-neo4j/07-plugins.md` is still broken for users
 - [x] Procedure allowlist injected into neo4j.conf (`dbms.security.procedures.allowlist`) for assigned plugins, verified effective on the running server — BDR-004
 - [x] `dbms.security.procedures.unrestricted` left empty — the operator allowlists plugin procedures but never removes them from the security sandbox; that needs an explicit `spec.config.neo4j` opt-in — NEO-024
 - [x] Licence Secret without `neo4j.com/mountable-by-operator` refused at reconcile with `Error/SecretNotMountable`, a matching Warning Event, and no operands — NEO-005
 - [x] `pluginDefinitions.<id>.config` merges into `neo4j.conf` (not a per-plugin file) and is effective at runtime — BDR-004
 - [x] Manual import channel: an existing PVC mounted at `/plugins` with no `spec.plugins`, `NEO4J_PLUGINS` left unset, content required under the `plugins` subPath — BDR-004
-- [ ] Bloom licensed end-to-end (Bloom server reachable, licence accepted) — blocked on real licence material in CI
+- [ ] Bloom server endpoint reachable over HTTP (`server.unmanaged_extension_classes`) — the licensed case proves the licence is accepted, not that the Bloom app is served; the mount point is not part of the plugin surface
 - [ ] Imported JAR's procedures callable — the import case mounts an empty PVC; seeding a real JAR needs a Job the harness does not have, and a volume-only install emits no procedure allowlist
 
 ### `feature-credentials` — NEO-2-004
