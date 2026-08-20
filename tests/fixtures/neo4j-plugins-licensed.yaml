@@ -64,6 +64,14 @@ spec:
   config:
     neo4j:
       server.config.strict_validation.enabled: "false"
+      # Same root cause, second symptom. Installing a bundled plugin, the image appends
+      # `dbms.security.procedures.unrestricted=gds.*,bloom.*` to neo4j.conf — verified against
+      # 2026.05.0-enterprise. That write cannot happen against a read-only ConfigMap, so under
+      # the operator the sandbox keeps every plugin procedure that touches database internals,
+      # and bloom.checkLicenseCompliance() answers 52N34 instead of a result. Only bloom.* is
+      # opted in here, the narrowest grant the assert needs; the operator leaving `unrestricted`
+      # empty by default is deliberate (NEO-024) and procedure-allowlists still pins it.
+      dbms.security.procedures.unrestricted: "bloom.*"
   plugins: [gds, bloom]
   pluginDefinitions:
     gds:
