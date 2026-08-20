@@ -13,7 +13,7 @@
 #   OPERATOR_IMAGE_PULL_POLICY  — Never on kind (image pre-loaded), IfNotPresent on a registry
 #   OPERATOR_HELM_RELEASE       — release name
 #   OPERATOR_HELM_NAMESPACE     — release namespace, dedicated to this suite
-#   E2E_SCOPE_NAMESPACES        — comma-separated watched namespaces
+#   E2E_SCOPE_WATCHED_NAMESPACES        — comma-separated watched namespaces
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,7 +27,7 @@ cd "${REPO_ROOT}"
 RELEASE="${OPERATOR_HELM_RELEASE:-neo4j-operator}"
 RELEASE_NS="${OPERATOR_HELM_NAMESPACE:-neo4j-operator-scope}"
 CHART="${OPERATOR_HELM_CHART:-charts/neo4j-operator}"
-WATCHED="${E2E_SCOPE_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
+WATCHED="${E2E_SCOPE_WATCHED_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
 IMAGE="${OPERATOR_IMAGE:?OPERATOR_IMAGE is required}"
 
 # The chart takes repository and tag apart, the harness carries one reference.

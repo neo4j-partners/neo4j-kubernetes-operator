@@ -16,7 +16,7 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 RELEASE_NS="${OPERATOR_HELM_NAMESPACE:-neo4j-operator-scope}"
 DEPLOYMENT="${OPERATOR_DEPLOYMENT:-neo4j-operator-controller-manager}"
 ROLE="${OPERATOR_ROLE:-neo4j-operator-manager-role}"
-WATCHED="${E2E_SCOPE_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
+WATCHED="${E2E_SCOPE_WATCHED_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
 TIMEOUT="${E2E_OPERATOR_TIMEOUT:-180s}"
 SELECTOR="${OPERATOR_LABEL_SELECTOR:-app.kubernetes.io/name=neo4j-operator}"
 

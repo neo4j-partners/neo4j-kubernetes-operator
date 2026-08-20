@@ -15,7 +15,7 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 
 RELEASE="${OPERATOR_HELM_RELEASE:-neo4j-operator}"
 RELEASE_NS="${OPERATOR_HELM_NAMESPACE:-neo4j-operator-scope}"
-WATCHED="${E2E_SCOPE_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
+WATCHED="${E2E_SCOPE_WATCHED_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
 
 if command -v helm >/dev/null 2>&1; then
   log "Uninstalling release ${RELEASE} from ${RELEASE_NS}"

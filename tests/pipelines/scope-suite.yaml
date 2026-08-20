@@ -1,11 +1,16 @@
-# Pipeline for namespace-scope tests. Applies a CR to BOTH a watched namespace
-# (positive control) and an unwatched namespace (negative control), so a single
-# case can prove the operator acts inside its scope and only inside it.
+# Pipeline for namespace-scope tests. Installs the operator from the Helm chart: it is the only
+# install path that can express more than one watched namespace, since the kustomize manifests
+# hard-code WATCH_NAMESPACE=default and ship a single Role. The release gets its own namespace so
+# it cannot collide with the kustomize install other suites apply on a shared cluster.
+#
+# Applies a CR to EVERY watched namespace (positive controls) and to an unwatched one (negative
+# control), so a single case can prove the operator acts in each namespace of its scope and only
+# there.
 setup:
-  - operator/install
+  - operator/install-helm
 
 teardown:
-  - cleanup/operator
+  - cleanup/operator-helm
 
 case_run:
   - scope/apply-watched

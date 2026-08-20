@@ -24,4 +24,4 @@ export OPERATOR_HELM_CHART="${OPERATOR_HELM_CHART:-charts/neo4j-operator}"
 
 # Watched namespaces for OP-2-001-SCOPE-02. Dedicated names, never "default": the Role there
 # belongs to the kustomize install and Helm would refuse to take it over.
-export E2E_SCOPE_NAMESPACES="${E2E_SCOPE_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
+export E2E_SCOPE_WATCHED_NAMESPACES="${E2E_SCOPE_WATCHED_NAMESPACES:-e2e-scope-a,e2e-scope-b}"
