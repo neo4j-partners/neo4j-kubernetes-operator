@@ -1,0 +1,14 @@
+# Pipeline for multi-namespace scope (OP-2-001-SCOPE-02). Installs the operator from the Helm
+# chart, because it is the only install path that can express more than one watched namespace:
+# the kustomize manifests hard-code WATCH_NAMESPACE=default and ship a single Role.
+setup:
+  - operator/install-helm
+
+teardown:
+  - cleanup/operator-helm
+
+case_run:
+  - scope/apply-multi
+
+case_teardown:
+  - scope/cleanup-multi

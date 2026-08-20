@@ -32,16 +32,7 @@ fi
 log "Role ${ROLE} absent from operator namespace ${OP_NS} (NEO-016)"
 
 # 2. No ClusterRoleBinding may grant the operator ServiceAccount cluster-wide access
-#    on a default install. metrics.enabled (NEO-017) is the documented exception
-#    (TokenReview / SubjectAccessReview for authenticated /metrics). E2E leaves
-#    metrics off.
-#    Flatten every CRB's subjects to "<crb> ServiceAccount/<ns>/<name>" lines and
-#    look for our SA — plain jsonpath + grep, no jq dependency.
-subject_needle="ServiceAccount/${OP_NS}/${SA}"
-crb_lines="$(kubectl get clusterrolebindings -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .subjects[*]}{.kind}/{.namespace}/{.name}{"\n"}{end}{end}' 2>/dev/null || true)"
-if grep -qF -- "${subject_needle}" <<<"${crb_lines}"; then
-  offending="$(grep -F -- "${subject_needle}" <<<"${crb_lines}" || true)"
-  die "operator SA ${OP_NS}/${SA} is bound cluster-wide via ClusterRoleBinding subject(s): ${offending}"
-fi
+#    on a default install.
+assert_no_cluster_wide_grant "${OP_NS}" "${SA}"
 
 log "No ClusterRoleBinding grants ${OP_NS}/${SA} — RBAC is namespace-scoped (AC-OP-SCOPE-SINGLE-004)"

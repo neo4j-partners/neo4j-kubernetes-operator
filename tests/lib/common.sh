@@ -33,6 +33,26 @@ kubectl_jsonpath() {
   kubectl get "$1" -n "${NEO4J_NAMESPACE}" -o "jsonpath={$2}"
 }
 
+# assert_no_cluster_wide_grant <operator_namespace> <serviceaccount> — no ClusterRoleBinding may
+# name the operator ServiceAccount as a subject. Shared by the single- and multi-namespace scope
+# asserts, since the invariant is the same whatever the number of watched namespaces: widening the
+# scope adds Roles, never a cluster-wide grant. metrics.enabled (NEO-017) is the documented
+# exception and e2e leaves metrics off.
+assert_no_cluster_wide_grant() {
+  local op_ns=$1
+  local sa=$2
+  local needle="ServiceAccount/${op_ns}/${sa}"
+  local crb_lines offending
+
+  # Flatten every CRB's subjects to "<crb> ServiceAccount/<ns>/<name>" lines: plain jsonpath plus
+  # grep, no jq dependency.
+  crb_lines="$(kubectl get clusterrolebindings -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .subjects[*]}{.kind}/{.namespace}/{.name}{"\n"}{end}{end}' 2>/dev/null || true)"
+  if grep -qF -- "${needle}" <<<"${crb_lines}"; then
+    offending="$(grep -F -- "${needle}" <<<"${crb_lines}" || true)"
+    die "operator SA ${op_ns}/${sa} is bound cluster-wide via ClusterRoleBinding subject(s): ${offending}"
+  fi
+}
+
 resolve_action_template() {
   local template=$1
   local resolved="${template//\{\{assert\}\}/${SUITE_CASE_ASSERT:-}}"

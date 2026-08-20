@@ -1,0 +1,21 @@
+name: operator-scope-multi
+description: >
+  OP-2-001-SCOPE-02 — the operator reconciles every namespace listed in WATCH_NAMESPACE, and
+  widening the scope adds one Role per namespace without any cluster-wide grant. Installed from
+  the Helm chart, the only install path that can express a multi-namespace scope. Covers
+  AC-OP-SCOPE-MULTI-001/002.
+brief_ref: slice-scope
+use_pipeline: scope-multi-suite
+on_case_failure: stop
+pipeline:
+  case_assert:
+    # -001 both namespaces reconciled, -002 the RBAC that made it possible.
+    - assert/scope-multi-reconciled
+    - assert/rbac-multi-namespaced
+
+# Single case; the namespaces and CR name come from the scope defaults
+# (E2E_SCOPE_NAMESPACES / E2E_SCOPE_MULTI_CR), not from case fields.
+cases:
+  - id: two-watched-namespaces
+    comment: OP-2-001-SCOPE-02 — a CR in each watched namespace is reconciled, each namespace holds an identical manager Role, and the operator holds no cluster-wide grant.
+    expect: success
