@@ -177,14 +177,27 @@ The acceptance checks read a boolean — `gds.isLicensed()`, and the `success` f
 `bloom.checkLicenseCompliance()` — rather than matching the procedure's own words: its `status`
 field reports `"invalid"` for a rejected licence, which contains `valid`.
 
-The fixture also turns `server.config.strict_validation.enabled` off, which is a workaround and
-not part of the subject. Both `*.license_file` keys are plugin-namespaced, and the image validates
-`neo4j.conf` before the plugin that declares them is on the validator's classpath — the server
-crash-loops with `No declared setting with name: gds.enterprise.license_file`. The image normally
-escapes this by rewriting plugin defaults into `neo4j.conf`, which cannot work against the
-operator's read-only projected ConfigMap. Passing the two settings as `NEO4J_*` env vars instead
-would fix it at the source; the CRD exposes no env passthrough, so a user cannot work around it
-the way this fixture does.
+The fixture also carries two `spec.config.neo4j` workarounds, neither part of the subject, and
+both the same root cause: **installing a bundled plugin, the image writes into `neo4j.conf`, and
+the operator's projected ConfigMap is read-only.**
+
+`server.config.strict_validation.enabled: false` — both `*.license_file` keys are
+plugin-namespaced, and the image validates `neo4j.conf` before the plugin that declares them is
+on the validator's classpath, so the server crash-loops with `No declared setting with name:
+gds.enterprise.license_file`. The image's escape is to rewrite plugin defaults into the file,
+which it cannot do here.
+
+`dbms.security.procedures.unrestricted: bloom.*` — installing `bloom`/`gds` the image appends
+`dbms.security.procedures.unrestricted=gds.*,bloom.*` (verified against 2026.05.0-enterprise;
+CI found it when `bloom.checkLicenseCompliance()` answered `52N34 procedure restricted`). Blocked
+the same way, so under the operator every plugin procedure touching database internals stays
+sandboxed. The operator leaving the setting empty is deliberate (NEO-024) and `procedure-allowlists`
+still pins that; what is not deliberate is that the image's own grant never lands, so `gds.*`
+is sandboxed too and a user must know to opt in by hand.
+
+Rendering plugin-declared settings as `NEO4J_*` env vars would fix both at the source. The CRD
+exposes no env passthrough, so a user cannot work around either the way this fixture does — they
+can only reach for `spec.config.neo4j`, which is what the fixture models.
 
 Worth knowing when reading `render/workload/plugin_volumes.go`: it projects the **whole**
 Secret (no `items`), so the file is named after the Secret key. The fixture's keys are therefore
