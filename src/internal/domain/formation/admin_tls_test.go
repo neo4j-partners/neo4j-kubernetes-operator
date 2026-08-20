@@ -21,6 +21,37 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+// Every pass that dials Neo4j builds these options, and client-go budgets Events per object, so
+// repeating the warning verbatim would spend the budget an actual report needs later.
+func TestAdminConnectOptsWarnsOncePerGeneration(t *testing.T) {
+	rec := record.NewFakeRecorder(10)
+	r := &Reconciler{Recorder: rec}
+	n := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns", UID: "uid-1", Generation: 1},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Trust: &neo4jv1beta1.TrustSpec{InsecureAdminConnection: true},
+		},
+	}
+	for range 4 {
+		if _, err := r.adminConnectOpts(context.Background(), n); err != nil {
+			t.Fatalf("adminConnectOpts: %v", err)
+		}
+	}
+	events := 0
+	for {
+		select {
+		case <-rec.Events:
+			events++
+			continue
+		default:
+		}
+		break
+	}
+	if events != 1 {
+		t.Fatalf("expected 1 InsecureAdminConnection event over 4 passes, got %d", events)
+	}
+}
+
 func TestAdminConnectOptsFailClosed(t *testing.T) {
 	rec := record.NewFakeRecorder(2)
 	r := &Reconciler{Recorder: rec}

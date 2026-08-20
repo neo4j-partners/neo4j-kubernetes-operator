@@ -152,7 +152,9 @@ collect_diagnostics() {
   kubectl get crd "${OPERATOR_CRD}" -o yaml >"${out}/crd.yaml" 2>&1 || true
   kubectl get all -n "${OPERATOR_NAMESPACE}" -o wide >"${out}/operator-all.txt" 2>&1 || true
   kubectl describe deployment -n "${OPERATOR_NAMESPACE}" >"${out}/operator-deployment.txt" 2>&1 || true
-  kubectl logs -n "${OPERATOR_NAMESPACE}" -l "${OPERATOR_LABEL_SELECTOR}" --tail=200 >"${out}/operator-logs.txt" 2>&1 || true
+  # Whole log, not a tail: asserts read it with --tail=-1, and at a dozen reconcile passes per
+  # minute a couple of hundred lines cover half a minute — never the failure they were collected for.
+  kubectl logs -n "${OPERATOR_NAMESPACE}" -l "${OPERATOR_LABEL_SELECTOR}" --tail=-1 >"${out}/operator-logs.txt" 2>&1 || true
   kubectl get neo4j,sts,svc,secret,configmap,pvc,pods -n "${NEO4J_NAMESPACE}" -o wide >"${out}/workload.txt" 2>&1 || true
   kubectl describe neo4j "${NEO4J_CR_NAME}" -n "${NEO4J_NAMESPACE}" >"${out}/neo4j-describe.txt" 2>&1 || true
 

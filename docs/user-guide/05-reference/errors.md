@@ -119,6 +119,23 @@ Messages never quote the value.
 
 See [Security](../03-neo4j/05-security.md) for how auth Secrets are labelled and delegated.
 
+## How often an Event is recorded
+
+Events that restate the spec — `DuplicateEntry`, `SecretMounted`, `InsecureAdminConnection`,
+`AdminBoltTLSRequired` — are recorded **once per `metadata.generation`**, not on every reconcile
+pass. Edit the spec and they are recorded again; leave it alone and they stay as they are, however
+long the operator keeps reconciling.
+
+That is not cosmetic. Kubernetes clients budget Events per object, 25 then one every five minutes,
+and the budget is shared by every reason on that object. An advisory repeated on each pass would
+exhaust it and the next Event reporting an actual decision — a scale-in narrowing a database
+topology, for instance — would be dropped before ever reaching the API server. Events reporting a
+decision or a failure are never collapsed this way.
+
+So an advisory Event is a statement about your spec, not a heartbeat: do not read its absence over
+the last few minutes as the condition having gone away. The condition and the reason are the
+current state; the Event is the announcement.
+
 ## Using reasons in automation
 
 Gate on a condition's `type` plus `reason`, never on the message:
