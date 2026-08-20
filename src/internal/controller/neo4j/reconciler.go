@@ -25,6 +25,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderconfig "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
@@ -49,6 +50,9 @@ type Neo4jReconciler struct {
 
 	// MaxConcurrentReconciles defaults to 2 so one wedged CR cannot starve others (NEO-014).
 	MaxConcurrentReconciles int
+
+	// advisories keeps the spec-derived Events to one per generation. Zero value is usable.
+	advisories events.Advisory
 }
 
 const (
@@ -172,15 +176,15 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 		}
 		return ctrl.Result{}, err
 	}
-	if r.Recorder != nil {
-		for _, name := range rendersecrets.ReferencedMountSecrets(neo4j) {
-			r.Recorder.Eventf(neo4j, corev1.EventTypeNormal, "SecretMounted",
-				"Mounting Secret %q into Neo4j pods (label %s=%s)", name, rendersecrets.MountableLabel, rendersecrets.MountableLabelValue)
-		}
+	// Which Secrets a spec mounts only changes with the spec, so this reports once per generation
+	// instead of once per pass — see internal/events for what the repetition costs.
+	for _, name := range rendersecrets.ReferencedMountSecrets(neo4j) {
+		r.advisories.Emitf(r.Recorder, neo4j, corev1.EventTypeNormal, "SecretMounted",
+			"Mounting Secret %q into Neo4j pods (label %s=%s)", name, rendersecrets.MountableLabel, rendersecrets.MountableLabelValue)
 	}
 
 	log := ctrllog.FromContext(ctx).WithName("pipeline")
-	reportDuplicateEntries(log, r.Recorder, neo4j)
+	reportDuplicateEntries(log, r.Recorder, &r.advisories, neo4j)
 
 	steps := []struct {
 		name string
@@ -218,15 +222,14 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 // has no warn level, hence Info on the log and a Warning Event carrying the oracle reason.
 //
 // Field-agnostic on purpose: every source returning render.Duplicate reports the same way.
-func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, neo4j *neo4jv1beta1.Neo4j) {
+func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, advisories *events.Advisory, neo4j *neo4jv1beta1.Neo4j) {
 	for _, d := range renderconfig.Duplicates(neo4j) {
 		log.Info("duplicate entry",
 			"field", d.Field, "key", d.Key,
 			"kept", d.Kept, "keptFrom", d.KeptFrom,
 			"dropped", d.Dropped, "droppedFrom", d.DroppedFrom)
-		if recorder != nil {
-			recorder.Event(neo4j, corev1.EventTypeWarning, status.ReasonDuplicateEntry, d.Message())
-		}
+		// A collision is a property of the spec: one Event per generation, not per pass.
+		advisories.Emit(recorder, neo4j, corev1.EventTypeWarning, status.ReasonDuplicateEntry, d.Message())
 	}
 }
 

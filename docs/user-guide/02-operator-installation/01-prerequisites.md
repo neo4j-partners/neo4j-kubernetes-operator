@@ -16,13 +16,15 @@ simplest way to get there; a platform team can narrow it down as described in
 
 | Tool | Purpose | Needed for |
 |------|---------|-----------|
-| `kubectl` | Applying manifests | Every install |
-| `make` | Project install targets | Recommended — the documented paths use it |
-| `docker` | Building the controller image | Every install, until an image is published |
-| `helm` 3.x | Chart-based install | The Helm option only |
+| `kubectl` | Applying the CRD and manifests | Every install |
+| `helm` 3.8+ | Installing the chart, published or local | Choice A, and the chart path of Choice B |
+| `make` | Project install targets | Choice B |
+| `docker` | Building the controller image | Choice B |
 | `go` 1.24+ | Building or running the manager on your machine | `make build`, `make run` |
 
-There is no published operator image yet, so building it is part of a first install — see
+The controller image, the chart and the CRD are published with every release, so a first install
+needs neither a clone nor a build — that is Choice A in
+[Operator installation](readme.md). Building your own is Choice B, and starts at
 [Build the operator image](02-build-image.md).
 
 ## Storage
@@ -74,8 +76,9 @@ means both extending that list and granting the operator rights in it — see
 
 ## Next
 
-Build the image, then install: [Build the operator image](02-build-image.md) ·
-[Install the operator](03-install.md).
+Pick an install path in [Operator installation](readme.md), or go straight to
+[Install the operator](03-install.md). Building your own image first:
+[Build the operator image](02-build-image.md).
 
 If you would rather follow a complete platform walkthrough, use
 [kind (local)](../01-getting-started/local-kind.md) or [Azure AKS](../01-getting-started/azure-aks.md).

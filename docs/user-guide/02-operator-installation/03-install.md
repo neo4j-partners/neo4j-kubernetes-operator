@@ -1,27 +1,51 @@
 # Install the operator
 
 Install the `Neo4j` CustomResourceDefinition and the controller into `neo4j-operator-system`. The
-procedure is identical on every Kubernetes distribution; only image delivery differs, and that is
-covered in [Build the operator image](02-build-image.md).
+procedure is identical on every Kubernetes distribution; only where the image comes from differs,
+which is the choice described in [Operator installation](readme.md).
 
-Before starting, make sure the [prerequisites](01-prerequisites.md) are met and that your image is
-reachable from the cluster.
+Before starting, make sure the [prerequisites](01-prerequisites.md) are met and, if you built your
+own image, that it is reachable from the cluster.
 
 ## Install the CRD
 
 The CRD must be applied server-side. Its schema is large enough to exceed the annotation size
 limit that a client-side `kubectl apply -f` relies on, so the plain form fails with a metadata
-error:
+error. From a clone:
 
 ```bash
 make install
 ```
 
 That runs `kubectl apply --server-side --force-conflicts` on
-`config/crd/bases/neo4j.com_neo4js.yaml`. Both install options below depend on it, and it is also
-the only step needed when you run the controller locally.
+`config/crd/bases/neo4j.com_neo4js.yaml`. Without a clone, apply the same file from the release
+asset — `VERSION` is the release tag without its leading `v`:
 
-## Option A — manifests
+```bash
+VERSION=1.0.0-rc1
+
+kubectl apply --server-side --force-conflicts \
+  -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
+```
+
+Every install path below depends on this step, and it is also the only one needed when you run the
+controller locally. Re-apply it when you upgrade: the chart never touches the CRD.
+
+## From the published chart
+
+Nothing to build and no image to name. The chart defaults to the controller image published at its
+own version, and both artefacts are public:
+
+```bash
+helm upgrade --install neo4j-operator \
+  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version ${VERSION} \
+  --namespace neo4j-operator-system --create-namespace
+```
+
+The same command upgrades an existing release. Add `--set` flags from the table below, or a values
+file, exactly as with a local chart.
+
+## From a clone — manifests
 
 ```bash
 make deploy IMG=neo4j-operator:local
@@ -38,7 +62,9 @@ The Deployment ships with `WATCH_NAMESPACE=default` (workload namespace only). E
 [Watch scope and RBAC](04-operator-scope.md) before you go further — the environment variable and
 the roles have to be changed together.
 
-## Option B — Helm
+## From a clone — the local chart
+
+Same chart as the published one, read from your working tree, with your image:
 
 ```bash
 make helm-install IMG=myregistry.example.com/neo4j-operator:0.1.0
@@ -56,11 +82,7 @@ helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --set 'watchNamespaces={default,team-a}'
 ```
 
-The chart does not manage the CRD, on purpose: chart lifecycle and CRD lifecycle are different
-risks, and an uninstall must never take your `Neo4j` resources with it. Install the CRD first, as
-above.
-
-Values worth knowing:
+Values worth knowing, on either chart:
 
 | Value | Effect |
 |-------|--------|
@@ -114,7 +136,8 @@ kubectl logs -n neo4j-operator-system deploy/neo4j-operator-controller-manager |
 
 A controller that starts and immediately exits with `WATCH_NAMESPACE is required` is telling you
 the environment variable was lost — the operator refuses to guess a scope. `ImagePullBackOff`
-instead means the cluster cannot reach the image you built.
+instead means the cluster cannot reach the image: a tag you built but never pushed or loaded, or a
+published version that does not exist. `kubectl describe pod` names the reference it tried.
 
 ## Run the controller on your machine
 

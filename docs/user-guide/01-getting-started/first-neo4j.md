@@ -4,7 +4,7 @@ Create one Standalone instance, understand what the operator built, and connect 
 
 This page assumes the operator is already running. If it is not, follow
 [kind (local)](local-kind.md) or [Azure AKS](azure-aks.md) first, or install it on an existing
-cluster from [Operator installation](../02-operator-installation/01-prerequisites.md).
+cluster from [Operator installation](../02-operator-installation/readme.md).
 
 ## 1. Create the resource
 

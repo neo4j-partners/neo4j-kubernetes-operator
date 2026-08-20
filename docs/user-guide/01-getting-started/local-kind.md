@@ -35,8 +35,9 @@ kubectl get storageclass
 
 ### 2. Build and load the operator image
 
-There is no published operator image, so you build it yourself. kind nodes use the local Docker
-daemon, which means loading the image into the node is enough — no registry involved:
+This walkthrough builds the image from the repository, since on a local cluster you are usually
+running the code you have. kind nodes use the local Docker daemon, so loading the image into the
+node is enough — no registry involved:
 
 ```bash
 make docker-build IMG=controller:latest
@@ -44,7 +45,9 @@ kind load docker-image controller:latest --name neo4j-operator
 ```
 
 Build options, including the platform flag needed on Apple silicon, are covered in
-[Build the operator image](../02-operator-installation/02-build-image.md).
+[Build the operator image](../02-operator-installation/02-build-image.md). To use the published
+image and chart instead of building, follow
+[Operator installation](../02-operator-installation/readme.md) and rejoin this page at step 4.
 
 ### 3. Deploy the operator
 
@@ -170,5 +173,5 @@ preserved until you delete them — see
 | The resource you just created | [Your first Neo4j](first-neo4j.md) |
 | What is implemented today | [What works today](feature-status.md) |
 | Shaping the deployment — storage, connectivity, security, plugins | [Neo4j topics](../03-neo4j/readme.md) |
-| Installing on a non-kind cluster | [Operator installation](../02-operator-installation/01-prerequisites.md) |
+| Installing on a non-kind cluster | [Operator installation](../02-operator-installation/readme.md) |
 | Something is wrong | [Troubleshooting](../04-troubleshooting/01-common-issues.md) |

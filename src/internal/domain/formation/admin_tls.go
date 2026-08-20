@@ -24,17 +24,15 @@ func (r *Reconciler) adminConnectOpts(ctx context.Context, neo4j *neo4jv1beta1.N
 		}
 		return intneo4j.ConnectOpts{RootCAs: pool}, nil
 	}
+	// Both warnings restate the spec, and this runs on every pass that dials Neo4j, so they go
+	// through the advisory memo: repeated verbatim they would drain the object's Event budget.
 	if neo4j.Spec.Trust != nil && neo4j.Spec.Trust.InsecureAdminConnection {
-		if r.Recorder != nil {
-			r.Recorder.Event(neo4j, corev1.EventTypeWarning, "InsecureAdminConnection",
-				"operator admin Bolt is unencrypted (trust.insecureAdminConnection=true); prefer trust.certificates.bolt")
-		}
+		r.advisories.Emit(r.Recorder, neo4j, corev1.EventTypeWarning, "InsecureAdminConnection",
+			"operator admin Bolt is unencrypted (trust.insecureAdminConnection=true); prefer trust.certificates.bolt")
 		return intneo4j.ConnectOpts{AllowPlaintext: true}, nil
 	}
 	msg := "admin Bolt requires trust.certificates.bolt (verified TLS) or trust.insecureAdminConnection=true (NEO-004)"
-	if r.Recorder != nil {
-		r.Recorder.Event(neo4j, corev1.EventTypeWarning, "AdminBoltTLSRequired", msg)
-	}
+	r.advisories.Emit(r.Recorder, neo4j, corev1.EventTypeWarning, "AdminBoltTLSRequired", msg)
 	return intneo4j.ConnectOpts{}, fmt.Errorf("%s", msg)
 }
 

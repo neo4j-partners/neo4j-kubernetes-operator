@@ -19,6 +19,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
@@ -33,6 +34,10 @@ type Reconciler struct {
 	Recorder record.EventRecorder
 	// Connect builds an Admin; nil → real Bolt driver.
 	Connect func(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (intneo4j.Admin, error)
+	// advisories keeps the NEO-004 dial warnings to one Event per generation, so they do not spend
+	// the object's Event budget that ReasonDatabaseTopologyResized needs. Zero value is usable, so
+	// every construction path gets it, tests included.
+	advisories events.Advisory
 }
 
 func New(c client.Client, scheme *runtime.Scheme, recorder record.EventRecorder) *Reconciler {

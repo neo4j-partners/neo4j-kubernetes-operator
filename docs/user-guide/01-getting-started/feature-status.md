@@ -26,7 +26,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Install from manifests or Helm chart | Verified | [Install](../02-operator-installation/03-install.md) |
 | Watching an explicit list of namespaces | Verified | [Watch scope](../02-operator-installation/04-operator-scope.md) |
 | Uninstall preserving data | Verified | [Uninstall](../02-operator-installation/05-uninstall.md) |
-| Published operator image | Planned | Build and push it yourself — [Build the image](../02-operator-installation/02-build-image.md) |
+| Published operator image and chart | Verified | GHCR, per release — [Operator installation](../02-operator-installation/readme.md) |
 | Operator upgrades | Planned | Re-deploy the new image; no migration is performed |
 
 ## Neo4J Deployment and topology

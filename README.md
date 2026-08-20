@@ -58,14 +58,18 @@ silently.
 The operator image and Helm chart are published to GHCR under `neo4j-partners`
 (`ghcr.io/neo4j-partners/neo4j-kubernetes-operator` and
 `oci://ghcr.io/neo4j-partners/charts/neo4j-operator`), so you can install from the
-released chart directly — see `charts/neo4j-operator/README.md`. Building and
-publishing your own image is only needed for development.
+released chart directly — the two install paths are compared in
+[Operator installation](docs/user-guide/02-operator-installation/readme.md), and every chart value
+is documented in `charts/neo4j-operator/README.md`. Building and publishing your own image is only
+needed for development.
 
 ## Quick start
 
 Starting from nothing, follow a platform guide — [local kind](docs/user-guide/01-getting-started/local-kind.md)
 or [Azure AKS](docs/user-guide/01-getting-started/azure-aks.md) — which cover creating the cluster and
-making the image reachable. With a cluster and a registry already in place:
+making the image reachable. To install the released chart without building anything, use
+[Operator installation](docs/user-guide/02-operator-installation/readme.md). With a cluster, a
+registry and a clone already in place:
 
 ```bash
 # 1. Build and publish the operator image

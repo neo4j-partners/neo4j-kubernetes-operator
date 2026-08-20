@@ -9,6 +9,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
 )
 
@@ -29,7 +30,7 @@ func TestReportDuplicateEntriesEmitsWarningEvent(t *testing.T) {
 	recorder := record.NewFakeRecorder(10)
 	neo4j := neo4jWithJVM("-Djdk.nio.maxCachedBufferSize=2048")
 
-	reportDuplicateEntries(logf.Log, recorder, neo4j)
+	reportDuplicateEntries(logf.Log, recorder, &events.Advisory{}, neo4j)
 
 	select {
 	case event := <-recorder.Events:
@@ -65,7 +66,7 @@ func TestReportDuplicateEntriesCoversPlainConfigKeys(t *testing.T) {
 		},
 	}
 
-	reportDuplicateEntries(logf.Log, recorder, neo4j)
+	reportDuplicateEntries(logf.Log, recorder, &events.Advisory{}, neo4j)
 
 	select {
 	case event := <-recorder.Events:
@@ -79,10 +80,27 @@ func TestReportDuplicateEntriesCoversPlainConfigKeys(t *testing.T) {
 	}
 }
 
+// A collision is a property of the spec, so the reconcile loop must report it once and not on
+// every pass: Events are budgeted per object and the budget is shared with what the operator
+// decides at runtime.
+func TestReportDuplicateEntriesReportsOncePerGeneration(t *testing.T) {
+	recorder := record.NewFakeRecorder(10)
+	advisories := &events.Advisory{}
+	neo4j := neo4jWithJVM("-Djdk.nio.maxCachedBufferSize=2048")
+
+	for range 3 {
+		reportDuplicateEntries(logf.Log, recorder, advisories, neo4j)
+	}
+
+	if got := len(recorder.Events); got != 1 {
+		t.Fatalf("expected 1 event over 3 passes, got %d", got)
+	}
+}
+
 func TestReportDuplicateEntriesSilentWithoutCollision(t *testing.T) {
 	recorder := record.NewFakeRecorder(10)
 
-	reportDuplicateEntries(logf.Log, recorder, neo4jWithJVM("-XX:+ExitOnOutOfMemoryError"))
+	reportDuplicateEntries(logf.Log, recorder, &events.Advisory{}, neo4jWithJVM("-XX:+ExitOnOutOfMemoryError"))
 
 	select {
 	case event := <-recorder.Events:
@@ -92,5 +110,5 @@ func TestReportDuplicateEntriesSilentWithoutCollision(t *testing.T) {
 }
 
 func TestReportDuplicateEntriesWithoutRecorder(t *testing.T) {
-	reportDuplicateEntries(logf.Log, nil, neo4jWithJVM("-Djdk.nio.maxCachedBufferSize=2048"))
+	reportDuplicateEntries(logf.Log, nil, &events.Advisory{}, neo4jWithJVM("-Djdk.nio.maxCachedBufferSize=2048"))
 }
