@@ -28,6 +28,6 @@ anything you want to change.
 | Goal | Page |
 |------|------|
 | Understand the CR you deployed | [Your first Neo4j](first-neo4j.md) |
-| Install the operator on another cluster | [Operator installation](../02-operator-installation/01-prerequisites.md) |
+| Install the operator on another cluster | [Operator installation](../02-operator-installation/readme.md) |
 | Move from one instance to a cluster | [Clustering](../03-neo4j/02-clustering.md) |
 | Something is wrong | [Troubleshooting](../04-troubleshooting/01-common-issues.md) |

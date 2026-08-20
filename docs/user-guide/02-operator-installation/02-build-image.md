@@ -1,7 +1,11 @@
 # Build the operator image
 
-The operator image is not published yet, so you build it from this repository and make it
-reachable from your cluster. Everything on this page runs from the repository root.
+This page is Choice B in [Operator installation](readme.md): you build the controller image from
+this repository and make it reachable from your cluster. You need it when you changed the operator,
+when your registry is air-gapped, or when you are developing against it — otherwise install the
+published image, which needs none of this.
+
+Everything below runs from the repository root.
 
 ## Build
 

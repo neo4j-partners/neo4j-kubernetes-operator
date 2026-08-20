@@ -20,7 +20,7 @@ TLS, plugins, metrics — go straight to the topic you need in **[Neo4j](03-neo4
 | Section | What it covers |
 |---------|----------------|
 | [1. Getting started](01-getting-started/readme.md) | Platform walkthroughs, your first Neo4j, current feature status |
-| [2. Operator installation](02-operator-installation/01-prerequisites.md) | Prerequisites, building the image, installing, watch scope, uninstalling |
+| [2. Operator installation](02-operator-installation/readme.md) | Installing from the published release or from source, watch scope, uninstalling |
 | [3. Neo4j](03-neo4j/readme.md) | One page per concern: topology, storage, connectivity, security, configuration, plugins, monitoring, operations |
 | [4. Troubleshooting](04-troubleshooting/01-common-issues.md) | Symptom-driven fixes, and how to read the operator log |
 | [5. Reference](05-reference/api.md) | Complete `Neo4j` API reference, error catalog, operator-owned settings |
@@ -61,9 +61,11 @@ spec:
 
 ## Conventions used in this guide
 
-Commands run from the repository root, because the install path currently builds the operator
-image from source. Namespaces are explicit in every `kubectl` command; where a manifest omits
-`metadata.namespace`, the resource lands in `default`.
+Installing the operator needs no clone: the image, the chart and the CRD are published with every
+release, as described in [Operator installation](02-operator-installation/readme.md). Commands that
+do run from the repository root — anything using `make`, and the manifests under
+[`examples/`](../../examples/) — say so. Namespaces are explicit in every `kubectl` command; where a
+manifest omits `metadata.namespace`, the resource lands in `default`.
 
 Field paths are written as you would type them in YAML, for example
 `spec.storage.volumes.data.mode`. Every field mentioned in a topic page is listed with its type,
