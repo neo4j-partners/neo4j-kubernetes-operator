@@ -1,0 +1,36 @@
+name: Windows Go tests
+
+# Manual only, deliberately. The operator ships as a Linux container (Dockerfile pins
+# GOOS=linux) and Neo4j has no Windows image, so nothing here gates a release — this exists
+# to catch a `filepath` vs `path` slip or a test that assumes a POSIX path, on the one
+# platform nobody on the team develops on.
+#
+# Not wired into ci.yml on purpose. Adding a leg there would put another runner on every PR
+# and make e2e wait for it (`needs: unit` waits on the whole called workflow), for a signal
+# that changes only when the Go code does. Run it when Go code moves, before a release, or
+# when a Windows developer reports something:
+#
+#   gh workflow run windows.yml --ref <branch>
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go-test:
+    name: Go tests (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.6"
+          cache-dependency-path: go.sum
+
+      # No make: the Makefile sets `SHELL = /usr/bin/env bash -o pipefail` and shells out to
+      # `which`, `mkdir -p` and `python3`, so `make test` here would mostly test Git Bash.
+      # Generated deepcopy code is committed, so go test needs no controller-gen.
+      - name: Unit tests
+        run: go test ./src/...
