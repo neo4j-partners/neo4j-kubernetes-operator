@@ -64,3 +64,15 @@ cases:
     assert: config-restart
     expect: success
     cr_name: e2e-cfgchange
+
+  # Last case on purpose: it is the only Cluster case in this suite, and neo4j_case sets
+  # NEO4J_POOL=primary. _config_reset_case_vars only clears that for cases that declare a
+  # neo4j_case, so a bare-fixture case running after this one would inherit the pool and
+  # derive the wrong StatefulSet name.
+  - id: cluster-config-change-restart
+    comment: NEO-3-010-RSTR-02 — the same config change on a 3-primary cluster rolls members one at a time and the cluster stays formed throughout.
+    fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
+    neo4j_case: cluster-3primaries
+    assert: cluster-config-restart
+    expect: success
+    cr_name: e2e-cfgroll

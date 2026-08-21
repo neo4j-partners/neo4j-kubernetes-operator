@@ -1,0 +1,60 @@
+# Cluster mode with BYO cluster TLS (NEO-3-005-TLS-03). Same 3-primary shape as
+# neo4j-cluster-3primaries.yaml, plus spec.trust.certificates.cluster.
+#
+# The three Secret names are LITERAL and must agree with tls/ensure-cluster-certs, which
+# derives them from the CR name (<cr>-cluster-key / -cert / -ca). The deploy sed only
+# substitutes the CR's own metadata.name, so extra references cannot use __CR_NAME__.
+#
+# clientAuth: Require is not a choice — render/trust forces REQUIRE for the cluster policy
+# (cluster comms are mTLS), and the validator rejects None outright. mTLS in turn makes
+# trustedCerts.sources mandatory, which is why the CA is mounted as well as the leaf.
+#
+# insecureAdminConnection stays true: only the *cluster* policy is configured here, so the
+# operator's own admin Bolt dial is still plaintext. Bolt/HTTPS TLS is a separate policy and
+# a separate requirement.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+    defaultPrimariesCount: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  trust:
+    enabled: true
+    insecureAdminConnection: true
+    certificates:
+      cluster:
+        privateKey:
+          secretName: e2e-tls-cluster-key
+          subPath: private.key
+        publicCertificate:
+          secretName: e2e-tls-cluster-cert
+          subPath: public.crt
+        clientAuth: Require
+        trustedCerts:
+          sources:
+            - secret:
+                name: e2e-tls-cluster-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+  auth:
+    generatePassword: true

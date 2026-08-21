@@ -14,6 +14,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010) |
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
+| `feature-tls-byo` | [suites/feature-tls-byo.yaml](suites/feature-tls-byo.yaml) | BYO cluster TLS (`spec.trust`) — a 3-primary cluster forms over mTLS with operator-mounted certificates, no cert-manager |
 | `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
 | `feature-plugins` | _(planned — no suite file yet)_ | Plugin runtime — APOC procedures, GDS, and Bloom available on assigned pools (BDR-004) |
@@ -53,9 +54,9 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] `defaultPrimariesCount` is a creation default, not a constraint: a database created wider than the field keeps its topology across reconcile passes, with no `DatabaseTopologyResized` Event — TOPO-006
 - [x] Default database reachable via `neo4j://` from members that do not host it (direct `bolt://` may be refused)
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
-- [ ] Cluster TLS material via BYO Secret (`spec.trust` with `secretName`/`privateKey`) — NEO-3-005-TLS-03 · AC-NEO-TLS (cert-manager path covered by `feature-tls`; BYO Secret path unit-tested only)
+- [x] Cluster TLS material via BYO Secret (`spec.trust` with `secretName`/`privateKey`) — NEO-3-005-TLS-03 · AC-NEO-TLS (see `feature-tls-byo`)
 - [x] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady=SecretsPresent`, cluster forms and serves Bolt over TLS — NEO-2-005 · AC-NEO-TLS (see `feature-tls`)
-- [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
+- Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02: see `feature-config`
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
 - [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE
 - [x] Scaling leaves the surviving members alone: identical pod UIDs, no container restarts and an unchanged pool config checksum on both halves, since the system bootstrap gate never follows `primaries.members` — derived when `minimumMembers` is unset, immutable when it is set
@@ -83,7 +84,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] JVM `additionalArguments` colliding with a default (same key) replace it in place — user value wins, one entry per key, position preserved — NEO-3-003-JVM-01
 - [x] A dropped JVM argument is reported — `DuplicateEntry` Warning Event and operator log line naming the field, the value kept and the one dropped — NEO-3-003-JVM-01
 - [ ] APOC credentials mounted from secret — NEO-3-003-APOC-02 · AC-NEO-APOC-CREDS-001 (`pluginDefinitions.apoc.credentials`)
-- [ ] Rolling restart of cluster members one-by-one on config change — NEO-3-010-RSTR-02 (cluster-specific, see `workload-cluster`)
+- [x] Rolling restart of cluster members one-by-one on config change — the 3-primary pool rolls to the new revision with at most one member unavailable at a time, `ClusterFormed` never goes False, and the new value is live on a restarted member — NEO-3-010-RSTR-02 · AC-NEO-CONFIG-CHANGE / AC-NEO-CLUSTER
 
 ### `feature-plugins` — plugins (BDR-004)
 
@@ -135,6 +136,23 @@ emitted for it yet.
 - [x] Non-existent StorageClass → stays Pending, `StorageReady=False/PVCPending`, message names the PVC — NEO-3-006-PVC-02
 - [x] Missing `claimName` PVC → stays Pending, `StorageReady=False/PVCPending`
 - [x] `volumeClaimTemplate` bad StorageClass → stays Pending, `StorageReady=False/PVCPending`
+
+### `feature-tls-byo` — NEO-2-005 (BYO trust material)
+
+The BYO half of the TLS domain: certificates supplied by the user through `spec.trust`,
+rather than issued by cert-manager (`feature-tls`). Every non-TLS cluster fixture sets
+`trust.enabled: false` with `insecureAdminConnection: true`, so this path is what proves
+`spec.trust` accepts material the operator did not create.
+
+Certificates are generated per run by `tls/ensure-cluster-certs`, never committed — they are
+private keys (NEO-019 / NEO-021), and regenerating keeps the SANs correct.
+
+- [x] Operator accepts BYO cluster trust material — `TLSReady=True/SecretsPresent` — NEO-3-005-TLS-03 · AC-NEO-TLS
+- [x] Leaf pair and trusted CA mounted inside the container at `/var/lib/neo4j/certificates/cluster/`, and the mounted certificate is the published one (subject check, not image-shipped material)
+- [x] `dbms.ssl.policy.cluster.enabled=true` and `client_auth=REQUIRE` effective at runtime (`SHOW SETTINGS`, not the rendered ConfigMap)
+- [x] A 3-primary cluster **forms over mTLS** — the substantive proof: with `client_auth=REQUIRE`, wrong certificates or SANs that do not match what members advertise would fail the handshake and formation would never complete — NEO-3-005-TLS-03 · AC-NEO-CLUSTER
+- [ ] Bolt / HTTPS TLS policies (`trust.certificates.bolt` / `.https`) — not V1; `insecureAdminConnection` stays true here because only the cluster policy is configured
+- [ ] Certificate rotation via `trust.reload` — `dbms.security.tls_reload_enabled` is rendered but no case exercises a reload
 
 ### `feature-uninstall` — NEO-2-018
 - [x] CR delete preserves data PVC by default — OP-2-005-UNINST-01 · AC-NEO-UNINSTALL-PRESERVE

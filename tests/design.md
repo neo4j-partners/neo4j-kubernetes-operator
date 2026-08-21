@@ -97,6 +97,23 @@ The live config-change case (`config-restart`, NEO-2-010, formerly the separate
 pod comes back `Ready`, `SHOW SETTINGS` over bolt reports the new value). It is the only
 config case that mutates a running CR, so it is heavier than the deploy-once cases.
 
+`cluster-config-restart` (NEO-3-010-RSTR-02) is its cluster half, and asserts the property a
+single member cannot show: the roll is **serial**. It patches the same setting on the
+3-primary fixture and then *samples the live rollout* every 2s, requiring `readyReplicas`
+never to fall below N-1 and `ClusterFormed` never to leave `True`, before checking the value
+is effective on a restarted member.
+
+Sampling rather than inspecting the spec is deliberate. The operator sets
+`PodManagementPolicy: Parallel` on the pool StatefulSet — pods are created and deleted in
+parallel when *scaling* — and leaves `updateStrategy` at its Kubernetes default,
+`RollingUpdate`, which still updates one pod at a time. Those two settings pull in opposite
+directions, and a change that made updates parallel too would drop quorum without any render
+test noticing.
+
+It is the only Cluster case in this suite and therefore runs **last**: `neo4j_case` sets
+`NEO4J_POOL=primary`, and `_config_reset_case_vars` only clears that for cases that declare a
+`neo4j_case`, so a bare-fixture case after it would derive the wrong StatefulSet name.
+
 ## Storage suite mechanics (`feature-storage`)
 
 Covers the `spec.storage` surface, one case per feature (all admitted). Mount points are
@@ -140,6 +157,41 @@ Neo4j pod itself (`localhost`) and from a separate client pod (client Service DN
 
 Expectations are data-driven via `EXPECT_CONN_{BOLT,NEO4J,HTTP,HTTPS}` (see
 `config/neo4j/cases/standalone-connectivity.sh`); a TLS case flips `https` to `success`.
+
+## BYO TLS suite mechanics (`feature-tls-byo`)
+
+Covers `spec.trust` with user-supplied material, the half `feature-tls` does not: there the
+operator asks cert-manager to issue certificates, here it mounts material it never created.
+Every non-TLS cluster fixture disables TLS (`trust.enabled: false` +
+`insecureAdminConnection: true`), so this suite is what exercises that path.
+
+**Certificates are generated per run, not committed.** `tls/ensure-cluster-certs` builds a CA
+and a cluster leaf, publishes three Secrets, and labels them
+`neo4j.com/mountable-by-operator=true`. Committing them is not an option — they are private
+keys (NEO-019 / NEO-021) — and generating also keeps the SANs correct if the CR name or
+namespace change. `hack/gen-cluster-tls.sh` is the hand-run equivalent.
+
+**SANs must match what members advertise**, or the mTLS handshake fails and the cluster never
+forms — a test bug that looks exactly like a product bug. The operator advertises
+`server.cluster.advertised_address` as `<pod>-internals.<ns>.svc.<cluster-domain>`, so every
+ordinal's `-internals` FQDN is listed explicitly rather than relying on the wildcard.
+
+**`client_auth` is not a choice.** `render/trust` forces `REQUIRE` for the cluster policy and
+the validator rejects `None`: cluster communication is mutually authenticated. mTLS in turn
+makes `trustedCerts.sources` mandatory, which is why the CA is mounted alongside the leaf.
+
+**`insecureAdminConnection` stays `true`.** Only the *cluster* policy is configured, so the
+operator's own admin Bolt dial is still plaintext. Turning it off without also configuring
+`trust.certificates.bolt` would stop the operator reaching Bolt, and formation would stall for
+a reason unrelated to the certificates under test.
+
+It needs its own pipeline (`cluster-tls-suite`) rather than a suite override: the Secrets must
+exist *before* the CR is applied, and suite phases append to the pipeline's, so an override
+would place the ensure step after `deploy/neo4j`.
+
+`assert/cluster-formed` runs alongside `assert/cluster-tls` and is the substantive half — the
+TLS assert pins how it was achieved (condition, mounts, effective policy, and that the mounted
+certificate is the published one rather than image-shipped material).
 
 ## Configuration profiles
 
