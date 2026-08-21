@@ -133,3 +133,37 @@ conn_assert_matrix() {
   done
   log "[${label}] connectivity matrix passed"
 }
+
+# conn_run_cypher <host> <pw> <cypher> — run one statement over bolt inside CONN_EXEC_FN and
+# print the result. Sibling of conn_show_setting for statements that are not SHOW SETTINGS —
+# a plugin procedure only answers once its JAR is downloaded and loaded, which is the whole
+# point of feature-plugins.
+#
+# Runs against the default database, which is correct for apoc.*/gds.* procedures. System
+# scoped commands (SHOW SERVERS, SHOW DATABASES) need `-d system` and are not this helper's job.
+conn_run_cypher() {
+  local host=$1 pw=$2 cypher=$3 snippet
+  snippet="cypher-shell -a 'bolt://${host}:${CONN_BOLT_PORT}' -u neo4j -p '${pw}' --format plain \"${cypher}\""
+  "${CONN_EXEC_FN}" "${snippet}"
+}
+
+# conn_assert_cypher <host> <pw> <cypher> <expect-substring> <label> — run the statement and
+# require the output to contain expect-substring. Containment, not equality, because plugin
+# versions move; retried on the same budget as conn_assert_setting because a freshly-Ready
+# server may still be registering procedures.
+conn_assert_cypher() {
+  local host=$1 pw=$2 cypher=$3 want=$4 label=$5
+  local out ok=1 max="${CONN_RETRIES:-20}" i
+  for ((i = 1; i <= max; i++)); do
+    if out="$(conn_run_cypher "${host}" "${pw}" "${cypher}" 2>&1)"; then
+      if grep -qF -- "${want}" <<<"${out}"; then
+        ok=0
+        break
+      fi
+    fi
+    [[ "${i}" -lt "${max}" ]] && sleep "${CONN_RETRY_DELAY:-3}"
+  done
+  [[ "${ok}" -eq 0 ]] \
+    || die "[${label}] '${cypher}' did not return '${want}' after ${max} attempts; got: ${out}"
+  log "[${label}] ${cypher} -> contains '${want}'"
+}

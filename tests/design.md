@@ -141,6 +141,89 @@ Neo4j pod itself (`localhost`) and from a separate client pod (client Service DN
 Expectations are data-driven via `EXPECT_CONN_{BOLT,NEO4J,HTTP,HTTPS}` (see
 `config/neo4j/cases/standalone-connectivity.sh`); a TLS case flips `https` to `success`.
 
+## Plugins suite mechanics (`feature-plugins`)
+
+Runtime plugin behaviour (BDR-004). Every render decision — the `NEO4J_PLUGINS` string, the
+generated ConfigMap keys, the volume shapes — is already covered by unit tests under
+`src/internal/render/`, so each case here asserts something only a real container can show.
+
+**The operator does not install anything.** It sets `NEO4J_PLUGINS` on the container and the
+image entrypoint installs the JAR at container start. All three V1 catalog plugins ship
+**inside** the Enterprise image — `apoc-*-core.jar` in `/var/lib/neo4j/labs`, and
+`neo4j-graph-data-science-*.jar` / `bloom-plugin-*.jar` in `/var/lib/neo4j/products` — so the
+suite is hermetic and needs no outbound network. (The `NEO4J_PLUGINS` mechanism *can* fetch a
+plugin that is not bundled; none of the V1 catalog ids are in that position.)
+
+The entrypoint installs into whatever `server.directories.plugins` points at, which is why
+`ensurePluginsMount` matters: before it, the operator pointed Neo4j at `/plugins` while the
+JAR went to `$NEO4J_HOME/plugins`, and every plugin silently failed to load on a server that
+still reported `Ready`.
+
+**Standalone only.** Every catalog plugin is legal in `spec.plugins`, so one topology covers
+apoc, gds and bloom. In Cluster mode GDS/Bloom are CEL-forbidden on primaries and on
+`secondaries.read` — that placement rule is admission-level and unit-tested, not worth a
+4-pod boot here. Staying on one topology also keeps `NEO4J_POOL` at its `server` default for
+every case.
+
+**Licence material is optional, and the case degrades when it is absent.** `licensed-plugins`
+carries GDS and Bloom in one CR and always asserts the two halves the operator owns: the Secret
+is mounted at `/licenses/<pluginID>`, and `pluginDefinitions.<id>.config` put the matching
+`*.license_file` path into `neo4j.conf`. Whether each plugin then *accepts* the file is asserted
+only when CI exported `LICENSE_GDS` / `LICENSE_BLOOM` from the repository secrets; without them
+`actions/deploy/neo4j` substitutes a dummy, which mounts fine and is rejected at runtime, so
+those two checks log a SKIP. Local runs and fork PRs take that path.
+
+The acceptance checks read a boolean — `gds.isLicensed()`, and the `success` field of
+`bloom.checkLicenseCompliance()` — rather than matching the procedure's own words: its `status`
+field reports `"invalid"` for a rejected licence, which contains `valid`.
+
+The fixture also carries two `spec.config.neo4j` workarounds, neither part of the subject, and
+both the same root cause: **installing a bundled plugin, the image writes into `neo4j.conf`, and
+the operator's projected ConfigMap is read-only.**
+
+`server.config.strict_validation.enabled: false` — both `*.license_file` keys are
+plugin-namespaced, and the image validates `neo4j.conf` before the plugin that declares them is
+on the validator's classpath, so the server crash-loops with `No declared setting with name:
+gds.enterprise.license_file`. The image's escape is to rewrite plugin defaults into the file,
+which it cannot do here.
+
+`dbms.security.procedures.unrestricted: bloom.*` — installing `bloom`/`gds` the image appends
+`dbms.security.procedures.unrestricted=gds.*,bloom.*` (verified against 2026.05.0-enterprise;
+CI found it when `bloom.checkLicenseCompliance()` answered `52N34 procedure restricted`). Blocked
+the same way, so under the operator every plugin procedure touching database internals stays
+sandboxed. The operator leaving the setting empty is deliberate (NEO-024) and `procedure-allowlists`
+still pins that; what is not deliberate is that the image's own grant never lands, so `gds.*`
+is sandboxed too and a user must know to opt in by hand.
+
+Rendering plugin-declared settings as `NEO4J_*` env vars would fix both at the source. The CRD
+exposes no env passthrough, so a user cannot work around either the way this fixture does — they
+can only reach for `spec.config.neo4j`, which is what the fixture models.
+
+Worth knowing when reading `render/workload/plugin_volumes.go`: it projects the **whole**
+Secret (no `items`), so the file is named after the Secret key. The fixture's keys are therefore
+`gds.license` / `bloom.license`, matching the paths its config points at — whereas
+`crd-spec/neo4j/spec.md` documents `/licenses/gds.key`, a doc bug tracked separately.
+
+**Procedure assertions avoid version strings.** A missing function makes `cypher-shell` print
+`Unknown function 'apoc.version'`, which contains `apoc.version` and would pass a naive
+substring check. The cases use `SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc.'
+RETURN count(*) > 0 AS ok` instead: core Cypher, so it returns `FALSE` rather than erroring
+when the plugin is absent. `conn_assert_cypher` in `lib/connectivity.sh` is the retrying
+wrapper; `conn_run_cypher` is its non-asserting sibling, used to log the actual version for
+diagnostics.
+
+Allowlists are checked over bolt rather than in the ConfigMap, because the Neo4j image ships
+its own `neo4j.conf` — a rendered key is not proof the server resolved it. The allowlist case
+also asserts `dbms.security.procedures.unrestricted` stays **empty**: `93bfc63` stopped the
+operator unrestricting plugin procedures (NEO-024), so a regression that re-enabled it would
+widen the security sandbox on every plugin install without any render test noticing.
+
+**Two documented gaps** (see coverage.md): a volume-only plugin install emits
+`server.directories.plugins` but *no* `dbms.security.procedures.*`, so a manually imported
+JAR loads with its procedures still restricted; and an imported JAR must live at
+`<pvc-root>/plugins/`, because `render/storage/volumes.go` applies the Share subPath to
+`Existing` volumes too. The import case pins both so a fix has to be deliberate.
+
 ## Configuration profiles
 
 | Profile | Behaviour |

@@ -16,7 +16,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
-| `feature-plugins` | _(planned — no suite file yet)_ | Plugin runtime — APOC procedures, GDS, and Bloom available on assigned pools (BDR-004) |
+| `feature-plugins` | [suites/feature-plugins.yaml](suites/feature-plugins.yaml) | Plugin runtime — APOC/GDS procedures callable, generated allowlists effective, licence Secret mounting, per-plugin config, manual-import channel (BDR-004) |
 | `operator-admission` | [suites/operator-admission.yaml](suites/operator-admission.yaml) | Admission rejections + one happy case |
 | `operator-scope` | [suites/operator-scope.yaml](suites/operator-scope.yaml) | Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE + namespaced RBAC |
 
@@ -91,10 +91,27 @@ Runtime plugin behavior (procedures actually callable), distinct from `feature-c
 checks `apoc.*` config renders into `apoc.conf` (SHOW SETTINGS does not expose APOC keys).
 Needs Neo4j Ready + a bolt query.
 
-- [ ] APOC assigned: `apoc.*` procedures callable at runtime (e.g. `RETURN apoc.version()`) — NEO-3-003-APOC-01
-- [ ] GDS assigned: `gds.*` procedures available (e.g. `RETURN gds.version()`) — BDR-004 (no dedicated FR)
-- [ ] Bloom assigned: Bloom server/license available on the workload — BDR-004 (no dedicated FR)
-- [ ] Procedure allowlists injected into neo4j.conf (`dbms.security.procedures.unrestricted`/`allowlist`) for assigned plugins — BDR-004
+Standalone only — every catalog plugin is legal in `spec.plugins`, so one topology covers all
+three. The operator has no install logic: it sets `NEO4J_PLUGINS` and the image entrypoint
+installs the JAR at container start. All three ship inside the Enterprise image (`apoc` in
+`/var/lib/neo4j/labs`, `gds` and `bloom` in `/var/lib/neo4j/products`), so the suite is
+hermetic — no outbound network required.
+Licence Secrets take their content from the `LICENSE_GDS` / `LICENSE_BLOOM` repository secrets
+when CI exports them, and a dummy otherwise; the acceptance checks are skipped in the dummy case
+(local runs, fork PRs), the mount and config checks are not.
+
+- [x] APOC assigned: `apoc.*` procedures callable at runtime — NEO-3-003-APOC-01
+- [x] GDS assigned: `gds.*` procedures available, with no `licenseSecretRef` (Community runs licence-free) — BDR-004 (no dedicated FR)
+- [x] GDS and Bloom assigned with a licence Secret each: both mounted at `/licenses/<id>`, and `pluginDefinitions.<id>.config` makes `gds.enterprise.license_file` / `dbms.bloom.license_file` effective on the running server — BDR-004
+- [x] Both plugins accept the mounted licence at runtime (`gds.isLicensed()`, `bloom.checkLicenseCompliance()`) — asserted only when CI supplies real licence material, skipped on the dummy
+- [ ] Licensed plugins without `spec.config.neo4j` workarounds — the image writes plugin defaults into `neo4j.conf` at install and the operator's projected ConfigMap is read-only, so two of its writes never land: strict validation rejects the plugin-namespaced `*.license_file` keys (crash-loop), and `dbms.security.procedures.unrestricted=gds.*,bloom.*` is lost (every plugin procedure touching internals stays sandboxed). The fixture sets both by hand; the setup documented in `docs/user-guide/03-neo4j/07-plugins.md` does not work as written
+- [x] Procedure allowlist injected into neo4j.conf (`dbms.security.procedures.allowlist`) for assigned plugins, verified effective on the running server — BDR-004
+- [x] `dbms.security.procedures.unrestricted` left empty — the operator allowlists plugin procedures but never removes them from the security sandbox; that needs an explicit `spec.config.neo4j` opt-in — NEO-024
+- [x] Licence Secret without `neo4j.com/mountable-by-operator` refused at reconcile with `Error/SecretNotMountable`, a matching Warning Event, and no operands — NEO-005
+- [x] `pluginDefinitions.<id>.config` merges into `neo4j.conf` (not a per-plugin file) and is effective at runtime — BDR-004
+- [x] Manual import channel: an existing PVC mounted at `/plugins` with no `spec.plugins`, `NEO4J_PLUGINS` left unset, content required under the `plugins` subPath — BDR-004
+- [ ] Bloom server endpoint reachable over HTTP (`server.unmanaged_extension_classes`) — the licensed case proves the licence is accepted, not that the Bloom app is served; the mount point is not part of the plugin surface
+- [ ] Imported JAR's procedures callable — the import case mounts an empty PVC; seeding a real JAR needs a Job the harness does not have, and a volume-only install emits no procedure allowlist
 
 ### `feature-credentials` — NEO-2-004
 - [x] Operator-generated password authenticates over bolt — NEO-3-004-CRED-01 · AC-NEO-SECRETS

@@ -2,7 +2,7 @@
 # assert/config-apoc-rendered — NEO-3-003-APOC-01: apoc.* keys from spec.config.apoc are
 # rendered into the dedicated <cr>-apoc-config ConfigMap (key apoc.conf) when APOC is
 # assigned via spec.plugins. This checks the rendered config file, not runtime procedures
-# (that belongs to the planned feature-plugins suite).
+# (that belongs to the feature-plugins suite).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

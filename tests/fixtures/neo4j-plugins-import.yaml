@@ -1,0 +1,48 @@
+# Manual JAR import channel: a pre-created PVC mounted at /plugins via
+# storage.volumes.plugins mode Existing, with NO spec.plugins entry so the operator leaves
+# NEO4J_PLUGINS unset and the entrypoint never installs over the imported directory.
+#
+# This is the only manual-import route the operator supports — there is no init-container
+# hook (spec.podTemplate was removed from the CRD in 8837095), and additionalMounts and
+# secretMounts both reject /plugins as a reserved path.
+#
+# The PVC is left empty on purpose. Seeding a real JAR needs a Job the harness does not have,
+# so this case proves the channel (mount, subPathExpr, no NEO4J_PLUGINS), not that an
+# imported JAR loads. See coverage.md for the remaining gap.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plg-plugins-import
+  labels:
+    app.kubernetes.io/managed-by: neo4j-e2e
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+      plugins:
+        mode: Existing
+        existing:
+          claimName: plg-plugins-import
+  auth:
+    generatePassword: true
