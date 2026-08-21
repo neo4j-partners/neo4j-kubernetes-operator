@@ -15,6 +15,43 @@ the operator can and cannot do today.
 If the operator is already running and you want to shape a deployment — clustering, storage,
 TLS, plugins, metrics — go straight to the topic you need in **[Neo4j](03-neo4j/readme.md)**.
 
+## The path, end to end
+
+Five steps take you from an empty Kubernetes cluster to a database answering queries.
+
+```mermaid
+flowchart LR
+    P["1 · Platform<br/>cluster + permissions"] --> I["4 · Install the operator<br/>CRD + controller"]
+    P -. "only if you need your own image" .-> B["2 · Build<br/>optional"]
+    B --> R["3 · Push to a registry<br/>optional"]
+    R -.-> I
+    I --> N["5 · Neo4j resource<br/>your database"]
+```
+
+| Step | What you do | Page |
+|------|-------------|------|
+| 1. Platform | Provide a Kubernetes cluster, a StorageClass, and a context allowed to install a CRD and create RBAC | [Prerequisites](02-operator-installation/01-prerequisites.md) |
+| 2. Build — *optional* | Compile the controller image from this repository | [Build the operator image](02-operator-installation/02-build-image.md) |
+| 3. Push — *optional* | Put that image in a registry your cluster can pull from | [Build the operator image](02-operator-installation/02-build-image.md#make-the-image-reachable) |
+| 4. Install the operator | Apply the CRD, then install the controller from the published chart or from a clone | [Operator installation](02-operator-installation/readme.md) |
+| 5. Create a Neo4j | Apply a `Neo4j` resource; the operator builds the StatefulSet, Services and volumes | [Your first Neo4j](01-getting-started/first-neo4j.md) |
+
+### Why steps 2 and 3 are optional
+
+Every release publishes the controller image and the Helm chart to GHCR, publicly, so a normal
+install pulls a ready image and never compiles anything. Go through the build and push steps only
+when one of these is true.
+
+**Build your own** when you changed the operator — a local fix, a patch you are testing — when you
+need something that is merged but not released yet, or when your organisation requires that what
+runs in production was compiled from sources it controls.
+
+**Push to your own registry** when the cluster cannot reach GHCR, which covers air-gapped clusters
+and any egress-filtered network, or when policy requires images to come from an internal registry
+that scans and signs what it stores. Note that this reason does not imply the first one: you can
+mirror the released image into your registry without building anything, which is often what
+"we only pull from our own ACR" actually needs.
+
 ## Contents
 
 | Section | What it covers |

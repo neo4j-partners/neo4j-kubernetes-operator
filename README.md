@@ -5,45 +5,6 @@ the StatefulSets, Services, ConfigMaps, Secrets and PersistentVolumeClaims that 
 instance or a Neo4j cluster needs, then keeps them converged and reports what it sees back in the
 resource status.
 
-```text
-API:    neo4j.com/v1beta1
-Kind:   Neo4j
-Module: github.com/neo4j/neo4j-kubernetes-operator
-```
-
-The unit of management is the deployment, not the data: the operator owns pods, storage, connectors,
-TLS material and configuration. Databases, users, roles and backups are not managed by a resource
-today — see [what works today](docs/user-guide/01-getting-started/feature-status.md).
-
-## What a resource looks like
-
-```yaml
-apiVersion: neo4j.com/v1beta1
-kind: Neo4j
-metadata:
-  name: dev-minimal
-spec:
-  edition: enterprise
-  version: "2026.05.0"
-  license:
-    accept: "yes"
-  topology:
-    mode: Standalone
-  storage:
-    volumes:
-      data:
-        mode: Dynamic
-        dynamic:
-          size: 10Gi
-  auth:
-    generatePassword: true
-```
-
-That is the whole input. Everything else — connector addresses, discovery, cluster formation settings,
-labels, probes — is derived, and the settings the operator owns are
-[listed explicitly](docs/user-guide/05-reference/operator-owned-config.md) so nothing is overridden
-silently.
-
 ## Requirements
 
 - Kubernetes 1.28 or later, with a StorageClass that can provision volumes. Older API servers do not
@@ -51,38 +12,35 @@ silently.
 - **Neo4j Enterprise or Community.** Enterprise requires `spec.license.accept: "yes"`, which records
   that you hold a license from Neo4j for the image you are about to run. Community needs no licence
   and runs Standalone only — clustering, backup and metrics are Enterprise capabilities.
-- Permission to install a CRD (cluster-scoped) and to create RBAC in the operator namespace.
-- The operator watches **one namespace by default**, set through `WATCH_NAMESPACE`. Cluster-wide watch
-  is deliberately refused — see [operator scope](docs/user-guide/02-operator-installation/04-operator-scope.md).
-
-The operator image and Helm chart are published to GHCR under `neo4j-partners`
-(`ghcr.io/neo4j-partners/neo4j-kubernetes-operator` and
-`oci://ghcr.io/neo4j-partners/charts/neo4j-operator`), so you can install from the
-released chart directly — the two install paths are compared in
-[Operator installation](docs/user-guide/02-operator-installation/readme.md), and every chart value
-is documented in `charts/neo4j-operator/README.md`. Building and publishing your own image is only
-needed for development.
+- Permission to install a CRD and to create RBAC in the operator namespace.
 
 ## Quick start
 
-Starting from nothing, follow a platform guide — [local kind](docs/user-guide/01-getting-started/local-kind.md)
-or [Azure AKS](docs/user-guide/01-getting-started/azure-aks.md) — which cover creating the cluster and
-making the image reachable. To install the released chart without building anything, use
-[Operator installation](docs/user-guide/02-operator-installation/readme.md). With a cluster, a
-registry and a clone already in place:
+On a Kubernetes cluster you already have, installing means applying the CRD and installing the chart — nothing is built.
+`VERSION` is the tag of the [latest release](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases) without its leading `v`:
 
 ```bash
-# 1. Build and publish the operator image
-export IMG=<registry>/neo4j-kubernetes-operator:dev
-make docker-build && docker push "$IMG"
+VERSION=1.0.0-rc1
 
-# 2. Install the CRD, RBAC and the controller
-make deploy IMG="$IMG"          # or: make helm-install IMG="$IMG"
+# 1. The CRD
+kubectl apply --server-side --force-conflicts \
+  -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
 
-# 3. Deploy a Standalone instance
+# 2. The controller, in its own namespace, watching default
+helm upgrade --install neo4j-operator \
+  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version ${VERSION} \
+  --namespace neo4j-operator-system --create-namespace --wait
+
+# 3. A Standalone instance, from this repository
 kubectl apply -f examples/standalone/01-minimal.yaml
 kubectl get neo4j dev-minimal -w
 ```
+
+If you are starting further back, or want to run your own build:
+
+- [Quickstart — local kind](docs/user-guide/01-getting-started/local-kind.md) — create a local cluster, then the install above
+- [Quickstart — Azure AKS](docs/user-guide/01-getting-started/azure-aks.md) — subscription setup, resource providers, and the AKS storage class
+- [Operator installation](docs/user-guide/02-operator-installation/readme.md) — the install paths compared, chart values, watch scope
 
 `kubectl get neo4j` prints edition, version, topology mode and readiness:
 
@@ -126,9 +84,6 @@ but unverified, from what is planned with a settled design, and from what is not
 | [Developer guide](docs/developer-guide/readme.md) | Contributing, CI gates, code layout |
 | [Design records](docs/design/) | Why the API and the architecture look like this — BDRs, ADRs, CRD spec |
 
-The user guide is self-contained: it links only to its own pages and to `examples/`, so you can read it
-without navigating the design tree.
-
 ## Examples
 
 [`examples/`](examples/README.md) holds apply-ready manifests — Standalone and Cluster variants,
@@ -144,12 +99,6 @@ Work on a branch, open a pull request against `main`, and expect the checks to g
 with a failing check is not merged, and `main` only moves forward by fast-forward. The full workflow,
 the local commands that reproduce CI, and what a change is expected to touch are in
 [Contributing](docs/developer-guide/01-contributing.md).
-
-```bash
-make test     # unit tests
-make audit    # CRD validator + reconcile linter
-make run      # controller on your machine, against your kubeconfig
-```
 
 ## License
 

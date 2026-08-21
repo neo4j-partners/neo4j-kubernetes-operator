@@ -61,13 +61,13 @@ when the Deployment does not become Available, and how to run the controller out
 ## Choice B — build the image and install from source
 
 Two steps, one page each. [Build the operator image](02-build-image.md) covers the build, the
-architecture trap on Apple silicon, and the three ways to make an image reachable — loading it into
-kind, into minikube, or pushing it to a registry. [Install the operator](03-install.md) then covers
-both install paths from a clone: plain manifests through `make deploy`, or the chart from
-`charts/neo4j-operator` with your own image values.
+architecture trap on Apple silicon, the ways to make an image reachable — loading it into kind or
+minikube, pushing it to a registry, or mirroring the published one — and how to point the install
+at the result. [Install the operator](03-install.md) then covers both install paths from a clone:
+the chart in `charts/neo4j-operator` with your image values, or the raw manifests under `config/`.
 
 If you are only developing, you can skip the image entirely and run the controller as a local
-process against your kubeconfig — `make install && make run`, described in
+process against your kubeconfig, described in
 [Build the operator image](02-build-image.md#skipping-the-image-entirely).
 
 ## Two things to settle before you install

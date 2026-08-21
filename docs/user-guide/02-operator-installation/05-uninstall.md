@@ -11,14 +11,17 @@ data volumes are three separate lifecycles, and you decide how far to go.
 
 ## Remove the controller
 
-```bash
-make undeploy
-```
-
-With Helm:
+If you installed the chart:
 
 ```bash
 helm uninstall neo4j-operator --namespace neo4j-operator-system
+```
+
+If you applied the raw manifests, delete the same two directories you applied:
+
+```bash
+kubectl delete -k config/manager --ignore-not-found
+kubectl delete -k config/rbac --ignore-not-found
 ```
 
 Either way the Deployment and its RBAC go away while Neo4j keeps serving traffic: pods, Services

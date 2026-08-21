@@ -5,7 +5,7 @@ Three ways in, depending on what you already have.
 | You have | Start here | Time |
 |----------|-----------|------|
 | Nothing — a laptop with Docker | [kind (local)](local-kind.md) | ~15 min |
-| An Azure subscription | [Azure AKS](azure-aks.md) | ~30 min |
+| An Azure subscription | [Azure AKS](azure-aks.md) — published chart, no Docker needed | ~20 min |
 | A running cluster with the operator installed | [Your first Neo4j](first-neo4j.md) | ~5 min |
 
 Before you invest time, check [what works today](feature-status.md). The `Neo4j` CRD is

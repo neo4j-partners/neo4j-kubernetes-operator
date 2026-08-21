@@ -11,21 +11,19 @@ own image, that it is reachable from the cluster.
 
 The CRD must be applied server-side. Its schema is large enough to exceed the annotation size
 limit that a client-side `kubectl apply -f` relies on, so the plain form fails with a metadata
-error. From a clone:
-
-```bash
-make install
-```
-
-That runs `kubectl apply --server-side --force-conflicts` on
-`config/crd/bases/neo4j.com_neo4js.yaml`. Without a clone, apply the same file from the release
-asset — `VERSION` is the release tag without its leading `v`:
+error. Apply the release asset — `VERSION` is the release tag without its leading `v`:
 
 ```bash
 VERSION=1.0.0-rc1
 
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
+```
+
+From a clone, the same definition is checked in, which is what you want when you changed the API:
+
+```bash
+kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
 ```
 
 Every install path below depends on this step, and it is also the only one needed when you run the
@@ -47,14 +45,30 @@ file, exactly as with a local chart.
 
 ## From a clone — manifests
 
+Three applies, in this order: the namespace, the roles and bindings the controller uses in the
+namespaces it watches, then the controller Deployment.
+
 ```bash
-make deploy IMG=neo4j-operator:local
+kubectl apply -f config/default/namespace.yaml
+kubectl apply -k config/rbac
+kubectl apply -k config/manager
 ```
 
-This creates the `neo4j-operator-system` namespace, applies the roles and bindings from
-`config/rbac`, and applies the controller Deployment from `config/manager`. It also removes the
-cluster-scoped role and binding that older installs used, since watch scope is now granted per
-namespace.
+If you are replacing an install that predates namespaced watch scope, remove the cluster-wide grant
+it left behind — nothing else does, and it would keep the operator readable across the whole
+Kubernetes cluster:
+
+```bash
+kubectl delete clusterrolebinding neo4j-operator-manager-rolebinding --ignore-not-found
+kubectl delete clusterrole neo4j-operator-manager-role --ignore-not-found
+```
+
+The Deployment runs whatever `config/manager/manager.yaml` names, `controller:latest` out of the
+box. These manifests substitute nothing, so pointing them at your own build means editing that
+file — see
+[Point the install at your image](02-build-image.md#point-the-install-at-your-image). Either chart
+takes that reference as a value instead, which is why the chart is the better choice for anything
+but a scratch cluster.
 
 The Deployment ships with `WATCH_NAMESPACE=default` (workload namespace only). Examples that omit
 `metadata.namespace` land in `default` and are reconciled. The operator namespace is never watched
@@ -64,17 +78,9 @@ the roles have to be changed together.
 
 ## From a clone — the local chart
 
-Same chart as the published one, read from your working tree, with your image:
+Same chart as the published one, read from your working tree, with your image and your scope:
 
 ```bash
-make helm-install IMG=myregistry.example.com/neo4j-operator:0.1.0
-```
-
-Or drive Helm yourself, which is what you want as soon as you need real values:
-
-```bash
-make install    # CRD, server-side
-
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace \
   --set image.repository=myregistry.example.com/neo4j-operator \
@@ -141,16 +147,13 @@ published version that does not exist. `kubectl describe pod` names the referenc
 
 ## Run the controller on your machine
 
-Useful while developing, since it skips image builds entirely:
+While developing you can skip the image altogether and run the controller as a local process
+against your kubeconfig, with the CRD as its only prerequisite. The command lives with the other
+from-source workflows, in
+[Build the operator image](02-build-image.md#skipping-the-image-entirely).
 
-```bash
-make install
-make run LOG_ARGS="--zap-devel --zap-log-level=debug"
-```
-
-`make run` disables leader election and uses your kubeconfig. Do not also run the in-cluster
-Deployment: two controllers reconciling the same resources will fight over every object. Either
-never apply `config/manager`, or scale it down first:
+Do not also run the in-cluster Deployment: two controllers reconciling the same resources will
+fight over every object. Either never apply `config/manager`, or scale it down first:
 
 ```bash
 kubectl scale deployment/neo4j-operator-controller-manager -n neo4j-operator-system --replicas=0

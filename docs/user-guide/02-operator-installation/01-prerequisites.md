@@ -16,11 +16,10 @@ simplest way to get there; a platform team can narrow it down as described in
 
 | Tool | Purpose | Needed for |
 |------|---------|-----------|
-| `kubectl` | Applying the CRD and manifests | Every install |
-| `helm` 3.8+ | Installing the chart, published or local | Choice A, and the chart path of Choice B |
-| `make` | Project install targets | Choice B |
-| `docker` | Building the controller image | Choice B |
-| `go` 1.24+ | Building or running the manager on your machine | `make build`, `make run` |
+| `kubectl` | Applying the CRD, then the `Neo4j` resources you create | Every install |
+| `helm` 3.8+ | Installing the chart, published or from a clone | Every install — the chart is the recommended path |
+| `docker` and `make` | Building the controller image from source | Choice B only |
+| `go` 1.24+ | Running the controller as a local process, without an image | Development only |
 
 The controller image, the chart and the CRD are published with every release, so a first install
 needs neither a clone nor a build — that is Choice A in

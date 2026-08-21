@@ -11,29 +11,30 @@ cluster. If you only have a condition reason and want to know what it means, sta
 
 **Cause:** Plain `kubectl apply -f config/crd/bases/neo4j.com_neo4js.yaml` (or `kubectl apply -k config/crd`) uses client-side apply. Kubernetes stores the entire manifest in `kubectl.kubernetes.io/last-applied-configuration`, and the Neo4j CRD OpenAPI schema is ~1.5 MB — above the 256 KiB annotation limit.
 
-**Fix:** Use server-side apply via `make install`:
+**Fix:** Use server-side apply, which stores no such annotation:
 
 ```bash
-make install
-# equivalent:
 kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
 ```
+
+Without a clone, the same definition is a release asset — see
+[Install the CRD](../02-operator-installation/03-install.md#install-the-crd).
 
 If a previous failed apply left a broken CRD object, delete it first (only when no Neo4j workloads depend on it):
 
 ```bash
 kubectl delete crd neo4js.neo4j.com --ignore-not-found
-make install
+kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
 ```
 
 ## CRD not found when applying Neo4j
 
 **Symptom:** `no matches for kind "Neo4j" in version "neo4j.com/v1beta1"`
 
-**Fix:** Install the CRD first:
+**Fix:** Install the CRD first, as described in
+[Install the CRD](../02-operator-installation/03-install.md#install-the-crd):
 
 ```bash
-make install
 kubectl get crd neo4js.neo4j.com
 ```
 
@@ -50,7 +51,7 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 
 Common causes:
 
-- Image `controller:latest` not present on nodes — run `make docker-build` and load into kind, or use `make run` locally.
+- Image `controller:latest` not present on nodes — that placeholder is what the raw manifests ship with, and it exists in no registry. Either install the chart, which defaults to the published image, or point the install at an image you built: [Point the install at your image](../02-operator-installation/02-build-image.md#point-the-install-at-your-image).
 - RBAC not applied — re-run `kubectl apply -k config/rbac`.
 - **Tainted nodes** — if the node pool uses taints (e.g. `dedicated=neo4j:NoSchedule`), the manager must tolerate them. Edit `config/manager/manager.yaml` (`spec.template.spec.tolerations` / optional `nodeSelector`), then `kubectl apply -k config/manager`. Events will show `untolerated taint ...`. Match the same keys as `Neo4j.spec.scheduling.tolerations`.
 

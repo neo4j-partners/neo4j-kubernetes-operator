@@ -64,8 +64,6 @@ File storage is an `emptyDir` (lost on pod restart). Mount a PVC later if you ne
 ### Local run
 
 ```bash
-make run
-# or
 go run ./src/cmd/manager/main.go --leader-elect=false \
   --zap-devel --zap-log-level=debug \
   --log-file=/tmp/neo4j-operator.log --log-file-level=debug
