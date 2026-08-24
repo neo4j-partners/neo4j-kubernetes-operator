@@ -11,7 +11,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `workload-standalone` | [suites/workload-standalone.yaml](suites/workload-standalone.yaml) | Positive Standalone (happy path / matrix) |
 | `workload-cluster` | [suites/workload-cluster.yaml](suites/workload-cluster.yaml) | Cluster mode — members created, cluster forms, default database allocated on the declared primaries, routing works (1-primary lab + 3-primary HA) |
 | `feature-connectivity` | [suites/feature-connectivity.yaml](suites/feature-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
-| `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart (NEO-2-010) |
+| `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart, Standalone (RSTR-01) and 3-primary cluster rolled one-by-one with quorum held (RSTR-02) (NEO-2-010) |
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo` | [suites/feature-tls-byo.yaml](suites/feature-tls-byo.yaml) | TLS from Bring-Your-Own Secrets — Standalone bolt leaf supplied via labelled Secrets, operator mounts and verifies it (Ready is the SAN gate), Neo4j serves Bolt over TLS, plaintext Bolt refused |
@@ -57,7 +57,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
 - [x] TLS material via BYO Secret (`spec.trust` with `privateKey`/`publicCertificate`) — Standalone bolt (`feature-tls-byo`) and Cluster bolt+cluster mTLS (`feature-tls-byo-cluster`) — NEO-3-005-TLS-03 · AC-NEO-TLS
 - [x] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady=SecretsPresent`, cluster forms and serves Bolt over TLS — NEO-2-005 · AC-NEO-TLS (see `feature-tls`)
-- [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
+- [x] Rolling restart of members one-by-one on config change: patching `spec.config` on a 3-primary cluster rolls the `<cr>-primary` pool with quorum held throughout (`readyReplicas` never below `members-1`) and every member reports the new value via `SHOW SETTINGS` — NEO-3-010-RSTR-02 (asserted in `feature-config` case `config-change-restart-cluster`, which owns the per-case assert; `workload-cluster` runs a fixed assert list so it cannot)
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
 - [x] Added servers auto-enabled: operator runs `ENABLE SERVER` so every new ordinal is `Enabled` + `Available` in `SHOW SERVERS`, checked by pod name — NEO-3-011-SRV-01 · AC-NEO-SCALE
 - [x] Scaling leaves the surviving members alone: identical pod UIDs, no container restarts and an unchanged pool config checksum on both halves, since the system bootstrap gate never follows `primaries.members` — derived when `minimumMembers` is unset, immutable when it is set
@@ -85,7 +85,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] JVM `additionalArguments` colliding with a default (same key) replace it in place — user value wins, one entry per key, position preserved — NEO-3-003-JVM-01
 - [x] A dropped JVM argument is reported — `DuplicateEntry` Warning Event and operator log line naming the field, the value kept and the one dropped — NEO-3-003-JVM-01
 - [ ] APOC credentials mounted from secret — NEO-3-003-APOC-02 · AC-NEO-APOC-CREDS-001 (`pluginDefinitions.apoc.credentials`)
-- [ ] Rolling restart of cluster members one-by-one on config change — NEO-3-010-RSTR-02 (cluster-specific, see `workload-cluster`)
+- [x] Rolling restart of cluster members one-by-one on config change — the same `neo4j.com/config-checksum` mechanism as Standalone, on a 3-replica pool: `updateRevision` bumps, quorum holds through the roll (`readyReplicas` >= `members-1`), and all three primaries converge on the new `SHOW SETTINGS` value (case `config-change-restart-cluster`) — NEO-3-010-RSTR-02
 
 ### `feature-plugins` — plugins (BDR-004)
 

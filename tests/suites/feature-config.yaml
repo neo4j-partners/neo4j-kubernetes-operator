@@ -64,3 +64,11 @@ cases:
     assert: config-restart
     expect: success
     cr_name: e2e-cfgchange
+
+  - id: config-change-restart-cluster
+    comment: NEO-3-010-RSTR-02 — changing spec.config on a running 3-primary cluster rolls the pool one member at a time (quorum held, readyReplicas never below members-1) and every member reports the new value via SHOW SETTINGS.
+    fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
+    neo4j_case: cluster-3primaries
+    assert: cluster-config-restart
+    expect: success
+    cr_name: e2e-cfgchange-cl
