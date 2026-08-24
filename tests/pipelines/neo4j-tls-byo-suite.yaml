@@ -1,0 +1,17 @@
+# Single-CR lifecycle for Bring-Your-Own TLS. No cert-manager: the user supplies the Secrets, so
+# case_run provisions them (trust/provision-byo) before applying the CR. Provision must precede
+# deploy because the operator refuses a CR whose mount Secrets are absent/unlabelled at reconcile.
+# case_teardown removes those user Secrets, which the CR delete does not GC (they are not owned).
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - trust/provision-byo
+  - deploy/neo4j
+
+case_teardown:
+  - cleanup/standalone
+  - trust/cleanup-byo

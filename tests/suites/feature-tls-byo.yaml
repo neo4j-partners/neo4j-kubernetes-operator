@@ -1,0 +1,21 @@
+name: feature-tls-byo
+description: >
+  NEO-2-005 TLS from Bring-Your-Own Secrets — the BYO half of the TLS feature (cert-manager is
+  covered by feature-tls). A Standalone server gets a self-signed bolt leaf via user-supplied,
+  operator-mountable Secrets; the operator mounts them, dials bolt+s and verifies against them
+  (Ready is the SAN gate), and Neo4j serves Bolt over TLS while plaintext bolt:// is refused.
+brief_ref: neo4j-tls-byo
+use_pipeline: neo4j-tls-byo-suite
+on_case_failure: continue
+pipeline:
+  case_assert:
+    - assert/tls-standalone
+    - assert/status-conditions
+
+cases:
+  - id: standalone-byo-secret
+    comment: Standalone bolt TLS from a self-signed BYO Secret; operator mounts + verifies it, Neo4j serves over TLS, plaintext refused.
+    fixture: tests/fixtures/neo4j-tls-byo-standalone.yaml
+    neo4j_case: standalone-tls-byo
+    expect: success
+    cr_name: e2e-tls-byo

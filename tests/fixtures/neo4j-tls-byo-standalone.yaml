@@ -1,0 +1,46 @@
+# Standalone TLS from a Bring-Your-Own Secret (NEO-2-005, the BYO half of the feature — the
+# cert-manager half lives in neo4j-tls-cert-manager.yaml). The two bolt Secrets are created by
+# the trust/provision-byo action *before* this CR is applied: it generates a self-signed leaf
+# whose SAN matches the client Service the operator dials (<cr>.<ns>.svc), and stores the key
+# and cert under the default subPaths (private.key / public.crt) with the mountable opt-in label.
+#
+# Standalone (not Cluster) on purpose: no cluster mTLS, so a single self-signed bolt leaf is
+# enough to prove the BYO path end to end — the operator mounts user Secrets, dials bolt+s and
+# verifies against them, and Neo4j serves Bolt over TLS. Cluster BYO (per-member SANs + mTLS)
+# is a heavier follow-up.
+#
+# Only `name: __CR_NAME__` and the storage placeholders are substituted; the secretName literals
+# are fixed and must match trust/provision-byo.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
+  trust:
+    enabled: true
+    certificates:
+      bolt:
+        privateKey:
+          secretName: tls-byo-bolt-key
+          subPath: private.key
+        publicCertificate:
+          secretName: tls-byo-bolt-cert
+          subPath: public.crt
