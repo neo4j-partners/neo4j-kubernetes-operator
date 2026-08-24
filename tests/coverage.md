@@ -15,6 +15,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo` | [suites/feature-tls-byo.yaml](suites/feature-tls-byo.yaml) | TLS from Bring-Your-Own Secrets — Standalone bolt leaf supplied via labelled Secrets, operator mounts and verifies it (Ready is the SAN gate), Neo4j serves Bolt over TLS, plaintext Bolt refused |
+| `feature-tls-byo-cluster` | [suites/feature-tls-byo-cluster.yaml](suites/feature-tls-byo-cluster.yaml) | Cluster BYO TLS — private CA signs shared bolt + cluster leaves with per-member SANs, members do mTLS (clientAuth Require), cluster forms and serves Bolt over TLS |
 | `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
 | `feature-plugins` | _(planned — no suite file yet)_ | Plugin runtime — APOC procedures, GDS, and Bloom available on assigned pools (BDR-004) |
@@ -54,7 +55,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] `defaultPrimariesCount` is a creation default, not a constraint: a database created wider than the field keeps its topology across reconcile passes, with no `DatabaseTopologyResized` Event — TOPO-006
 - [x] Default database reachable via `neo4j://` from members that do not host it (direct `bolt://` may be refused)
 - [x] Routing works through the client Service (`neo4j://`) — AC-NEO-CLUSTER-003
-- [x] TLS material via BYO Secret (`spec.trust` with `privateKey`/`publicCertificate`) — Standalone bolt, see `feature-tls-byo`; Cluster BYO (per-member SANs + mTLS) still unit-tested only — NEO-3-005-TLS-03 · AC-NEO-TLS
+- [x] TLS material via BYO Secret (`spec.trust` with `privateKey`/`publicCertificate`) — Standalone bolt (`feature-tls-byo`) and Cluster bolt+cluster mTLS (`feature-tls-byo-cluster`) — NEO-3-005-TLS-03 · AC-NEO-TLS
 - [x] cert-manager issued certificates: operator creates one `Certificate` per policy, `TLSReady=SecretsPresent`, cluster forms and serves Bolt over TLS — NEO-2-005 · AC-NEO-TLS (see `feature-tls`)
 - [ ] Rolling restart of members one-by-one on config change — NEO-3-010-RSTR-02
 - [x] Scale out then in after deploy (`topology.primaries.members` 3 → 5 → 3, one cluster) — NEO-2-011 / NEO-3-011-CSZ-01 · AC-NEO-SCALE
@@ -128,9 +129,21 @@ Secrets before the CR; `trust/cleanup-byo` removes them on teardown (the CR does
 - [x] `TLSReady=True/SecretsPresent` from BYO material — NEO-2-005
 - [x] Operator dials its own admin Bolt over verified `bolt+s` and reaches Ready — the SAN/trust gate (a cert without `<cr>.<ns>.svc` keeps Ready False) — NEO-2-005 · NEO-004
 - [x] Neo4j serves Bolt over TLS (`bolt+ssc` query succeeds) and plaintext `bolt://` is refused — NEO-2-005
-- [ ] Cluster BYO (per-member SANs + cluster mTLS with `clientAuth: Require`) — unit-tested only
+- [x] Cluster BYO (per-member SANs + cluster mTLS with `clientAuth: Require`) — see `feature-tls-byo-cluster`
 - [ ] BYO HTTPS listener material — unit-tested only
 - [ ] BYO renewal (user updates the Secret → operator re-stamps checksum → roll) — cert-manager renewal is covered in `feature-tls`; the BYO update path is not
+
+### `feature-tls-byo-cluster` — NEO-2-005 (BYO, Cluster)
+
+The hardest BYO shape: a 3-primary cluster where the user supplies both the bolt and the cluster
+mTLS material. `trust/provision-byo-cluster` runs a private CA that signs one shared bolt leaf and
+one shared cluster leaf (the operator mounts the same Secret on every member), each with every
+member's service FQDN as a SAN. Reuses `assert/tls-ready` with `TLS_EXPECT_CERTIFICATES=false`.
+
+- [x] Operator mounts user-supplied cluster + bolt material (private.key/public.crt/ca.crt), NEO-005 label enforced — NEO-2-005 · AC-NEO-TLS
+- [x] `TLSReady=True/SecretsPresent` from BYO material — NEO-2-005
+- [x] Members do cluster mTLS (`clientAuth: Require`) against the CA and the cluster forms (`ClusterFormed=True`) — NEO-2-005 · AC-NEO-CLUSTER-002
+- [x] Cluster serves Bolt over TLS (`SHOW SERVERS` via `bolt+ssc`, all members Enabled+Available) and plaintext `bolt://` refused — NEO-2-005
 
 ### `feature-storage` — NEO-2-006
 - [x] Dynamic data via existing StorageClass — NEO-3-006-PVC-02 · AC-NEO-STORAGE-DYNAMIC

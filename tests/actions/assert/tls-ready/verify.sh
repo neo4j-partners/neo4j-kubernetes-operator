@@ -39,31 +39,39 @@ cond() {  # cond <type> <field>
 # 1. Every Certificate the operator created for this CR must be issued. A pending Certificate
 #    is cert-manager's own verdict that no usable Secret exists yet — assert it directly so a
 #    failure points at issuance, not at Neo4j.
-log "Waiting for cert-manager Certificates (instance=${NEO4J_CR_NAME}) to be Ready"
-deadline=$((SECONDS + TIMEOUT_SECS))
-certs_ok=0
-while [[ "${SECONDS}" -lt "${deadline}" ]]; do
-  # One line per Certificate: "<name> <Ready-status>". No rows yet = operator has not created
-  # them; a row with anything but True = still issuing.
-  rows="$(kubectl get certificate -n "${NEO4J_NAMESPACE}" \
-    -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null || true)"
-  # awk over grep -c: a here-string appends a trailing newline, which grep -cv counts as a
-  # spurious not-ready row. NF skips blank lines; $NF is the Ready status column.
-  total="$(awk 'NF{c++} END{print c+0}' <<<"${rows}")"
-  notready="$(awk 'NF && $NF!="True"{c++} END{print c+0}' <<<"${rows}")"
-  if [[ "${total}" -ge 1 && "${notready}" -eq 0 ]]; then
-    certs_ok=1
-    break
+#
+#    Skipped for Bring-Your-Own material (TLS_EXPECT_CERTIFICATES=false): there are no operator
+#    Certificate objects then, only user Secrets. The rest of this assert (TLSReady, formation
+#    over TLS, enforcement) is identical for BYO and cert-manager, so it is reused as-is.
+if [[ "${TLS_EXPECT_CERTIFICATES:-true}" == "true" ]]; then
+  log "Waiting for cert-manager Certificates (instance=${NEO4J_CR_NAME}) to be Ready"
+  deadline=$((SECONDS + TIMEOUT_SECS))
+  certs_ok=0
+  while [[ "${SECONDS}" -lt "${deadline}" ]]; do
+    # One line per Certificate: "<name> <Ready-status>". No rows yet = operator has not created
+    # them; a row with anything but True = still issuing.
+    rows="$(kubectl get certificate -n "${NEO4J_NAMESPACE}" \
+      -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" \
+      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null || true)"
+    # awk over grep -c: a here-string appends a trailing newline, which grep -cv counts as a
+    # spurious not-ready row. NF skips blank lines; $NF is the Ready status column.
+    total="$(awk 'NF{c++} END{print c+0}' <<<"${rows}")"
+    notready="$(awk 'NF && $NF!="True"{c++} END{print c+0}' <<<"${rows}")"
+    if [[ "${total}" -ge 1 && "${notready}" -eq 0 ]]; then
+      certs_ok=1
+      break
+    fi
+    sleep 5
+  done
+  if [[ "${certs_ok}" -ne 1 ]]; then
+    kubectl get certificate -n "${NEO4J_NAMESPACE}" -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" -o wide >&2 || true
+    die "cert-manager Certificates for ${NEO4J_CR_NAME} not all Ready within ${TIMEOUT_SECS}s"
   fi
-  sleep 5
-done
-if [[ "${certs_ok}" -ne 1 ]]; then
-  kubectl get certificate -n "${NEO4J_NAMESPACE}" -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" -o wide >&2 || true
-  die "cert-manager Certificates for ${NEO4J_CR_NAME} not all Ready within ${TIMEOUT_SECS}s"
+  log "cert-manager Certificates Ready:"
+  printf '%s\n' "${rows}" | sed 's/^/  /' >&2
+else
+  log "TLS_EXPECT_CERTIFICATES=false — Bring-Your-Own material, skipping cert-manager Certificate check"
 fi
-log "cert-manager Certificates Ready:"
-printf '%s\n' "${rows}" | sed 's/^/  /' >&2
 
 # 2. The operator's own TLS verdict. SecretsPresent means it read usable material out of the
 #    issued Secrets; CertificatePending means it is still requeueing on cert-manager.

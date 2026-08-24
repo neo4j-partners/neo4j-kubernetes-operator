@@ -1,0 +1,22 @@
+name: feature-tls-byo-cluster
+description: >
+  NEO-2-005 Cluster TLS from Bring-Your-Own Secrets — the hardest BYO shape. A private CA signs a
+  shared bolt leaf and a shared cluster leaf, each carrying every member's service FQDN; the
+  operator mounts them, members do mTLS (clientAuth Require), and the cluster forms and serves
+  Bolt over TLS. Reuses assert/tls-ready with the cert-manager Certificate check disabled
+  (TLS_EXPECT_CERTIFICATES=false, set by the case), since BYO has no operator Certificate objects.
+brief_ref: neo4j-tls-byo-cluster
+use_pipeline: neo4j-tls-byo-cluster-suite
+on_case_failure: continue
+pipeline:
+  case_assert:
+    - assert/tls-ready
+    - assert/status-conditions
+
+cases:
+  - id: cluster-byo-secret
+    comment: 3-primary cluster, BYO bolt+cluster TLS from a private CA; operator mounts + verifies, members mTLS, cluster forms and serves over TLS.
+    fixture: tests/fixtures/neo4j-tls-byo-cluster.yaml
+    neo4j_case: cluster-tls-byo
+    expect: success
+    cr_name: e2e-tls-byo-cl

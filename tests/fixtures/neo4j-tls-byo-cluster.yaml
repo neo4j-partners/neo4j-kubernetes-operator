@@ -1,0 +1,70 @@
+# Cluster TLS from Bring-Your-Own Secrets (NEO-2-005, the hardest BYO shape). The two Secrets are
+# created by trust/provision-byo-cluster before this CR is applied: a private CA signs one bolt
+# leaf and one cluster leaf, each carrying every member's service FQDN as SANs, stored with the
+# default subPaths (private.key/public.crt) plus ca.crt, and the mountable opt-in label.
+#
+# cluster mTLS: clientAuth Require means members present the shared cluster cert from both ends
+# and validate the peer against ca.crt. bolt trustedCerts=ca.crt so the operator's bolt+s admin
+# dial (to <cr>.<ns>.svc and per-member FQDNs) verifies against the CA.
+#
+# Only `name: __CR_NAME__` and the storage placeholders are substituted; secretName literals are
+# fixed and must match trust/provision-byo-cluster.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    minimumMembers: 3
+    defaultPrimariesCount: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
+  trust:
+    enabled: true
+    certificates:
+      cluster:
+        clientAuth: Require
+        privateKey:
+          secretName: tls-byo-cl-cluster
+          subPath: private.key
+        publicCertificate:
+          secretName: tls-byo-cl-cluster
+          subPath: public.crt
+        trustedCerts:
+          sources:
+            - secret:
+                name: tls-byo-cl-cluster
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+      bolt:
+        privateKey:
+          secretName: tls-byo-cl-bolt
+          subPath: private.key
+        publicCertificate:
+          secretName: tls-byo-cl-bolt
+          subPath: public.crt
+        trustedCerts:
+          sources:
+            - secret:
+                name: tls-byo-cl-bolt
+                items:
+                  - key: ca.crt
+                    path: ca.crt

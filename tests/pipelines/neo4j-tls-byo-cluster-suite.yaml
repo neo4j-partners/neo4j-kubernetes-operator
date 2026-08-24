@@ -1,0 +1,16 @@
+# Cluster Bring-Your-Own TLS lifecycle. Like neo4j-tls-byo-suite but provisions the cluster
+# material (CA + bolt + cluster leaves with per-member SANs). No cert-manager. Provision precedes
+# deploy because the operator refuses a CR whose mount Secrets are absent/unlabelled at reconcile.
+setup:
+  - operator/install
+
+teardown:
+  - cleanup/operator
+
+case_run:
+  - trust/provision-byo-cluster
+  - deploy/neo4j
+
+case_teardown:
+  - cleanup/standalone
+  - trust/cleanup-byo-cluster
