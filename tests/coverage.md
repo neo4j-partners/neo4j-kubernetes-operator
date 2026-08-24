@@ -18,7 +18,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-tls-byo-cluster` | [suites/feature-tls-byo-cluster.yaml](suites/feature-tls-byo-cluster.yaml) | Cluster BYO TLS — private CA signs shared bolt + cluster leaves with per-member SANs, members do mTLS (clientAuth Require), cluster forms and serves Bolt over TLS |
 | `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
-| `feature-plugins` | _(planned — no suite file yet)_ | Plugin runtime — APOC procedures, GDS, and Bloom available on assigned pools (BDR-004) |
+| `feature-plugins` | [suites/feature-plugins.yaml](suites/feature-plugins.yaml) | Plugin runtime — APOC + GDS procedures actually callable over bolt on a Standalone server, and the operator opens the procedure allowlist to exactly the assigned plugins (BDR-004) |
 | `operator-admission` | [suites/operator-admission.yaml](suites/operator-admission.yaml) | Admission rejections + one happy case |
 | `operator-scope` | [suites/operator-scope.yaml](suites/operator-scope.yaml) | Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE + namespaced RBAC |
 
@@ -91,12 +91,15 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 
 Runtime plugin behavior (procedures actually callable), distinct from `feature-config` which
 checks `apoc.*` config renders into `apoc.conf` (SHOW SETTINGS does not expose APOC keys).
-Needs Neo4j Ready + a bolt query.
+Runs on Standalone with APOC + GDS assigned via `spec.plugins`. Declaring a catalog plugin sets
+`NEO4J_PLUGINS` so the Neo4j image downloads the JAR at start; the assert waits for `Ready` then
+calls each plugin's version function over bolt. GDS runs in Community form without a license, so no
+license Secret is needed.
 
-- [ ] APOC assigned: `apoc.*` procedures callable at runtime (e.g. `RETURN apoc.version()`) — NEO-3-003-APOC-01
-- [ ] GDS assigned: `gds.*` procedures available (e.g. `RETURN gds.version()`) — BDR-004 (no dedicated FR)
-- [ ] Bloom assigned: Bloom server/license available on the workload — BDR-004 (no dedicated FR)
-- [ ] Procedure allowlists injected into neo4j.conf (`dbms.security.procedures.unrestricted`/`allowlist`) for assigned plugins — BDR-004
+- [x] APOC assigned: `apoc.*` procedures callable at runtime (`RETURN apoc.version()` over bolt) — NEO-3-003-APOC-01
+- [x] GDS assigned: `gds.*` procedures available (`RETURN gds.version()` over bolt, no license — Community form) — BDR-004 (no dedicated FR)
+- [x] Procedure allowlist injected into neo4j.conf (`dbms.security.procedures.allowlist` contains `apoc`/`gds` via `SHOW SETTINGS`) for the assigned plugins; the operator never auto-sets `unrestricted` (opt-in only) — BDR-004
+- [ ] Bloom assigned: Bloom server/license available on the workload — out of scope for an unlicensed runner (Bloom is an unmanaged HTTP extension, not Cypher procedures, and needs a real license to run) — BDR-004 (no dedicated FR)
 
 ### `feature-credentials` — NEO-2-004
 - [x] Operator-generated password authenticates over bolt — NEO-3-004-CRED-01 · AC-NEO-SECRETS

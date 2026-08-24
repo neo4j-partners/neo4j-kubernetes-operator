@@ -1,0 +1,23 @@
+name: feature-plugins
+description: >
+  NEO-3-003-APOC-01 / BDR-004 plugin runtime — a plugin declared on spec.plugins is downloaded by the
+  Neo4j image and its procedures are actually callable over bolt, distinct from feature-config's
+  apoc-config case which only checks apoc.* keys render into apoc.conf. Runs on Standalone (the
+  cheapest topology): a single server with APOC + GDS assigned. Both answer their version function
+  without a license (GDS runs in Community form), and the operator opens
+  dbms.security.procedures.allowlist to exactly apoc.*/gds.*. Bloom is out of scope — it is an
+  unmanaged HTTP extension needing a real license, nothing a bolt query can prove on a runner.
+brief_ref: neo4j-plugins
+use_pipeline: neo4j-suite
+on_case_failure: continue
+pipeline:
+  case_assert:
+    - assert/{{assert}}
+
+cases:
+  - id: apoc-gds-runtime
+    comment: BDR-004 — APOC + GDS assigned via spec.plugins; apoc.version()/gds.version() callable over bolt and the allowlist opened to both.
+    fixture: tests/fixtures/neo4j-plugins-standalone.yaml
+    assert: plugins-runtime
+    expect: success
+    cr_name: e2e-plugins
