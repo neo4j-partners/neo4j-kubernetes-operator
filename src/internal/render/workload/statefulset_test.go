@@ -144,6 +144,37 @@ func TestCommunityStatefulSetOmitsLicensingEnv(t *testing.T) {
 	}
 }
 
+func TestStandaloneStatefulSetEvalLicense(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptEval},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data: neo4jv1beta1.DataVolumeSpec{
+						Mode:    neo4jv1beta1.VolumeModeDynamic,
+						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+					},
+				},
+			},
+		},
+	}
+	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
+	env := sts.Spec.Template.Spec.Containers[0].Env
+	envByName := map[string]string{}
+	for _, e := range env {
+		if e.Value != "" {
+			envByName[e.Name] = e.Value
+		}
+	}
+	if envByName["NEO4J_ACCEPT_LICENSE_AGREEMENT"] != "eval" {
+		t.Fatalf("license env = %q, want eval (NEO-2-001-LIC-02)", envByName["NEO4J_ACCEPT_LICENSE_AGREEMENT"])
+	}
+}
+
 func TestClusterPoolStatefulSet(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},

@@ -67,7 +67,7 @@ ships under GPLv3 with nothing to accept, and the operator renders no
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `accept` | string | **yes** when the block is present | — | `yes` — accepted Enterprise license (`NEO-2-001-LIC-01`). `eval` deferred (`NEO-2-001-LIC-02`, V1=No). |
+| `accept` | string | **yes** when the block is present | — | `yes` — accepted Enterprise license (`NEO-2-001-LIC-01`). `eval` — evaluation license (`NEO-2-001-LIC-02`); both pass straight through to `NEO4J_ACCEPT_LICENSE_AGREEMENT`. |
 
 ---
 
