@@ -6,7 +6,7 @@
 | **Date** | 2026-08-06 |
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-001](../neo4j/001-single-neo4j-crd.md) — single `Neo4j` CRD, day-2 satellites via `neo4jRef` (accepted) · [BDR-009](../neo4j/009-scale-pool-ordinal-semantics.md) — scale drain `DEALLOCATE` / `DROP SERVER` (accepted) |
-| **Related** | [BDR-012](../identity-user-roles/012-identity-management.md) — identity CRDs reference databases by name · `Neo4jBackup` / `Neo4jRestore` (V2, `NEO-2-013` / `NEO-2-014`) |
+| **Related** | [BDR-012](../identity-user-roles/012-identity-management.md) — identity CRDs reference databases by name · [BDR-014](../backup-restore/014-backup-restore.md) — `Neo4jBackup` / `Neo4jBackupSchedule` / `Neo4jRestore` (V2, `NEO-2-013` / `NEO-2-014`) |
 | **Reference** | [`20-operator-proposal.md`](../../../../00-discovery/20-operator-proposal.md) §3.2 · [`crd-candidates.md`](../../../analysis/helm-fields/crd-candidates.md) · [`09-api.md`](../../../../01-prd/09-api.md) · [`13-roadmap.md`](../../../../01-prd/13-roadmap.md) |
 
 ---
