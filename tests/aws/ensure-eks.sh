@@ -72,69 +72,116 @@ fi
 # Artifact Registry, where the operator image is a name inside the registry.
 ECR_HOST="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-if aws eks describe-cluster --name "${AWS_EKS_NAME}" >/dev/null 2>&1; then
-  log "EKS cluster ${AWS_EKS_NAME} exists"
-  # Reuse the cluster's own subnets: a nodegroup added later must land in the network the cluster
-  # was created with, which is not necessarily what default-VPC discovery would return today.
-  subnet_ids="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
-    --query 'cluster.resourcesVpcConfig.subnetIds' --output text | tr '\t' ',')"
-else
-  subnet_ids="${AWS_EKS_SUBNET_IDS:-}"
-  if [[ -z "${subnet_ids}" ]]; then
-    # Borrow the default VPC rather than create one per run: EKS needs two availability zones, and
-    # a managed nodegroup in public subnets needs public IPs to reach ECR — both already true of a
-    # default VPC, and creating a VPC would leave more to tear down.
-    vpc_id="$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true \
-      --query 'Vpcs[0].VpcId' --output text)"
-    [[ -n "${vpc_id}" && "${vpc_id}" != "None" ]] \
-      || die "no default VPC in ${AWS_REGION}. Create one, or set AWS_EKS_SUBNET_IDS to a comma-separated list of subnets spanning two availability zones"
-    # One subnet per AZ, three at most: more buys nothing here, and some regions expose an AZ that
-    # EKS does not support, so a deterministic slice beats passing every subnet.
-    subnet_ids="$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" \
-      --query 'Subnets[].[AvailabilityZone,SubnetId]' --output text \
-      | sort | awk '!seen[$1]++ {print $2}' | head -3 | paste -sd, -)"
-  fi
-  [[ "${subnet_ids}" == *,* ]] \
-    || die "need subnets in at least two availability zones, got '${subnet_ids}'. Set AWS_EKS_SUBNET_IDS explicitly"
+# The state matters, not just the existence. delete-cluster returns immediately and the control
+# plane takes minutes to go, so a cluster torn down by an earlier run keeps answering
+# describe-cluster as DELETING — and reusing it would fail every step after this one.
+cluster_status="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
+  --query 'cluster.status' --output text 2>/dev/null || true)"
 
-  log "Creating EKS cluster ${AWS_EKS_NAME} in ${subnet_ids} (10-15 minutes)"
-  # authenticationMode=API with bootstrapClusterCreatorAdminPermissions gives the creating identity
-  # an access entry with cluster-admin, which is what makes update-kubeconfig below usable. Anyone
-  # else — including the human who owns the account — needs an access entry of their own.
-  if ! aws eks create-cluster \
-    --name "${AWS_EKS_NAME}" \
-    --role-arn "${cluster_role_arn}" \
-    --resources-vpc-config "subnetIds=${subnet_ids},endpointPublicAccess=true" \
-    --access-config "authenticationMode=API,bootstrapClusterCreatorAdminPermissions=true" \
-    >/dev/null; then
-    die "create-cluster was refused. Under PowerUserAccess this is iam:PassRole or iam:GetRole on ${cluster_role_arn} — the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
-  fi
-  aws eks wait cluster-active --name "${AWS_EKS_NAME}"
+if [[ "${cluster_status}" == "DELETING" ]]; then
+  log "Cluster ${AWS_EKS_NAME} is still being deleted by an earlier run — waiting before re-creating"
+  aws eks wait cluster-deleted --name "${AWS_EKS_NAME}"
+  cluster_status=""
 fi
+
+case "${cluster_status}" in
+  ACTIVE | CREATING)
+    log "EKS cluster ${AWS_EKS_NAME} exists (${cluster_status})"
+    # A cluster left CREATING by a cancelled run is worth waiting for rather than failing on.
+    [[ "${cluster_status}" == "ACTIVE" ]] \
+      || aws eks wait cluster-active --name "${AWS_EKS_NAME}"
+    # Reuse the cluster's own subnets: a nodegroup added later must land in the network the cluster
+    # was created with, which is not necessarily what default-VPC discovery would return today.
+    subnet_ids="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
+      --query 'cluster.resourcesVpcConfig.subnetIds' --output text | tr '\t' ',')"
+    ;;
+  "" | None)
+    subnet_ids="${AWS_EKS_SUBNET_IDS:-}"
+    if [[ -z "${subnet_ids}" ]]; then
+      # Borrow the default VPC rather than create one per run: EKS needs two availability zones,
+      # and a managed nodegroup in public subnets needs public IPs to reach ECR — both already true
+      # of a default VPC, and creating a VPC would leave more to tear down.
+      vpc_id="$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true \
+        --query 'Vpcs[0].VpcId' --output text)"
+      [[ -n "${vpc_id}" && "${vpc_id}" != "None" ]] \
+        || die "no default VPC in ${AWS_REGION}. Create one, or set AWS_EKS_SUBNET_IDS to a comma-separated list of subnets spanning two availability zones"
+      # One subnet per AZ, three at most: more buys nothing here, and some regions expose an AZ
+      # that EKS does not support, so a deterministic slice beats passing every subnet.
+      subnet_ids="$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" \
+        --query 'Subnets[].[AvailabilityZone,SubnetId]' --output text \
+        | sort | awk '!seen[$1]++ {print $2}' | head -3 | paste -sd, -)"
+    fi
+    [[ "${subnet_ids}" == *,* ]] \
+      || die "need subnets in at least two availability zones, got '${subnet_ids}'. Set AWS_EKS_SUBNET_IDS explicitly"
+
+    log "Creating EKS cluster ${AWS_EKS_NAME} in ${subnet_ids} (10-15 minutes)"
+    # authenticationMode=API with bootstrapClusterCreatorAdminPermissions gives the creating
+    # identity an access entry with cluster-admin, which is what makes update-kubeconfig below
+    # usable. Anyone else — including the human who owns the account — needs their own entry.
+    if ! aws eks create-cluster \
+      --name "${AWS_EKS_NAME}" \
+      --role-arn "${cluster_role_arn}" \
+      --resources-vpc-config "subnetIds=${subnet_ids},endpointPublicAccess=true" \
+      --access-config "authenticationMode=API,bootstrapClusterCreatorAdminPermissions=true" \
+      >/dev/null; then
+      die "create-cluster was refused. Under PowerUserAccess this is the identity's rights over ${cluster_role_arn}: iam:PassRole plus the read actions EKS calls on it. The preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
+    fi
+    aws eks wait cluster-active --name "${AWS_EKS_NAME}"
+    ;;
+  *)
+    # FAILED, or a state a future API version introduces. Guessing what to do with a cluster in an
+    # unknown state is how a run destroys something it should not have touched.
+    die "EKS cluster ${AWS_EKS_NAME} is in state ${cluster_status}. Delete it — make teardown-e2e-eks — and run again"
+    ;;
+esac
 
 # --subnets takes a space-separated list where the VPC config took a comma-separated one.
 IFS=',' read -r -a subnet_list <<<"${subnet_ids}"
 
-if ! aws eks describe-nodegroup --cluster-name "${AWS_EKS_NAME}" \
-  --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}" >/dev/null 2>&1; then
-  log "Creating nodegroup ${AWS_EKS_NODEGROUP_NAME} (${AWS_EKS_NODE_COUNT} x ${AWS_EKS_NODE_INSTANCE_TYPE})"
-  # Fixed size, min = max = desired: nothing here benefits from autoscaling, and a stable node
-  # count keeps the Cluster suite's placement assertions meaningful.
-  if ! aws eks create-nodegroup \
-    --cluster-name "${AWS_EKS_NAME}" \
-    --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}" \
-    --node-role "${node_role_arn}" \
-    --subnets "${subnet_list[@]}" \
-    --instance-types "${AWS_EKS_NODE_INSTANCE_TYPE}" \
-    --scaling-config "minSize=${AWS_EKS_NODE_COUNT},maxSize=${AWS_EKS_NODE_COUNT},desiredSize=${AWS_EKS_NODE_COUNT}" \
-    >/dev/null; then
-    die "create-nodegroup was refused. Under PowerUserAccess this is iam:PassRole or iam:GetRole on ${node_role_arn} — CreateNodegroup needs both, and the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
-  fi
-  aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
+# Same story as the cluster: deletion is asynchronous, so a nodegroup on its way out still answers
+# describe-nodegroup, and one left CREATING by a cancelled run is worth waiting for.
+nodegroup_status="$(aws eks describe-nodegroup --cluster-name "${AWS_EKS_NAME}" \
+  --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}" --query 'nodegroup.status' --output text 2>/dev/null || true)"
+
+if [[ "${nodegroup_status}" == "DELETING" ]]; then
+  log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is still being deleted — waiting before re-creating"
+  aws eks wait nodegroup-deleted --cluster-name "${AWS_EKS_NAME}" \
     --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
-else
-  log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} exists"
+  nodegroup_status=""
 fi
+
+case "${nodegroup_status}" in
+  ACTIVE | UPDATING)
+    log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} exists (${nodegroup_status})"
+    ;;
+  CREATING)
+    log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is being created — waiting"
+    aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
+      --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
+    ;;
+  "" | None)
+    log "Creating nodegroup ${AWS_EKS_NODEGROUP_NAME} (${AWS_EKS_NODE_COUNT} x ${AWS_EKS_NODE_INSTANCE_TYPE})"
+    # Fixed size, min = max = desired: nothing here benefits from autoscaling, and a stable node
+    # count keeps the Cluster suite's placement assertions meaningful.
+    if ! aws eks create-nodegroup \
+      --cluster-name "${AWS_EKS_NAME}" \
+      --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}" \
+      --node-role "${node_role_arn}" \
+      --subnets "${subnet_list[@]}" \
+      --instance-types "${AWS_EKS_NODE_INSTANCE_TYPE}" \
+      --scaling-config "minSize=${AWS_EKS_NODE_COUNT},maxSize=${AWS_EKS_NODE_COUNT},desiredSize=${AWS_EKS_NODE_COUNT}" \
+      >/dev/null; then
+      die "create-nodegroup was refused. CreateNodegroup does more than pass ${node_role_arn}: it reads the role on the caller's behalf, so the identity needs iam:GetRole and iam:ListAttachedRolePolicies on it as well as iam:PassRole. See tests/contribute.md (AWS CI setup)"
+    fi
+    aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
+      --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
+    ;;
+  *)
+    # CREATE_FAILED or DEGRADED: the instances are unusable and every suite would fail on
+    # unschedulable pods. Say so here rather than 20 minutes later.
+    die "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is in state ${nodegroup_status}. Delete it — make teardown-e2e-eks — and run again"
+    ;;
+esac
 
 # EKS installs no CSI driver, so without this addon every PVC stays Pending and each storage
 # suite fails on a pod that never schedules. Installed after the nodegroup because its controller

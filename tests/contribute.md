@@ -328,10 +328,11 @@ role shared from another account.
 
 ### The two IAM roles, created out of band
 
-The CI user holds `PowerUserAccess`, which covers every service **except IAM**. It can pass a role
-to EKS — once granted `iam:PassRole` and `iam:GetRole` on both, as below — but never create one,
-and EKS requires two. Neither script attempts to: a missing role surfaces as a `create-cluster` or
-`create-nodegroup` failure naming the ARN and pointing here.
+The CI user holds `PowerUserAccess`, which covers every service **except IAM**. It can hand a role
+to EKS — once granted the actions below on both — but never create one, and EKS requires two.
+Neither script attempts to: a missing role is caught by a preflight in `ensure-eks.sh`, which uses
+`iam:ListRoles` (allowed by `PowerUserAccess`) to tell "the role does not exist" apart from "this
+identity may not use it", two cases AWS reports identically.
 
 | Role | Trusted by | Attached policies |
 |------|-----------|-------------------|
@@ -367,12 +368,13 @@ for policy_arn in \
     --policy-arn "${policy_arn}"
 done
 
-# Two actions, not one. PassRole is what lets the user hand a role to EKS at all; CreateNodegroup
-# additionally calls GetRole on the node role on the caller's behalf, and refuses without it — a
-# second failure, several minutes into a run that already created the control plane.
+# PassRole alone is not enough. CreateNodegroup inspects the role on the caller's behalf — GetRole,
+# then ListAttachedRolePolicies — and refuses one action at a time, each failure arriving minutes
+# into a run that already built the control plane. The rest are read-only and scoped to these two
+# ARNs, so granting them together costs nothing and ends the round trips.
 aws iam put-user-policy --user-name "${CI_USER}" \
   --policy-name neo4j-operator-ci-eks-passrole \
-  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:PassRole","iam:GetRole"],"Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]}]}'
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:PassRole","iam:GetRole","iam:ListAttachedRolePolicies","iam:ListRolePolicies","iam:GetRolePolicy","iam:ListInstanceProfilesForRole"],"Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]}]}'
 ```
 
 ### Reaching the cluster as a human
