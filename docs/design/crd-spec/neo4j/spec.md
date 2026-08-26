@@ -421,10 +421,10 @@ Client Service — merges Helm `services.default` + `services.neo4j`. **No `neo4
 | `type` | string | `ClusterIP` | `ClusterIP`, `LoadBalancer`, `NodePort`. |
 | `annotations` | map | `{}` | Service metadata. |
 | `loadBalancerSourceRanges` | []string | — | **Required** when `type: LoadBalancer` (ADD-08). CIDR allowlist for the cloud LB. |
-| `expose` | []string | `[bolt, http]` | Connector names published on this Service. |
+| `expose` | []string | `[bolt, http]` | Connector names published on this Service. Must include `bolt` (see CEL) — e.g. `[bolt]` gives a Bolt-only client Service (`NEO-3-007-PCMB-01`); HTTP/HTTPS still listen in the pod but are not published. |
 | `ports.{name}` | int | = `listeners.{name}` | Optional Service port (LB façade); `targetPort` = listen port. |
 
-CEL: each name in `expose` ⇒ `connectivity.listeners.{name}` is set (non-null). **`service.expose` ∩ `reverseProxy.expose` must be empty** (NET-005).
+CEL: each name in `expose` ⇒ `connectivity.listeners.{name}` is set (non-null). **`expose` (when set) must include `bolt`** — the operator manages Neo4j over Bolt via the client Service, so dropping Bolt would break its admin/status session. **`service.expose` ∩ `reverseProxy.expose` must be empty** (NET-005).
 
 ### `spec.connectivity.reverseProxy`
 
