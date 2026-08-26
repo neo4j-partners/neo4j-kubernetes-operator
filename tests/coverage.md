@@ -78,6 +78,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 ### `feature-config` — NEO-2-003 / NEO-2-010
 - [x] Valid `spec.config.neo4j` effective at runtime (bolt `SHOW SETTINGS`) — NEO-3-003-CFG-01 · AC-NEO-CONFIG-001
 - [x] Unknown setting admitted but rejected by Neo4j at startup — AC-NEO-CONFIG-002
+- [x] Strict validation toggle toggles — with `server.config.strict_validation.enabled: "false"` the same unknown setting is downgraded to a warning, so the workload becomes Ready and `SHOW SETTINGS` reports the toggle value (mirror of the unknown-key case) — NEO-3-003-CFG-02 · AC-NEO-CONFIG-001
 - [x] JVM `additionalArguments` effective at runtime in `server.jvm.additional` (bolt `SHOW SETTINGS`) — NEO-3-003-JVM-02
 - [x] APOC `apoc.*` config rendered into `<cr>-apoc-config` (`apoc.conf`) — NEO-3-003-APOC-01 · AC-NEO-APOC-001
 - [x] Live `spec.config` change applied end-to-end — render (ConfigMap) + rollout (STS template bump = controlled restart) + runtime (bolt `SHOW SETTINGS` on the restarted server) — NEO-3-010-RSTR-01 · AC-NEO-CONFIG-CHANGE

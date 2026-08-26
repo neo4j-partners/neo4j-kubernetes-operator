@@ -28,6 +28,13 @@ cases:
     expect_contains: Unrecognized
     cr_name: e2e-cfg-unknown
 
+  - id: strict-validation-off
+    comment: NEO-3-003-CFG-02 — the strict validation toggle toggles. Mirror of unknown-key. with server.config.strict_validation.enabled false the same unknown setting is downgraded to a warning, so the server becomes Ready and reports the toggle value via SHOW SETTINGS.
+    fixture: tests/fixtures/neo4j-config-strict-off.yaml
+    assert: config-strict-off
+    expect: success
+    cr_name: e2e-cfg-strict-off
+
   # The two JVM cases are a pair — useDefaults false here, true below.
   - id: jvm-additional-args
     comment: NEO-3-003-JVM-02 — spec.config.jvm.additionalArguments take effect, SHOW SETTINGS server.jvm.additional contains the custom flag and useDefaults false keeps the Neo4j defaults out.
