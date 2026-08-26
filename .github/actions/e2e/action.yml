@@ -6,15 +6,15 @@ description: Run the e2e harness against one platform, either a single suite or 
 # truncates the left half — which is exactly where the suite name ends up. As an action the
 # matrix leg is a plain job, so the check reads "CI / feature-config" and nothing is elided.
 #
-# Callers keep whatever must outlive a cancelled job — Azure login and teardown — because `if:`
-# inside a composite is evaluated against this action's own status, not the job's, so a cancelled
-# job would skip a teardown step placed here.
+# Callers keep whatever must outlive a cancelled job — cloud login and cluster teardown — because
+# `if:` inside a composite is evaluated against this action's own status, not the job's, so a
+# cancelled job would skip a teardown step placed here.
 inputs:
   cloud:
-    description: "Target platform — local-kind or azure-aks"
+    description: "Target platform — local-kind, azure-aks or gcp-gke"
     required: true
   suite:
-    description: "Single suite to run. Empty runs every suite in this one job (the azure path)."
+    description: "Single suite to run. Empty runs every suite in this one job (the cloud paths)."
     required: false
     default: ""
   images-artifact:
@@ -87,11 +87,31 @@ runs:
       shell: bash
       run: bash tests/azure/push-operator-image.sh
 
+    # ----------------------------------------------------------------- gcp
+    # The caller has already authenticated to GCP and installed gke-gcloud-auth-plugin, since only
+    # it can hold the workload identity federation inputs.
+    - name: Ensure GKE cluster and Artifact Registry
+      if: inputs.cloud == 'gcp-gke'
+      shell: bash
+      run: |
+        # Creates the Artifact Registry repository and the cluster if missing, then wires kubectl.
+        . tests/gcp/ensure-gke.sh
+        echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}" >> "${GITHUB_ENV}"
+        # Persist what teardown needs: the profile defaults apply when a Variable is unset, and
+        # the teardown step runs outside this shell.
+        echo "GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME}" >> "${GITHUB_ENV}"
+        echo "GCP_ZONE=${GCP_ZONE}" >> "${GITHUB_ENV}"
+
+    - name: Push operator image to Artifact Registry
+      if: inputs.cloud == 'gcp-gke'
+      shell: bash
+      run: bash tests/gcp/push-operator-image.sh
+
     # --------------------------------------------------------------- suites
     # Two modes. `suite` set: this job runs exactly one suite, and the caller fans the matrix
     # out — each suite gets its own job, its own log and its own re-run button. `suite` empty:
-    # every suite runs in this one job, which is what the azure target needs because all its
-    # jobs would otherwise race to provision and tear down the same AKS cluster.
+    # every suite runs in this one job, which is what the cloud targets need because all their
+    # jobs would otherwise race to provision and tear down the same AKS or GKE cluster.
     #
     # Neither mode hardcodes the list: it comes from tests/suites/*.yaml, so adding a suite
     # file is all it takes to get it into CI.

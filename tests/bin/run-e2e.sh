@@ -12,7 +12,7 @@ TESTS_DIR="$(cd "${BIN_DIR}/.." && pwd)"
 # whatever cluster kubectl happens to point at, and every suite fails on the operator never
 # becoming ready instead of on the missing variable.
 if [[ -n "${CI:-}" && -z "${CLOUD:-}" ]]; then
-  echo "CLOUD must be set explicitly in CI (local-kind or azure-aks)" >&2
+  echo "CLOUD must be set explicitly in CI (local-kind, azure-aks or gcp-gke)" >&2
   exit 1
 fi
 CLOUD="${CLOUD:-local-kind}"
@@ -26,12 +26,21 @@ source "${TESTS_DIR}/config/load.sh"
 
 require_cmd kubectl bash awk
 
-# Fail once when Azure prerequisites are missing.
+# Fail once when a cloud's prerequisites are missing, naming the target's own commands: a run
+# without OPERATOR_IMAGE would otherwise deploy the placeholder image and fail every suite on a
+# controller stuck in ImagePullBackOff.
 _require_e2e_cloud_ready() {
   load_cloud_config "${CLOUD}"
-  if [[ "${CLOUD_ID:-}" == "azure-aks" && -z "${OPERATOR_IMAGE:-}" ]]; then
-    die "OPERATOR_IMAGE is required for CLOUD=azure-aks. Run: make test-e2e-azure  (or: source tests/azure/ensure-aks.sh && bash tests/azure/push-operator-image.sh)"
-  fi
+  case "${CLOUD_ID:-}" in
+    azure-aks)
+      [[ -n "${OPERATOR_IMAGE:-}" ]] \
+        || die "OPERATOR_IMAGE is required for CLOUD=azure-aks. Run: make test-e2e-azure  (or: source tests/azure/ensure-aks.sh && bash tests/azure/push-operator-image.sh)"
+      ;;
+    gcp-gke)
+      [[ -n "${OPERATOR_IMAGE:-}" ]] \
+        || die "OPERATOR_IMAGE is required for CLOUD=gcp-gke. Run: make test-e2e-gke  (or: source tests/gcp/ensure-gke.sh && bash tests/gcp/push-operator-image.sh)"
+      ;;
+  esac
 }
 
 _require_e2e_cloud_ready

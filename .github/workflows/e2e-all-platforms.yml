@@ -1,8 +1,8 @@
 name: E2E — all platforms
 
-# The same suites as CI, on kind and on a real AKS cluster in parallel. Azure
-# lives here rather than in CI because it creates and destroys a cluster on
-# every run, so it is scheduled daily instead of gating pull requests.
+# The same suites as CI, on kind and on real AKS and GKE clusters in parallel.
+# The managed clusters live here rather than in CI because each run creates and
+# destroys one, so this is scheduled daily instead of gating pull requests.
 on:
   schedule:
     # 05:00 UTC — 07:00 in Paris on summer time, 06:00 on winter time.
@@ -12,12 +12,13 @@ on:
 
 concurrency:
   # Deliberately not keyed on the ref: every run of this workflow, whether from
-  # cron on main or dispatched on a branch, competes for the same Azure resource
-  # group, ACR and AKS names. Serialising them stops one run tearing down the
-  # cluster another is testing against.
+  # cron on main or dispatched on a branch, competes for the same fixed cloud
+  # names — Azure resource group, ACR and AKS, GKE cluster and Artifact Registry.
+  # Serialising them stops one run tearing down the cluster another is testing
+  # against.
   group: e2e-all-platforms
-  # Never cancel a run in progress: an interrupted Azure run must still reach
-  # its teardown step rather than leave an AKS cluster billing.
+  # Never cancel a run in progress: an interrupted cloud run must still reach its
+  # teardown step rather than leave a managed cluster billing.
   cancel-in-progress: false
 
 permissions:
@@ -27,13 +28,13 @@ jobs:
   unit:
     uses: ./.github/workflows/unit.yml
 
-  # Both targets declare the same single dependency and none on each other, so
-  # they start together as soon as unit passes. Gating on unit avoids creating
-  # an AKS cluster for code that does not compile.
+  # The three targets declare the same single dependency and none on each other, so they start
+  # together as soon as unit passes. Gating on unit avoids creating a managed cluster for code
+  # that does not compile.
   #
-  # Neither fans a matrix out the way CI does: passing no `suite` runs them all in one job. For
-  # azure that is mandatory, since parallel jobs would race to provision the shared AKS cluster
-  # while another job's teardown deleted the resource group underneath them.
+  # None fans a matrix out the way CI does: passing no `suite` runs them all in one job. For the
+  # cloud targets that is mandatory, since parallel jobs would race to provision the one shared
+  # cluster while another job's teardown deleted it underneath them.
   e2e-local-kind:
     name: kind
     needs: unit
@@ -88,4 +89,63 @@ jobs:
             az group delete --name "${rg}" --yes --no-wait
           else
             echo "Resource group ${rg} not found — nothing to tear down"
+          fi
+
+  e2e-gcp-gke:
+    name: GCP
+    needs: unit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Workload identity federation exchanges this job's OIDC token for a short-lived GCP
+      # credential. Without id-token the exchange has nothing to present and auth fails before
+      # any cluster exists. Declared per job so the other targets keep the read-only default.
+      id-token: write
+    env:
+      # GCP names and sizing — override via repository Variables
+      # (Settings > Secrets and variables > Actions > Variables).
+      # Unset falls back to the defaults in tests/config/cloud/gcp-gke.sh.
+      GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ZONE: ${{ vars.GCP_ZONE }}
+      GCP_AR_REPOSITORY: ${{ vars.GCP_AR_REPOSITORY }}
+      GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+      GKE_NODE_COUNT: ${{ vars.GKE_NODE_COUNT }}
+      GKE_MACHINE_TYPE: ${{ vars.GKE_MACHINE_TYPE }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Keyless: the provider trusts this repository's OIDC token and impersonates the service
+      # account, so no service account key is stored anywhere. Both values are configuration, not
+      # secrets — a Variable overrides them without touching this file.
+      - name: GCP auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/494283589603/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT || 'gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com' }}
+
+      # gcloud ships on the runner image; the plugin kubectl needs to authenticate against GKE
+      # does not, and get-credentials would write a kubeconfig no later kubectl call can use.
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      - uses: ./.github/actions/e2e
+        with:
+          cloud: gcp-gke
+
+      # Same reasoning as Azure: a GKE cluster bills by the hour, and `always()` inside the
+      # composite would track the action rather than the job. Only the cluster goes — the
+      # Artifact Registry repository is kept on purpose, it costs cents and saves a full push.
+      - name: Teardown GKE cluster
+        if: always()
+        run: |
+          cluster="${GKE_CLUSTER_NAME:-neo4j-operator-ci-gke}"
+          zone="${GCP_ZONE:-europe-west1-b}"
+          if gcloud container clusters describe "${cluster}" --zone "${zone}" >/dev/null 2>&1; then
+            echo "Deleting GKE cluster ${cluster} in ${zone}"
+            gcloud container clusters delete "${cluster}" --zone "${zone}" --quiet --async
+          else
+            echo "GKE cluster ${cluster} not found — nothing to tear down"
           fi

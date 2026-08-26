@@ -1,0 +1,83 @@
+name: GCP cleanup
+
+# Safety net for the gcp-gke e2e target, the counterpart of azure-cleanup.yml. The run's own
+# teardown step handles a normal cancellation — the server re-evaluates `if` on cancel and
+# `always()` still runs — but a force-cancel bypasses `always()` by design, and a lost runner
+# skips every step. Either way a GKE cluster keeps billing by the hour, so this workflow deletes
+# the CI cluster out of band. It is a no-op when the cluster is already gone.
+#
+# The Artifact Registry repository is deliberately left alone: it holds a few image layers, costs
+# cents, and e2e reuses it across runs.
+#
+# schedule and workflow_dispatch only register from the default branch, so this file must be on
+# main before it can be scheduled or triggered from the Actions tab.
+on:
+  schedule:
+    # 09:00 UTC — four hours after e2e-all-platforms starts, by which point it has finished.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Delete even while an E2E run is in flight — for a run stuck in progress"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  # gh run list, to tell a live run from an abandoned cluster.
+  actions: read
+  # Workload identity federation, same exchange as the e2e job.
+  id-token: write
+
+concurrency:
+  group: gcp-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete leftover GKE cluster
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      # Same fallbacks as tests/config/cloud/gcp-gke.sh, so both agree on the target.
+      GCP_PROJECT: ${{ vars.GCP_PROJECT || 'kop12345' }}
+      GCP_ZONE: ${{ vars.GCP_ZONE || 'europe-west1-b' }}
+      GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME || 'neo4j-operator-ci-gke' }}
+    steps:
+      # A running suite owns the cluster: deleting it underneath would fail that run for no
+      # reason. Only e2e-all-platforms touches GKE — ci.yml is kind-only.
+      - name: Skip while an E2E run holds the cluster
+        if: ${{ !inputs.force }}
+        run: |
+          active=0
+          for status in in_progress queued; do
+            n="$(gh run list --workflow e2e-all-platforms.yml --status "${status}" --json databaseId --jq 'length')"
+            active=$((active + n))
+          done
+          if (( active > 0 )); then
+            echo "::notice::${active} E2E run(s) in flight — leaving ${GKE_CLUSTER_NAME} alone"
+            echo "skip=true" >>"${GITHUB_ENV}"
+          fi
+
+      - name: GCP auth
+        if: env.skip != 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/494283589603/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT || 'gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com' }}
+
+      - name: Set up gcloud
+        if: env.skip != 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Delete the CI cluster
+        if: env.skip != 'true'
+        run: |
+          gcloud config set project "${GCP_PROJECT}" >/dev/null
+          if gcloud container clusters describe "${GKE_CLUSTER_NAME}" --zone "${GCP_ZONE}" >/dev/null 2>&1; then
+            echo "Deleting GKE cluster ${GKE_CLUSTER_NAME} in ${GCP_ZONE}"
+            gcloud container clusters delete "${GKE_CLUSTER_NAME}" --zone "${GCP_ZONE}" --quiet --async
+          else
+            echo "GKE cluster ${GKE_CLUSTER_NAME} not found — nothing to clean up"
+          fi
