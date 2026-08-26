@@ -6,8 +6,10 @@
 #
 # Creates no IAM object. The CI identity holds PowerUserAccess, which excludes IAM, so the cluster
 # role and the node role are provisioned out of band (tests/contribute.md, AWS CI setup) and only
-# passed here. The same limit is why the EBS CSI driver runs on the node role rather than through
-# IRSA, which would need an OIDC provider this identity cannot create.
+# passed here. The same limit rules out IRSA for the EBS CSI driver: its OIDC provider is derived
+# from the cluster's issuer URL, so a cluster recreated nightly would need a new provider each time,
+# and that is an IAM object. EKS Pod Identity replaces it — an addon plus an EKS-side association,
+# no IAM call at run time.
 
 set -euo pipefail
 
@@ -252,6 +254,43 @@ _addon_status() {
     --query 'addon.status' --output text 2>/dev/null || true
 }
 
+_pod_identity_agent_status() {
+  aws eks describe-addon --cluster-name "${AWS_EKS_NAME}" --addon-name eks-pod-identity-agent \
+    --query 'addon.status' --output text 2>/dev/null || true
+}
+
+# EKS stops a pod from reaching the node's instance metadata, so the CSI controller cannot borrow the
+# node role's credentials the way a process on the host would: it needs credentials of its own. Pod
+# Identity delivers them without an IAM call — the agent is an addon, the association is an EKS API
+# call, and the role it hands out is the node role, which already carries AmazonEBSCSIDriverPolicy
+# and, provisioned out of band, trusts pods.eks.amazonaws.com as well (tests/contribute.md).
+if [[ "$(_pod_identity_agent_status)" == "ACTIVE" ]]; then
+  log "Addon eks-pod-identity-agent is ACTIVE"
+else
+  log "Installing the eks-pod-identity-agent addon"
+  aws eks create-addon --cluster-name "${AWS_EKS_NAME}" \
+    --addon-name eks-pod-identity-agent >/dev/null
+  _await _pod_identity_agent_status "addon eks-pod-identity-agent" ACTIVE "CREATING DEGRADED" \
+    "${AWS_EKS_ADDON_TIMEOUT}" "It is a DaemonSet on nodes that are already Ready, so look at the pods"
+fi
+
+# The association outlives the addon and a second create is an error rather than a no-op, so ask
+# first. Naming a service account that does not exist yet is fine: the addon creates it below, and
+# the agent only resolves the association when a pod using it starts.
+pod_identity_assoc="$(aws eks list-pod-identity-associations --cluster-name "${AWS_EKS_NAME}" \
+  --namespace kube-system --service-account ebs-csi-controller-sa \
+  --query 'associations[0].associationId' --output text 2>/dev/null || true)"
+if [[ -z "${pod_identity_assoc}" || "${pod_identity_assoc}" == "None" ]]; then
+  log "Associating kube-system/ebs-csi-controller-sa with ${node_role_arn}"
+  if ! aws eks create-pod-identity-association --cluster-name "${AWS_EKS_NAME}" \
+    --namespace kube-system --service-account ebs-csi-controller-sa \
+    --role-arn "${node_role_arn}" >/dev/null; then
+    die "create-pod-identity-association was refused. It needs iam:PassRole on ${node_role_arn}, and that role must trust pods.eks.amazonaws.com for sts:AssumeRole and sts:TagSession — see tests/contribute.md (AWS CI setup)"
+  fi
+else
+  log "Pod identity association for ebs-csi-controller-sa exists"
+fi
+
 # An addon stuck short of ACTIVE says why in two places and neither is the status: health.issues on
 # the AWS side, and the controller's own pods on the cluster side.
 _addon_diagnostics() {
@@ -264,13 +303,32 @@ _addon_diagnostics() {
   kubectl get pods -n kube-system -o wide || true
   log "Recent kube-system events:"
   kubectl get events -n kube-system --sort-by=.lastTimestamp 2>/dev/null | tail -30 || true
+  # The sidecars only ever complain that the driver's socket is absent; ebs-plugin is the one that
+  # says why — a credentials or metadata failure names itself here and nowhere else.
+  log "ebs-plugin container, current and previous:"
+  kubectl logs -n kube-system -l app=ebs-csi-controller -c ebs-plugin \
+    --tail=40 --prefix 2>/dev/null || true
+  kubectl logs -n kube-system -l app=ebs-csi-controller -c ebs-plugin \
+    --tail=20 --previous --prefix 2>/dev/null || true
 }
 
 # EKS installs no CSI driver, so without this addon every PVC stays Pending and each storage suite
-# fails on a pod that never schedules. Installed after the nodegroup because its controller needs
-# somewhere to run. No --service-account-role-arn: the controller then uses the node role's
-# credentials, which is why that role carries AmazonEBSCSIDriverPolicy.
+# fails on a pod that never schedules. Installed last: its controller needs nodes to run on, and
+# credentials to serve, both of which exist by now.
 addon_status="$(_addon_status)"
+
+# A DEGRADED addon is reinstalled rather than reported. The driver crash-loops when it starts without
+# credentials and does not recover once they arrive, so a cluster kept from an earlier run would stay
+# broken for as long as it lives.
+if [[ "${addon_status}" == "DEGRADED" ]]; then
+  log "Addon aws-ebs-csi-driver is DEGRADED — removing it to install it again"
+  _addon_diagnostics
+  aws eks delete-addon --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver >/dev/null
+  _await _addon_status "addon aws-ebs-csi-driver" "" DELETING "${AWS_EKS_ADDON_TIMEOUT}" \
+    "Delete it by hand, then run again"
+  addon_status=""
+fi
+
 case "${addon_status}" in
   ACTIVE)
     log "Addon aws-ebs-csi-driver is ACTIVE"
@@ -279,12 +337,10 @@ case "${addon_status}" in
     log "Installing the aws-ebs-csi-driver addon"
     aws eks create-addon --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver >/dev/null
     _await _addon_status "addon aws-ebs-csi-driver" ACTIVE "CREATING DEGRADED" "${AWS_EKS_ADDON_TIMEOUT}" \
-      "The driver's pods run on the nodes, so this is usually the nodes themselves — not the addon" \
+      "The controller gets its credentials from the pod identity association above; a crash loop in ebs-plugin means it did not" \
       _addon_diagnostics
     ;;
   *)
-    # DEGRADED or UPDATING left by an earlier run: the driver is installed but not serving, so a
-    # storage suite would fail on volumes that never attach.
     _addon_diagnostics
     die "Addon aws-ebs-csi-driver is ${addon_status}, not ACTIVE. Delete the cluster — make teardown-e2e-eks — and run again"
     ;;

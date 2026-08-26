@@ -337,11 +337,20 @@ identity may not use it", two cases AWS reports identically.
 | Role | Trusted by | Attached policies |
 |------|-----------|-------------------|
 | `neo4j-operator-ci-eks-cluster-role` | `eks.amazonaws.com` | `AmazonEKSClusterPolicy` |
-| `neo4j-operator-ci-eks-node-role` | `ec2.amazonaws.com` | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`, `service-role/AmazonEBSCSIDriverPolicy` |
+| `neo4j-operator-ci-eks-node-role` | `ec2.amazonaws.com` **and** `pods.eks.amazonaws.com` | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`, `service-role/AmazonEBSCSIDriverPolicy` |
 
-`AmazonEBSCSIDriverPolicy` on the **node** role is what lets the EBS CSI driver provision volumes
-without IRSA: `ensure-eks.sh` installs the addon with no service account role, so its controller
-falls back to the node's credentials. IRSA would need an OIDC provider, which is IAM again.
+The node role is trusted by two principals because it serves two purposes. `ec2.amazonaws.com` is
+what the instances themselves assume. `pods.eks.amazonaws.com` is what lets the EBS CSI controller
+assume it through EKS Pod Identity, and it is not optional: EKS stops a pod from reaching the node's
+instance metadata, so the driver cannot borrow the instance credentials the way a host process
+would. Without that second statement the controller crash-loops and the addon never leaves
+`DEGRADED`. IRSA would be the alternative, but its OIDC provider derives from the cluster's issuer
+URL — a cluster recreated nightly would need a new provider each night, and that is an IAM object
+the CI user cannot create. `ensure-eks.sh` therefore installs the `eks-pod-identity-agent` addon and
+creates the association itself: both are EKS calls, and the only IAM right they need is the
+`iam:PassRole` already granted below.
+
+`AmazonEBSCSIDriverPolicy` is what the driver ends up holding through that association, and
 `AmazonEC2ContainerRegistryReadOnly` is what lets nodes pull the operator image from ECR, the
 equivalent of `az aks --attach-acr`.
 
@@ -355,8 +364,12 @@ aws iam create-role --role-name neo4j-operator-ci-eks-cluster-role \
 aws iam attach-role-policy --role-name neo4j-operator-ci-eks-cluster-role \
   --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
 
+# Two trust statements: the instances assume this role, and so does the EBS CSI controller through
+# Pod Identity. sts:TagSession alongside sts:AssumeRole is required by Pod Identity, which tags every
+# session it hands out. On a role that already exists, replace create-role with:
+#   aws iam update-assume-role-policy --role-name neo4j-operator-ci-eks-node-role --policy-document '<same>'
 aws iam create-role --role-name neo4j-operator-ci-eks-node-role \
-  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"},{"Effect":"Allow","Principal":{"Service":"pods.eks.amazonaws.com"},"Action":["sts:AssumeRole","sts:TagSession"]}]}'
 # AmazonEBSCSIDriverPolicy sits under the service-role/ path, unlike the other three, so these are
 # full ARNs rather than a list of names — attaching the wrong path fails with NoSuchEntity.
 for policy_arn in \
@@ -402,7 +415,8 @@ entry to.
 
 ### What a run creates
 
-Cluster, one managed nodegroup, the `aws-ebs-csi-driver` addon and a `gp3` StorageClass — EKS ships
+Cluster, one managed nodegroup, the `eks-pod-identity-agent` and `aws-ebs-csi-driver` addons, a pod
+identity association for `kube-system/ebs-csi-controller-sa`, and a `gp3` StorageClass — EKS ships
 no gp3 class, and its default `gp2` only works through in-tree CSI migration, so `ensure-eks.sh`
 declares `ebs.csi.aws.com` explicitly with `WaitForFirstConsumer`, matching how the storage suites
 already bind on kind, AKS and GKE. Expect 10 to 15 minutes before the first suite starts.
