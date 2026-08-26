@@ -1,3 +1,0 @@
-# 3. let your repo's workflows impersonate it
-gcloud iam service-accounts add-iam-policy-binding gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com --project=kop12345 --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/494283589603/locations/global/workloadIdentityPools/github-pool/attribute.repository/neo4j-partners/neo4j-kubernetes-operator"

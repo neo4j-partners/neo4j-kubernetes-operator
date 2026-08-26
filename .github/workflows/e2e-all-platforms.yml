@@ -121,7 +121,7 @@ jobs:
       - name: GCP auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/494283589603/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/1024447859763/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT || 'gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com' }}
 
       # gcloud ships on the runner image; the plugin kubectl needs to authenticate against GKE

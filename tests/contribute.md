@@ -221,11 +221,50 @@ The provider and the service account are defaults in `e2e-all-platforms.yml` and
 
 | Variable | Default |
 |----------|---------|
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/494283589603/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/1024447859763/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
 | `GCP_SERVICE_ACCOUNT` | `gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com` |
 
 The job that uses them declares `id-token: write`; without that permission the token exchange has
 nothing to present and the run fails before any cluster exists.
+
+### Bootstrapping the pool and the provider
+
+One-off, in the project that owns the service account. Note that both the provider path above and
+the `principalSet` below identify the project by its **number**, not its ID: `1024447859763` is
+`kop12345`. A pool that lives in another project is that project's to configure — its attribute
+condition decides which repositories may exchange a token, and granting
+`workloadIdentityUser` on our side cannot widen it.
+
+```bash
+PROJECT=kop12345
+PROJECT_NUMBER=1024447859763
+REPO=neo4j-partners/neo4j-kubernetes-operator
+SA=gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com
+
+gcloud services enable \
+  iam.googleapis.com sts.googleapis.com iamcredentials.googleapis.com \
+  compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com \
+  --project="$PROJECT"
+
+gcloud iam workload-identity-pools create github-pool \
+  --project="$PROJECT" --location=global --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --project="$PROJECT" --location=global --workload-identity-pool=github-pool \
+  --display-name="GitHub OIDC" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner,attribute.ref=assertion.ref" \
+  --attribute-condition="assertion.repository == '${REPO}'"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" --project="$PROJECT" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO}"
+```
+
+The condition matches the repository and deliberately says nothing about the branch, so a
+maintainer can run `e2e-all-platforms` by `workflow_dispatch` from a feature branch. Pinning
+`assertion.ref` to `refs/heads/main` would restrict the scheduled run only, and reject every
+dispatch with `unauthorized_client: The given credential is rejected by the attribute condition`.
 
 ### Optional repository variables
 
