@@ -142,6 +142,45 @@ GKE nodes are `amd64`, hence the explicit platform on a Mac. A missing reader ro
 `ImagePullBackOff` on the operator Deployment, with the denied reference in
 `kubectl describe pod`.
 
+### Elastic Container Registry (AWS)
+
+Create the repository, hand Docker a registry token, and push. This assumes the cluster from the
+[EKS quickstart](../01-getting-started/aws-eks.md):
+
+```bash
+export REGION=eu-west-1
+export ECR_REPO=neo4j-operator
+export ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+export ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+
+aws ecr create-repository --repository-name "$ECR_REPO" --region "$REGION"
+aws ecr get-login-password --region "$REGION" \
+  | docker login --username AWS --password-stdin "$ECR_HOST"
+
+export IMG="${ECR_HOST}/${ECR_REPO}:0.1.0"
+make docker-build IMG="$IMG" DOCKER_PLATFORM=linux/amd64
+docker push "$IMG"
+```
+
+One ECR repository holds one image name, so the repository *is* the image path — unlike an ACR or an
+Artifact Registry repository, which hold several. No pull Secret is involved: nodes authenticate
+with their own instance role, which needs `AmazonEC2ContainerRegistryReadOnly`. A cluster created by
+`eksctl` already has it. Otherwise attach it once:
+
+```bash
+NODE_ROLE="$(aws eks describe-nodegroup --cluster-name "$CLUSTER" --region "$REGION" \
+  --nodegroup-name "$(aws eks list-nodegroups --cluster-name "$CLUSTER" --region "$REGION" \
+    --query 'nodegroups[0]' --output text)" \
+  --query 'nodegroup.nodeRole' --output text)"
+
+aws iam attach-role-policy --role-name "${NODE_ROLE##*/}" \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+```
+
+EKS nodes are `amd64`, hence the explicit platform on a Mac. The login token lasts 12 hours, so a
+push that worked yesterday fails with a `401` that mentions no credentials at all — run
+`get-login-password` again.
+
 ### Mirroring the published image instead of building
 
 If you only need the image to come from your own registry, copy the released one — no clone, no

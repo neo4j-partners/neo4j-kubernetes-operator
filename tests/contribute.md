@@ -329,8 +329,9 @@ role shared from another account.
 ### The two IAM roles, created out of band
 
 The CI user holds `PowerUserAccess`, which covers every service **except IAM**. It can pass a role
-to EKS but never create one, and EKS requires two. Neither script attempts to: a missing role
-surfaces as a `create-cluster` or `create-nodegroup` failure naming the ARN and pointing here.
+to EKS — once granted `iam:PassRole` and `iam:GetRole` on both, as below — but never create one,
+and EKS requires two. Neither script attempts to: a missing role surfaces as a `create-cluster` or
+`create-nodegroup` failure naming the ARN and pointing here.
 
 | Role | Trusted by | Attached policies |
 |------|-----------|-------------------|
@@ -366,10 +367,12 @@ for policy_arn in \
     --policy-arn "${policy_arn}"
 done
 
-# Without iam:PassRole the CI user cannot hand either role to EKS, whatever else it may do.
+# Two actions, not one. PassRole is what lets the user hand a role to EKS at all; CreateNodegroup
+# additionally calls GetRole on the node role on the caller's behalf, and refuses without it — a
+# second failure, several minutes into a run that already created the control plane.
 aws iam put-user-policy --user-name "${CI_USER}" \
   --policy-name neo4j-operator-ci-eks-passrole \
-  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"iam:PassRole","Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]}]}'
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:PassRole","iam:GetRole"],"Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]}]}'
 ```
 
 ### Reaching the cluster as a human

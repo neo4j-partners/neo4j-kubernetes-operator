@@ -107,7 +107,7 @@ else
     --resources-vpc-config "subnetIds=${subnet_ids},endpointPublicAccess=true" \
     --access-config "authenticationMode=API,bootstrapClusterCreatorAdminPermissions=true" \
     >/dev/null; then
-    die "create-cluster was refused. Under PowerUserAccess this is iam:PassRole on ${cluster_role_arn} — the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
+    die "create-cluster was refused. Under PowerUserAccess this is iam:PassRole or iam:GetRole on ${cluster_role_arn} — the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
   fi
   aws eks wait cluster-active --name "${AWS_EKS_NAME}"
 fi
@@ -128,7 +128,7 @@ if ! aws eks describe-nodegroup --cluster-name "${AWS_EKS_NAME}" \
     --instance-types "${AWS_EKS_NODE_INSTANCE_TYPE}" \
     --scaling-config "minSize=${AWS_EKS_NODE_COUNT},maxSize=${AWS_EKS_NODE_COUNT},desiredSize=${AWS_EKS_NODE_COUNT}" \
     >/dev/null; then
-    die "create-nodegroup was refused. Under PowerUserAccess this is iam:PassRole on ${node_role_arn} — the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
+    die "create-nodegroup was refused. Under PowerUserAccess this is iam:PassRole or iam:GetRole on ${node_role_arn} — CreateNodegroup needs both, and the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
   fi
   aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
     --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
