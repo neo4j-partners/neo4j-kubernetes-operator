@@ -104,6 +104,26 @@ else
   log "This identity cannot list IAM roles — skipping the role preflight"
 fi
 
+# The node role serves two purposes and needs a trust statement for each: ec2.amazonaws.com for the
+# instances, pods.eks.amazonaws.com for the EBS CSI controller through Pod Identity. EKS only checks
+# the second when the association is created, minutes into the run and long after the nodegroup has
+# been paid for. Checking here costs one call — GetRole is granted for CreateNodegroup anyway.
+case "${AWS_EKS_NODE_ROLE}" in
+  arn:*) ;; # A role in another account: GetRole says nothing useful.
+  *)
+    # to_string covers both spellings, since Principal.Service is a string for one service and a
+    # list for several.
+    node_role_trust="$(aws iam get-role --role-name "${AWS_EKS_NODE_ROLE}" \
+      --query "length(Role.AssumeRolePolicyDocument.Statement[?contains(to_string(Principal.Service), 'pods.eks.amazonaws.com')])" \
+      --output text 2>/dev/null || true)"
+    if [[ "${node_role_trust}" == "0" ]]; then
+      die "IAM role ${AWS_EKS_NODE_ROLE} does not trust pods.eks.amazonaws.com, so the EBS CSI controller cannot obtain credentials and every storage suite would fail. Whoever holds IAM in the account runs: aws iam update-assume-role-policy --role-name ${AWS_EKS_NODE_ROLE} --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"},{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"},\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"]}]}' — see tests/contribute.md (AWS CI setup)"
+    elif [[ -n "${node_role_trust}" && "${node_role_trust}" != "None" ]]; then
+      log "Node role trusts pods.eks.amazonaws.com"
+    fi
+    ;;
+esac
+
 # The repository outlives the cluster deliberately. It holds a handful of image layers, costs
 # cents, and re-creating it per run would mean pushing every layer again with nothing saved.
 if ! aws ecr describe-repositories --repository-names "${AWS_ECR_REPOSITORY}" >/dev/null 2>&1; then
