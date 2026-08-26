@@ -43,6 +43,22 @@ _eks_role_arn() {
 cluster_role_arn="$(_eks_role_arn "${AWS_EKS_CLUSTER_ROLE}")"
 node_role_arn="$(_eks_role_arn "${AWS_EKS_NODE_ROLE}")"
 
+# PowerUserAccess denies iam:GetRole but does allow iam:ListRoles, which is just enough to tell the
+# two failure modes apart: a role nobody created, and a role this identity may not pass. AWS answers
+# both with the same AccessDeniedException on create-cluster and deliberately does not say which.
+# Best-effort — an identity without ListRoles must not fail the run over a check.
+if aws iam list-roles --max-items 1 >/dev/null 2>&1; then
+  for role in "${AWS_EKS_CLUSTER_ROLE}" "${AWS_EKS_NODE_ROLE}"; do
+    # A full ARN can name a role in another account, where ListRoles says nothing.
+    case "${role}" in arn:*) continue ;; esac
+    [[ -n "$(aws iam list-roles --query "Roles[?RoleName=='${role}'].RoleName" --output text)" ]] \
+      || die "IAM role ${role} does not exist in account ${AWS_ACCOUNT_ID}. Both cluster roles are provisioned out of band — see tests/contribute.md (AWS CI setup)"
+  done
+  log "Cluster and node roles both exist"
+else
+  log "This identity cannot list IAM roles — skipping the role preflight"
+fi
+
 # The repository outlives the cluster deliberately. It holds a handful of image layers, costs
 # cents, and re-creating it per run would mean pushing every layer again with nothing saved.
 if ! aws ecr describe-repositories --repository-names "${AWS_ECR_REPOSITORY}" >/dev/null 2>&1; then
@@ -91,7 +107,7 @@ else
     --resources-vpc-config "subnetIds=${subnet_ids},endpointPublicAccess=true" \
     --access-config "authenticationMode=API,bootstrapClusterCreatorAdminPermissions=true" \
     >/dev/null; then
-    die "create-cluster failed. Under PowerUserAccess the usual cause is the cluster role: ${cluster_role_arn} must exist and this identity needs iam:PassRole on it — see tests/contribute.md (AWS CI setup)"
+    die "create-cluster was refused. Under PowerUserAccess this is iam:PassRole on ${cluster_role_arn} — the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
   fi
   aws eks wait cluster-active --name "${AWS_EKS_NAME}"
 fi
@@ -112,7 +128,7 @@ if ! aws eks describe-nodegroup --cluster-name "${AWS_EKS_NAME}" \
     --instance-types "${AWS_EKS_NODE_INSTANCE_TYPE}" \
     --scaling-config "minSize=${AWS_EKS_NODE_COUNT},maxSize=${AWS_EKS_NODE_COUNT},desiredSize=${AWS_EKS_NODE_COUNT}" \
     >/dev/null; then
-    die "create-nodegroup failed. Under PowerUserAccess the usual cause is the node role: ${node_role_arn} must exist and this identity needs iam:PassRole on it — see tests/contribute.md (AWS CI setup)"
+    die "create-nodegroup was refused. Under PowerUserAccess this is iam:PassRole on ${node_role_arn} — the preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
   fi
   aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
     --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"

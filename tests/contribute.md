@@ -335,7 +335,7 @@ surfaces as a `create-cluster` or `create-nodegroup` failure naming the ARN and 
 | Role | Trusted by | Attached policies |
 |------|-----------|-------------------|
 | `neo4j-operator-ci-eks-cluster-role` | `eks.amazonaws.com` | `AmazonEKSClusterPolicy` |
-| `neo4j-operator-ci-eks-node-role` | `ec2.amazonaws.com` | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`, `AmazonEBSCSIDriverPolicy` |
+| `neo4j-operator-ci-eks-node-role` | `ec2.amazonaws.com` | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`, `service-role/AmazonEBSCSIDriverPolicy` |
 
 `AmazonEBSCSIDriverPolicy` on the **node** role is what lets the EBS CSI driver provision volumes
 without IRSA: `ensure-eks.sh` installs the addon with no service account role, so its controller
@@ -355,10 +355,15 @@ aws iam attach-role-policy --role-name neo4j-operator-ci-eks-cluster-role \
 
 aws iam create-role --role-name neo4j-operator-ci-eks-node-role \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-for policy in AmazonEKSWorkerNodePolicy AmazonEKS_CNI_Policy \
-              AmazonEC2ContainerRegistryReadOnly AmazonEBSCSIDriverPolicy; do
+# AmazonEBSCSIDriverPolicy sits under the service-role/ path, unlike the other three, so these are
+# full ARNs rather than a list of names — attaching the wrong path fails with NoSuchEntity.
+for policy_arn in \
+  arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy \
+  arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy \
+  arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly \
+  arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy; do
   aws iam attach-role-policy --role-name neo4j-operator-ci-eks-node-role \
-    --policy-arn "arn:aws:iam::aws:policy/${policy}"
+    --policy-arn "${policy_arn}"
 done
 
 # Without iam:PassRole the CI user cannot hand either role to EKS, whatever else it may do.
