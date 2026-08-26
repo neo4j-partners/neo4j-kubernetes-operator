@@ -15,6 +15,7 @@ tests/
   pipelines/     reusable setup/case/teardown phases
   suites/        table-driven tests (cases + pipeline refs)
   azure/         AKS + ACR provisioning for e2e
+  gcp/           GKE + Artifact Registry provisioning for e2e
   bin/           entry points (run-e2e, setup-local-kind)
   actions/       atomic run.sh + verify.sh steps
   runner/        suite executor
@@ -32,7 +33,7 @@ setup → case → teardown phase definition; an **action** is one atomic `run.s
   apply the CR fixture the case picks, clean it up. Suites override `case_assert` with the
   topology/feature-specific checks.
 - Suites are **cloud-agnostic by default**: every suite runs on every platform, so a green
-  kind run and a green AKS run cover the same behaviour. Anything platform-dependent belongs
+  kind run, a green AKS run and a green GKE run cover the same behaviour. Anything platform-dependent belongs
   in the cloud profile (`tests/config/cloud/*.sh`) or in a `__CLOUD_*__` fixture placeholder,
   not in a suite that skips.
 - `clouds: [...]` is therefore reserved for suites — or cases — whose *subject* is one platform,
@@ -153,27 +154,32 @@ See [config/readme.md](config/readme.md) for classic cases per domain.
 
 ## GitHub Actions
 
-Two entry workflows, both driving the same composite action:
+Two entry workflows, both driving the same composite action, plus one cleanup workflow per
+managed cloud:
 
 | Workflow | When | Runs |
 |----------|------|------|
 | [`ci.yml`](../.github/workflows/ci.yml) | Every PR / push to `main`, manual | `unit.yml`, one image build, then one job per suite on `local-kind` |
-| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then every suite on `local-kind` and on `azure-aks` in parallel |
+| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then every suite on `local-kind`, `azure-aks` and `gcp-gke` in parallel |
 | [`azure-cleanup.yml`](../.github/workflows/azure-cleanup.yml) | 09:00 UTC daily, manual | Deletes the Azure CI resource group if an e2e run left it behind |
+| [`gcp-cleanup.yml`](../.github/workflows/gcp-cleanup.yml) | 09:00 UTC daily, manual | Deletes the GKE CI cluster if an e2e run left it behind |
 
 [`.github/actions/e2e`](../.github/actions/e2e/action.yml) holds the platform setup — kind
-cluster, or AKS create plus image push — and runs either one suite (`suite` input) or all of
-them. Neither mode lists the suites: CI derives its matrix from `tests/suites/*.yaml` and the
+cluster, or a managed cluster created and an image pushed to its registry — and runs either one
+suite (`suite` input) or all of them. Neither mode lists the suites: CI derives its matrix from `tests/suites/*.yaml` and the
 action loops over the same glob, so adding a suite file is all it takes.
 
 It is an action rather than a reusable workflow so that each CI check is a single name
 (`CI / feature-config`); a called workflow would add a job level and the checks list truncates
 the left half of `caller / callee`.
 
-Azure teardown lives in the calling job, not the action, with `if: always()` — inside a
+Cluster teardown lives in the calling job, not the action, with `if: always()` — inside a
 composite, `always()` tracks the action's status rather than the job's, so a cancelled job would
 skip it. Even there it does *not* fire on a force-cancel (which bypasses `always()` by design)
-nor when a runner is lost, which is what `azure-cleanup.yml` covers — it skips itself while an
+nor when a runner is lost, which is what the cleanup workflows cover — each skips itself while an
 e2e run is in flight, unless dispatched with `force`.
 
-Azure CI credentials and variables are documented in [contribute.md](contribute.md).
+The two clouds authenticate differently, on purpose. Azure uses a service principal secret, since
+`azure/login` ignores `creds` as soon as `client-id` is passed; GCP uses workload identity
+federation, so the job holds no key and nothing expires. Credentials and variables for both are
+documented in [contribute.md](contribute.md).

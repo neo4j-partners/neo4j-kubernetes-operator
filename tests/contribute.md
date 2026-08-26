@@ -39,6 +39,30 @@ make test-e2e-azure-matrix
 `tests/azure/ensure-aks.sh` creates the resource group, ACR, and AKS cluster **if they do not
 already exist**, then configures `kubectl`.
 
+## Run locally — GCP GKE
+
+Prerequisites: `gcloud auth login`, a project you can create clusters in, the
+`gke-gcloud-auth-plugin` component (`gcloud components install gke-gcloud-auth-plugin`), and
+`docker`.
+
+```bash
+export GCP_PROJECT=kop12345
+# optional overrides:
+# export GCP_ZONE=europe-west1-b          # cluster is zonal
+# export GCP_REGION=europe-west1           # Artifact Registry location
+# export GKE_CLUSTER_NAME=neo4j-operator-ci-gke
+# export GCP_AR_REPOSITORY=neo4j-operator-ci
+
+make test-e2e-gke
+# matrix on GKE (6 runs — requires ensure-gke + image push first):
+make test-e2e-gke-matrix
+```
+
+`tests/gcp/ensure-gke.sh` creates the Artifact Registry repository and the GKE cluster **if they
+do not already exist**, grants the node service account read access to the repository, then
+configures `kubectl`. The repository is never deleted by teardown — only the cluster is, since
+that is what bills by the hour.
+
 ## Configuration profiles
 
 | Profile | Command |
@@ -69,8 +93,8 @@ Suite naming convention: `workload-*` (topology), `feature-*` (topology-agnostic
 
 ### Fixtures must not hard-code a platform
 
-Every suite runs on kind and on AKS, so a fixture may not name a StorageClass that exists on
-only one of them. Use a placeholder instead:
+Every suite runs on kind, on AKS and on GKE, so a fixture may not name a StorageClass that
+exists on only one of them. Use a placeholder instead:
 
 | Placeholder | Rendered as |
 |---|---|
@@ -107,13 +131,14 @@ decision record) stays a `#` comment above the case.
 | Workflow | Trigger | Targets |
 |----------|---------|---------|
 | `ci.yml` | Every pull request and push to `main`, plus manual dispatch | Unit and audit, then every suite on kind |
-| `e2e-all-platforms.yml` | 05:00 UTC daily, plus manual dispatch | Unit and audit, then every suite on kind **and** on AKS, in parallel |
+| `e2e-all-platforms.yml` | 05:00 UTC daily, plus manual dispatch | Unit and audit, then every suite on kind, on AKS **and** on GKE, in parallel |
 | `azure-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes the Azure CI resource group if it outlived its run |
+| `gcp-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes the GKE CI cluster if it outlived its run |
 
 The first two share `unit.yml` and the `.github/actions/e2e` composite action, which takes a
-`cloud` input of `local-kind` or `azure-aks` and an optional `suite`. CI passes a suite per job so
-each one reports on its own; the scheduled workflow passes none and runs them all in one job per
-platform. Neither hardcodes the list — it comes from `tests/suites/*.yaml`.
+`cloud` input of `local-kind`, `azure-aks` or `gcp-gke` and an optional `suite`. CI passes a suite
+per job so each one reports on its own; the scheduled workflow passes none and runs them all in one
+job per platform. Neither hardcodes the list — it comes from `tests/suites/*.yaml`.
 
 The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
 and 06:00 in winter.
@@ -130,6 +155,19 @@ itself while an e2e run is in flight. If a run is stuck holding the cluster, dis
 ```bash
 az group delete --name "${AZURE_RESOURCE_GROUP:-neo4j-operator-ci-rg}" --yes --no-wait
 ```
+
+### Leftover GKE cluster
+
+Same failure mode, same net: `gcp-cleanup.yml` deletes the CI cluster daily and skips itself while
+an e2e run is in flight. Dispatch it with `force: true` for a stuck run, or delete by hand:
+
+```bash
+gcloud container clusters delete "${GKE_CLUSTER_NAME:-neo4j-operator-ci-gke}" \
+  --zone "${GCP_ZONE:-europe-west1-b}" --quiet --async
+```
+
+The Artifact Registry repository is left in place on purpose — it holds a few image layers and
+saves a full push on the next run.
 
 ## Azure CI setup (maintainers)
 
@@ -168,3 +206,88 @@ az ad sp create-for-rbac \
 Map the output to the secrets above: `appId` → `AZURE_CLIENT_ID`, `password` →
 `AZURE_SERVICE_ACCOUNT_SECRET`, `tenant` → `AZURE_TENANT_ID`. The client secret expires (one year
 by default), so the scheduled Azure job will start failing at login when it does.
+
+## GCP CI setup (maintainers)
+
+### No secrets
+
+GKE authenticates through workload identity federation: the job presents its GitHub OIDC token,
+the provider trusts this repository, and GCP returns a short-lived credential impersonating the
+service account. Nothing is stored in the repository, and nothing expires the way an Azure client
+secret does — which is why the two clouds are configured differently.
+
+The provider and the service account are defaults in `e2e-all-platforms.yml` and
+`gcp-cleanup.yml`. They are configuration, not secrets, and a Variable overrides either one:
+
+| Variable | Default |
+|----------|---------|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/1024447859763/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `GCP_SERVICE_ACCOUNT` | `gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com` |
+
+The job that uses them declares `id-token: write`; without that permission the token exchange has
+nothing to present and the run fails before any cluster exists.
+
+### Bootstrapping the pool and the provider
+
+One-off, in the project that owns the service account. Note that both the provider path above and
+the `principalSet` below identify the project by its **number**, not its ID: `1024447859763` is
+`kop12345`. A pool that lives in another project is that project's to configure — its attribute
+condition decides which repositories may exchange a token, and granting
+`workloadIdentityUser` on our side cannot widen it.
+
+```bash
+PROJECT=kop12345
+PROJECT_NUMBER=1024447859763
+REPO=neo4j-partners/neo4j-kubernetes-operator
+SA=gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com
+
+gcloud services enable \
+  iam.googleapis.com sts.googleapis.com iamcredentials.googleapis.com \
+  compute.googleapis.com container.googleapis.com artifactregistry.googleapis.com \
+  --project="$PROJECT"
+
+gcloud iam workload-identity-pools create github-pool \
+  --project="$PROJECT" --location=global --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --project="$PROJECT" --location=global --workload-identity-pool=github-pool \
+  --display-name="GitHub OIDC" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner,attribute.ref=assertion.ref" \
+  --attribute-condition="assertion.repository == '${REPO}'"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" --project="$PROJECT" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO}"
+```
+
+The condition matches the repository and deliberately says nothing about the branch, so a
+maintainer can run `e2e-all-platforms` by `workflow_dispatch` from a feature branch. Pinning
+`assertion.ref` to `refs/heads/main` would restrict the scheduled run only, and reject every
+dispatch with `unauthorized_client: The given credential is rejected by the attribute condition`.
+
+### Optional repository variables
+
+| Variable | Default |
+|----------|---------|
+| `GCP_PROJECT` | `kop12345` |
+| `GCP_ZONE` | `europe-west1-b` (the cluster is zonal) |
+| `GCP_REGION` | `europe-west1` (Artifact Registry location) |
+| `GKE_CLUSTER_NAME` | `neo4j-operator-ci-gke` |
+| `GCP_AR_REPOSITORY` | `neo4j-operator-ci` |
+| `GKE_NODE_COUNT` | `2` |
+| `GKE_MACHINE_TYPE` | `e2-standard-4` |
+
+### Roles the service account needs
+
+| Role | Why |
+|------|-----|
+| `roles/container.admin` | Create, describe and delete the GKE cluster |
+| `roles/artifactregistry.admin` | Create the repository, push images, and grant the node account read access |
+| `roles/iam.serviceAccountUser` | Attach the node service account when creating the cluster |
+
+The node service account — the project's default compute account unless you changed it — needs to
+read the repository. `ensure-gke.sh` grants `roles/artifactregistry.reader` on the repository
+itself, and treats a failure as non-fatal: the binding is usually already implied by that
+account's project role. If the operator Deployment ends up in `ImagePullBackOff`, that grant is
+the first thing to check.

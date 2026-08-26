@@ -156,6 +156,14 @@ test-e2e-azure: ## Ensure AKS, push image, run e2e on azure-aks
 test-e2e-azure-matrix: ## Ensure AKS, push image, run all e2e matrix combinations on azure-aks
 	bash -c 'source tests/azure/ensure-aks.sh && bash tests/azure/push-operator-image.sh && CLOUD=azure-aks E2E_PROFILE=matrix ./tests/bin/run-e2e.sh'
 
+.PHONY: test-e2e-gke
+test-e2e-gke: ## Ensure GKE, push image, run e2e on gcp-gke
+	bash -c 'source tests/gcp/ensure-gke.sh && bash tests/gcp/push-operator-image.sh && CLOUD=gcp-gke ./tests/bin/run-e2e.sh'
+
+.PHONY: test-e2e-gke-matrix
+test-e2e-gke-matrix: ## Ensure GKE, push image, run all e2e matrix combinations on gcp-gke
+	bash -c 'source tests/gcp/ensure-gke.sh && bash tests/gcp/push-operator-image.sh && CLOUD=gcp-gke E2E_PROFILE=matrix ./tests/bin/run-e2e.sh'
+
 ##@ Code generation
 
 .PHONY: manifests

@@ -1,11 +1,12 @@
 # Getting started
 
-Three ways in, depending on what you already have.
+Four ways in, depending on what you already have.
 
 | You have | Start here | Time |
 |----------|-----------|------|
 | Nothing — a laptop with Docker | [kind (local)](local-kind.md) | ~15 min |
 | An Azure subscription | [Azure AKS](azure-aks.md) — published chart, no Docker needed | ~20 min |
+| A Google Cloud project | [Google Kubernetes Engine](gcp-gke.md) — published chart, no Docker needed | ~20 min |
 | A running cluster with the operator installed | [Your first Neo4j](first-neo4j.md) | ~5 min |
 
 Before you invest time, check [what works today](feature-status.md). The `Neo4j` CRD is
@@ -15,7 +16,7 @@ planned with a settled design, and what is not decided yet.
 
 ## What you get
 
-Both platform walkthroughs end at the same place: the operator running in
+The three platform walkthroughs end at the same place: the operator running in
 `neo4j-operator-system`, and one Standalone Neo4j instance in `default` with a generated
 password, reachable over Bolt and HTTP.
 

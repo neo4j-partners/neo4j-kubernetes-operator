@@ -24,10 +24,23 @@ _config_source_case() {
   source "${path}"
 }
 
+# Clouds whose nodes pull the operator image from a registry (ACR, Artifact Registry) rather than
+# having it loaded into them. They share an operator case, an OPERATOR_IMAGE requirement, and a
+# provisioning script that sets it — so the distinction is worth naming once.
+_config_cloud_uses_registry() {
+  case "${CLOUD_ID:-}" in
+    azure-aks | gcp-gke) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 _config_happy_path_operator_case() {
+  if _config_cloud_uses_registry; then
+    export OPERATOR_CASE=registry-image
+    return 0
+  fi
   case "${CLOUD_ID:-}" in
     local-kind) export OPERATOR_CASE=local-image ;;
-    azure-aks) export OPERATOR_CASE=registry-image ;;
     *) export OPERATOR_CASE=default ;;
   esac
 }
@@ -35,15 +48,16 @@ _config_happy_path_operator_case() {
 _config_align_operator_case_to_cloud() {
   # `if` rather than `[[ ]] &&`: a false test would make the function return non-zero and
   # abort the caller under `set -e`, with no message to explain the exit.
+  if _config_cloud_uses_registry; then
+    if [[ "${OPERATOR_CASE}" == "local-image" ]]; then
+      export OPERATOR_CASE=registry-image
+    fi
+    return 0
+  fi
   case "${CLOUD_ID:-}" in
     local-kind)
       if [[ "${OPERATOR_CASE}" == "registry-image" ]]; then
         export OPERATOR_CASE=local-image
-      fi
-      ;;
-    azure-aks)
-      if [[ "${OPERATOR_CASE}" == "local-image" ]]; then
-        export OPERATOR_CASE=registry-image
       fi
       ;;
   esac
@@ -51,9 +65,12 @@ _config_align_operator_case_to_cloud() {
 
 # Operator cases that make sense on each cloud (skip registry-image on kind, etc.).
 _config_operator_cases_for_cloud() {
+  if _config_cloud_uses_registry; then
+    printf '%s\n' default registry-image
+    return 0
+  fi
   case "${CLOUD_ID:-}" in
     local-kind) printf '%s\n' default local-image ;;
-    azure-aks) printf '%s\n' default registry-image ;;
     *) printf '%s\n' default local-image registry-image ;;
   esac
 }
@@ -117,8 +134,8 @@ _reconcile_apply() {
   : "${OPERATOR_CASE:?OPERATOR_CASE not set}"
   : "${NEO4J_CASE:?NEO4J_CASE not set}"
 
-  if [[ "${CLOUD_ID:-}" == "azure-aks" && -z "${OPERATOR_IMAGE:-}" ]]; then
-    echo "OPERATOR_IMAGE must be set for azure-aks (run tests/azure/ensure-aks.sh first)" >&2
+  if _config_cloud_uses_registry && [[ -z "${OPERATOR_IMAGE:-}" ]]; then
+    echo "OPERATOR_IMAGE must be set for ${CLOUD_ID} (run the cloud's ensure script first)" >&2
     return 1
   fi
 

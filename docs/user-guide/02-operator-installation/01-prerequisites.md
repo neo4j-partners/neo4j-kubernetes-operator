@@ -80,4 +80,5 @@ Pick an install path in [Operator installation](readme.md), or go straight to
 [Build the operator image](02-build-image.md).
 
 If you would rather follow a complete platform walkthrough, use
-[kind (local)](../01-getting-started/local-kind.md) or [Azure AKS](../01-getting-started/azure-aks.md).
+[kind (local)](../01-getting-started/local-kind.md), [Azure AKS](../01-getting-started/azure-aks.md)
+or [GKE](../01-getting-started/gcp-gke.md).

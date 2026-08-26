@@ -40,6 +40,7 @@ If you are starting further back, or want to run your own build:
 
 - [Quickstart — local kind](docs/user-guide/01-getting-started/local-kind.md) — create a local cluster, then the install above
 - [Quickstart — Azure AKS](docs/user-guide/01-getting-started/azure-aks.md) — subscription setup, resource providers, and the AKS storage class
+- [Quickstart — Google Kubernetes Engine](docs/user-guide/01-getting-started/gcp-gke.md) — project setup, the GKE auth plugin, and the GKE storage class
 - [Operator installation](docs/user-guide/02-operator-installation/readme.md) — the install paths compared, chart values, watch scope
 
 `kubectl get neo4j` prints edition, version, topology mode and readiness:
