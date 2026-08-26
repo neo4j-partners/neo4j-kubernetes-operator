@@ -91,9 +91,46 @@ We will use **Option A** — one Kubernetes `Job` per **backup** run — and dri
 
 | Controller | Watches | Executes via | Terminal record |
 |------------|---------|--------------|-----------------|
-| `BackupReconciler` | `Neo4jBackup` | one `Job`, ownerRef → `Neo4jBackup` (`neo4j-admin database backup`) | mirrors Job → `status.phase`, fills `status.artifacts[]` |
-| `ScheduleReconciler` | `Neo4jBackupSchedule` | emits `Neo4jBackup` objects on cron; prunes per `retention` | updates `status.lastScheduleTime` / `lastBackup` |
+| `BackupReconciler` | `Neo4jBackup` | one `Job`, ownerRef → `Neo4jBackup` (`neo4j-admin database backup --type=FULL\|DIFF\|AUTO`) | mirrors Job → `status.phase`, fills `status.artifacts[]` + `status.chain` |
+| `ScheduleReconciler` | `Neo4jBackupSchedule` | emits `Neo4jBackup` on **two crons** (full / incremental); optional `aggregate` Job; **chain-aware** pruning | updates `status.lastFullTime` / `lastIncrementalTime` / `currentChain` |
 | `RestoreReconciler` | `Neo4jRestore` | **Bolt** `CREATE OR REPLACE DATABASE … OPTIONS {seedURI}` / `dbms.recreateDatabase` per database ([ADR-007](007-formation-and-bolt.md)); DBMS seeds all allocations | mirrors `SHOW DATABASES` → `status.phase` |
+
+### Backup chains, scheduling, and retention ([BDR-014](../business/backup-restore/014-backup-restore.md) §9–§10)
+
+A `Neo4jBackupSchedule` runs two cadences that write to the same `destination.path`, so `neo4j-admin` sees one backup chain per database:
+
+- **full cron** → `--type=FULL`, anchors a new chain (new `status.chain` id).
+- **incremental cron** → `--type=AUTO` (safe cold-start: self-seeds a full if no chain exists yet), otherwise produces a differential link.
+- **aggregate cron** (optional) → a Job running `neo4j-admin backup aggregate` collapses a chain into one recovered full, bounding restore replay time and chain-loss risk.
+
+**Chain-aware pruning** — the invariant is *never orphan a link*:
+
+| Retention lever | Prunes | Never touches |
+|-----------------|--------|---------------|
+| `full.retention` (keep last *N* / age of chains) | **whole superseded chains** (full + all its links) | the active chain, or any chain still within age |
+| `incremental.retention` (age of links) | triggers `aggregate` to compact old links from the **front** of a chain | a middle link individually; a link the newest restore point still needs |
+
+```go
+// sketch — chain-aware prune, not "keep last N objects"
+chains := groupByChain(listBackups(schedule))        // full + its contiguous diffs
+for _, c := range olderThan(chains, full.Retention) {
+    if c == currentChain { continue }                // active chain is sacred
+    deleteWholeChain(c)                              // objects + object-store artifacts together
+}
+compactExpiredLinks(currentChain, incremental.Retention) // via aggregate, front-only
+```
+
+A pruning bug that deletes a mid-chain differential silently breaks every restore point after it — so pruning operates on **whole chains** (or `aggregate`), never on individual `Neo4jBackup` objects by age.
+
+### Backup Job command ([BDR-014](../business/backup-restore/014-backup-restore.md) §12)
+
+`buildBackupJob` composes `neo4j-admin database backup` from three sources:
+
+- **Operator-owned** (never user-settable): `--from` = the target's backup-listener address (headless Service / pod DNS, port 6362); `--to-path` = derived from `destination`; `--temp-path` = a **local scratch volume** on the Job pod; `--type` = from `spec.type`.
+- **Typed passthrough**: `--compress`, `--keep-failed`, `--verbose`, `--include-metadata` from `spec.options` (omitted → Neo4j default).
+- **`extraArgs`**: appended verbatim **after allowlist validation** — the operator rejects any arg that collides with an operator-owned flag or is not on the allowlist (webhook, [ADR-001](001-crd-validation-process.md)).
+
+**Scratch space is not optional for cloud backups.** Neo4j stages the store + tx-logs in `--temp-path` before streaming the artifact to S3/GCS/Azure, so the temp dir must hold roughly the whole backup. The Job mounts a scratch volume sized against the database; `spec.volumes.backups` ([BDR-005](../business/neo4j/005-storage-volume-mode.md)) is the natural source, otherwise an `emptyDir`/ephemeral PVC. Under-provisioning here is a common backup failure — the operator sizes it explicitly rather than defaulting to the Job's working dir.
 
 ### Idempotency (GitOps re-apply safe)
 
@@ -124,12 +161,16 @@ func (r *BackupReconciler) Reconcile(ctx, req) (Result, error) {
 
 1. Admission (webhook, [ADR-001](001-crd-validation-process.md)) checks target `neo4jRef` exists, edition is `enterprise`, `source` is well-formed, and **rejects `system` in `databases`** (see below). **No Bolt from the webhook.**
 2. Reconciler waits for the target to be formation-stable — every member `ENABLED`, quorum present, `ClusterFormed` ([ADR-007](007-formation-and-bolt.md)) — before touching any database. A restore before formation would allocate over an incomplete server set.
-3. Per user database, over Bolt (one statement, DBMS distributes):
-   - **new database** → `CREATE DATABASE <db> TOPOLOGY <p> PRIMARIES <s> SECONDARIES OPTIONS {existingData:'use', seedURI:'…'}`.
-   - **existing database** → `dbms.recreateDatabase("<db>", {seedURI:"…"})` (or `CREATE OR REPLACE DATABASE`) — replaces the store on **all allocations**; the database is unavailable while it re-seeds, but the DBMS stays up.
+3. **Existence / overwrite gate** ([BDR-014](../business/backup-restore/014-backup-restore.md) §11) — the reconciler runs `SHOW DATABASES` and, for each target that **already exists**:
+   - `spec.overwrite=false` → **stop**: `status.phase=Failed`, `reason=DatabaseExists`, Event; **nothing is dropped or seeded**. (Existence is runtime state, so this cannot be a webhook check — [ADR-001](001-crd-validation-process.md).)
+   - `spec.overwrite=true` → proceed to step 4 with the replace path.
+   - `spec.forceOffline=true` → `STOP DATABASE <db>` first (fence writes), replace, then `START DATABASE <db>`.
+4. Per user database, over Bolt (one statement, DBMS distributes):
+   - **new / absent database** → `CREATE DATABASE <db> TOPOLOGY <p> PRIMARIES <s> SECONDARIES OPTIONS {existingData:'use', seedURI:'…'}`.
+   - **existing database, `overwrite=true`** → `dbms.recreateDatabase("<db>", {seedURI:"…"})` (or `CREATE OR REPLACE DATABASE`) — replaces the store on **all allocations**; the database is unavailable while it re-seeds, but the DBMS stays up.
    - `TOPOLOGY` is derived from the target's pools ([BDR-009](../business/neo4j/009-scale-pool-ordinal-semantics.md)); the backup's original topology is not assumed.
-4. The **Neo4j workload pods** read `seedURI` using their cloud identity (ADR-016) — the operator passes only the URI, never the object bytes. No per-run Job is created for cluster restore.
-5. Poll `SHOW DATABASES` until each restored database is `online` on its allocations → `status.phase=Succeeded`; partial failure is reported per database.
+5. The **Neo4j workload pods** read `seedURI` using their cloud identity (ADR-016) — the operator passes only the URI, never the object bytes. No per-run Job is created for cluster restore.
+6. Poll `SHOW DATABASES` until each restored database is `online` on its allocations → `status.phase=Succeeded`; partial failure is reported per database.
 
 **Standalone** may use the same seed-from-URI, or an offline `neo4j-admin database restore` Job (single store, no distribution concern).
 
@@ -161,11 +202,13 @@ Operator SA gains `batch/jobs` create/watch/delete and read on referenced backup
 - Backup and restore take **different execution paths** (Job vs Bolt) — two code paths, not one.
 - Restore credentials are the **workload's** cloud identity (ADR-016 on the Neo4j pods), not a Job Secret — a different trust surface to document.
 - `system` / whole-cluster DR is **not automated** in the first release; users follow a manual runbook.
+- **Chain-aware pruning is a correctness-critical path** — a naive "keep last N objects" deletes mid-chain links and silently breaks recovery. The `ScheduleReconciler` must track chain membership and prune whole chains / compact via `aggregate` only. Needs dedicated tests.
 
 ### Neutral
 
 - Backup Job image = the Neo4j image by default; a slimmer `neo4j-admin`-only image is a future optimization.
-- `differential` backup and continuous/PITR are out of scope; the Job model extends to them later without a controller redesign.
+- The `aggregate` Job reuses the same Job/credentials plumbing as backup — no new execution primitive.
+- Continuous/WAL backup is out of scope; within-chain PITR (`--restore-until`) extends the restore Job/Bolt path later without a controller redesign.
 - Designated-seeder restore (`neo4j-admin database restore` on one server, then `seedingServers`) remains available as a fallback if seed-from-URI is unavailable for a source.
 
 ---
@@ -176,5 +219,5 @@ Operator SA gains `batch/jobs` create/watch/delete and read on referenced backup
 - [ADR-001](001-crd-validation-process.md) · [ADR-007](007-formation-and-bolt.md) · [ADR-008](008-finalizers-and-deletion.md) · [ADR-013](013-neo4j-conf-directory-fragments.md) · ADR-016 (cloud identity, backlog)
 - [BDR-009](../business/neo4j/009-scale-pool-ordinal-semantics.md) — per-pool StatefulSets / topology that restore must allocate against
 - CloudNativePG `BackupReconciler` / `ScheduledBackupReconciler`, barman-cloud in Jobs — [cloudnative-pg.md](../../architecture/operator-benchmark/operators/cloudnative-pg.md) D3, D5, D10
-- [Neo4j — backup and restore](https://neo4j.com/docs/operations-manual/current/backup-restore/) · [`neo4j-admin database backup`](https://neo4j.com/docs/operations-manual/current/backup-restore/online-backup/)
+- [Neo4j — backup and restore](https://neo4j.com/docs/operations-manual/current/backup-restore/) · [`neo4j-admin database backup` & backup chain](https://neo4j.com/docs/operations-manual/current/backup-restore/online-backup/#backup-chain) · [aggregate a backup chain](https://neo4j.com/docs/operations-manual/current/backup-restore/aggregate/)
 - [Neo4j — seed a cluster database from URI](https://neo4j.com/docs/operations-manual/current/clustering/databases/) · [recreate a database](https://neo4j.com/docs/operations-manual/current/database-administration/standard-databases/recreate-database/) · [cluster disaster recovery](https://neo4j.com/docs/operations-manual/current/clustering/multi-region-deployment/disaster-recovery/)
