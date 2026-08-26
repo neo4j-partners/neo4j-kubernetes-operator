@@ -26,6 +26,18 @@ AWS_EKS_NODEGROUP_NAME="${AWS_EKS_NODEGROUP_NAME:-default}"
 # instances takes a few minutes; the aws waiter's own limit is 40, long enough to hold a runner for
 # a deletion that is never going to finish.
 AWS_EKS_TEARDOWN_TIMEOUT="${AWS_EKS_TEARDOWN_TIMEOUT:-900}"
+# Bounds on the two creations, both polled by tests/aws/ensure-eks.sh rather than left to
+# `aws eks wait`, which prints nothing and allows 20 minutes on a cluster and 40 on a nodegroup.
+# A control plane takes 10 to 15 minutes, a nodegroup 3 to 6; past these values the creation is
+# not slow, it is stuck, and holding the runner buys nothing.
+AWS_EKS_CLUSTER_TIMEOUT="${AWS_EKS_CLUSTER_TIMEOUT:-1500}"
+AWS_EKS_NODEGROUP_TIMEOUT="${AWS_EKS_NODEGROUP_TIMEOUT:-900}"
+# The EBS CSI addon is a Deployment and a DaemonSet on nodes that already exist, so it is a matter
+# of pulling images: a minute or two when it works, and never when the nodes are the problem.
+AWS_EKS_ADDON_TIMEOUT="${AWS_EKS_ADDON_TIMEOUT:-420}"
+# A registered instance is not a Ready node: the CNI has to start first. Checked separately so an
+# unready node is not reported as an addon failure.
+AWS_EKS_NODE_READY_TIMEOUT="${AWS_EKS_NODE_READY_TIMEOUT:-300}"
 AWS_EKS_NODE_COUNT="${AWS_EKS_NODE_COUNT:-2}"
 # 4 vCPU / 16 GiB per node, matching AKS's Standard_D4s_v3 and GKE's e2-standard-4 so a Cluster
 # suite has the same room on all three clouds.

@@ -32,6 +32,49 @@ if [[ -z "${AWS_ACCOUNT_ID}" ]]; then
 fi
 log "AWS account ${AWS_ACCOUNT_ID}, region ${AWS_REGION}"
 
+# `aws eks wait` writes nothing at all while it polls, for up to 40 minutes on a nodegroup. In a CI
+# log that is indistinguishable from a hung step, and it keeps a runner busy long after a creation
+# has stopped making progress. These poll the same API and print one line a minute instead.
+_cluster_status() {
+  aws eks describe-cluster --name "${AWS_EKS_NAME}" \
+    --query 'cluster.status' --output text 2>/dev/null || true
+}
+
+_nodegroup_status() {
+  aws eks describe-nodegroup --cluster-name "${AWS_EKS_NAME}" \
+    --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}" \
+    --query 'nodegroup.status' --output text 2>/dev/null || true
+}
+
+# _await <probe fn> <label> <wanted> <transient states> <timeout s> [hint] [diagnostics fn]
+# An empty wanted status means "gone", which is how deletion is awaited. Transient takes a
+# space-separated list, because an addon reports DEGRADED while its pods start and only settles on
+# ACTIVE afterwards. Any state outside that list ends the run: EKS leaves a failed nodegroup in
+# place, and waiting on CREATE_FAILED only delays the report. The diagnostics function, when given,
+# runs before giving up — the last chance to capture why, since the resource is about to be deleted.
+_await() {
+  local probe="$1" label="$2" want="$3" transient="$4" timeout="$5" hint="${6:-}" diag="${7:-}"
+  local deadline=$((SECONDS + timeout)) started=${SECONDS} status
+  while :; do
+    status="$("${probe}")"
+    if [[ "${status}" == "${want}" ]] \
+      || [[ -z "${want}" && ( -z "${status}" || "${status}" == "None" ) ]]; then
+      log "${label} is ${want:-gone} ($((SECONDS - started))s)"
+      return 0
+    fi
+    if [[ " ${transient} " != *" ${status} "* ]]; then
+      [[ -z "${diag}" ]] || "${diag}"
+      die "${label} is ${status:-gone}, expected ${want:-gone}. ${hint}"
+    fi
+    if (( SECONDS >= deadline )); then
+      [[ -z "${diag}" ]] || "${diag}"
+      die "${label} is still ${status} after ${timeout}s — stopping rather than holding the runner. ${hint}"
+    fi
+    log "${label} is ${status} ($((SECONDS - started))s elapsed)"
+    sleep 30
+  done
+}
+
 # A plain name is expanded in the CI account; a full ARN is honoured as given, which allows a role
 # shared from another account without a second variable.
 _eks_role_arn() {
@@ -75,12 +118,12 @@ ECR_HOST="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 # The state matters, not just the existence. delete-cluster returns immediately and the control
 # plane takes minutes to go, so a cluster torn down by an earlier run keeps answering
 # describe-cluster as DELETING — and reusing it would fail every step after this one.
-cluster_status="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
-  --query 'cluster.status' --output text 2>/dev/null || true)"
+cluster_status="$(_cluster_status)"
 
 if [[ "${cluster_status}" == "DELETING" ]]; then
   log "Cluster ${AWS_EKS_NAME} is still being deleted by an earlier run — waiting before re-creating"
-  aws eks wait cluster-deleted --name "${AWS_EKS_NAME}"
+  _await _cluster_status "cluster ${AWS_EKS_NAME}" "" DELETING "${AWS_EKS_TEARDOWN_TIMEOUT}" \
+    "Run the cloud-cleanup workflow, or delete it by hand, then start again"
   cluster_status=""
 fi
 
@@ -89,7 +132,8 @@ case "${cluster_status}" in
     log "EKS cluster ${AWS_EKS_NAME} exists (${cluster_status})"
     # A cluster left CREATING by a cancelled run is worth waiting for rather than failing on.
     [[ "${cluster_status}" == "ACTIVE" ]] \
-      || aws eks wait cluster-active --name "${AWS_EKS_NAME}"
+      || _await _cluster_status "cluster ${AWS_EKS_NAME}" ACTIVE CREATING "${AWS_EKS_CLUSTER_TIMEOUT}" \
+        "An earlier run left it half-created; delete it and start again"
     # Reuse the cluster's own subnets: a nodegroup added later must land in the network the cluster
     # was created with, which is not necessarily what default-VPC discovery would return today.
     subnet_ids="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
@@ -126,7 +170,8 @@ case "${cluster_status}" in
       >/dev/null; then
       die "create-cluster was refused. Under PowerUserAccess this is the identity's rights over ${cluster_role_arn}: iam:PassRole, plus the read actions EKS calls on the roles it touches. The preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
     fi
-    aws eks wait cluster-active --name "${AWS_EKS_NAME}"
+    _await _cluster_status "cluster ${AWS_EKS_NAME}" ACTIVE CREATING "${AWS_EKS_CLUSTER_TIMEOUT}" \
+      "Check the cluster in the EKS console before re-running"
     ;;
   *)
     # FAILED, or a state a future API version introduces. Guessing what to do with a cluster in an
@@ -138,15 +183,18 @@ esac
 # --subnets takes a space-separated list where the VPC config took a comma-separated one.
 IFS=',' read -r -a subnet_list <<<"${subnet_ids}"
 
+# A nodegroup that fails to come up says why in health.issues — no capacity in the AZ, a subnet
+# without a route to ECR, an instance type the region does not offer — and the status alone does not.
+nodegroup_health_hint="Ask why with: aws eks describe-nodegroup --cluster-name ${AWS_EKS_NAME} --nodegroup-name ${AWS_EKS_NODEGROUP_NAME} --query nodegroup.health"
+
 # Same story as the cluster: deletion is asynchronous, so a nodegroup on its way out still answers
 # describe-nodegroup, and one left CREATING by a cancelled run is worth waiting for.
-nodegroup_status="$(aws eks describe-nodegroup --cluster-name "${AWS_EKS_NAME}" \
-  --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}" --query 'nodegroup.status' --output text 2>/dev/null || true)"
+nodegroup_status="$(_nodegroup_status)"
 
 if [[ "${nodegroup_status}" == "DELETING" ]]; then
   log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is still being deleted — waiting before re-creating"
-  aws eks wait nodegroup-deleted --cluster-name "${AWS_EKS_NAME}" \
-    --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
+  _await _nodegroup_status "nodegroup ${AWS_EKS_NODEGROUP_NAME}" "" DELETING \
+    "${AWS_EKS_TEARDOWN_TIMEOUT}" "Delete it by hand, then start again"
   nodegroup_status=""
 fi
 
@@ -155,9 +203,9 @@ case "${nodegroup_status}" in
     log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} exists (${nodegroup_status})"
     ;;
   CREATING)
-    log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is being created — waiting"
-    aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
-      --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
+    log "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is being created by another run — waiting"
+    _await _nodegroup_status "nodegroup ${AWS_EKS_NODEGROUP_NAME}" ACTIVE CREATING \
+      "${AWS_EKS_NODEGROUP_TIMEOUT}" "${nodegroup_health_hint}"
     ;;
   "" | None)
     log "Creating nodegroup ${AWS_EKS_NODEGROUP_NAME} (${AWS_EKS_NODE_COUNT} x ${AWS_EKS_NODE_INSTANCE_TYPE})"
@@ -173,30 +221,74 @@ case "${nodegroup_status}" in
       >/dev/null; then
       die "create-nodegroup was refused. It passes ${node_role_arn} and also reads roles on the caller's behalf — including the AWSServiceRoleForAmazonEKSNodegroup service-linked role, which no resource list can name in advance. The read actions must therefore be granted on every role, not only the two above: see tests/contribute.md (AWS CI setup)"
     fi
-    aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
-      --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
+    _await _nodegroup_status "nodegroup ${AWS_EKS_NODEGROUP_NAME}" ACTIVE CREATING \
+      "${AWS_EKS_NODEGROUP_TIMEOUT}" "${nodegroup_health_hint}"
     ;;
   *)
     # CREATE_FAILED or DEGRADED: the instances are unusable and every suite would fail on
     # unschedulable pods. Say so here rather than 20 minutes later.
-    die "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is in state ${nodegroup_status}. Delete it — make teardown-e2e-eks — and run again"
+    die "Nodegroup ${AWS_EKS_NODEGROUP_NAME} is in state ${nodegroup_status}. Delete it — make teardown-e2e-eks — and run again. ${nodegroup_health_hint}"
     ;;
 esac
 
-# EKS installs no CSI driver, so without this addon every PVC stays Pending and each storage
-# suite fails on a pod that never schedules. Installed after the nodegroup because its controller
-# needs somewhere to run. No --service-account-role-arn: the controller then uses the node role's
-# credentials, which is why that role carries AmazonEBSCSIDriverPolicy.
-if ! aws eks describe-addon --cluster-name "${AWS_EKS_NAME}" \
-  --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
-  log "Installing the aws-ebs-csi-driver addon"
-  aws eks create-addon --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver >/dev/null
-  aws eks wait addon-active --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver
-else
-  log "Addon aws-ebs-csi-driver present"
+# Before the addon, not after: an addon that never reaches ACTIVE can only be explained from inside
+# the cluster, and a kubeconfig obtained afterwards arrives too late to say why.
+aws eks update-kubeconfig --name "${AWS_EKS_NAME}"
+log "kubectl context configured for ${AWS_EKS_NAME}"
+kubectl get nodes -o wide
+
+# A nodegroup reports ACTIVE once its instances register, which is not the same as Ready. The addon
+# below needs somewhere to run, so a node short of Ready would surface minutes later as an addon
+# timeout, blaming the addon for what is a node problem.
+log "Waiting for every node to be Ready"
+if ! kubectl wait --for=condition=Ready nodes --all \
+  --timeout="${AWS_EKS_NODE_READY_TIMEOUT}s"; then
+  kubectl describe nodes || true
+  die "the nodes of ${AWS_EKS_NODEGROUP_NAME} registered but never became Ready. ${nodegroup_health_hint}"
 fi
 
-aws eks update-kubeconfig --name "${AWS_EKS_NAME}"
+_addon_status() {
+  aws eks describe-addon --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver \
+    --query 'addon.status' --output text 2>/dev/null || true
+}
+
+# An addon stuck short of ACTIVE says why in two places and neither is the status: health.issues on
+# the AWS side, and the controller's own pods on the cluster side.
+_addon_diagnostics() {
+  log "Addon health issues:"
+  aws eks describe-addon --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver \
+    --query 'addon.health.issues' --output json || true
+  log "Nodes:"
+  kubectl get nodes -o wide || true
+  log "kube-system pods:"
+  kubectl get pods -n kube-system -o wide || true
+  log "Recent kube-system events:"
+  kubectl get events -n kube-system --sort-by=.lastTimestamp 2>/dev/null | tail -30 || true
+}
+
+# EKS installs no CSI driver, so without this addon every PVC stays Pending and each storage suite
+# fails on a pod that never schedules. Installed after the nodegroup because its controller needs
+# somewhere to run. No --service-account-role-arn: the controller then uses the node role's
+# credentials, which is why that role carries AmazonEBSCSIDriverPolicy.
+addon_status="$(_addon_status)"
+case "${addon_status}" in
+  ACTIVE)
+    log "Addon aws-ebs-csi-driver is ACTIVE"
+    ;;
+  "" | None)
+    log "Installing the aws-ebs-csi-driver addon"
+    aws eks create-addon --cluster-name "${AWS_EKS_NAME}" --addon-name aws-ebs-csi-driver >/dev/null
+    _await _addon_status "addon aws-ebs-csi-driver" ACTIVE "CREATING DEGRADED" "${AWS_EKS_ADDON_TIMEOUT}" \
+      "The driver's pods run on the nodes, so this is usually the nodes themselves — not the addon" \
+      _addon_diagnostics
+    ;;
+  *)
+    # DEGRADED or UPDATING left by an earlier run: the driver is installed but not serving, so a
+    # storage suite would fail on volumes that never attach.
+    _addon_diagnostics
+    die "Addon aws-ebs-csi-driver is ${addon_status}, not ACTIVE. Delete the cluster — make teardown-e2e-eks — and run again"
+    ;;
+esac
 
 # Cluster setup, not fixture data: AKS and GKE ship the class the storage suites ask for, EKS
 # ships only gp2 and serves it through in-tree CSI migration. Declaring the provisioner explicitly
@@ -220,6 +312,3 @@ fi
 
 export AWS_ACCOUNT_ID ECR_HOST
 export OPERATOR_IMAGE="${ECR_HOST}/${AWS_ECR_REPOSITORY}:ci-${GITHUB_SHA:-local}"
-
-log "kubectl context configured for ${AWS_EKS_NAME}"
-kubectl get nodes
