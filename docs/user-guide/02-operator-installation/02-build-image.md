@@ -107,6 +107,41 @@ cluster's kubelet identity, so `imagePullSecrets` stays empty. Creating an ACR r
 [AKS quickstart prerequisites](../01-getting-started/azure-aks.md#prerequisites). AKS nodes are
 `amd64`, hence the explicit platform on a Mac.
 
+### Artifact Registry (GCP)
+
+Create the repository, register gcloud as a Docker credential helper, and push. This assumes the
+project and cluster from the [GKE quickstart](../01-getting-started/gcp-gke.md):
+
+```bash
+export PROJECT_ID=my-project
+export REGION=europe-west1
+export AR_REPO=neo4j-operator
+
+gcloud artifacts repositories create "$AR_REPO" \
+  --repository-format=docker --location "$REGION"
+gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+export IMG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/neo4j-operator:0.1.0"
+make docker-build IMG="$IMG" DOCKER_PLATFORM=linux/amd64
+docker push "$IMG"
+```
+
+No pull Secret is involved: GKE nodes authenticate as their own service account, which needs
+`roles/artifactregistry.reader` on the repository. In a project where that account is still a
+project Editor — the default — it already has it. Otherwise grant it once:
+
+```bash
+NODE_SA="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" \
+  --location "$REGION" \
+  --member="serviceAccount:${NODE_SA}" \
+  --role=roles/artifactregistry.reader
+```
+
+GKE nodes are `amd64`, hence the explicit platform on a Mac. A missing reader role shows up as
+`ImagePullBackOff` on the operator Deployment, with the denied reference in
+`kubectl describe pod`.
+
 ### Mirroring the published image instead of building
 
 If you only need the image to come from your own registry, copy the released one — no clone, no
