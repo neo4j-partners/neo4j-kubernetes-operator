@@ -81,8 +81,11 @@ eksctl create addon --cluster "$CLUSTER" --region "$REGION" --name aws-ebs-csi-d
   --force
 ```
 
-Then declare a `gp3` class. EKS ships only `gp2`, served through in-tree CSI migration; naming the
-provisioner explicitly removes that indirection, and gp3 is both cheaper and faster:
+Then declare a `gp3` class and make it the cluster default. Recent EKS versions ship no default
+StorageClass at all, and a `Neo4j` resource that does not name one — the examples in this guide
+included — leaves its volume claim `Pending` for as long as that stays true. Naming the provisioner
+explicitly also avoids the in-tree CSI migration that serves the older `gp2` class, and gp3 is both
+cheaper and faster:
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -90,6 +93,8 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
 provisioner: ebs.csi.aws.com
 parameters:
   type: gp3
@@ -100,6 +105,9 @@ EOF
 
 kubectl get storageclass
 ```
+
+The output should show `gp3 (default)`. If another class already carries that mark, remove it from
+the other one first — Kubernetes ignores the annotation entirely when two classes claim it.
 
 `WaitForFirstConsumer` binds the volume in the availability zone where the pod lands, which is what
 you want: an EBS volume cannot be attached across zones.

@@ -366,17 +366,25 @@ case "${addon_status}" in
     ;;
 esac
 
-# Cluster setup, not fixture data: AKS and GKE ship the class the storage suites ask for, EKS
-# ships only gp2 and serves it through in-tree CSI migration. Declaring the provisioner explicitly
-# removes that indirection, and WaitForFirstConsumer matches the binding sequence the storage
-# asserts already expect on the other three platforms.
-if ! kubectl get storageclass "${STORAGE_CLASS_NAME}" >/dev/null 2>&1; then
-  log "Creating StorageClass ${STORAGE_CLASS_NAME}"
-  kubectl apply -f - <<EOF
+# Cluster setup, not fixture data: AKS and GKE ship the class the storage suites ask for, EKS ships
+# only gp2 and serves it through in-tree CSI migration. Declaring the provisioner explicitly removes
+# that indirection, and WaitForFirstConsumer matches the binding sequence the storage asserts already
+# expect on the other three platforms.
+#
+# Applied unconditionally rather than only when absent: a cluster kept from an earlier run may carry
+# this class in an older shape, and everything here except the annotation is immutable anyway, so
+# apply either changes nothing or adds what is missing.
+log "Applying StorageClass ${STORAGE_CLASS_NAME}"
+kubectl apply -f - <<EOF
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: ${STORAGE_CLASS_NAME}
+  annotations:
+    # Recent EKS versions ship no default class, while kind, AKS and GKE all do. Most fixtures leave
+    # storageClassName unset and bind to the default, so without this every PVC stays Pending and no
+    # suite gets past its first case.
+    storageclass.kubernetes.io/is-default-class: "true"
 provisioner: ebs.csi.aws.com
 parameters:
   type: gp3
@@ -384,7 +392,20 @@ reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 EOF
-fi
+
+# Two classes claiming the default make Kubernetes honour neither, which looks exactly like the
+# failure the annotation above is here to prevent. Listed name by name rather than with a jsonpath
+# filter: a filter that the client rejects returns nothing, and nothing reads as "all is well".
+default_classes="$(kubectl get storageclass \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"="}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' \
+  | awk -F= '$2 == "true" { print $1 }')"
+default_count="$(printf '%s' "${default_classes}" | awk 'NF' | wc -l | tr -d ' ')"
+log "Default StorageClass: $(printf '%s' "${default_classes}" | tr '\n' ' ' | sed 's/ $//')${default_classes:+ }(${default_count})"
+case "${default_count}" in
+  1) ;;
+  0) die "no default StorageClass after applying ${STORAGE_CLASS_NAME}, so every fixture that omits storageClassName would stay Pending" ;;
+  *) die "${default_count} default StorageClasses, so Kubernetes will honour none of them. Remove the annotation from all but ${STORAGE_CLASS_NAME}" ;;
+esac
 
 export AWS_ACCOUNT_ID ECR_HOST
 export OPERATOR_IMAGE="${ECR_HOST}/${AWS_ECR_REPOSITORY}:ci-${GITHUB_SHA:-local}"
