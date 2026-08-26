@@ -21111,6 +21111,12 @@ spec:
               rule: '!has(self.connectivity) || !has(self.connectivity.service) ||
                 self.connectivity.service.type != ''LoadBalancer'' || (has(self.connectivity.service.loadBalancerSourceRanges)
                 && size(self.connectivity.service.loadBalancerSourceRanges) > 0)'
+            - message: connectivity.service.expose must include bolt (the operator
+                manages Neo4j over Bolt via the client Service); omit the field entirely
+                to keep the default [bolt, http]
+              rule: '!has(self.connectivity) || !has(self.connectivity.service) ||
+                !has(self.connectivity.service.expose) || self.connectivity.service.expose.exists(e,
+                e == ''bolt'')'
           status:
             description: Neo4jStatus defines the observed state of Neo4j (ADR-004).
             properties:

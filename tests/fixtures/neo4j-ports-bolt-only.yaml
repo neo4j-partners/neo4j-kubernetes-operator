@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # PCMB-01 Bolt only: publish just the Bolt connector on the client Service. HTTP/HTTPS
+  # still listen inside the pod (no Neo4j-side disable) but are not exposed. bolt must stay
+  # in expose — the operator manages Neo4j over Bolt via the client Service (CEL-enforced).
+  connectivity:
+    service:
+      expose:
+        - bolt

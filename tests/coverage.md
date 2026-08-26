@@ -72,6 +72,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] Bolt (7687) reachable from the Neo4j pod — NEO-3-007-PRT-03 · AC-NEO-NETWORKING-PORTS-BOLT
 - [x] HTTP (7474) reachable — NEO-3-007-PRT-01 · AC-NEO-NETWORKING-PORTS-HTTP
 - [x] HTTP+Bolt exposed, HTTPS disabled — NEO-3-007-PCMB-03 · AC-NEO-NETWORKING-PORTS-HTTP-BOLT
+- [x] Bolt only — `connectivity.service.expose: [bolt]` publishes only `tcp-bolt` on the client Service; HTTP/HTTPS are not exposed and Neo4j still reaches Ready over Bolt (exposure-only; Neo4j keeps listening on HTTP internally). `expose` must include `bolt` (CEL) since the operator manages Neo4j over the client-Service Bolt path — covered in `feature-ports` case `bolt-only` — NEO-3-007-PCMB-01 · AC-NEO-NETWORKING-PORTS-BOLT
 - [x] Reachable via client ClusterIP Service from an external pod — NEO-3-007-SVC-01 · AC-NEO-NETWORKING-CLUSTERIP
 - [x] Single-cluster only — `multiCluster.enabled` refused at admission, see `operator-admission` — NEO-3-007-MULTI-01
 

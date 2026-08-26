@@ -75,6 +75,7 @@ func TestCRDContainsCELValidations(t *testing.T) {
 		"topology.minimumMembers cannot change after create",
 		"minimumMembers 1 requires primaries.members 1",
 		"Cluster mode needs an admin Bolt path for the operator",
+		"connectivity.service.expose must include bolt",
 		"community edition supports topology.mode Standalone only",
 		"Enterprise edition requires spec.license.accept",
 		"features.backup requires Enterprise edition",
