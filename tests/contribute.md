@@ -368,14 +368,19 @@ for policy_arn in \
     --policy-arn "${policy_arn}"
 done
 
-# PassRole alone is not enough. CreateNodegroup inspects the role on the caller's behalf — GetRole,
-# then ListAttachedRolePolicies — and refuses one action at a time, each failure arriving minutes
-# into a run that already built the control plane. The rest are read-only and scoped to these two
-# ARNs, so granting them together costs nothing and ends the round trips.
+# PassRole alone is not enough: CreateCluster and CreateNodegroup read roles on the caller's behalf
+# and refuse one action at a time, each failure landing minutes into a run that already built the
+# control plane. The reads deliberately span every role, not just these two — CreateNodegroup also
+# checks whether the AWSServiceRoleForAmazonEKSNodegroup service-linked role exists, an ARN under
+# aws-service-role/ that nobody here creates and that a resource list cannot name in advance.
+# They return role metadata and grant no power over anything; PassRole, which does, stays scoped.
 aws iam put-user-policy --user-name "${CI_USER}" \
   --policy-name neo4j-operator-ci-eks-passrole \
-  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:PassRole","iam:GetRole","iam:ListAttachedRolePolicies","iam:ListRolePolicies","iam:GetRolePolicy","iam:ListInstanceProfilesForRole"],"Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]}]}'
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Sid":"PassTheTwoEksRoles","Effect":"Allow","Action":"iam:PassRole","Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]},{"Sid":"ReadRolesEksInspects","Effect":"Allow","Action":["iam:GetRole","iam:ListAttachedRolePolicies","iam:ListRolePolicies","iam:GetRolePolicy","iam:ListInstanceProfilesForRole"],"Resource":"*"}]}'
 ```
+
+Creating the service-linked role itself needs nothing extra: `iam:CreateServiceLinkedRole` is part of
+the little IAM that `PowerUserAccess` does allow. Only the "does it already exist" check was denied.
 
 ### Reaching the cluster as a human
 

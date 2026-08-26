@@ -124,7 +124,7 @@ case "${cluster_status}" in
       --resources-vpc-config "subnetIds=${subnet_ids},endpointPublicAccess=true" \
       --access-config "authenticationMode=API,bootstrapClusterCreatorAdminPermissions=true" \
       >/dev/null; then
-      die "create-cluster was refused. Under PowerUserAccess this is the identity's rights over ${cluster_role_arn}: iam:PassRole plus the read actions EKS calls on it. The preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
+      die "create-cluster was refused. Under PowerUserAccess this is the identity's rights over ${cluster_role_arn}: iam:PassRole, plus the read actions EKS calls on the roles it touches. The preflight above says whether the role itself exists. See tests/contribute.md (AWS CI setup)"
     fi
     aws eks wait cluster-active --name "${AWS_EKS_NAME}"
     ;;
@@ -171,7 +171,7 @@ case "${nodegroup_status}" in
       --instance-types "${AWS_EKS_NODE_INSTANCE_TYPE}" \
       --scaling-config "minSize=${AWS_EKS_NODE_COUNT},maxSize=${AWS_EKS_NODE_COUNT},desiredSize=${AWS_EKS_NODE_COUNT}" \
       >/dev/null; then
-      die "create-nodegroup was refused. CreateNodegroup does more than pass ${node_role_arn}: it reads the role on the caller's behalf, so the identity needs iam:GetRole and iam:ListAttachedRolePolicies on it as well as iam:PassRole. See tests/contribute.md (AWS CI setup)"
+      die "create-nodegroup was refused. It passes ${node_role_arn} and also reads roles on the caller's behalf — including the AWSServiceRoleForAmazonEKSNodegroup service-linked role, which no resource list can name in advance. The read actions must therefore be granted on every role, not only the two above: see tests/contribute.md (AWS CI setup)"
     fi
     aws eks wait nodegroup-active --cluster-name "${AWS_EKS_NAME}" \
       --nodegroup-name "${AWS_EKS_NODEGROUP_NAME}"
