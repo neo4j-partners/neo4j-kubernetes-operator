@@ -1,0 +1,169 @@
+name: Cloud cleanup
+
+# Safety net for the three managed e2e targets. A run's own teardown step is enough for a normal
+# cancellation — the server re-evaluates `if` on cancel and `always()` still runs — but a
+# force-cancel bypasses `always()` by design, and a lost runner skips every step. Either way a
+# control plane keeps billing by the hour, so this workflow deletes what a run may have left
+# behind: the Azure CI resource group (AKS + ACR), the GKE cluster, the EKS cluster and its
+# nodegroups. Each is a no-op when its target is already gone.
+#
+# One job per cloud, sharing a single guard job, so a credential expiring on one cloud cannot stop
+# the other two from being cleaned up — and so the run tells you which cloud failed at a glance.
+#
+# The image registries are deliberately left alone: ACR, Artifact Registry and ECR hold a few
+# image layers, cost cents, and e2e reuses them across runs.
+#
+# schedule and workflow_dispatch only register from the default branch, so this file must be on
+# main before it can be scheduled or triggered from the Actions tab.
+on:
+  schedule:
+    # 09:00 UTC — four hours after e2e-all-platforms starts, by which point it has finished.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Delete even while an E2E run is in flight — for a run stuck in progress"
+        type: boolean
+        default: false
+      cloud:
+        description: "Which cloud to clean up"
+        type: choice
+        default: all
+        options: [all, azure, gcp, aws]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-cleanup
+  cancel-in-progress: false
+
+jobs:
+  # A running suite owns its cluster: deleting it underneath would fail that run for no reason.
+  # Only e2e-all-platforms touches the managed clouds — ci.yml is kind-only — so one check covers
+  # all three, which is why it is a job of its own rather than a step repeated three times.
+  guard:
+    name: Check for a live E2E run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # gh run list, to tell a live run from an abandoned cluster.
+      actions: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Look for an E2E run in flight
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [[ "${FORCE}" == "true" ]]; then
+            echo "::notice::force requested — cleaning up regardless of any run in flight"
+            echo "skip=false" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          active=0
+          for status in in_progress queued; do
+            n="$(gh run list --workflow e2e-all-platforms.yml --status "${status}" --json databaseId --jq 'length')"
+            active=$((active + n))
+          done
+          if (( active > 0 )); then
+            echo "::notice::${active} E2E run(s) in flight — leaving the CI clusters alone"
+            echo "skip=true" >>"${GITHUB_OUTPUT}"
+          else
+            echo "skip=false" >>"${GITHUB_OUTPUT}"
+          fi
+
+  azure:
+    name: Delete leftover Azure resources
+    needs: guard
+    # An empty inputs.cloud is a scheduled run, which cleans up everything.
+    if: >-
+      needs.guard.outputs.skip != 'true' &&
+      (inputs.cloud == '' || inputs.cloud == 'all' || inputs.cloud == 'azure')
+    runs-on: ubuntu-latest
+    env:
+      # Same fallback as tests/config/cloud/azure-aks.sh, so both agree on the target.
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'neo4j-operator-ci-rg' }}
+    steps:
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_SERVICE_ACCOUNT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      # Deleting the group takes AKS and ACR with it, which is why Azure needs no per-resource
+      # handling here.
+      - name: Delete the CI resource group
+        run: |
+          if az group show --name "${AZURE_RESOURCE_GROUP}" >/dev/null 2>&1; then
+            echo "Deleting resource group ${AZURE_RESOURCE_GROUP}"
+            az group delete --name "${AZURE_RESOURCE_GROUP}" --yes --no-wait
+          else
+            echo "Resource group ${AZURE_RESOURCE_GROUP} not found — nothing to clean up"
+          fi
+
+  gcp:
+    name: Delete leftover GKE cluster
+    needs: guard
+    if: >-
+      needs.guard.outputs.skip != 'true' &&
+      (inputs.cloud == '' || inputs.cloud == 'all' || inputs.cloud == 'gcp')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Workload identity federation, the same exchange as the e2e job.
+      id-token: write
+    env:
+      # Same fallbacks as tests/config/cloud/gcp-gke.sh, so both agree on the target.
+      GCP_PROJECT: ${{ vars.GCP_PROJECT || 'kop12345' }}
+      GCP_ZONE: ${{ vars.GCP_ZONE || 'europe-west1-b' }}
+      GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME || 'neo4j-operator-ci-gke' }}
+    steps:
+      - name: GCP auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/1024447859763/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT || 'gh-actions-k8s-operator-test@kop12345.iam.gserviceaccount.com' }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Delete the CI cluster
+        run: |
+          gcloud config set project "${GCP_PROJECT}" >/dev/null
+          if gcloud container clusters describe "${GKE_CLUSTER_NAME}" --zone "${GCP_ZONE}" >/dev/null 2>&1; then
+            echo "Deleting GKE cluster ${GKE_CLUSTER_NAME} in ${GCP_ZONE}"
+            gcloud container clusters delete "${GKE_CLUSTER_NAME}" --zone "${GCP_ZONE}" --quiet --async
+          else
+            echo "GKE cluster ${GKE_CLUSTER_NAME} not found — nothing to clean up"
+          fi
+
+  aws:
+    name: Delete leftover EKS cluster
+    needs: guard
+    if: >-
+      needs.guard.outputs.skip != 'true' &&
+      (inputs.cloud == '' || inputs.cloud == 'all' || inputs.cloud == 'aws')
+    runs-on: ubuntu-latest
+    env:
+      # Unset falls back to the defaults in tests/config/cloud/aws-eks.sh, which the script below
+      # loads, so only overrides need to appear here.
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_EKS_NAME: ${{ vars.AWS_EKS_NAME }}
+    steps:
+      # The only cloud whose cleanup needs the repository: nodegroups must go before the cluster,
+      # and that ordering lives in tests/aws/teardown-eks.sh so the e2e job and this one cannot
+      # drift apart.
+      - uses: actions/checkout@v5
+
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Delete the CI cluster and its nodegroups
+        run: bash tests/aws/teardown-eks.sh

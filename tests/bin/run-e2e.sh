@@ -12,7 +12,7 @@ TESTS_DIR="$(cd "${BIN_DIR}/.." && pwd)"
 # whatever cluster kubectl happens to point at, and every suite fails on the operator never
 # becoming ready instead of on the missing variable.
 if [[ -n "${CI:-}" && -z "${CLOUD:-}" ]]; then
-  echo "CLOUD must be set explicitly in CI (local-kind, azure-aks or gcp-gke)" >&2
+  echo "CLOUD must be set explicitly in CI (local-kind, azure-aks, gcp-gke or aws-eks)" >&2
   exit 1
 fi
 CLOUD="${CLOUD:-local-kind}"
@@ -39,6 +39,10 @@ _require_e2e_cloud_ready() {
     gcp-gke)
       [[ -n "${OPERATOR_IMAGE:-}" ]] \
         || die "OPERATOR_IMAGE is required for CLOUD=gcp-gke. Run: make test-e2e-gke  (or: source tests/gcp/ensure-gke.sh && bash tests/gcp/push-operator-image.sh)"
+      ;;
+    aws-eks)
+      [[ -n "${OPERATOR_IMAGE:-}" ]] \
+        || die "OPERATOR_IMAGE is required for CLOUD=aws-eks. Run: make test-e2e-eks  (or: source tests/aws/ensure-eks.sh && bash tests/aws/push-operator-image.sh)"
       ;;
   esac
 }

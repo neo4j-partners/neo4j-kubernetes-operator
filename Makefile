@@ -164,6 +164,18 @@ test-e2e-gke: ## Ensure GKE, push image, run e2e on gcp-gke
 test-e2e-gke-matrix: ## Ensure GKE, push image, run all e2e matrix combinations on gcp-gke
 	bash -c 'source tests/gcp/ensure-gke.sh && bash tests/gcp/push-operator-image.sh && CLOUD=gcp-gke E2E_PROFILE=matrix ./tests/bin/run-e2e.sh'
 
+.PHONY: test-e2e-eks
+test-e2e-eks: ## Ensure EKS, push image, run e2e on aws-eks
+	bash -c 'source tests/aws/ensure-eks.sh && bash tests/aws/push-operator-image.sh && CLOUD=aws-eks ./tests/bin/run-e2e.sh'
+
+.PHONY: test-e2e-eks-matrix
+test-e2e-eks-matrix: ## Ensure EKS, push image, run all e2e matrix combinations on aws-eks
+	bash -c 'source tests/aws/ensure-eks.sh && bash tests/aws/push-operator-image.sh && CLOUD=aws-eks E2E_PROFILE=matrix ./tests/bin/run-e2e.sh'
+
+.PHONY: teardown-e2e-eks
+teardown-e2e-eks: ## Delete the EKS CI cluster and its nodegroups (ECR repository is kept)
+	bash tests/aws/teardown-eks.sh
+
 ##@ Code generation
 
 .PHONY: manifests
