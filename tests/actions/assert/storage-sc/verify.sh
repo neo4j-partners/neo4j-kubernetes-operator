@@ -2,8 +2,8 @@
 # assert/storage-sc — Dynamic data volume with an explicit storageClassName.
 # The operator provisions data-<cr>-server-0 with that StorageClass and the CR reaches Ready.
 # The class comes from the cloud profile (local-kind: standard, azure-aks: managed-csi,
-# gcp-gke: standard-rwo), the same source the fixture's __CLOUD_STORAGE_CLASS__ placeholder
-# resolves from.
+# gcp-gke: standard-rwo, aws-eks: gp3), the same source the fixture's __CLOUD_STORAGE_CLASS__
+# placeholder resolves from.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

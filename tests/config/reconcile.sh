@@ -24,12 +24,12 @@ _config_source_case() {
   source "${path}"
 }
 
-# Clouds whose nodes pull the operator image from a registry (ACR, Artifact Registry) rather than
-# having it loaded into them. They share an operator case, an OPERATOR_IMAGE requirement, and a
-# provisioning script that sets it — so the distinction is worth naming once.
+# Clouds whose nodes pull the operator image from a registry (ACR, Artifact Registry, ECR) rather
+# than having it loaded into them. They share an operator case, an OPERATOR_IMAGE requirement, and
+# a provisioning script that sets it — so the distinction is worth naming once.
 _config_cloud_uses_registry() {
   case "${CLOUD_ID:-}" in
-    azure-aks | gcp-gke) return 0 ;;
+    azure-aks | gcp-gke | aws-eks) return 0 ;;
     *) return 1 ;;
   esac
 }

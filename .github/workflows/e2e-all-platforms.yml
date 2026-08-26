@@ -1,6 +1,6 @@
 name: E2E — all platforms
 
-# The same suites as CI, on kind and on real AKS and GKE clusters in parallel.
+# The same suites as CI, on kind and on real AKS, GKE and EKS clusters in parallel.
 # The managed clusters live here rather than in CI because each run creates and
 # destroys one, so this is scheduled daily instead of gating pull requests.
 on:
@@ -13,9 +13,9 @@ on:
 concurrency:
   # Deliberately not keyed on the ref: every run of this workflow, whether from
   # cron on main or dispatched on a branch, competes for the same fixed cloud
-  # names — Azure resource group, ACR and AKS, GKE cluster and Artifact Registry.
-  # Serialising them stops one run tearing down the cluster another is testing
-  # against.
+  # names — Azure resource group, ACR and AKS, GKE cluster and Artifact Registry,
+  # EKS cluster and ECR repository. Serialising them stops one run tearing down
+  # the cluster another is testing against.
   group: e2e-all-platforms
   # Never cancel a run in progress: an interrupted cloud run must still reach its
   # teardown step rather than leave a managed cluster billing.
@@ -28,7 +28,7 @@ jobs:
   unit:
     uses: ./.github/workflows/unit.yml
 
-  # The three targets declare the same single dependency and none on each other, so they start
+  # The four targets declare the same single dependency and none on each other, so they start
   # together as soon as unit passes. Gating on unit avoids creating a managed cluster for code
   # that does not compile.
   #
@@ -149,3 +149,48 @@ jobs:
           else
             echo "GKE cluster ${cluster} not found — nothing to tear down"
           fi
+
+  e2e-aws-eks:
+    name: AWS
+    needs: unit
+    runs-on: ubuntu-latest
+    env:
+      # AWS names and sizing — override via repository Variables
+      # (Settings > Secrets and variables > Actions > Variables).
+      # Unset falls back to the defaults in tests/config/cloud/aws-eks.sh.
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+      AWS_EKS_NAME: ${{ vars.AWS_EKS_NAME }}
+      AWS_EKS_NODE_COUNT: ${{ vars.AWS_EKS_NODE_COUNT }}
+      AWS_EKS_NODE_INSTANCE_TYPE: ${{ vars.AWS_EKS_NODE_INSTANCE_TYPE }}
+      # Empty means "discover the default VPC", which is what CI relies on.
+      AWS_EKS_SUBNET_IDS: ${{ vars.AWS_EKS_SUBNET_IDS }}
+      # The two IAM roles EKS requires. The CI identity holds PowerUserAccess and cannot create
+      # them, so they are provisioned out of band — see tests/contribute.md (AWS CI setup).
+      AWS_EKS_CLUSTER_ROLE: ${{ vars.AWS_EKS_CLUSTER_ROLE }}
+      AWS_EKS_NODE_ROLE: ${{ vars.AWS_EKS_NODE_ROLE }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Long-lived access key rather than OIDC, unlike GCP: an organisation policy on this account
+      # reserves role assumption for SSO principals, so a workload identity gets a key. The secrets
+      # stay in this step's inputs — the action exports only the resolved credentials to the rest of
+      # the job, so they never appear in a job-level env block.
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Required input, so it cannot rely on the profile default the way the names above do.
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - uses: ./.github/actions/e2e
+        with:
+          cloud: aws-eks
+
+      # Same reasoning as the other two clouds, with one addition: EKS refuses to delete a cluster
+      # that still owns a nodegroup, so the order and the bounded wait live in a script rather than
+      # inline here. The ECR repository is kept on purpose.
+      - name: Teardown EKS cluster
+        if: always()
+        run: bash tests/aws/teardown-eks.sh

@@ -160,9 +160,8 @@ managed cloud:
 | Workflow | When | Runs |
 |----------|------|------|
 | [`ci.yml`](../.github/workflows/ci.yml) | Every PR / push to `main`, manual | `unit.yml`, one image build, then one job per suite on `local-kind` |
-| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then every suite on `local-kind`, `azure-aks` and `gcp-gke` in parallel |
-| [`azure-cleanup.yml`](../.github/workflows/azure-cleanup.yml) | 09:00 UTC daily, manual | Deletes the Azure CI resource group if an e2e run left it behind |
-| [`gcp-cleanup.yml`](../.github/workflows/gcp-cleanup.yml) | 09:00 UTC daily, manual | Deletes the GKE CI cluster if an e2e run left it behind |
+| [`e2e-all-platforms.yml`](../.github/workflows/e2e-all-platforms.yml) | 05:00 UTC daily, manual | `unit.yml`, then every suite on `local-kind`, `azure-aks`, `gcp-gke` and `aws-eks` in parallel |
+| [`cloud-cleanup.yml`](../.github/workflows/cloud-cleanup.yml) | 09:00 UTC daily, manual | One job per cloud, deleting any managed cluster an e2e run left behind |
 
 [`.github/actions/e2e`](../.github/actions/e2e/action.yml) holds the platform setup — kind
 cluster, or a managed cluster created and an image pushed to its registry — and runs either one

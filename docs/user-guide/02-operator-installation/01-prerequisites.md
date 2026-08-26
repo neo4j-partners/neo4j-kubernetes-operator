@@ -37,7 +37,11 @@ kubectl get storageclass
 ```
 
 If nothing is marked `(default)` and you do not set a class name, the claim stays Pending and the
-instance never starts. The full matrix of volume modes, including reusing an existing PVC, is in
+instance never starts. This is the normal state of a recent EKS cluster, which ships no default
+class, and a listed class is not proof of a working provisioner either: EKS shows `gp2` but
+provisions nothing until the EBS CSI driver is installed. The
+[EKS quickstart](../01-getting-started/aws-eks.md#2-give-the-cluster-a-working-storageclass)
+covers both. The full matrix of volume modes, including reusing an existing PVC, is in
 [Storage](../03-neo4j/03-storage.md); runnable manifests are in
 [`examples/storage/`](../../../examples/storage/).
 
@@ -80,5 +84,5 @@ Pick an install path in [Operator installation](readme.md), or go straight to
 [Build the operator image](02-build-image.md).
 
 If you would rather follow a complete platform walkthrough, use
-[kind (local)](../01-getting-started/local-kind.md), [Azure AKS](../01-getting-started/azure-aks.md)
-or [GKE](../01-getting-started/gcp-gke.md).
+[kind (local)](../01-getting-started/local-kind.md), [Azure AKS](../01-getting-started/azure-aks.md),
+[GKE](../01-getting-started/gcp-gke.md) or [EKS](../01-getting-started/aws-eks.md).

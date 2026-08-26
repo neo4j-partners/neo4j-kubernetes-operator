@@ -28,6 +28,7 @@ tests/config/
     local-kind.sh
     azure-aks.sh
     gcp-gke.sh
+    aws-eks.sh
 
   profiles/
     happy-path.sh         # fixed picks per layer
@@ -48,7 +49,7 @@ final config = operator/base
 
 | Profile | Behaviour |
 |---------|-----------|
-| `happy-path` (default) | Fixed: `neo4j/standalone-minimal` + operator case from cloud (`local-image` on kind, `registry-image` on AKS and GKE) |
+| `happy-path` (default) | Fixed: `neo4j/standalone-minimal` + operator case from cloud (`local-image` on kind, `registry-image` on AKS, GKE and EKS) |
 | `matrix` | All valid operator × neo4j combinations for the cloud and scenario (cleanup between each run) |
 | `explicit` | You set `OPERATOR_CASE` and `NEO4J_CASE` env vars |
 
@@ -59,6 +60,7 @@ final config = operator/base
 | `local-kind` | `default`, `local-image` | `standalone-minimal`, `standalone-storage-class`, `standalone-named-cr` | 6 |
 | `azure-aks` | `default`, `registry-image` | same | 6 |
 | `gcp-gke` | `default`, `registry-image` | same | 6 |
+| `aws-eks` | `default`, `registry-image` | same | 6 |
 
 ## Usage
 
@@ -73,6 +75,7 @@ E2E_PROFILE=matrix make test-e2e-local
 make test-e2e-combinations
 # CLOUD=azure-aks make test-e2e-combinations
 # CLOUD=gcp-gke make test-e2e-combinations
+# CLOUD=aws-eks make test-e2e-combinations
 
 # Single explicit combination
 E2E_PROFILE=explicit OPERATOR_CASE=local-image NEO4J_CASE=standalone-storage-class \

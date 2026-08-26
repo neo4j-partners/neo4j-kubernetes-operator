@@ -11,7 +11,7 @@ description: Run the e2e harness against one platform, either a single suite or 
 # cancelled job would skip a teardown step placed here.
 inputs:
   cloud:
-    description: "Target platform — local-kind, azure-aks or gcp-gke"
+    description: "Target platform — local-kind, azure-aks, gcp-gke or aws-eks"
     required: true
   suite:
     description: "Single suite to run. Empty runs every suite in this one job (the cloud paths)."
@@ -107,11 +107,31 @@ runs:
       shell: bash
       run: bash tests/gcp/push-operator-image.sh
 
+    # ----------------------------------------------------------------- aws
+    # The caller has already configured the AWS credentials, since only it can read the secrets.
+    - name: Ensure EKS cluster and ECR
+      if: inputs.cloud == 'aws-eks'
+      shell: bash
+      run: |
+        # Creates the ECR repository, the cluster, its nodegroup and the EBS CSI addon if missing,
+        # then wires kubectl.
+        . tests/aws/ensure-eks.sh
+        echo "OPERATOR_IMAGE=${OPERATOR_IMAGE}" >> "${GITHUB_ENV}"
+        # Persist what teardown needs: the profile defaults apply when a Variable is unset, and the
+        # teardown step runs outside this shell.
+        echo "AWS_EKS_NAME=${AWS_EKS_NAME}" >> "${GITHUB_ENV}"
+        echo "AWS_REGION=${AWS_REGION}" >> "${GITHUB_ENV}"
+
+    - name: Push operator image to ECR
+      if: inputs.cloud == 'aws-eks'
+      shell: bash
+      run: bash tests/aws/push-operator-image.sh
+
     # --------------------------------------------------------------- suites
     # Two modes. `suite` set: this job runs exactly one suite, and the caller fans the matrix
     # out — each suite gets its own job, its own log and its own re-run button. `suite` empty:
     # every suite runs in this one job, which is what the cloud targets need because all their
-    # jobs would otherwise race to provision and tear down the same AKS or GKE cluster.
+    # jobs would otherwise race to provision and tear down the same managed cluster.
     #
     # Neither mode hardcodes the list: it comes from tests/suites/*.yaml, so adding a suite
     # file is all it takes to get it into CI.

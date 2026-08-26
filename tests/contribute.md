@@ -131,43 +131,41 @@ decision record) stays a `#` comment above the case.
 | Workflow | Trigger | Targets |
 |----------|---------|---------|
 | `ci.yml` | Every pull request and push to `main`, plus manual dispatch | Unit and audit, then every suite on kind |
-| `e2e-all-platforms.yml` | 05:00 UTC daily, plus manual dispatch | Unit and audit, then every suite on kind, on AKS **and** on GKE, in parallel |
-| `azure-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes the Azure CI resource group if it outlived its run |
-| `gcp-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes the GKE CI cluster if it outlived its run |
+| `e2e-all-platforms.yml` | 05:00 UTC daily, plus manual dispatch | Unit and audit, then every suite on kind, on AKS, on GKE **and** on EKS, in parallel |
+| `cloud-cleanup.yml` | 09:00 UTC daily, plus manual dispatch | Deletes whichever managed cluster outlived its run — one job per cloud |
 
 The first two share `unit.yml` and the `.github/actions/e2e` composite action, which takes a
-`cloud` input of `local-kind`, `azure-aks` or `gcp-gke` and an optional `suite`. CI passes a suite
-per job so each one reports on its own; the scheduled workflow passes none and runs them all in one
-job per platform. Neither hardcodes the list — it comes from `tests/suites/*.yaml`.
+`cloud` input of `local-kind`, `azure-aks`, `gcp-gke` or `aws-eks` and an optional `suite`. CI
+passes a suite per job so each one reports on its own; the scheduled workflow passes none and runs
+them all in one job per platform. Neither hardcodes the list — it comes from `tests/suites/*.yaml`.
 
 The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
 and 06:00 in winter.
 
-### Leftover Azure resources
+### Leftover clusters
 
-`e2e-all-platforms.yml` tears the resource group down with `if: always()`, which also covers a
-cancelled run.
-It cannot cover a **force-cancel** (documented to bypass `always()`) or a lost runner, and an AKS
-cluster bills by the hour. `azure-cleanup.yml` is the net: it deletes the group daily, skipping
-itself while an e2e run is in flight. If a run is stuck holding the cluster, dispatch it with
-`force: true`, or delete the group by hand:
+`e2e-all-platforms.yml` tears each platform down with `if: always()`, which also covers a cancelled
+run. It cannot cover a **force-cancel** (documented to bypass `always()`) or a lost runner, and
+every managed control plane bills by the hour. `cloud-cleanup.yml` is the net: one job per cloud,
+daily, each skipping itself while an e2e run is in flight. Dispatch it with `force: true` for a run
+stuck holding a cluster, and with `cloud:` to target a single provider.
+
+By hand, if you would rather not wait for the workflow:
 
 ```bash
+# Azure — deleting the group takes AKS and ACR with it
 az group delete --name "${AZURE_RESOURCE_GROUP:-neo4j-operator-ci-rg}" --yes --no-wait
-```
 
-### Leftover GKE cluster
-
-Same failure mode, same net: `gcp-cleanup.yml` deletes the CI cluster daily and skips itself while
-an e2e run is in flight. Dispatch it with `force: true` for a stuck run, or delete by hand:
-
-```bash
+# GCP
 gcloud container clusters delete "${GKE_CLUSTER_NAME:-neo4j-operator-ci-gke}" \
   --zone "${GCP_ZONE:-europe-west1-b}" --quiet --async
+
+# AWS — nodegroups first, which is why this one is a script
+make teardown-e2e-eks
 ```
 
-The Artifact Registry repository is left in place on purpose — it holds a few image layers and
-saves a full push on the next run.
+The image registries are left in place on purpose — ACR, Artifact Registry and ECR each hold a few
+image layers and save a full push on the next run.
 
 ## Azure CI setup (maintainers)
 
@@ -214,10 +212,10 @@ by default), so the scheduled Azure job will start failing at login when it does
 GKE authenticates through workload identity federation: the job presents its GitHub OIDC token,
 the provider trusts this repository, and GCP returns a short-lived credential impersonating the
 service account. Nothing is stored in the repository, and nothing expires the way an Azure client
-secret does — which is why the two clouds are configured differently.
+secret or an AWS access key does — which is why the three clouds are configured differently.
 
 The provider and the service account are defaults in `e2e-all-platforms.yml` and
-`gcp-cleanup.yml`. They are configuration, not secrets, and a Variable overrides either one:
+`cloud-cleanup.yml`. They are configuration, not secrets, and a Variable overrides either one:
 
 | Variable | Default |
 |----------|---------|
@@ -291,3 +289,137 @@ read the repository. `ensure-gke.sh` grants `roles/artifactregistry.reader` on t
 itself, and treats a failure as non-fatal: the binding is usually already implied by that
 account's project role. If the operator Deployment ends up in `ImagePullBackOff`, that grant is
 the first thing to check.
+
+## AWS CI setup (maintainers)
+
+### Required secrets
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | Access key of the CI IAM user |
+| `AWS_SECRET_ACCESS_KEY` | Its secret access key |
+
+A long-lived key rather than federation, unlike GCP, because an organisation policy on this account
+reserves role assumption for SSO principals: an automated workload gets an IAM user. Access keys do
+not expire on their own, so the credential carries an agreed rotation date rather than an
+expiry — the run starts failing at `sts get-caller-identity` when it is revoked, not at a cluster
+operation.
+
+Both secrets are passed in the `with:` block of the credentials step, never a job-level `env:`. The
+action exports only the resolved credentials to the remaining steps, which keeps the raw key out of
+every other step's environment.
+
+### Optional repository variables
+
+| Variable | Default |
+|----------|---------|
+| `AWS_REGION` | `eu-west-1` |
+| `AWS_EKS_NAME` | `neo4j-operator-ci-eks` |
+| `AWS_ECR_REPOSITORY` | `neo4j-operator-ci` |
+| `AWS_EKS_NODE_COUNT` | `2` |
+| `AWS_EKS_NODE_INSTANCE_TYPE` | `m5.xlarge` (4 vCPU / 16 GiB, as on AKS and GKE) |
+| `AWS_EKS_CLUSTER_ROLE` | `neo4j-operator-ci-eks-cluster-role` |
+| `AWS_EKS_NODE_ROLE` | `neo4j-operator-ci-eks-node-role` |
+| `AWS_EKS_SUBNET_IDS` | empty — discover the default VPC |
+
+The account id is deliberately absent: `ensure-eks.sh` reads it from the caller's identity, so it
+never has to live in the repository. Either role variable also accepts a full `arn:...` value, for a
+role shared from another account.
+
+### The two IAM roles, created out of band
+
+The CI user holds `PowerUserAccess`, which covers every service **except IAM**. It can hand a role
+to EKS — once granted the actions below on both — but never create one, and EKS requires two.
+Neither script attempts to: a missing role is caught by a preflight in `ensure-eks.sh`, which uses
+`iam:ListRoles` (allowed by `PowerUserAccess`) to tell "the role does not exist" apart from "this
+identity may not use it", two cases AWS reports identically.
+
+| Role | Trusted by | Attached policies |
+|------|-----------|-------------------|
+| `neo4j-operator-ci-eks-cluster-role` | `eks.amazonaws.com` | `AmazonEKSClusterPolicy` |
+| `neo4j-operator-ci-eks-node-role` | `ec2.amazonaws.com` **and** `pods.eks.amazonaws.com` | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`, `service-role/AmazonEBSCSIDriverPolicy` |
+
+The node role is trusted by two principals because it serves two purposes. `ec2.amazonaws.com` is
+what the instances themselves assume. `pods.eks.amazonaws.com` is what lets the EBS CSI controller
+assume it through EKS Pod Identity, and it is not optional: EKS stops a pod from reaching the node's
+instance metadata, so the driver cannot borrow the instance credentials the way a host process
+would. Without that second statement the controller crash-loops and the addon never leaves
+`DEGRADED`. IRSA would be the alternative, but its OIDC provider derives from the cluster's issuer
+URL — a cluster recreated nightly would need a new provider each night, and that is an IAM object
+the CI user cannot create. `ensure-eks.sh` therefore installs the `eks-pod-identity-agent` addon and
+creates the association itself: both are EKS calls, and the only IAM right they need is the
+`iam:PassRole` already granted below.
+
+`AmazonEBSCSIDriverPolicy` is what the driver ends up holding through that association, and
+`AmazonEC2ContainerRegistryReadOnly` is what lets nodes pull the operator image from ECR, the
+equivalent of `az aks --attach-acr`.
+
+Commands for whoever holds IAM in the account:
+
+```bash
+CI_USER=github-actions-fieldeng-ps-eks-test
+
+aws iam create-role --role-name neo4j-operator-ci-eks-cluster-role \
+  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"eks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+aws iam attach-role-policy --role-name neo4j-operator-ci-eks-cluster-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+
+# Two trust statements: the instances assume this role, and so does the EBS CSI controller through
+# Pod Identity. sts:TagSession alongside sts:AssumeRole is required by Pod Identity, which tags every
+# session it hands out. On a role that already exists, replace create-role with:
+#   aws iam update-assume-role-policy --role-name neo4j-operator-ci-eks-node-role --policy-document '<same>'
+aws iam create-role --role-name neo4j-operator-ci-eks-node-role \
+  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"},{"Effect":"Allow","Principal":{"Service":"pods.eks.amazonaws.com"},"Action":["sts:AssumeRole","sts:TagSession"]}]}'
+# AmazonEBSCSIDriverPolicy sits under the service-role/ path, unlike the other three, so these are
+# full ARNs rather than a list of names — attaching the wrong path fails with NoSuchEntity.
+for policy_arn in \
+  arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy \
+  arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy \
+  arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly \
+  arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy; do
+  aws iam attach-role-policy --role-name neo4j-operator-ci-eks-node-role \
+    --policy-arn "${policy_arn}"
+done
+
+# PassRole alone is not enough: CreateCluster and CreateNodegroup read roles on the caller's behalf
+# and refuse one action at a time, each failure landing minutes into a run that already built the
+# control plane. The reads deliberately span every role, not just these two — CreateNodegroup also
+# checks whether the AWSServiceRoleForAmazonEKSNodegroup service-linked role exists, an ARN under
+# aws-service-role/ that nobody here creates and that a resource list cannot name in advance.
+# They return role metadata and grant no power over anything; PassRole, which does, stays scoped.
+aws iam put-user-policy --user-name "${CI_USER}" \
+  --policy-name neo4j-operator-ci-eks-passrole \
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Sid":"PassTheTwoEksRoles","Effect":"Allow","Action":"iam:PassRole","Resource":["arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-cluster-role","arn:aws:iam::<ACCOUNT_ID>:role/neo4j-operator-ci-eks-node-role"]},{"Sid":"ReadRolesEksInspects","Effect":"Allow","Action":["iam:GetRole","iam:ListAttachedRolePolicies","iam:ListRolePolicies","iam:GetRolePolicy","iam:ListInstanceProfilesForRole"],"Resource":"*"}]}'
+```
+
+Creating the service-linked role itself needs nothing extra: `iam:CreateServiceLinkedRole` is part of
+the little IAM that `PowerUserAccess` does allow. Only the "does it already exist" check was denied.
+
+### Reaching the cluster as a human
+
+EKS grants cluster-admin to whichever principal created the cluster, and to nobody else. The CI
+user creates it, so `aws eks update-kubeconfig` gives you a kubeconfig whose every request is
+rejected until you add an access entry for yourself:
+
+```bash
+aws eks create-access-entry --cluster-name neo4j-operator-ci-eks \
+  --principal-arn "$(aws sts get-caller-identity --query Arn --output text)"
+aws eks associate-access-policy --cluster-name neo4j-operator-ci-eks \
+  --principal-arn "$(aws sts get-caller-identity --query Arn --output text)" \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+  --access-scope type=cluster
+```
+
+Worth doing while the cluster is still up: after the nightly teardown there is nothing to attach an
+entry to.
+
+### What a run creates
+
+Cluster, one managed nodegroup, the `eks-pod-identity-agent` and `aws-ebs-csi-driver` addons, a pod
+identity association for `kube-system/ebs-csi-controller-sa`, and a `gp3` StorageClass — EKS ships
+no gp3 class, and its default `gp2` only works through in-tree CSI migration, so `ensure-eks.sh`
+declares `ebs.csi.aws.com` explicitly with `WaitForFirstConsumer`, matching how the storage suites
+already bind on kind, AKS and GKE. Expect 10 to 15 minutes before the first suite starts.
+
+Teardown deletes the nodegroups then the cluster, in that order and with a bounded wait, since EKS
+refuses to delete a cluster that still owns one. The ECR repository stays.
