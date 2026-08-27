@@ -6,9 +6,9 @@
 # hook (spec.podTemplate was removed from the CRD in 8837095), and additionalMounts and
 # secretMounts both reject /plugins as a reserved path.
 #
-# The PVC is left empty on purpose. Seeding a real JAR needs a Job the harness does not have,
-# so this case proves the channel (mount, subPathExpr, no NEO4J_PLUGINS), not that an
-# imported JAR loads. See coverage.md for the remaining gap.
+# The PVC starts empty and the assert seeds it, copying the APOC core jar the image already
+# ships into /plugins and restarting the server. That needs no Job and no download: the point
+# is that a JAR a user puts on this claim is loaded, not where the JAR came from.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

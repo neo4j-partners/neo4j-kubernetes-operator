@@ -136,7 +136,7 @@ conn_assert_matrix() {
 
 # conn_run_cypher <host> <pw> <cypher> — run one statement over bolt inside CONN_EXEC_FN and
 # print the result. Sibling of conn_show_setting for statements that are not SHOW SETTINGS —
-# a plugin procedure only answers once its JAR is downloaded and loaded, which is the whole
+# a plugin procedure only answers once its JAR is installed and loaded, which is the whole
 # point of feature-plugins.
 #
 # Runs against the default database, which is correct for apoc.*/gds.* procedures. System
