@@ -82,3 +82,8 @@ spec:
       licenseSecretRef: plg-lic-bloom
       config:
         dbms.bloom.license_file: /licenses/bloom/bloom.license
+        # Bloom is only reachable once its server extension is mounted. The image would set
+        # this itself when installing the plugin (neo4j-plugins.json carries it as a default)
+        # but that write never reaches the config the server reads, so a user has to declare
+        # it — which is what docs/user-guide/03-neo4j/07-plugins.md now shows.
+        server.unmanaged_extension_classes: com.neo4j.bloom.server=/bloom

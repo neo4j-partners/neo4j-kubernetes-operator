@@ -10,8 +10,8 @@ on_case_failure: continue
 # the licence file is where the code (not the doc) says it is.
 #
 # No clouds: key — nothing here has a platform-specific subject. The plugins ship in the
-# Enterprise image, the licence Secrets are dummies, and storage is a plain Dynamic volume,
-# so the suite is hermetic and should run on every platform.
+# Enterprise image, storage is a plain Dynamic volume, and the one case that wants real licence
+# material degrades without it, so the suite is hermetic and should run on every platform.
 #
 # NOTE: the operator contains no install logic. It sets NEO4J_PLUGINS and the image entrypoint
 # installs the JAR at container start. All three V1 catalog plugins ship INSIDE the Enterprise
@@ -53,7 +53,7 @@ cases:
     cr_name: plg-allow
 
   - id: licensed-plugins
-    comment: GDS and Bloom each with a licence Secret — both mounted at /licenses/<id>, both license_file settings effective, and both plugins accept the licence when CI supplies real material.
+    comment: GDS and Bloom each with a licence Secret — both mounted at /licenses/<id>, both license_file settings effective, Bloom's server extension served at /bloom/, and both plugins accept the licence when CI supplies real material.
     fixture: tests/fixtures/neo4j-plugins-licensed.yaml
     assert: plugins-license
     expect: success
@@ -75,7 +75,7 @@ cases:
     cr_name: plg-nolbl
 
   - id: import-volume
-    comment: Pre-created PVC mounted at /plugins with no spec.plugins entry — the manual-import channel, with NEO4J_PLUGINS left unset.
+    comment: Pre-created PVC mounted at /plugins with no spec.plugins entry — the manual-import channel, with NEO4J_PLUGINS left unset, and a JAR seeded onto the claim is loaded after a restart.
     fixture: tests/fixtures/neo4j-plugins-import.yaml
     assert: plugins-import
     expect: success

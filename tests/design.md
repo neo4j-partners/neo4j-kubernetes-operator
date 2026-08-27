@@ -196,27 +196,42 @@ The acceptance checks read a boolean — `gds.isLicensed()`, and the `success` f
 `bloom.checkLicenseCompliance()` — rather than matching the procedure's own words: its `status`
 field reports `"invalid"` for a rejected licence, which contains `valid`.
 
-The fixture also carries two `spec.config.neo4j` workarounds, neither part of the subject, and
-both the same root cause: **installing a bundled plugin, the image writes into `neo4j.conf`, and
-the operator's projected ConfigMap is read-only.**
+The fixture also declares three settings that are not part of the subject, all with the same
+root cause: **the image writes a plugin's default configuration into
+`$NEO4J_HOME/conf/neo4j.conf`, and the operator runs the server with `NEO4J_CONF=/config`.**
+That path in `docker-entrypoint.sh` is hardcoded rather than derived from `NEO4J_CONF`, so none
+of those defaults reach the file the server reads. The Neo4j Helm chart mounts config the same
+way, which is why Neo4j's own Kubernetes docs list these keys under `config:` for the user to
+set by hand.
 
-`server.config.strict_validation.enabled: false` — both `*.license_file` keys are
-plugin-namespaced, and the image validates `neo4j.conf` before the plugin that declares them is
-on the validator's classpath, so the server crash-loops with `No declared setting with name:
-gds.enterprise.license_file`. The image's escape is to rewrite plugin defaults into the file,
-which it cannot do here.
+`server.config.strict_validation.enabled: "false"` — both `*.license_file` keys are
+plugin-namespaced. Reproduced against `2026.05.0-enterprise` in the operator's layout (fragment
+directory at `/config/neo4j.conf`, `NEO4J_CONF=/config`, GDS and Bloom installed into
+`/plugins`): the server refuses to start with
 
-`dbms.security.procedures.unrestricted: bloom.*` — installing `bloom`/`gds` the image appends
-`dbms.security.procedures.unrestricted=gds.*,bloom.*` (verified against 2026.05.0-enterprise;
-CI found it when `bloom.checkLicenseCompliance()` answered `52N34 procedure restricted`). Blocked
-the same way, so under the operator every plugin procedure touching database internals stays
-sandboxed. The operator leaving the setting empty is deliberate (NEO-024) and `procedure-allowlists`
-still pins that; what is not deliberate is that the image's own grant never lands, so `gds.*`
-is sandboxed too and a user must know to opt in by hand.
+```
+Failed to read config /config/neo4j.conf
+Unrecognized setting. No declared setting with name: gds.enterprise.license_file.
+Cleanup the config or disable 'server.config.strict_validation.enabled' to continue.
+```
 
-Rendering plugin-declared settings as `NEO4J_*` env vars would fix both at the source. The CRD
-exposes no env passthrough, so a user cannot work around either the way this fixture does — they
-can only reach for `spec.config.neo4j`, which is what the fixture models.
+`dbms.security.procedures.unrestricted: "bloom.*"` — the image would grant `gds.*,bloom.*`
+itself (`/startup/neo4j-plugins.json` carries it as a plugin default). CI found the gap when
+`bloom.checkLicenseCompliance()` answered `52N34 procedure restricted`. The operator leaving the
+setting empty by default is deliberate (NEO-024) and `procedure-allowlists` pins it; what is not
+deliberate is that the image's own grant is lost too, so `gds.*` stays sandboxed for real GDS
+work until a user opts in by hand.
+
+`server.unmanaged_extension_classes: com.neo4j.bloom.server=/bloom` — from the same list of
+plugin defaults, and without it Bloom is licensed but never served. The assert reads the status
+line of `GET /bloom/` over `/dev/tcp`: `401` means the extension is mounted (the request carries
+no credentials), `404` means it is not. Licence material is irrelevant to that, so unlike the
+two acceptance checks it runs everywhere.
+
+One dead end worth recording: rendering these as `NEO4J_*` env vars instead would not help.
+`add_env_setting_to_conf` writes to the same hardcoded `$NEO4J_HOME/conf/neo4j.conf`, so an env
+var is lost exactly like the plugin default. Fixing it at the source means the operator
+rendering the defaults it wants into its own ConfigMap.
 
 Worth knowing when reading `render/workload/plugin_volumes.go`: it projects the **whole**
 Secret (no `items`), so the file is named after the Secret key. The fixture's keys are therefore
@@ -237,11 +252,17 @@ also asserts `dbms.security.procedures.unrestricted` stays **empty**: `93bfc63` 
 operator unrestricting plugin procedures (NEO-024), so a regression that re-enabled it would
 widen the security sandbox on every plugin install without any render test noticing.
 
-**Two documented gaps** (see coverage.md): a volume-only plugin install emits
-`server.directories.plugins` but *no* `dbms.security.procedures.*`, so a manually imported
-JAR loads with its procedures still restricted; and an imported JAR must live at
-`<pvc-root>/plugins/`, because `render/storage/volumes.go` applies the Share subPath to
-`Existing` volumes too. The import case pins both so a fix has to be deliberate.
+**The import case seeds its own JAR.** `storage.volumes.plugins` mode `Existing` is the only
+manual-import route the operator supports, and asserting the mount alone would not show whether
+an imported JAR loads. The assert copies the APOC core jar the image already ships into
+`/plugins`, deletes pod-0, and requires `apoc.*` procedures to be registered when the server
+comes back — which also proves the jar is on the claim rather than in the container layer. No
+Job and no download: where the jar came from is not the subject, being loaded from the claim is.
+
+Two properties it pins along the way: an imported JAR must live at `<pvc-root>/plugins/`,
+because `render/storage/volumes.go` applies the Share subPath to `Existing` volumes too; and a
+volume-only install emits `server.directories.plugins` but *no* `dbms.security.procedures.*`,
+so those procedures are registered under Neo4j's default allowlist and stay sandboxed.
 
 ## Configuration profiles
 
