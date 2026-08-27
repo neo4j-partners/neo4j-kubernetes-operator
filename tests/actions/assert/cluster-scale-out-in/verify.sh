@@ -408,7 +408,7 @@ requested_before="$(db_primaries)"
 log "database ${DB} sits at '${requested_before:-unknown}' (requested current) primaries as the scale-in is requested"
 scale_members "${NARROW}"
 
-# Observation, not a gate: the drain reasons are catalogued (status/oracle.go) but each pass is a
+# Observation, not a gate: the drain reasons are catalogued (internal/oracle) but each pass is a
 # 15s requeue, so which one is visible depends on when we look. Failing on a missed sample would
 # make this case flaky, so only the outcome below is enforced.
 log "Watching for the drain to become visible (ServersPendingDrain)"

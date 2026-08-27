@@ -30,6 +30,11 @@ WANT="${CLUSTER_EXPECTED_MEMBERS:?CLUSTER_EXPECTED_MEMBERS not set}"
 NEO4J_RESOURCE="neo4j/${NEO4J_CR_NAME}"
 POD="${NEO4J_STS_NAME}-0"
 TIMEOUT_SECS="${E2E_CLUSTER_TIMEOUT:-600}"
+# Catalogued in src/internal/oracle/catalog.go. Pinned through a variable so the projection lint
+# sees it, and checked now rather than after the cert-manager wait below: a reason renamed in Go
+# then fails by name instead of looking like an operator that never read the issued Secrets.
+EXPECT_TLS_REASON="${TLS_READY_REASON:-SecretsPresent}"
+oracle_require TLSReady "${EXPECT_TLS_REASON}"
 
 cond() {  # cond <type> <field>
   kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" \
@@ -75,7 +80,7 @@ fi
 
 # 2. The operator's own TLS verdict. SecretsPresent means it read usable material out of the
 #    issued Secrets; CertificatePending means it is still requeueing on cert-manager.
-log "Waiting up to ${TIMEOUT_SECS}s for TLSReady=True (reason SecretsPresent)"
+log "Waiting up to ${TIMEOUT_SECS}s for TLSReady=True (reason ${EXPECT_TLS_REASON})"
 deadline=$((SECONDS + TIMEOUT_SECS))
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
   [[ "$(cond TLSReady status)" == "True" ]] && break
@@ -85,9 +90,9 @@ tls_status="$(cond TLSReady status)"
 tls_reason="$(cond TLSReady reason)"
 [[ "${tls_status}" == "True" ]] \
   || die "TLSReady=${tls_status:-<absent>} (reason=${tls_reason:-none}, message=$(cond TLSReady message)) — operator does not consider TLS ready"
-[[ "${tls_reason}" == "SecretsPresent" ]] \
-  || die "TLSReady=True but reason=${tls_reason} (expected SecretsPresent)"
-log "TLSReady=True (SecretsPresent)"
+[[ "${tls_reason}" == "${EXPECT_TLS_REASON}" ]] \
+  || die "TLSReady=True but reason=${tls_reason} (expected ${EXPECT_TLS_REASON})"
+log "TLSReady=True (${EXPECT_TLS_REASON})"
 
 # 3. The operator considers the cluster formed — its admin dial reached the members over TLS.
 log "Waiting up to ${TIMEOUT_SECS}s for ${NEO4J_RESOURCE} ClusterFormed"

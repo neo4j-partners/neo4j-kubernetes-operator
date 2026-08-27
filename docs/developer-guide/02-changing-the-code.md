@@ -105,12 +105,15 @@ make errors
 That rewrites the tables between the markers of
 [`docs/user-guide/05-reference/errors.md`](../user-guide/05-reference/errors.md) — the prose around
 them stays hand-written — and `tests/lib/oracle.sh`, the shell lookups the e2e asserts source. Both
-are committed, and `make test` then refuses four things: a stale projection, a catalogued reason no
-production code emits any more, a mis-named `Reason` variable, and a raw string passed as the reason
-argument of an `EventRecorder` call, which is the one API still taking a `string`.
+are committed, and `make test` then refuses six things: a stale projection, a catalogued reason no
+production code emits any more, a mis-named `Reason` variable, a raw string passed as the reason
+argument of an `EventRecorder` call — the one API still taking a `string` — an end-to-end assert
+whose `*_REASON` variable names a reason the catalog does not hold or never reaches an `oracle_`
+lookup, and a reason compared as a bare literal in the shell harness.
 
-To assert on the new reason end to end, the harness reads the same catalog through
-`tests/lib/oracle.sh` — see
+Those last two are what keeps the e2e suites honest: the harness is shell, so nothing but that lint
+stops it from waiting for a string the operator stopped writing. To assert on the new reason, hold
+it in a `*_REASON` variable and check it with `oracle_require` — see
 [Asserting on a condition reason](../../tests/contribute.md#asserting-on-a-condition-reason).
 
 So declare and emit in the same change. A row added ahead of the code that emits it fails the build

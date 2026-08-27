@@ -31,6 +31,9 @@ LAST_DEFAULT="-Dlog4j2.disable.jmx=true"
 # Operator-side reporting of the drop: oracle reason on the Event, msg on the log line. Both are
 # field-agnostic (render.Duplicate) — the message names spec.config.jvm.additionalArguments.
 EXPECT_EVENT_REASON="${EXPECT_EVENT_REASON:-DuplicateEntry}"
+# Event-only, hence the `event` key: the pairing is checked against the catalog before the wait,
+# so a reason renamed in Go fails here by name instead of as a missing Event.
+oracle_require event "${EXPECT_EVENT_REASON}"
 EXPECT_LOG_MSG="${EXPECT_LOG_MSG:-duplicate entry}"
 EXPECT_EVENT_FIELD="${EXPECT_EVENT_FIELD:-spec.config.jvm.additionalArguments}"
 TIMEOUT="${E2E_ASSERT_TIMEOUT:-300s}"

@@ -169,6 +169,11 @@ We will implement operator observability as **A2 + B2 + C3 + D**.
   refuse a catalogued reason no production code emits any more (a documented row for behaviour that
   is gone), and to refuse a raw string in the reason argument of an `EventRecorder` call, which is
   the one API taking a plain `string`.
+- The same tests scan the shell harness, which no compiler covers: a reason an assert expects lives
+  in an uppercase `*_REASON` variable checked against the catalog and passed to an `oracle_` lookup,
+  and a reason compared as a bare literal is refused by file and line. Without it a rename in Go
+  leaves an assert waiting for a string nothing writes, and the failure surfaces as a timed-out
+  end-to-end suite accusing the operator.
 
 ### Metrics
 

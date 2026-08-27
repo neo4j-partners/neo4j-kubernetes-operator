@@ -25,6 +25,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../../lib/common.sh"
 
 NEO4J_RESOURCE="neo4j/${NEO4J_CR_NAME}"
+# The one reason that legitimately pairs with Ready=True, catalogued in
+# src/internal/oracle/catalog.go. Pinned through a variable so the projection lint sees it.
+EXPECT_READY_REASON="${READY_NOMINAL_REASON:-AllMembersReady}"
 
 kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" >/dev/null 2>&1 \
   || die "${NEO4J_RESOURCE} not found — cannot check status conditions"
@@ -66,6 +69,7 @@ expect_cond() {  # expect_cond <type> <expected-status> <expected-reason>
 oracle_require Installed ObjectsCreated
 oracle_require Reconciling Completed
 oracle_require Error NoError
+oracle_require Ready "${EXPECT_READY_REASON}"
 expect_cond Installed True ObjectsCreated
 expect_cond Reconciling False Completed
 expect_cond Error False NoError
@@ -90,8 +94,8 @@ else
     log "FAIL Ready: status=True with reason ${ready_reason}, which the catalog does not consider a healthy state"
     failures=$((failures + 1))
   fi
-  if [[ "${ready_status}" == "True" && "${ready_reason}" != "AllMembersReady" ]]; then
-    log "FAIL Ready: status=True with reason ${ready_reason}, expected AllMembersReady"
+  if [[ "${ready_status}" == "True" && "${ready_reason}" != "${EXPECT_READY_REASON}" ]]; then
+    log "FAIL Ready: status=True with reason ${ready_reason}, expected ${EXPECT_READY_REASON}"
     failures=$((failures + 1))
   fi
   log "Ready=${ready_status} (${ready_reason}, severity $(oracle_severity "${ready_reason}" 2>/dev/null || echo unknown))"
