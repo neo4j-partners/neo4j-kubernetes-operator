@@ -54,8 +54,8 @@ kubectl apply -f examples/storage/
   leaves `ENABLE SERVER` stuck on `Dropped` until you wipe or replace the claim. See
   [Scaling members](../../docs/user-guide/03-neo4j/02-clustering.md#scaling-members).
 - **Share** mounts reuse the data volume with `subPathExpr` such as `logs/$(POD_NAME)`
-  (and `metrics/$(POD_NAME)`). `volumes.plugins` Share uses subPath `plugins` so
-  `NEO4J_PLUGINS` downloads persist; see [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml).
+  (and `metrics/$(POD_NAME)`). `volumes.plugins` Share uses subPath `plugins` so the
+  installed jars persist; see [`12-aux-share-plugins-apoc.yaml`](12-aux-share-plugins-apoc.yaml).
 - **secretMounts (NEO-005):** companion Secrets need
   `neo4j.com/mountable-by-operator: "true"`, and each mount must list `items`
   (`key` → file under `mountPath`). See [`../secrets/README.md`](../secrets/README.md).

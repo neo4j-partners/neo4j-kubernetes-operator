@@ -100,7 +100,7 @@ you only declare them when you want something different:
 | `backups` | `/backups` | A separate, possibly larger volume for backup artefacts |
 | `import` | `/import` | Share a pre-populated dataset, often read-only |
 | `licenses` | `/licenses` | Plugin licence files |
-| `plugins` | `/plugins` | Persist downloaded plugin jars across restarts |
+| `plugins` | `/plugins` | Persist plugin jars across restarts, or import your own |
 
 Each takes `Share`, `Dynamic` or `Existing`:
 
