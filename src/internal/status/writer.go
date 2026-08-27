@@ -16,20 +16,11 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
-	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
-)
-
-const (
-	ConditionReady        = "Ready"
-	ConditionReconciling  = "Reconciling"
-	ConditionInstalled    = "Installed"
-	ConditionError        = "Error"
-	ConditionStorageReady = "StorageReady"
-	ConditionTLSReady     = "TLSReady"
 )
 
 // Writer updates Neo4j status from observed cluster state (ADR-004).
@@ -43,32 +34,32 @@ func NewWriter(c client.Client) *Writer {
 
 // MarkReconciling sets the Reconciling condition at pipeline start.
 func (w *Writer) MarkReconciling(neo4j *neo4jv1beta1.Neo4j) {
-	setCondition(neo4j, ConditionReconciling, metav1.ConditionTrue, "InProgress", "Reconciliation in progress")
-	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
+	setCondition(neo4j, oracle.ConditionReconciling, metav1.ConditionTrue, oracle.ReasonInProgress, "Reconciliation in progress")
+	setCondition(neo4j, oracle.ConditionError, metav1.ConditionFalse, oracle.ReasonNoError, "")
 }
 
-// PipelineErrorReason maps a pipeline error to a stable oracle reason (user-guide errors.md).
+// PipelineErrorReason maps a pipeline error to a catalogued reason (internal/oracle).
 // Callers use it for both the Error condition and the matching Warning Event.
-func PipelineErrorReason(err error) string {
+func PipelineErrorReason(err error) oracle.Reason {
 	switch {
 	case errors.Is(err, rendersecrets.ErrNotMountable):
-		return ReasonSecretNotMountable
+		return oracle.ReasonSecretNotMountable
 	case errors.Is(err, rendersecrets.ErrAuthNotDelegated):
-		return ReasonSecretNotDelegated
+		return oracle.ReasonSecretNotDelegated
 	case errors.Is(err, rendersecrets.ErrAuthValueRejected):
-		return ReasonAuthSecretInvalid
+		return oracle.ReasonAuthSecretInvalid
 	default:
-		return ReasonReconcileFailed
+		return oracle.ReasonReconcileFailed
 	}
 }
 
 // MarkPipelineError records a reconcile failure.
 func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
-	setCondition(neo4j, ConditionError, metav1.ConditionTrue, PipelineErrorReason(err), err.Error())
-	setCondition(neo4j, ConditionReady, metav1.ConditionFalse, "ReconcileError", err.Error())
-	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Failed", err.Error())
+	setCondition(neo4j, oracle.ConditionError, metav1.ConditionTrue, PipelineErrorReason(err), err.Error())
+	setCondition(neo4j, oracle.ConditionReady, metav1.ConditionFalse, oracle.ReasonReconcileError, err.Error())
+	setCondition(neo4j, oracle.ConditionReconciling, metav1.ConditionFalse, oracle.ReasonFailed, err.Error())
 	if rendertrust.TrustEnabled(neo4j) && isTLSSecretError(err) {
-		setCondition(neo4j, ConditionTLSReady, metav1.ConditionFalse, "SecretMissing", err.Error())
+		setCondition(neo4j, oracle.ConditionTLSReady, metav1.ConditionFalse, oracle.ReasonSecretMissing, err.Error())
 	}
 	neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseFailed
 }
@@ -79,7 +70,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	var ready, desired int32
 	var anySTSFound bool
 	storageReady := true
-	storageReason, storageMsg := "PVCBound", ""
+	storageReason, storageMsg := oracle.ReasonPVCBound, ""
 
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
@@ -103,37 +94,37 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			// First failing pool wins — same pattern as TLS observation.
 			if storageMsg == "" {
 				storageReason, storageMsg = reason, msg
-				log.Info("storage not ready", "pool", string(pool), "reason", reason, "message", msg)
+				log.Info("storage not ready", "pool", string(pool), "reason", reason.String(), "message", msg)
 			}
 		}
 	}
 
 	tlsReady, tlsReason, tlsMsg := w.observeTLSReady(ctx, neo4j)
-	setCondition(neo4j, ConditionTLSReady, boolCondition(tlsReady), tlsReason, tlsMsg)
+	setCondition(neo4j, oracle.ConditionTLSReady, boolCondition(tlsReady), tlsReason, tlsMsg)
 
-	setCondition(neo4j, ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
+	setCondition(neo4j, oracle.ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
 	neo4j.Status.ServerSummary = &neo4jv1beta1.ReplicaSummary{Servers: desired, Ready: ready}
-	setCondition(neo4j, ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
+	setCondition(neo4j, oracle.ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
 
 	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady
 	if render.IsClusterMode(neo4j) && allReady {
-		if c := meta.FindStatusCondition(neo4j.Status.Conditions, formation.ConditionClusterFormed); c == nil || c.Status != metav1.ConditionTrue {
+		if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionClusterFormed.String()); c == nil || c.Status != metav1.ConditionTrue {
 			allReady = false
 		}
-		if c := meta.FindStatusCondition(neo4j.Status.Conditions, formation.ConditionServersPendingDrain); c != nil && c.Status == metav1.ConditionTrue {
+		if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionServersPendingDrain.String()); c != nil && c.Status == metav1.ConditionTrue {
 			allReady = false
 		}
 	}
-	setCondition(neo4j, ConditionReconciling, metav1.ConditionFalse, "Completed", "")
-	setCondition(neo4j, ConditionError, metav1.ConditionFalse, "NoError", "")
+	setCondition(neo4j, oracle.ConditionReconciling, metav1.ConditionFalse, oracle.ReasonCompleted, "")
+	setCondition(neo4j, oracle.ConditionError, metav1.ConditionFalse, oracle.ReasonNoError, "")
 
 	if offlineMode(neo4j) {
 		// Pods run a sleep loop (NotReady via Bolt readiness) — do not report Running/Ready.
-		setCondition(neo4j, ConditionReady, metav1.ConditionFalse, "OfflineMaintenance",
+		setCondition(neo4j, oracle.ConditionReady, metav1.ConditionFalse, oracle.ReasonOfflineMaintenance,
 			"spec.maintenance.offlineMode is true; Neo4j process is not running")
 		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseMaintenance
 	} else {
-		setCondition(neo4j, ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady), readyMessage(ready, desired))
+		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady), readyMessage(ready, desired))
 		if allReady {
 			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseRunning
 			neo4j.Status.Version = neo4j.Spec.Version
@@ -152,7 +143,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 		"readyReplicas", ready,
 		"desiredReplicas", desired,
 		"storageReady", storageReady,
-		"storageReason", storageReason,
+		"storageReason", storageReason.String(),
 		"tlsReady", tlsReady,
 		"allReady", allReady,
 	)
@@ -162,29 +153,29 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 // observePoolStorageReady reports data-PVC readiness for one pool.
 // ponytail: no StorageClass Get — V1 RBAC is namespace Role only (cluster-scoped SC needs ClusterRole).
 // Surface storageClassName from the PVC/spec so describe shows why Pending.
-func (w *Writer) observePoolStorageReady(ctx context.Context, ctxRender render.Context) (ok bool, reason, message string) {
+func (w *Writer) observePoolStorageReady(ctx context.Context, ctxRender render.Context) (ok bool, reason oracle.Reason, message string) {
 	pvcName, lookupOK := renderstorage.DataPVCLookup(ctxRender)
 	if !lookupOK {
 		// Existing.volume (raw VolumeSource) — no PVC to observe.
-		return true, "PVCBound", ""
+		return true, oracle.ReasonPVCBound, ""
 	}
 	var pvc corev1.PersistentVolumeClaim
 	if err := w.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: ctxRender.Namespace()}, &pvc); err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, "PVCPending", fmt.Sprintf("waiting for PVC %q", pvcName)
+			return false, oracle.ReasonPVCPending, fmt.Sprintf("waiting for PVC %q", pvcName)
 		}
-		return false, "PVCPending", err.Error()
+		return false, oracle.ReasonPVCPending, err.Error()
 	}
 	if pvc.Status.Phase == corev1.ClaimBound {
-		return true, "PVCBound", ""
+		return true, oracle.ReasonPVCBound, ""
 	}
 	sc := storageClassNameOf(&pvc, ctxRender)
 	if sc != "" {
-		return false, "PVCPending", fmt.Sprintf(
+		return false, oracle.ReasonPVCPending, fmt.Sprintf(
 			"PVC %q is Pending (storageClassName=%q); ensure the StorageClass exists and the provisioner is healthy",
 			pvcName, sc)
 	}
-	return false, "PVCPending", fmt.Sprintf(
+	return false, oracle.ReasonPVCPending, fmt.Sprintf(
 		"PVC %q is Pending (no storageClassName set; waiting for a default StorageClass)", pvcName)
 }
 
@@ -195,29 +186,29 @@ func storageClassNameOf(pvc *corev1.PersistentVolumeClaim, ctxRender render.Cont
 	return ctxRender.DataStorageClassName()
 }
 
-func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ok bool, reason, message string) {
+func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ok bool, reason oracle.Reason, message string) {
 	if !rendertrust.TrustEnabled(neo4j) {
-		return true, "TrustDisabled", "trust.enabled is false"
+		return true, oracle.ReasonTrustDisabled, "trust.enabled is false"
 	}
 	for _, name := range rendertrust.BYOSecretNames(neo4j) {
 		var secret corev1.Secret
 		if err := w.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: neo4j.Namespace}, &secret); err != nil {
 			if apierrors.IsNotFound(err) {
-				return false, "SecretMissing", fmt.Sprintf("trust secret %q not found", name)
+				return false, oracle.ReasonSecretMissing, fmt.Sprintf("trust secret %q not found", name)
 			}
-			return false, "SecretMissing", err.Error()
+			return false, oracle.ReasonSecretMissing, err.Error()
 		}
 	}
 	for _, need := range rendertrust.RequiredSecretKeys(neo4j) {
 		var secret corev1.Secret
 		if err := w.Client.Get(ctx, types.NamespacedName{Name: need.SecretName, Namespace: neo4j.Namespace}, &secret); err != nil {
 			if apierrors.IsNotFound(err) {
-				return false, "SecretMissing", fmt.Sprintf("trust secret %q not found", need.SecretName)
+				return false, oracle.ReasonSecretMissing, fmt.Sprintf("trust secret %q not found", need.SecretName)
 			}
-			return false, "SecretMissing", err.Error()
+			return false, oracle.ReasonSecretMissing, err.Error()
 		}
 		if secret.Data == nil || len(secret.Data[need.Key]) == 0 {
-			return false, "SecretMissing", fmt.Sprintf("trust secret %q missing data key %q", need.SecretName, need.Key)
+			return false, oracle.ReasonSecretMissing, fmt.Sprintf("trust secret %q missing data key %q", need.SecretName, need.Key)
 		}
 	}
 	// cert-manager material gets its own reason: the Secret is operator-provisioned, so a
@@ -226,17 +217,17 @@ func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 		var secret corev1.Secret
 		if err := w.Client.Get(ctx, types.NamespacedName{Name: need.SecretName, Namespace: neo4j.Namespace}, &secret); err != nil {
 			if apierrors.IsNotFound(err) {
-				return false, "CertificatePending", fmt.Sprintf(
+				return false, oracle.ReasonCertificatePending, fmt.Sprintf(
 					"waiting for cert-manager to issue certificate into secret %q", need.SecretName)
 			}
-			return false, "CertificatePending", err.Error()
+			return false, oracle.ReasonCertificatePending, err.Error()
 		}
 		if secret.Data == nil || len(secret.Data[need.Key]) == 0 {
-			return false, "CertificatePending", fmt.Sprintf(
+			return false, oracle.ReasonCertificatePending, fmt.Sprintf(
 				"cert-manager secret %q does not carry %q yet", need.SecretName, need.Key)
 		}
 	}
-	return true, "SecretsPresent", "required TLS secrets and keys present"
+	return true, oracle.ReasonSecretsPresent, "required TLS secrets and keys present"
 }
 
 func buildEndpoints(ctx render.Context) *neo4jv1beta1.EndpointsStatus {
@@ -306,11 +297,13 @@ func isTLSSecretError(err error) bool {
 	return strings.Contains(msg, "trust secret") || strings.Contains(msg, "trust.certificates")
 }
 
-func setCondition(neo4j *neo4jv1beta1.Neo4j, typ string, status metav1.ConditionStatus, reason, message string) {
+// setCondition takes catalogued values only: an undeclared reason cannot be built outside
+// internal/oracle, so it cannot reach the status subresource (ADR-014).
+func setCondition(neo4j *neo4jv1beta1.Neo4j, typ oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
 	meta.SetStatusCondition(&neo4j.Status.Conditions, metav1.Condition{
-		Type:               typ,
+		Type:               typ.String(),
 		Status:             status,
-		Reason:             reason,
+		Reason:             reason.String(),
 		Message:            message,
 		ObservedGeneration: neo4j.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -324,21 +317,21 @@ func boolCondition(ok bool) metav1.ConditionStatus {
 	return metav1.ConditionFalse
 }
 
-func installedReason(ok bool) string {
+func installedReason(ok bool) oracle.Reason {
 	if ok {
-		return "ObjectsCreated"
+		return oracle.ReasonObjectsCreated
 	}
-	return "Pending"
+	return oracle.ReasonPending
 }
 
-func readyReason(ok, tlsReady bool) string {
+func readyReason(ok, tlsReady bool) oracle.Reason {
 	if ok {
-		return "AllMembersReady"
+		return oracle.ReasonAllMembersReady
 	}
 	if !tlsReady {
-		return "TLSNotReady"
+		return oracle.ReasonTLSNotReady
 	}
-	return "MembersNotReady"
+	return oracle.ReasonMembersNotReady
 }
 
 func readyMessage(ready, desired int32) string {
@@ -348,7 +341,7 @@ func readyMessage(ready, desired int32) string {
 // IsReady reports whether the Ready condition is True.
 func IsReady(neo4j *neo4jv1beta1.Neo4j) bool {
 	for _, c := range neo4j.Status.Conditions {
-		if c.Type == ConditionReady {
+		if c.Type == oracle.ConditionReady.String() {
 			return c.Status == metav1.ConditionTrue
 		}
 	}

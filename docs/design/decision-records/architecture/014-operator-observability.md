@@ -156,8 +156,19 @@ We will implement operator observability as **A2 + B2 + C3 + D**.
 - Each domain uses a **named context logger** (`WithName("<domain>")`); level policy per the
   A2 table. `shared.Apply` logs create/update at `Info` and no-ops at `Debug` (this also
   resolves the [ADR-006](006-apply-and-idempotency.md) discard gap at the shared layer).
-- Condition **reasons** are catalogued as a test oracle:
-  `src/internal/status/oracle.go` ↔ [error-overview.md](../../../03-user-documentation/reference/error-overview.md).
+- Condition **reasons** and Event reasons are catalogued in one place, `src/internal/oracle`, and
+  the catalog is the **only** place they exist: `Reason` and `Condition` are opaque value types with
+  unexported fields, so no code outside that package can build one. A reason absent from the catalog
+  therefore cannot be emitted — the operator does not compile — which replaces the earlier
+  convention of keeping a Go slice and a markdown table in sync by hand.
+- Two projections are **generated** from it by `make errors`, both committed and both checked by
+  `make test`: the tables in
+  [errors.md](../../../user-guide/05-reference/errors.md), and `tests/lib/oracle.sh`, the shell
+  lookups the e2e asserts source instead of copying reason strings.
+- Parsing complements the type where the type cannot reach: unit tests walk the AST of `src/` to
+  refuse a catalogued reason no production code emits any more (a documented row for behaviour that
+  is gone), and to refuse a raw string in the reason argument of an `EventRecorder` call, which is
+  the one API taking a plain `string`.
 
 ### Metrics
 

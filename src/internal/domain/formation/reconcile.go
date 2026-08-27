@@ -21,6 +21,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 )
@@ -67,12 +68,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		if gate != nil && pool != nil && *gate > pool.Members {
 			msg := fmt.Sprintf("topology.minimumMembers %d exceeds the %d primaries in the pool: the system database cannot bootstrap, so Bolt never answers (%v)", *gate, pool.Members, err)
 			log.Info("bootstrap gate above pool, requeue", "bootstrapGate", *gate, "primaryPool", pool.Members)
-			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BootstrapGateTooHigh", msg)
+			setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonBootstrapGateTooHigh, msg)
 			return shared.Requeue(requeueAfter)
 		}
 		// Cluster not reachable yet (formation / auth lag).
 		log.Info("bolt unavailable, requeue", "err", err.Error())
-		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "BoltUnavailable", err.Error())
+		setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonBoltUnavailable, err.Error())
 		return shared.Requeue(requeueAfter)
 	}
 	defer func() { _ = admin.Close(ctx) }()
@@ -80,7 +81,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	servers, err := admin.ShowServers(ctx)
 	if err != nil {
 		log.Info("show servers failed, requeue", "err", err.Error())
-		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "ShowServersFailed", err.Error())
+		setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonShowServersFailed, err.Error())
 		return shared.Requeue(requeueAfter)
 	}
 	log.V(1).Info("show servers", "count", len(servers))
@@ -124,10 +125,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j)
 		if err != nil {
 			if isUnsupportedSinglePrimary(err) {
-				log.Error(err, "scale-in blocked", "reason", "UnsupportedSinglePrimary")
-				setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "UnsupportedSinglePrimary",
+				log.Error(err, "scale-in blocked", "reason", oracle.ReasonUnsupportedSinglePrimary.String())
+				setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonUnsupportedSinglePrimary,
 					err.Error())
-				setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "UnsupportedSinglePrimary",
+				setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonUnsupportedSinglePrimary,
 					err.Error())
 				// Do not Failed — Neo4j cannot ALTER multi→1; leave STS held and wait for spec fix.
 				return shared.Requeue(5 * time.Minute)
@@ -136,7 +137,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		}
 		if !ok {
 			log.Info("shrinking database topologies for scale-in")
-			setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "ShrinkingTopology",
+			setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonShrinkingTopology,
 				"reducing database topologies to fit scale-in")
 			return shared.Requeue(requeueAfter)
 		}
@@ -166,7 +167,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 					return adminErrResult(neo4j, err)
 				}
 				if !done {
-					setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "Draining",
+					setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonDraining,
 						fmt.Sprintf("draining %s", m.PodName))
 					return shared.Requeue(requeueAfter)
 				}
@@ -211,10 +212,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	if pendingDrain {
 		// All tails dropped and status.drainOK written on prior pass; wait for STS shrink.
 		log.Info("drain complete, awaiting statefulset shrink")
-		setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionTrue, "AwaitingSTSShrink",
+		setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonAwaitingSTSShrink,
 			"Neo4j drain complete; waiting for StatefulSet scale-down")
 	} else {
-		setCondition(neo4j, ConditionServersPendingDrain, metav1.ConditionFalse, "NoDrain", "")
+		setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionFalse, oracle.ReasonNoDrain, "")
 	}
 
 	// Scale-out / heal: enable every desired member (all Free in this pass).
@@ -231,7 +232,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		if !ok {
 			pendingEnable = true
 			log.Info("enabling server", "pool", string(m.Pool), "pod", m.PodName, "ordinal", m.Ordinal)
-			setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "EnablingServer",
+			setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonEnablingServer,
 				fmt.Sprintf("enabling %s", m.PodName))
 		}
 		servers, err = admin.ShowServers(ctx)
@@ -244,7 +245,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 
 	if systemScaleBlocked {
-		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "UnsupportedSystemScaleUp",
+		setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonUnsupportedSystemScaleUp,
 			"system has 1 primary; growing to multiple system primaries is not supported (bootstrap with primaries.members at the final size, typically 3). Scaling secondaries only is fine.")
 		return shared.Requeue(5 * time.Minute)
 	}
@@ -261,13 +262,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	enabledPrimaries := countEnabledPrimaries(neo4j, servers)
 	if enabledPrimaries < min {
 		log.Info("waiting for primary quorum", "enabledPrimaries", enabledPrimaries, "bootstrapGate", min)
-		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "WaitingQuorum",
+		setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonWaitingQuorum,
 			fmt.Sprintf("enabled primaries %d, the system database needs %d", enabledPrimaries, min))
 		return shared.Requeue(requeueAfter)
 	}
 
 	log.Info("cluster formed", "enabledPrimaries", enabledPrimaries, "bootstrapGate", min)
-	setCondition(neo4j, ConditionClusterFormed, metav1.ConditionTrue, "Formed", "All desired servers enabled")
+	setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionTrue, oracle.ReasonFormed, "All desired servers enabled")
 
 	// Only past quorum: the creation defaults live in the system database, which needs a leader.
 	// A failure is retried rather than surfaced — it leaves the DBMS defaults on their previous
@@ -499,7 +500,7 @@ func (r *Reconciler) reportTopologyResized(ctx context.Context, neo4j *neo4jv1be
 	if r.Recorder == nil {
 		return
 	}
-	r.Recorder.Eventf(neo4j, corev1.EventTypeWarning, ReasonDatabaseTopologyResized,
+	r.Recorder.Eventf(neo4j, corev1.EventTypeWarning, oracle.ReasonDatabaseTopologyResized.String(),
 		"database %q: requested topology rewritten from %d primaries / %d secondaries to %d / %d — %s",
 		db.Name, db.RequestedPrimaries, db.RequestedSecondaries, toPrimaries, toSecondaries, cause)
 }
@@ -570,11 +571,12 @@ func countEnabledPrimaries(neo4j *neo4jv1beta1.Neo4j, servers []intneo4j.Server)
 	return n
 }
 
-func setCondition(neo4j *neo4jv1beta1.Neo4j, ctype string, status metav1.ConditionStatus, reason, message string) {
+// setCondition takes catalogued values only — see internal/oracle and status.setCondition.
+func setCondition(neo4j *neo4jv1beta1.Neo4j, ctype oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
 	meta.SetStatusCondition(&neo4j.Status.Conditions, metav1.Condition{
-		Type:               ctype,
+		Type:               ctype.String(),
 		Status:             status,
-		Reason:             reason,
+		Reason:             reason.String(),
 		Message:            message,
 		ObservedGeneration: neo4j.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -582,8 +584,8 @@ func setCondition(neo4j *neo4jv1beta1.Neo4j, ctype string, status metav1.Conditi
 }
 
 func clearFormationConditions(neo4j *neo4jv1beta1.Neo4j) {
-	meta.RemoveStatusCondition(&neo4j.Status.Conditions, ConditionServersPendingDrain)
-	meta.RemoveStatusCondition(&neo4j.Status.Conditions, ConditionClusterFormed)
+	meta.RemoveStatusCondition(&neo4j.Status.Conditions, oracle.ConditionServersPendingDrain.String())
+	meta.RemoveStatusCondition(&neo4j.Status.Conditions, oracle.ConditionClusterFormed.String())
 }
 
 func offlineMode(neo4j *neo4jv1beta1.Neo4j) bool {
@@ -592,7 +594,7 @@ func offlineMode(neo4j *neo4jv1beta1.Neo4j) bool {
 
 func adminErrResult(neo4j *neo4jv1beta1.Neo4j, err error) shared.StepResult {
 	if isRetryableAdmin(err) {
-		setCondition(neo4j, ConditionClusterFormed, metav1.ConditionFalse, "WaitingSystemLeader", err.Error())
+		setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonWaitingSystemLeader, err.Error())
 		return shared.Requeue(requeueAfter)
 	}
 	return shared.Failed(err)

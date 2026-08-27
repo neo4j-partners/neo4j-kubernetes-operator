@@ -65,8 +65,10 @@ fi
 WIDE="${CLUSTER_SCALE_OUT_MEMBERS}"
 NARROW="${CLUSTER_SCALE_IN_MEMBERS:-${CLUSTER_EXPECTED_MEMBERS:?CLUSTER_EXPECTED_MEMBERS not set — needed as the scale-in target}}"
 DB="${CLUSTER_SCALE_DB:-scalewide}"
-# Catalogued in src/internal/status/oracle.go; the reason is the stable contract, not the message.
+# Catalogued in src/internal/oracle/catalog.go; the reason is the stable contract, not the message.
+# Event-only, hence the `event` key in the oracle lookup.
 RESIZE_REASON="${CLUSTER_SCALE_RESIZE_REASON:-DatabaseTopologyResized}"
+oracle_require event "${RESIZE_REASON}"
 # Each half creates or drains members and waits for the cluster to settle again, so this is a
 # formation-sized budget, not an assertion-sized one.
 TIMEOUT_SECS="${CLUSTER_SCALE_TIMEOUT:-900}"

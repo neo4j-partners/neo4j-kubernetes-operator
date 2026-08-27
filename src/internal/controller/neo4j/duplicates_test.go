@@ -10,7 +10,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
-	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
 
 func neo4jWithJVM(args ...string) *neo4jv1beta1.Neo4j {
@@ -34,8 +34,8 @@ func TestReportDuplicateEntriesEmitsWarningEvent(t *testing.T) {
 
 	select {
 	case event := <-recorder.Events:
-		if !strings.Contains(event, status.ReasonDuplicateEntry) {
-			t.Errorf("event %q should carry the oracle reason %s", event, status.ReasonDuplicateEntry)
+		if !strings.Contains(event, oracle.ReasonDuplicateEntry.String()) {
+			t.Errorf("event %q should carry the catalogued reason %s", event, oracle.ReasonDuplicateEntry)
 		}
 		if !strings.Contains(event, "Warning") {
 			t.Errorf("event %q should be a Warning", event)
@@ -70,7 +70,7 @@ func TestReportDuplicateEntriesCoversPlainConfigKeys(t *testing.T) {
 
 	select {
 	case event := <-recorder.Events:
-		for _, want := range []string{status.ReasonDuplicateEntry, "spec.config.neo4j", "dbms.routing.enabled"} {
+		for _, want := range []string{oracle.ReasonDuplicateEntry.String(), "spec.config.neo4j", "dbms.routing.enabled"} {
 			if !strings.Contains(event, want) {
 				t.Errorf("event %q should mention %q", event, want)
 			}

@@ -8,17 +8,6 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
-const (
-	ConditionServersPendingDrain = "ServersPendingDrain"
-	ConditionClusterFormed       = "ClusterFormed"
-)
-
-// ReasonDatabaseTopologyResized is Event-only: a scale-in left fewer servers than a database
-// claimed, so the operator ran ALTER DATABASE SET TOPOLOGY on a topology it does not own. This is
-// the only case where it rewrites one. Declared here rather than in status because status imports
-// this package, and it is catalogued in status.ErrorOracle so tests and docs share one identifier.
-const ReasonDatabaseTopologyResized = "DatabaseTopologyResized"
-
 // Member is one desired (or draining) cluster server.
 type Member struct {
 	Pool           render.PoolID

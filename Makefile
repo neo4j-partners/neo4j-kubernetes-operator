@@ -63,8 +63,16 @@ govulncheck: ## Fail on known Go vulnerabilities in this module
 lint-reconcile: ## Lint controller reconcile anti-patterns
 	python3 .cursor/skills/kubernetes-operator/scripts/reconcile_lint.py --controller src/internal/controller/
 
+.PHONY: errors
+errors: ## Regenerate the error reference tables and tests/lib/oracle.sh from internal/oracle
+	go run ./src/cmd/errorcatalog
+
+.PHONY: errors-check
+errors-check: ## Fail if either error catalog projection is stale
+	go run ./src/cmd/errorcatalog -check
+
 .PHONY: audit
-audit: manifests lint-reconcile validate-crd ## Run operator audit (CRD + reconcile lint)
+audit: manifests lint-reconcile validate-crd errors-check ## Run operator audit (CRD + reconcile lint + error catalog)
 
 ##@ Deployment (kind / local cluster)
 

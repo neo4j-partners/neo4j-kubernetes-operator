@@ -147,10 +147,19 @@ That refreshes `zz_generated.deepcopy.go` and `config/crd/bases/`. The committed
 not run `controller-gen rbac`: the manager Role is hand-maintained per watched namespace and would be
 overwritten with a ClusterRole.
 
-**New condition reasons** must be added to the oracle in `src/internal/status/oracle.go` *and* to
-[`docs/user-guide/05-reference/errors.md`](../user-guide/05-reference/errors.md). This is enforced: a
-unit test fails when a catalogued reason is missing from that page. Assert on reasons in tests, never
-on message text.
+**New condition reasons and Event reasons** are declared in `src/internal/oracle/catalog.go`, and
+nowhere else. `Reason` is an opaque type, so a literal cannot reach a condition or an Event — the
+code will not compile. Then run:
+
+```bash
+make errors
+```
+
+That regenerates the two tables in
+[`docs/user-guide/05-reference/errors.md`](../user-guide/05-reference/errors.md) and the shell
+lookups in `tests/lib/oracle.sh` that the e2e asserts source. Both are committed, and `make test`
+fails when either is stale, when a catalogued reason has no emission site left, or when an Event
+reason is passed as a raw string. Assert on reasons in tests, never on message text.
 
 **New spec fields** need an example under [`examples/`](../../examples/) and a mention in the matching
 user-guide topic page, plus a row in
@@ -172,7 +181,8 @@ its own pages and to `examples/`. Design rationale belongs in [`docs/design/`](.
 | `src/internal/controller/neo4j/` | The reconciler and its pipeline |
 | `src/internal/domain/` | One package per pipeline step: persistence, trust, serverconfig, workload, connectivity, formation |
 | `src/internal/render/` | Pure functions building Kubernetes objects from a resource |
-| `src/internal/status/` | Conditions, phases, the error oracle |
+| `src/internal/oracle/` | The reason catalog, and the projections `make errors` generates from it |
+| `src/internal/status/` | Conditions and phases written from observed state |
 | `src/internal/validation/` | Checks that need an API read rather than CEL |
 | `config/` | CRD, RBAC, manager manifests |
 | `charts/neo4j-operator/` | Helm chart |
