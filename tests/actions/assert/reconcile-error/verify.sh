@@ -6,8 +6,9 @@
 #   - nothing is deployed: no StatefulSet for this instance, and the CR never becomes Ready
 #
 # Assert on Reason, never on the message (free-form and allowed to change). Reasons come from
-# src/internal/status/oracle.go, mirrored in
-# docs/user-guide/05-reference/errors.md.
+# src/internal/oracle/catalog.go, which also generates
+# docs/user-guide/05-reference/errors.md and tests/lib/oracle.sh — so the reason below is checked
+# against the operator's contract before the wait starts.
 #
 # Inputs: NEO4J_CR_NAME, NEO4J_NAMESPACE, EXPECT_REASON, RECONCILE_ERROR_TIMEOUT
 set -euo pipefail
@@ -16,7 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../../lib/common.sh
 source "${SCRIPT_DIR}/../../../lib/common.sh"
 
-: "${EXPECT_REASON:?EXPECT_REASON required (a reason listed in status.ErrorOracle)}"
+: "${EXPECT_REASON:?EXPECT_REASON required (a reason catalogued in internal/oracle)}"
+oracle_require Error "${EXPECT_REASON}"
 
 RES="neo4j/${NEO4J_CR_NAME}"
 # Time we allow the operator to observe the CR and write the refusal on the Error condition.

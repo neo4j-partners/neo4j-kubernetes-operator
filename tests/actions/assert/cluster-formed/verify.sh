@@ -41,14 +41,14 @@ log "operator reports Ready (reason=${reason:-?}, message=${message:-none})"
 # 1b. ClusterFormed is the operator's dedicated formation verdict (set by
 #     domain/formation): True/Formed once every desired server is enabled. Ready can
 #     go True on member health alone, so assert the formation-specific condition too.
-#     Reasons it may hold instead: WaitingQuorum, EnablingServer,
-#     UnsupportedSystemScaleUp, UnsupportedSinglePrimary.
+#     What it may hold instead is whatever the catalog lists for ClusterFormed
+#     (tests/lib/oracle.sh), so the failure names the alternatives without keeping a copy here.
 formed_status="$(kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" \
   -o jsonpath='{.status.conditions[?(@.type=="ClusterFormed")].status}' 2>/dev/null || true)"
 formed_reason="$(kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" \
   -o jsonpath='{.status.conditions[?(@.type=="ClusterFormed")].reason}' 2>/dev/null || true)"
 [[ "${formed_status}" == "True" ]] \
-  || die "ClusterFormed=${formed_status:-<absent>} (reason=${formed_reason:-none}) — operator does not consider the cluster formed"
+  || die "ClusterFormed=${formed_status:-<absent>} (reason=${formed_reason:-none}) — operator does not consider the cluster formed; catalogued reasons: $(oracle_reasons_for ClusterFormed | tr '\n' ' ')"
 log "ClusterFormed=True (reason=${formed_reason:-?})"
 
 # 2. Ask Neo4j directly — the authoritative check. Every expected member must appear

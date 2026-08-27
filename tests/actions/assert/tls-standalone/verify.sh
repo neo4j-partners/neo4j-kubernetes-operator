@@ -22,6 +22,11 @@ source "${SCRIPT_DIR}/../../../lib/connectivity.sh"
 NEO4J_RESOURCE="neo4j/${NEO4J_CR_NAME}"
 POD="${NEO4J_STS_NAME}-0"
 TIMEOUT_SECS="${E2E_TLS_TIMEOUT:-600}"
+# Catalogued in src/internal/oracle/catalog.go. Pinned through a variable so the projection lint
+# sees it, and checked now rather than after the wait below: a reason renamed in Go then fails by
+# name instead of looking like an operator that never mounted the material.
+EXPECT_TLS_REASON="${TLS_READY_REASON:-SecretsPresent}"
+oracle_require TLSReady "${EXPECT_TLS_REASON}"
 
 cond() {  # cond <type> <field>
   kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" \
@@ -29,7 +34,7 @@ cond() {  # cond <type> <field>
 }
 
 # 1. Operator mounted the BYO material.
-log "Waiting up to ${TIMEOUT_SECS}s for TLSReady=True (reason SecretsPresent)"
+log "Waiting up to ${TIMEOUT_SECS}s for TLSReady=True (reason ${EXPECT_TLS_REASON})"
 deadline=$((SECONDS + TIMEOUT_SECS))
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
   [[ "$(cond TLSReady status)" == "True" ]] && break
@@ -39,9 +44,9 @@ tls_status="$(cond TLSReady status)"
 tls_reason="$(cond TLSReady reason)"
 [[ "${tls_status}" == "True" ]] \
   || die "TLSReady=${tls_status:-<absent>} (reason=${tls_reason:-none}, message=$(cond TLSReady message))"
-[[ "${tls_reason}" == "SecretsPresent" ]] \
-  || die "TLSReady=True but reason=${tls_reason} (expected SecretsPresent)"
-log "TLSReady=True (SecretsPresent)"
+[[ "${tls_reason}" == "${EXPECT_TLS_REASON}" ]] \
+  || die "TLSReady=True but reason=${tls_reason} (expected ${EXPECT_TLS_REASON})"
+log "TLSReady=True (${EXPECT_TLS_REASON})"
 
 # 2. SAN gate: Ready only goes True once the operator's own bolt+s dial verified the cert.
 log "Waiting up to ${TIMEOUT_SECS}s for ${NEO4J_RESOURCE} Ready (operator dials bolt+s and verifies)"

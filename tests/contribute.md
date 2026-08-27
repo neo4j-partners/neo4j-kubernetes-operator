@@ -91,6 +91,57 @@ See [config/readme.md](config/readme.md) for classic cases per domain.
 Suite naming convention: `workload-*` (topology), `feature-*` (topology-agnostic domain),
 `operator-*` (operator behavior). See [design.md](design.md).
 
+### Asserting on a condition reason
+
+Never copy a reason string into an assert. `lib/common.sh` sources `lib/oracle.sh`, generated from
+the operator's own catalog by `make errors`, so an assert can ask the contract:
+
+| Helper | Answers |
+|---|---|
+| `oracle_require <condition> <reason>` | fails the assert immediately, naming the alternatives, when the pairing is not catalogued — use `event` as the condition for Event-only reasons |
+| `oracle_has <condition> <reason>` | whether the pairing is catalogued |
+| `oracle_reasons_for <condition>` | every reason that condition can carry, one per line |
+| `oracle_nominal <reason>` | success when the reason means things are fine |
+| `oracle_severity <reason>` | `error`, `warn` or `info` |
+
+Two shapes cover nearly every case. When the assert pins one reason, hold it in an uppercase
+variable whose name ends in `_REASON`, check it against the catalog, then wait for it:
+
+```bash
+EXPECT_REASON="${STORAGE_ERROR_REASON:-PVCPending}"
+oracle_require StorageReady "${EXPECT_REASON}"   # `event` as the condition for Event-only reasons
+```
+
+That variable name is the convention, not a style preference: `make test` reads it. A `*_REASON`
+variable is checked to name a catalogued reason and to reach an `oracle_` lookup, and a reason
+compared as a bare literal anywhere in `tests/` is refused with the file and the line
+(`src/internal/oracle/harness_test.go`). So a rename in `catalog.go` breaks the unit stage in
+seconds instead of an end-to-end suite twenty minutes in.
+
+When the assert accepts several — a condition observed mid-flight can legitimately hold any of them
+— read the admissible set instead of writing one:
+
+```bash
+if ! oracle_has Ready "${ready_reason}"; then
+  log "FAIL Ready: ${ready_reason:-unset} is not catalogued (catalogued: $(oracle_reasons_for Ready | tr '\n' ' '))"
+fi
+if [[ "${ready_status}" == "True" ]] && ! oracle_nominal "${ready_reason}"; then
+  log "FAIL Ready: True on a reason the catalog does not consider healthy"
+fi
+```
+
+`assert/storage-error` and `assert/status-conditions` are the working examples of each.
+
+The point is the failure mode. A reason renamed in Go used to leave the assert waiting for a string
+nothing would ever write, then failing after a full timeout as though the operator were broken.
+`oracle_require` turns that into an immediate, named failure before the wait even starts, the lint
+turns it into a unit-test failure before anything runs at all, and a whitelist read from
+`oracle_reasons_for` cannot fall behind the operator in the first place.
+
+`lib/oracle.sh` is generated: never edit it, and never add a reason there to make an assert pass.
+Declare it in `src/internal/oracle/catalog.go` and run `make errors` — see
+[Adding a condition or Event reason](../docs/developer-guide/02-changing-the-code.md#adding-a-condition-or-event-reason).
+
 ### Fixtures must not hard-code a platform
 
 Every suite runs on kind, on AKS and on GKE, so a fixture may not name a StorageClass that

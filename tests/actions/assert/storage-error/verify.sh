@@ -6,11 +6,10 @@
 #   - the message explains the problem and mentions the PVC ("pvc")
 #   - status.phase is NOT Failed and the CR never becomes Ready
 #
-# NOTE: the message currently lives ONLY on the StorageReady status condition — the
-# operator does not emit a Kubernetes Event for it yet (no EventRecorder is wired). This
-# asserts against the condition; revisit to also check Events once a `make doc error`
-# catalog / event emission lands. Source of truth: src/internal/status/writer.go
-# (observePoolStorageReady, reason "PVCPending").
+# NOTE: PVCPending lives ONLY on the StorageReady condition — the catalog declares its surface
+# as `condition`, so there is deliberately no Event to look for. Source of truth:
+# src/internal/oracle/catalog.go, checked below through tests/lib/oracle.sh so a rename fails
+# here rather than after the full timeout.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,8 +21,10 @@ source "${SCRIPT_DIR}/../../../lib/storage.sh"
 RES="neo4j/${NEO4J_CR_NAME}"
 # Time we allow the operator to observe the stuck PVC and set StorageReady=False/PVCPending.
 TIMEOUT="${STORAGE_ERROR_TIMEOUT:-120}"
+EXPECT_REASON="${STORAGE_ERROR_REASON:-PVCPending}"
+oracle_require StorageReady "${EXPECT_REASON}"
 
-log "Expecting ${RES} to stay Pending with StorageReady=False/PVCPending (PVC cannot bind) within ${TIMEOUT}s"
+log "Expecting ${RES} to stay Pending with StorageReady=False/${EXPECT_REASON} (PVC cannot bind) within ${TIMEOUT}s"
 
 sr_status="" sr_reason=""
 deadline=$((SECONDS + TIMEOUT))
@@ -32,7 +33,7 @@ while [[ "${SECONDS}" -lt "${deadline}" ]]; do
     -o jsonpath='{.status.conditions[?(@.type=="StorageReady")].status}' 2>/dev/null || true)"
   sr_reason="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
     -o jsonpath='{.status.conditions[?(@.type=="StorageReady")].reason}' 2>/dev/null || true)"
-  if [[ "${sr_status}" == "False" && "${sr_reason}" == "PVCPending" ]]; then
+  if [[ "${sr_status}" == "False" && "${sr_reason}" == "${EXPECT_REASON}" ]]; then
     break
   fi
   sleep 5
@@ -43,10 +44,10 @@ phase="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
 ready_status="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" \
   -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
 
-if [[ "${sr_status}" != "False" || "${sr_reason}" != "PVCPending" ]]; then
+if [[ "${sr_status}" != "False" || "${sr_reason}" != "${EXPECT_REASON}" ]]; then
   kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status}' >&2 2>/dev/null || true
   echo >&2
-  die "expected StorageReady=False/PVCPending within ${TIMEOUT}s, got status='${sr_status:-<none>}' reason='${sr_reason:-<none>}'"
+  die "expected StorageReady=False/${EXPECT_REASON} within ${TIMEOUT}s, got status='${sr_status:-<none>}' reason='${sr_reason:-<none>}'"
 fi
 
 # Decision: a stuck PVC keeps the CR Pending — it must NOT be marked Failed, and must NOT

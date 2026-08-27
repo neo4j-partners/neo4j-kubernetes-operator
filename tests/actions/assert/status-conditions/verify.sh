@@ -25,6 +25,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../../lib/common.sh"
 
 NEO4J_RESOURCE="neo4j/${NEO4J_CR_NAME}"
+# The one reason that legitimately pairs with Ready=True, catalogued in
+# src/internal/oracle/catalog.go. Pinned through a variable so the projection lint sees it.
+EXPECT_READY_REASON="${READY_NOMINAL_REASON:-AllMembersReady}"
 
 kubectl get "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" >/dev/null 2>&1 \
   || die "${NEO4J_RESOURCE} not found — cannot check status conditions"
@@ -60,7 +63,13 @@ expect_cond() {  # expect_cond <type> <expected-status> <expected-reason>
   log "${type}=${status} (${reason})"
 }
 
-# Steady state after a completed reconcile — src/internal/status/writer.go.
+# Steady state after a completed reconcile — src/internal/status/writer.go. Each pairing is
+# checked against the catalog first, so a reason renamed in Go fails here by name instead of
+# looking like the operator stopped writing the condition.
+oracle_require Installed ObjectsCreated
+oracle_require Reconciling Completed
+oracle_require Error NoError
+oracle_require Ready "${EXPECT_READY_REASON}"
 expect_cond Installed True ObjectsCreated
 expect_cond Reconciling False Completed
 expect_cond Error False NoError
@@ -73,20 +82,23 @@ if [[ -z "${ready_status}" ]]; then
   log "FAIL Ready: condition absent from .status.conditions"
   failures=$((failures + 1))
 else
-  # readyReason() emits the first three; OfflineMaintenance and ReconcileError are set
-  # directly by the writer (maintenance mode and MarkPipelineError).
-  case "${ready_reason}" in
-    AllMembersReady|MembersNotReady|TLSNotReady|OfflineMaintenance|ReconcileError) ;;
-    *)
-      log "FAIL Ready: unknown reason ${ready_reason:-unset} (writer emits AllMembersReady/MembersNotReady/TLSNotReady/OfflineMaintenance/ReconcileError)"
-      failures=$((failures + 1))
-      ;;
-  esac
-  if [[ "${ready_status}" == "True" && "${ready_reason}" != "AllMembersReady" ]]; then
-    log "FAIL Ready: status=True with reason ${ready_reason}, expected AllMembersReady"
+  # The admissible set is the operator's own catalog, not a copy of it: tests/lib/oracle.sh is
+  # generated from src/internal/oracle, so adding a Ready reason in Go updates this check.
+  if ! oracle_has Ready "${ready_reason}"; then
+    log "FAIL Ready: reason ${ready_reason:-unset} is not catalogued for Ready (catalogued: $(oracle_reasons_for Ready | tr '\n' ' '))"
     failures=$((failures + 1))
   fi
-  log "Ready=${ready_status} (${ready_reason})"
+  # True is only legitimate on a nominal reason, and AllMembersReady is the only one — asking the
+  # catalog rather than the string keeps the intent visible if a second nominal reason appears.
+  if [[ "${ready_status}" == "True" ]] && ! oracle_nominal "${ready_reason}"; then
+    log "FAIL Ready: status=True with reason ${ready_reason}, which the catalog does not consider a healthy state"
+    failures=$((failures + 1))
+  fi
+  if [[ "${ready_status}" == "True" && "${ready_reason}" != "${EXPECT_READY_REASON}" ]]; then
+    log "FAIL Ready: status=True with reason ${ready_reason}, expected ${EXPECT_READY_REASON}"
+    failures=$((failures + 1))
+  fi
+  log "Ready=${ready_status} (${ready_reason}, severity $(oracle_severity "${ready_reason}" 2>/dev/null || echo unknown))"
 fi
 
 if [[ "${failures}" -ne 0 ]]; then

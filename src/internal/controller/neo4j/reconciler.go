@@ -26,6 +26,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderconfig "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
@@ -172,14 +173,14 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 		// Same reason on the Event as on the Error condition, so `kubectl describe` and the
 		// status oracle agree on one identifier.
 		if r.Recorder != nil {
-			r.Recorder.Event(neo4j, corev1.EventTypeWarning, status.PipelineErrorReason(err), err.Error())
+			r.Recorder.Event(neo4j, corev1.EventTypeWarning, status.PipelineErrorReason(err).String(), err.Error())
 		}
 		return ctrl.Result{}, err
 	}
 	// Which Secrets a spec mounts only changes with the spec, so this reports once per generation
 	// instead of once per pass — see internal/events for what the repetition costs.
 	for _, name := range rendersecrets.ReferencedMountSecrets(neo4j) {
-		r.advisories.Emitf(r.Recorder, neo4j, corev1.EventTypeNormal, "SecretMounted",
+		r.advisories.Emitf(r.Recorder, neo4j, corev1.EventTypeNormal, oracle.ReasonSecretMounted,
 			"Mounting Secret %q into Neo4j pods (label %s=%s)", name, rendersecrets.MountableLabel, rendersecrets.MountableLabelValue)
 	}
 
@@ -229,7 +230,7 @@ func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, advi
 			"kept", d.Kept, "keptFrom", d.KeptFrom,
 			"dropped", d.Dropped, "droppedFrom", d.DroppedFrom)
 		// A collision is a property of the spec: one Event per generation, not per pass.
-		advisories.Emit(recorder, neo4j, corev1.EventTypeWarning, status.ReasonDuplicateEntry, d.Message())
+		advisories.Emit(recorder, neo4j, corev1.EventTypeWarning, oracle.ReasonDuplicateEntry, d.Message())
 	}
 }
 

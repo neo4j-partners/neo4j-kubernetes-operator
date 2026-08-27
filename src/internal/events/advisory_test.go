@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
 
 func obj(generation int64) *neo4jv1beta1.Neo4j {
@@ -36,7 +37,7 @@ func TestEmitOncePerGeneration(t *testing.T) {
 	rec := record.NewFakeRecorder(10)
 	var a Advisory
 	for range 5 {
-		a.Emit(rec, obj(1), corev1.EventTypeWarning, "InsecureAdminConnection", "plaintext admin bolt")
+		a.Emit(rec, obj(1), corev1.EventTypeWarning, oracle.ReasonInsecureAdminConnection, "plaintext admin bolt")
 	}
 	if got := drain(t, rec); len(got) != 1 {
 		t.Fatalf("expected 1 event, got %d: %v", len(got), got)
@@ -47,8 +48,8 @@ func TestEmitOncePerGeneration(t *testing.T) {
 func TestEmitAgainOnNewGeneration(t *testing.T) {
 	rec := record.NewFakeRecorder(10)
 	var a Advisory
-	a.Emit(rec, obj(1), corev1.EventTypeWarning, "InsecureAdminConnection", "plaintext admin bolt")
-	a.Emit(rec, obj(2), corev1.EventTypeWarning, "InsecureAdminConnection", "plaintext admin bolt")
+	a.Emit(rec, obj(1), corev1.EventTypeWarning, oracle.ReasonInsecureAdminConnection, "plaintext admin bolt")
+	a.Emit(rec, obj(2), corev1.EventTypeWarning, oracle.ReasonInsecureAdminConnection, "plaintext admin bolt")
 	if got := drain(t, rec); len(got) != 2 {
 		t.Fatalf("expected 2 events, got %d: %v", len(got), got)
 	}
@@ -59,9 +60,9 @@ func TestEmitAgainOnNewGeneration(t *testing.T) {
 func TestEmitKeepsDistinctMessagesOfOneReason(t *testing.T) {
 	rec := record.NewFakeRecorder(10)
 	var a Advisory
-	a.Emitf(rec, obj(1), corev1.EventTypeNormal, "SecretMounted", "Mounting Secret %q", "alpha")
-	a.Emitf(rec, obj(1), corev1.EventTypeNormal, "SecretMounted", "Mounting Secret %q", "beta")
-	a.Emitf(rec, obj(1), corev1.EventTypeNormal, "SecretMounted", "Mounting Secret %q", "alpha")
+	a.Emitf(rec, obj(1), corev1.EventTypeNormal, oracle.ReasonSecretMounted, "Mounting Secret %q", "alpha")
+	a.Emitf(rec, obj(1), corev1.EventTypeNormal, oracle.ReasonSecretMounted, "Mounting Secret %q", "beta")
+	a.Emitf(rec, obj(1), corev1.EventTypeNormal, oracle.ReasonSecretMounted, "Mounting Secret %q", "alpha")
 	got := drain(t, rec)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 events, got %d: %v", len(got), got)
@@ -78,8 +79,8 @@ func TestEmitIsPerObject(t *testing.T) {
 	first := obj(1)
 	second := obj(1)
 	second.UID = "uid-2"
-	a.Emit(rec, first, corev1.EventTypeWarning, "InsecureAdminConnection", "plaintext admin bolt")
-	a.Emit(rec, second, corev1.EventTypeWarning, "InsecureAdminConnection", "plaintext admin bolt")
+	a.Emit(rec, first, corev1.EventTypeWarning, oracle.ReasonInsecureAdminConnection, "plaintext admin bolt")
+	a.Emit(rec, second, corev1.EventTypeWarning, oracle.ReasonInsecureAdminConnection, "plaintext admin bolt")
 	if got := drain(t, rec); len(got) != 2 {
 		t.Fatalf("expected 2 events, got %d: %v", len(got), got)
 	}
@@ -87,5 +88,5 @@ func TestEmitIsPerObject(t *testing.T) {
 
 func TestEmitWithoutRecorderIsNoop(t *testing.T) {
 	var a Advisory
-	a.Emit(nil, obj(1), corev1.EventTypeWarning, "InsecureAdminConnection", "plaintext admin bolt")
+	a.Emit(nil, obj(1), corev1.EventTypeWarning, oracle.ReasonInsecureAdminConnection, "plaintext admin bolt")
 }

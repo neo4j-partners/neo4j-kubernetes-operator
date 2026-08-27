@@ -4,6 +4,10 @@ Every stable `status.conditions[].reason` the operator emits. Match on **Reason*
 alerts and tests: it is a contract and will not change silently, whereas the human-readable message
 may be reworded at any time.
 
+The two tables below are generated from the operator's own catalog of reasons, and the operator
+cannot emit a reason that is missing from it. So this is the whole surface: if you read a reason in
+`kubectl describe` and it is not on this page, you are looking at a different version.
+
 ## How to read a failure
 
 ```bash
@@ -16,39 +20,76 @@ Rejected Secrets (`SecretNotMountable`, `SecretNotDelegated`, `AuthSecretInvalid
 the same reason — the operator stops before creating any StatefulSet, so `kubectl describe` is
 usually the fastest way to see why nothing was deployed.
 
-Reasons with **no condition** (`—` in the table) are Event-only: the CR is healthy, but the
-operator resolved something silently and wants you to know. They appear in `kubectl describe`
+Reasons with **no condition** (`— (Event only)` in the table) are Event-only: the CR is healthy, but
+the operator resolved something silently and wants you to know. They appear in `kubectl describe`
 and in the operator log; nothing turns `Ready` false.
+
+The **Surface** column says where a reason shows up. `condition+event` means the same identifier is
+written to `status.conditions[].reason` *and* recorded as an Event, so `kubectl describe` and any
+automation gating on the condition agree on one string.
 
 Structured logs use `msg`, `level`, and logger names (`neo4j`, `pipeline`, domain).
 See [Operator logs](../04-troubleshooting/02-operator-logs.md).
 
 ## Catalog
 
-| Condition | Reason | Severity | Meaning |
-|-----------|--------|----------|---------|
-| Error | ReconcileFailed | error | A pipeline step returned an error |
-| Error | SecretNotMountable | error | Referenced Secret lacks the `neo4j.com/mountable-by-operator` opt-in label (NEO-005) |
-| Error | SecretNotDelegated | error | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
-| Error | AuthSecretInvalid | error | Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop |
-| — (Event only) | DuplicateEntry | warn | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
-| — (Event only) | DatabaseTopologyResized | warn | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
-| Ready | ReconcileError | error | Ready cleared because reconcile failed |
-| Reconciling | Failed | error | Reconciling stopped after failure |
-| TLSReady | SecretMissing | error | Required TLS/auth Secret is missing or incomplete |
-| StorageReady | PVCPending | warn | Data PVC not Bound yet (or missing StorageClass) |
-| Ready | OfflineMaintenance | info | `spec.maintenance.offlineMode` is true |
-| ClusterFormed | BoltUnavailable | warn | Cannot reach Bolt to form/align the cluster |
-| ClusterFormed | BootstrapGateTooHigh | error | `topology.minimumMembers` asks for more primaries than the pool has, so the system database never bootstraps and Bolt never answers |
-| ClusterFormed | ShowServersFailed | error | `SHOW SERVERS` failed over Bolt |
-| ClusterFormed | UnsupportedSinglePrimary | error | Neo4j forbids shrinking to a single primary |
-| ClusterFormed | UnsupportedSystemScaleUp | error | Cannot grow system DB from 1 primary via ENABLE alone |
-| ClusterFormed | WaitingSystemLeader | warn | Waiting for a system database leader |
-| ClusterFormed | WaitingQuorum | warn | Waiting for primary quorum / enable completion |
-| ServersPendingDrain | UnsupportedSinglePrimary | error | Drain blocked — would leave a single primary |
-| ServersPendingDrain | ShrinkingTopology | info | Scale-in in progress |
-| ServersPendingDrain | Draining | info | Server drain / DEALLOCATE in progress |
-| ServersPendingDrain | AwaitingSTSShrink | info | Waiting for StatefulSet replica shrink after drain |
+Reasons that report a problem, a decision, or an operation in progress.
+
+<!-- BEGIN GENERATED oracle:catalog -->
+| Condition | Reason | Severity | Surface | Meaning |
+|-----------|--------|----------|---------|---------|
+| Ready | MembersNotReady | warn | condition | Fewer servers ready than desired; the message carries both counts |
+| Ready | TLSNotReady | warn | condition | Held back by TLSReady — trust material is missing or still being issued |
+| Ready | OfflineMaintenance | info | condition | `spec.maintenance.offlineMode` is true, so the Neo4j process is not running |
+| Ready | ReconcileError | error | condition | Ready cleared because reconcile failed |
+| Reconciling | Failed | error | condition | Reconciling stopped after failure |
+| Installed | Pending | info | condition | No StatefulSet observed yet; expected on a first pass, a symptom if it lasts |
+| Error | ReconcileFailed | error | condition+event | A pipeline step returned an error |
+| Error | SecretNotMountable | error | condition+event | Referenced Secret lacks the `neo4j.com/mountable-by-operator` opt-in label (NEO-005) |
+| Error | SecretNotDelegated | error | condition+event | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
+| Error | AuthSecretInvalid | error | condition+event | Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop |
+| StorageReady | PVCPending | warn | condition | Data PVC not Bound yet; the message names the StorageClass, or reports that none is set |
+| TLSReady | SecretMissing | error | condition | Required TLS/auth Secret is missing or incomplete |
+| TLSReady | CertificatePending | warn | condition | Waiting for cert-manager to issue the certificate into the operator-provisioned Secret |
+| ClusterFormed | EnablingServer | info | condition | `ENABLE SERVER` in progress for a server that joined the pool |
+| ClusterFormed | BoltUnavailable | warn | condition | Cannot reach Bolt to form or align the cluster |
+| ClusterFormed | BootstrapGateTooHigh | error | condition | `topology.minimumMembers` asks for more primaries than the pool has, so the system database never bootstraps and Bolt never answers |
+| ClusterFormed | ShowServersFailed | error | condition | `SHOW SERVERS` failed over Bolt |
+| ClusterFormed | UnsupportedSystemScaleUp | error | condition | Cannot grow the system database from a single primary via `ENABLE SERVER` alone |
+| ClusterFormed | WaitingSystemLeader | warn | condition | Waiting for a system database leader |
+| ClusterFormed | WaitingQuorum | warn | condition | Waiting for primary quorum, or for an enable to complete |
+| ClusterFormed | UnsupportedSinglePrimary | error | condition | Neo4j forbids shrinking to a single primary |
+| ServersPendingDrain | UnsupportedSinglePrimary | error | condition | Drain blocked — it would leave a single primary |
+| ServersPendingDrain | ShrinkingTopology | info | condition | Scale-in in progress |
+| ServersPendingDrain | Draining | info | condition | Server drain / `DEALLOCATE DATABASES` in progress |
+| ServersPendingDrain | AwaitingSTSShrink | info | condition | Waiting for the StatefulSet replica shrink after drain |
+| — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
+| — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
+| — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
+| — (Event only) | AdminBoltTLSRequired | warn | event | The operator refuses to dial admin Bolt without `trust.certificates.bolt` or `trust.insecureAdminConnection` (NEO-004) |
+<!-- END GENERATED oracle:catalog -->
+
+## Steady-state reasons
+
+The other half of the contract: the reasons a healthy CR carries. Nothing here needs acting on, and
+they are listed so that a reason you read in `kubectl describe` is always documented somewhere — and
+so automation can tell "fine" from "not fine" without a hardcoded list.
+
+<!-- BEGIN GENERATED oracle:steady -->
+| Condition | Reason | Severity | Surface | Meaning |
+|-----------|--------|----------|---------|---------|
+| Ready | AllMembersReady | info | condition | Every desired server is ready and the CR is serving |
+| Reconciling | InProgress | info | condition | A reconcile pass is running |
+| Reconciling | Completed | info | condition | The last reconcile pass finished |
+| Installed | ObjectsCreated | info | condition | The operands exist — at least one StatefulSet was observed |
+| Error | NoError | info | condition | No pipeline error on the last pass |
+| StorageReady | PVCBound | info | condition | The data PVC is Bound |
+| TLSReady | TrustDisabled | info | condition | `trust.enabled` is false, so there is nothing to verify |
+| TLSReady | SecretsPresent | info | condition | Required TLS secrets and keys are present |
+| ClusterFormed | Formed | info | condition | All desired servers are enabled in the Neo4j cluster |
+| ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
+| — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
+<!-- END GENERATED oracle:steady -->
 
 ## DuplicateEntry
 
@@ -147,9 +188,10 @@ kubectl get neo4j dev -n default \
   -o jsonpath='{range .status.conditions[?(@.type=="StorageReady")]}{.reason}{"\n"}{end}'
 ```
 
-Severity in the table above tells you what deserves an alert. `error` means the operator has stopped
-making progress and needs a human; `warn` means it is waiting on something that may resolve itself,
-such as a claim being bound; `info` is narration of an operation in progress.
+Severity tells you what deserves an alert. `error` means the operator has stopped making progress
+and needs a human; `warn` means it is waiting on something that may resolve itself, such as a claim
+being bound; `info` is either narration of an operation in progress or, for every reason in
+[Steady-state reasons](#steady-state-reasons), a settled healthy state.
 
 What to do about each symptom: [Troubleshooting](../04-troubleshooting/01-common-issues.md).
 The settings behind `kept (operator-injected)`:

@@ -10,7 +10,7 @@ Operator-compromise blast radius, PSS / SCC mapping and the full RBAC rationale 
 (backlog L-12, fed by ADR-013 / ADR-015).
 
 **Related**: [`examples/secrets/README.md`](../../examples/secrets/README.md) (user-facing
-prerequisites), [error-overview.md](../03-user-documentation/reference/error-overview.md) (reasons
+prerequisites), [errors.md](../user-guide/05-reference/errors.md) (reasons
 `SecretNotMountable` / `SecretNotDelegated`),
 [BDR-005](decision-records/business/neo4j/005-storage-volume-mode.md) (`secretMounts`),
 [BDR-006](decision-records/business/neo4j/006-service-exposure-connectivity.md) (`clusterDomain`,
@@ -155,8 +155,8 @@ on two surfaces at once:
 
 - `status.conditions[type=Error]` with reason `SecretNotMountable` (NEO-005) or
   `SecretNotDelegated` (ADD-01) — the machine-readable contract, catalogued in
-  `src/internal/status/oracle.go` and mirrored in
-  [error-overview.md](../03-user-documentation/reference/error-overview.md);
+  `src/internal/oracle/catalog.go` and projected onto
+  [errors.md](../user-guide/05-reference/errors.md);
 - a `Warning` Event under the **same** reason, so `kubectl describe neo4j <name>` explains why
   nothing was deployed.
 

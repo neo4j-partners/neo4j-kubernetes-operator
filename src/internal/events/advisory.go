@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
 
 // maxTracked bounds the memo the way client-go bounds its own event cache. Past that it is dropped
@@ -34,18 +36,18 @@ type advisoryKey struct {
 // Emit records message unless the same advisory was already recorded for this generation of obj.
 // Only for statements derived from the spec: an Event reporting a decision or a state must never
 // go through here, since a generation is not a fact about the cluster.
-func (a *Advisory) Emit(rec record.EventRecorder, obj client.Object, eventtype, reason, message string) {
+func (a *Advisory) Emit(rec record.EventRecorder, obj client.Object, eventtype string, reason oracle.Reason, message string) {
 	if rec == nil || obj == nil {
 		return
 	}
-	if !a.claim(obj.GetUID(), reason+"\x00"+message, obj.GetGeneration()) {
+	if !a.claim(obj.GetUID(), reason.String()+"\x00"+message, obj.GetGeneration()) {
 		return
 	}
-	rec.Event(obj, eventtype, reason, message)
+	rec.Event(obj, eventtype, reason.String(), message)
 }
 
 // Emitf is Emit with a formatted message.
-func (a *Advisory) Emitf(rec record.EventRecorder, obj client.Object, eventtype, reason, format string, args ...any) {
+func (a *Advisory) Emitf(rec record.EventRecorder, obj client.Object, eventtype string, reason oracle.Reason, format string, args ...any) {
 	a.Emit(rec, obj, eventtype, reason, fmt.Sprintf(format, args...))
 }
 

@@ -16,6 +16,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
 
 type fakeAdmin struct {
@@ -106,9 +107,9 @@ func testClusterCR(primaries int32) *neo4jv1beta1.Neo4j {
 	return &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
 		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
-			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Edition: neo4jv1beta1.EditionEnterprise,
+			Version: "2026.05.0",
+			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
 			Topology: neo4jv1beta1.TopologySpec{
 				Mode:      neo4jv1beta1.TopologyModeCluster,
 				Primaries: &neo4jv1beta1.PrimariesSpec{Members: primaries},
@@ -193,7 +194,7 @@ func TestReconcileFormsWhenGateExceedsShrunkPool(t *testing.T) {
 	if out.Err != nil {
 		t.Fatal(out.Err)
 	}
-	cond := meta.FindStatusCondition(neo4j.Status.Conditions, ConditionClusterFormed)
+	cond := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionClusterFormed.String())
 	if cond == nil || cond.Status != metav1.ConditionTrue {
 		t.Fatalf("ClusterFormed = %#v, want True (a gate above the pool must not wedge formation)", cond)
 	}
@@ -342,9 +343,9 @@ func TestReconcileReportsDatabaseTopologyResize(t *testing.T) {
 		t.Fatal(out.Err)
 	}
 
-	event := findEvent(recorder, ReasonDatabaseTopologyResized)
+	event := findEvent(recorder, oracle.ReasonDatabaseTopologyResized.String())
 	if event == "" {
-		t.Fatalf("no %s Event after the operator shrunk a database topology", ReasonDatabaseTopologyResized)
+		t.Fatalf("no %s Event after the operator shrunk a database topology", oracle.ReasonDatabaseTopologyResized)
 	}
 	if !strings.Contains(event, "Warning") {
 		t.Errorf("event %q should be a Warning", event)
@@ -392,7 +393,7 @@ func TestReconcileNoResizeEventWhenTopologiesAlreadyFit(t *testing.T) {
 	if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
 		t.Fatal(out.Err)
 	}
-	if event := findEvent(recorder, ReasonDatabaseTopologyResized); event != "" {
+	if event := findEvent(recorder, oracle.ReasonDatabaseTopologyResized.String()); event != "" {
 		t.Errorf("unexpected resize Event while every topology already fits: %q", event)
 	}
 }

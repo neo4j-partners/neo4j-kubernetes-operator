@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -86,7 +87,7 @@ func TestObservePoolStorageReadyPendingWithStorageClass(t *testing.T) {
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
 	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
-	if ok || reason != "PVCPending" {
+	if ok || reason != oracle.ReasonPVCPending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
 	if !strings.Contains(msg, `storageClassName="missing-sc"`) || !strings.Contains(msg, "data-dev-server-0") {
@@ -106,7 +107,7 @@ func TestObservePoolStorageReadyPendingNoStorageClass(t *testing.T) {
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
 	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
-	if ok || reason != "PVCPending" {
+	if ok || reason != oracle.ReasonPVCPending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
 	if !strings.Contains(msg, "default StorageClass") {
@@ -126,7 +127,7 @@ func TestObservePoolStorageReadyBound(t *testing.T) {
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
 	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
-	if !ok || reason != "PVCBound" || msg != "" {
+	if !ok || reason != oracle.ReasonPVCBound || msg != "" {
 		t.Fatalf("ok=%v reason=%q msg=%q", ok, reason, msg)
 	}
 }
@@ -139,7 +140,7 @@ func TestObservePoolStorageReadyPVCMissing(t *testing.T) {
 	neo4j := standaloneWithDynamicSC("dev", "default", "standard")
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
 	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
-	if ok || reason != "PVCPending" {
+	if ok || reason != oracle.ReasonPVCPending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
 	if !strings.Contains(msg, `waiting for PVC "data-dev-server-0"`) {
@@ -174,7 +175,7 @@ func TestObserveTLSReadyDisabled(t *testing.T) {
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
 	ok, reason, _ := w.observeTLSReady(t.Context(), neo4j)
-	if !ok || reason != "TrustDisabled" {
+	if !ok || reason != oracle.ReasonTrustDisabled {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
 }
@@ -189,7 +190,7 @@ func TestObserveTLSReadyCertManagerPending(t *testing.T) {
 	neo4j := standaloneCertManagerCR()
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
 	ok, reason, msg := w.observeTLSReady(t.Context(), neo4j)
-	if ok || reason != "CertificatePending" {
+	if ok || reason != oracle.ReasonCertificatePending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
 	if !strings.Contains(msg, "dev-bolt-tls") {
@@ -209,7 +210,7 @@ func TestObserveTLSReadyCertManagerIssued(t *testing.T) {
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build())
 	ok, reason, _ := w.observeTLSReady(t.Context(), neo4j)
-	if !ok || reason != "SecretsPresent" {
+	if !ok || reason != oracle.ReasonSecretsPresent {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
 }
