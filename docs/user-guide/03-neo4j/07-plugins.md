@@ -1,12 +1,16 @@
 # Plugins
 
 Three plugins are supported by name: `apoc`, `gds` for Graph Data Science, and `bloom`. Unknown
-ids are rejected. Declaring a catalog plugin sets `NEO4J_PLUGINS` so the official image
-**downloads JARs at pod start** — the operator does not checksum those files (NEO-013).
+ids are rejected. Declaring a catalog plugin sets `NEO4J_PLUGINS`, and the image entrypoint
+installs the JAR at container start.
 
-For production or air-gapped clusters, pre-seed `/plugins` and skip the fetch (see below).
-Procedure sandbox stays on unless you opt in via `spec.config.neo4j`
-(`dbms.security.procedures.unrestricted`).
+All three ship **inside the Enterprise image** — `apoc` in `/var/lib/neo4j/labs`, `gds` and
+`bloom` in `/var/lib/neo4j/products` — so the entrypoint copies them locally and no egress is
+involved. The Community image bundles `apoc` only: `gds` and `bloom` there fall back to a
+download from the Neo4j hosts, and the operator does not checksum a downloaded file (NEO-013).
+
+The procedure sandbox stays on unless you opt in via `spec.config.neo4j`
+(`dbms.security.procedures.unrestricted`) — see [Licensed plugins](#licensed-plugins).
 
 ## Standalone
 
@@ -66,24 +70,27 @@ You can still add your own settings; they merge with the generated ones and your
 
 ## How plugins get onto disk
 
-| Path | `NEO4J_PLUGINS` fetch | Use when |
-|------|----------------------|----------|
-| Catalog id only (ephemeral emptyDir) | Yes, every restart | Labs |
-| `volumes.plugins` Share / Dynamic | Yes on first start, then persist | Default production if egress is allowed |
-| `volumes.plugins` **Existing** | **No** | Air-gap / pre-seeded JARs (NEO-013) |
-| Custom image with JARs baked in | No (and omit catalog ids, or use Existing) | Fully pinned supply chain |
+| Path | What happens at container start | Use when |
+|------|---------------------------------|----------|
+| Catalog id only (ephemeral emptyDir) | JAR copied out of the image, every start | Default |
+| `volumes.plugins` Share / Dynamic | Copied on first start, then persisted | Keeping the directory across restarts |
+| `volumes.plugins` **Existing** | Nothing — `NEO4J_PLUGINS` is left unset | Pre-seeded or pinned JARs (NEO-013) |
+| Custom image with JARs baked in | Nothing (omit catalog ids, or use Existing) | Fully pinned supply chain |
 
 `pluginDefinitions.*.version` is rejected — the image entrypoint cannot pin plugin versions.
 Put known-good JARs on an Existing volume or in a derived image.
 
-Download egress (when fetch is on) is whatever the Neo4j image documents for
-[Docker plugins](https://neo4j.com/docs/operations-manual/current/docker/plugins/) — typically
-GitHub / Neo4j download hosts. Allowlist those destinations if you restrict egress.
+Egress only matters for a plugin the image does not bundle — `gds` or `bloom` on the Community
+image. The destinations are the ones the Neo4j image documents for
+[Docker plugins](https://neo4j.com/docs/operations-manual/current/docker/plugins/); allowlist
+them if you restrict egress.
 
-## Persisting downloaded plugins
+## Persisting plugins
 
-Plugins are fetched into `/plugins` when the container starts, which means they are downloaded again
-on every restart and require the pod to reach the download source. Keep them on disk instead:
+`/plugins` is an ephemeral `emptyDir` by default, so the JAR is installed again on every restart.
+On the Enterprise image that is a local file copy and costs nothing. Keep the directory on disk
+if you want it to survive anyway — or if you are on the Community image, where `gds` and `bloom`
+are fetched over the network:
 
 ```yaml
 spec:
@@ -94,10 +101,10 @@ spec:
         shareFrom: data
 ```
 
-`Share` puts `/plugins` in a subdirectory of the data volume, so it costs no extra claim. First
-start still downloads (needs egress); later restarts reuse the files.
+`Share` puts `/plugins` in a subdirectory of the data volume, so it costs no extra claim.
 
-To skip the network fetch entirely, mount a pre-populated PVC:
+To supply your own JARs and stop the image installing anything over them, mount a pre-populated
+PVC:
 
 ```yaml
 spec:
@@ -123,6 +130,15 @@ licence for Enterprise features. Supply it as a Secret and reference it per plug
 ```yaml
 spec:
   plugins: [gds, bloom]
+  config:
+    neo4j:
+      # Both *.license_file keys below are plugin-namespaced, and the server validates its
+      # configuration before the plugin that declares them is on the classpath. Without this
+      # it refuses to start: "No declared setting with name: gds.enterprise.license_file".
+      server.config.strict_validation.enabled: "false"
+      # GDS and Bloom procedures that touch database internals need the sandbox lifted.
+      # bloom.checkLicenseCompliance() answers 52N34 without it.
+      dbms.security.procedures.unrestricted: "gds.*,bloom.*"
   pluginDefinitions:
     gds:
       licenseSecretRef: gds-license
@@ -131,8 +147,17 @@ spec:
     bloom:
       licenseSecretRef: bloom-license
       config:
+        dbms.bloom.license_file: /licenses/bloom/bloom.license
+        # Without this Bloom is licensed but never served — /bloom answers 404.
         server.unmanaged_extension_classes: com.neo4j.bloom.server=/bloom
 ```
+
+Those three `config` entries are not operator quirks to work around; the Neo4j image would
+normally write them itself when it installs `gds`/`bloom`, but it writes them to
+`$NEO4J_HOME/conf/neo4j.conf` while the server here reads `/config`, so they never take effect.
+The [Neo4j Helm chart docs](https://neo4j.com/docs/operations-manual/current/kubernetes/plugins/#install-gds-ee-bloom)
+ask for the same keys for the same reason. Setting them is what makes a licensed plugin usable
+— `feature-plugins` boots exactly this shape on every CI run.
 
 Each licence Secret is mounted under `/licenses/<plugin>`, and — like every Secret the operator
 mounts — must carry `neo4j.com/mountable-by-operator: "true"`:
