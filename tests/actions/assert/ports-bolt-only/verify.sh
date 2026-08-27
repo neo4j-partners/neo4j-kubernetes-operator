@@ -12,16 +12,18 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 
 NEO4J_RESOURCE="neo4j/${NEO4J_CR_NAME}"
 SVC="${NEO4J_CLIENT_SVC:-${NEO4J_CR_NAME}}"
-TIMEOUT_SECS="${E2E_ASSERT_TIMEOUT:-600}"
+# E2E_ASSERT_TIMEOUT already carries its unit (base.sh exports "300s") — use it verbatim, never
+# re-append "s" (that yields an invalid "300ss" duration that kubectl rejects instantly).
+TIMEOUT="${E2E_ASSERT_TIMEOUT:-300s}"
 
 # Ready proves Bolt accepts connections (probes are Bolt TCP) and the operator could manage the
 # workload over the client-Service Bolt path — the core of AC-NEO-NETWORKING-PORTS-BOLT-001.
-log "Waiting up to ${TIMEOUT_SECS}s for ${NEO4J_RESOURCE} Ready (Bolt-only must still serve Bolt)"
+log "Waiting up to ${TIMEOUT} for ${NEO4J_RESOURCE} Ready (Bolt-only must still serve Bolt)"
 kubectl wait --for=condition=Installed "${NEO4J_RESOURCE}" \
   -n "${NEO4J_NAMESPACE}" --timeout=120s >/dev/null 2>&1 \
   || die "${NEO4J_RESOURCE} was not reconciled"
 if ! kubectl wait --for=condition=Ready "${NEO4J_RESOURCE}" \
-  -n "${NEO4J_NAMESPACE}" --timeout="${TIMEOUT_SECS}s" >/dev/null 2>&1; then
+  -n "${NEO4J_NAMESPACE}" --timeout="${TIMEOUT}" >/dev/null 2>&1; then
   kubectl describe "${NEO4J_RESOURCE}" -n "${NEO4J_NAMESPACE}" >&2 || true
   die "${NEO4J_RESOURCE} did not become Ready with a Bolt-only client Service"
 fi
