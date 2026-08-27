@@ -104,10 +104,36 @@ the operator's own catalog by `make errors`, so an assert can ask the contract:
 | `oracle_nominal <reason>` | success when the reason means things are fine |
 | `oracle_severity <reason>` | `error`, `warn` or `info` |
 
+Two shapes cover nearly every case. When the assert pins one reason, declare it, check it against
+the catalog, then wait for it:
+
+```bash
+EXPECT_REASON="${STORAGE_ERROR_REASON:-PVCPending}"
+oracle_require StorageReady "${EXPECT_REASON}"   # `event` as the condition for Event-only reasons
+```
+
+When the assert accepts several — a condition observed mid-flight can legitimately hold any of them
+— read the admissible set instead of writing one:
+
+```bash
+if ! oracle_has Ready "${ready_reason}"; then
+  log "FAIL Ready: ${ready_reason:-unset} is not catalogued (catalogued: $(oracle_reasons_for Ready | tr '\n' ' '))"
+fi
+if [[ "${ready_status}" == "True" ]] && ! oracle_nominal "${ready_reason}"; then
+  log "FAIL Ready: True on a reason the catalog does not consider healthy"
+fi
+```
+
+`assert/storage-error` and `assert/status-conditions` are the working examples of each.
+
 The point is the failure mode. A reason renamed in Go used to leave the assert waiting for a string
 nothing would ever write, then failing after a full timeout as though the operator were broken.
 `oracle_require` turns that into an immediate, named failure before the wait even starts — and a
 whitelist read from `oracle_reasons_for` cannot fall behind the operator at all.
+
+`lib/oracle.sh` is generated: never edit it, and never add a reason there to make an assert pass.
+Declare it in `src/internal/oracle/catalog.go` and run `make errors` — see
+[Adding a condition or Event reason](../docs/developer-guide/02-changing-the-code.md#adding-a-condition-or-event-reason).
 
 ### Fixtures must not hard-code a platform
 

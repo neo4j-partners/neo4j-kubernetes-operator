@@ -5,7 +5,8 @@ For people changing the operator. If you only want to run Neo4j on Kubernetes, y
 
 | Page | Covers |
 |------|--------|
-| [1. Contributing](01-contributing.md) | Branch and pull request workflow, the CI gates, fast-forward merges, what a change has to touch |
+| [1. Contributing](01-contributing.md) | Branch and pull request workflow, the CI gates, running them locally, fast-forward merges, commits, reviews |
+| [2. Changing the code](02-changing-the-code.md) | What a change has to carry, adding a condition or Event reason, where each package lives |
 
 ## Where the rest of the developer material lives
 
@@ -27,7 +28,8 @@ the thing they describe lives:
 
 ```bash
 make test                     # unit tests
-make audit                    # CRD validator + reconcile linter
+make audit                    # CRD validator, reconcile linter, error catalog projections
+make errors                   # regenerate the error reference and tests/lib/oracle.sh
 make install                  # CRD into your cluster (server-side apply)
 make run LOG_ARGS="--zap-devel --zap-log-level=debug"
 ```
@@ -36,4 +38,5 @@ make run LOG_ARGS="--zap-devel --zap-log-level=debug"
 building an image. Do not leave the in-cluster Deployment running at the same time.
 
 Then read [Contributing](01-contributing.md) before opening a pull request — the two rules there
-(green checks, fast-forward only) determine how your work lands.
+(green checks, fast-forward only) determine how your work lands — and
+[Changing the code](02-changing-the-code.md) for what the change itself has to carry.

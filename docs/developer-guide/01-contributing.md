@@ -1,7 +1,10 @@
 # Contributing
 
-How a change gets from your machine into `main`. Two rules are non-negotiable and everything else on
-this page exists to make them painless:
+How a change gets from your machine into `main`: branches, CI, commits and merges. What the change
+itself has to carry — regenerated output, catalogued reasons, where each package belongs — is in
+[Changing the code](02-changing-the-code.md).
+
+Two rules are non-negotiable and everything else on this page exists to make them painless:
 
 > **Every change reaches `main` through a pull request, and a pull request with a failing check is not
 > merged.**
@@ -60,7 +63,7 @@ The whole first stage takes a couple of minutes locally, and catches most of wha
 
 ```bash
 make test          # unit tests under src/
-make audit         # regenerate CRD manifests, CRD validator, reconcile linter
+make audit         # regenerate CRD manifests, CRD validator, reconcile linter, error catalog
 make govulncheck   # known vulnerabilities in dependencies
 ```
 
@@ -132,69 +135,12 @@ docs(user-guide): explain the Secret opt-in labels
 Explain the *why* in the body when the summary cannot carry it. A commit whose message is `fix tests`
 tells a future reader nothing about the constraint it encoded.
 
-## What a change usually has to touch
-
-The reviewer will look for these, so save a round trip:
-
-**API changes** (`src/api/v1beta1/`) need generated output regenerated and committed:
-
-```bash
-make generate manifests
-```
-
-That refreshes `zz_generated.deepcopy.go` and `config/crd/bases/`. The committed CRD is what
-`make install` applies, so a stale one means users install a schema that does not match the code. Do
-not run `controller-gen rbac`: the manager Role is hand-maintained per watched namespace and would be
-overwritten with a ClusterRole.
-
-**New condition reasons and Event reasons** are declared in `src/internal/oracle/catalog.go`, and
-nowhere else. `Reason` is an opaque type, so a literal cannot reach a condition or an Event — the
-code will not compile. Then run:
-
-```bash
-make errors
-```
-
-That regenerates the two tables in
-[`docs/user-guide/05-reference/errors.md`](../user-guide/05-reference/errors.md) and the shell
-lookups in `tests/lib/oracle.sh` that the e2e asserts source. Both are committed, and `make test`
-fails when either is stale, when a catalogued reason has no emission site left, or when an Event
-reason is passed as a raw string. Assert on reasons in tests, never on message text.
-
-**New spec fields** need an example under [`examples/`](../../examples/) and a mention in the matching
-user-guide topic page, plus a row in
-[`feature-status.md`](../user-guide/01-getting-started/feature-status.md) if the capability is
-user-visible. A field that exists in the schema and nowhere else is indistinguishable from an inert
-one.
-
-**New end-to-end coverage** is recorded in [`tests/coverage.md`](../../tests/coverage.md).
-
-**User-facing behaviour** is documented in the user guide, which is self-contained: it links only to
-its own pages and to `examples/`. Design rationale belongs in [`docs/design/`](../design/) instead.
-
-## Where the code lives
-
-| Path | Contents |
-|------|----------|
-| `src/api/v1beta1/` | CRD types, validation markers, CEL rules |
-| `src/cmd/manager/` | Entry point, flags, watch scope |
-| `src/internal/controller/neo4j/` | The reconciler and its pipeline |
-| `src/internal/domain/` | One package per pipeline step: persistence, trust, serverconfig, workload, connectivity, formation |
-| `src/internal/render/` | Pure functions building Kubernetes objects from a resource |
-| `src/internal/oracle/` | The reason catalog, and the projections `make errors` generates from it |
-| `src/internal/status/` | Conditions and phases written from observed state |
-| `src/internal/validation/` | Checks that need an API read rather than CEL |
-| `config/` | CRD, RBAC, manager manifests |
-| `charts/neo4j-operator/` | Helm chart |
-| `tests/` | End-to-end harness: suites, actions, fixtures |
-
-The layering is deliberate: `render/` is pure and unit-testable, `domain/` applies what render
-produces, and the controller sequences the domains. A pull request that reaches into the API server
-from `render/` will be sent back.
-
 ## Reviews
 
 Expect questions about failure modes rather than style: what happens on the second reconcile, what
 happens when the object already exists with different content, what the user sees when the input is
 wrong. Answer those in the code — through an idempotent apply, a stable condition reason, an Event —
 rather than in the pull request discussion, where the answer is lost after merge.
+
+The checklist a reviewer runs through — regenerated CRD, catalogued reasons, examples, coverage — is
+in [Changing the code](02-changing-the-code.md#what-a-change-usually-has-to-touch).

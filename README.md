@@ -98,9 +98,11 @@ A smaller kubebuilder-style sample lives in [`config/samples/`](config/samples/)
 ## Contributing
 
 Work on a branch, open a pull request against `main`, and expect the checks to gate it: a pull request
-with a failing check is not merged, and `main` only moves forward by fast-forward. The full workflow,
-the local commands that reproduce CI, and what a change is expected to touch are in
-[Contributing](docs/developer-guide/01-contributing.md).
+with a failing check is not merged, and `main` only moves forward by fast-forward. The full workflow
+and the local commands that reproduce CI are in
+[Contributing](docs/developer-guide/01-contributing.md); what a change is expected to touch, including
+the catalog of condition and Event reasons, is in
+[Changing the code](docs/developer-guide/02-changing-the-code.md).
 
 ## License
 
