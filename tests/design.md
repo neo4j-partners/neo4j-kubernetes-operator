@@ -98,6 +98,24 @@ The live config-change case (`config-restart`, NEO-2-010, formerly the separate
 pod comes back `Ready`, `SHOW SETTINGS` over bolt reports the new value). It is the only
 config case that mutates a running CR, so it is heavier than the deploy-once cases.
 
+`cluster-config-restart` (NEO-3-010-RSTR-02) is its cluster half, and adds the two properties a
+single member cannot show. The roll must be **serial** — `readyReplicas` never falls below
+`members - 1`, sampled every 2s rather than read off the spec, because the operator sets
+`PodManagementPolicy: Parallel` on the pool StatefulSet (pods are created and deleted in parallel
+when *scaling*) while leaving `updateStrategy` at the Kubernetes default `RollingUpdate`, which
+still updates one pod at a time; a change that made updates parallel too would drop quorum without
+any render test noticing. And the cluster must be **formed again** afterwards, since `Ready` speaks
+only for member health.
+
+`ClusterFormed` is not required to stay `True` during the roll, and asserting that would fail a
+healthy one: with `minimumMembers=3` on a 3-primary pool, one member down puts `enabledPrimaries`
+below the minimum and the operator honestly reports `WaitingQuorum`, or `BoltUnavailable` while it
+dials the restarting member. What may never appear is one of the error-severity reasons — the
+operator giving up instead of waiting. That set is read from the generated `lib/oracle.sh` rather
+than written into the assert, so a refusal added to formation later is watched without anyone
+remembering to. The reasons observed are carried into every failure message, where they are the
+fastest explanation available.
+
 ## Storage suite mechanics (`feature-storage`)
 
 Covers the `spec.storage` surface, one case per feature (all admitted). Mount points are
