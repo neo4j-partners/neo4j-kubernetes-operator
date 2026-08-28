@@ -83,7 +83,7 @@ audit: manifests lint-reconcile validate-crd errors-check ## Run operator audit 
 
 .PHONY: install
 install: manifests ## Install CRDs into the cluster
-	kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+	kubectl apply --server-side --force-conflicts -k config/crd/bases
 
 .PHONY: deploy
 deploy: install ## Deploy operator to neo4j-operator-system
