@@ -224,6 +224,8 @@ var (
 		"Every desired server is enabled in the Neo4j cluster")
 	ConditionServersPendingDrain = declareCondition("ServersPendingDrain", GateClusterTrueBlocks,
 		"A server dropped from the spec is still registered in Neo4j and waiting to be drained")
+	ConditionBackupReady = declareCondition("BackupReady", GateFalseBlocks,
+		"At least one successful backup exists for this Neo4j instance")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -331,6 +333,24 @@ var (
 		on(ConditionServersPendingDrain, "Waiting for the StatefulSet replica shrink after drain"))
 	ReasonDrainTimeout = declare("DrainTimeout", SeverityWarn, SurfaceBoth,
 		on(ConditionServersPendingDrain, "A scale-in has stayed pending past the operator's budget; the message names the member Neo4j has not released, what it still reports it hosting, and how long the scale-in has waited. The StatefulSet stays at its current size — no data is at risk, but the scale-in needs a look"))
+)
+
+// BackupReady — a Neo4jBackup run-to-completion record (BDR-014 / ADR-015).
+var (
+	ReasonBackupSucceeded = declareNominal("BackupSucceeded", SurfaceCondition,
+		on(ConditionBackupReady, "The backup Job completed and artifacts were written"))
+	ReasonBackupInProgress = declare("BackupInProgress", SeverityInfo, SurfaceCondition,
+		on(ConditionBackupReady, "The backup Job is running"))
+	ReasonBackupJobFailed = declare("BackupJobFailed", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "The backup Job failed; the message carries the failure detail"))
+	ReasonBackupTargetNotFound = declare("BackupTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionBackupReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonBackupEditionUnsupported = declare("BackupEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "Backup requires Enterprise edition; the target is community"))
+	ReasonBackupListenerDisabled = declare("BackupListenerDisabled", SeverityWarn, SurfaceCondition,
+		on(ConditionBackupReady, "The target has no backup listener; set `features.backup` and `connectivity.listeners.backup`"))
+	ReasonBackupDestinationUnsupported = declare("BackupDestinationUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName)"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the
