@@ -32,6 +32,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	neo4jctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4j"
+	neo4jbackupctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackup"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
@@ -150,6 +151,11 @@ func main() {
 		os.Exit(1)
 	}
 	setupLog.Info("neo4j reconciler", "maxConcurrentReconciles", maxConcurrentReconciles)
+
+	if err := neo4jbackupctrl.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Neo4jBackup")
+		os.Exit(1)
+	}
 
 	if enableWebhooks {
 		if err := ctrl.NewWebhookManagedBy(mgr).

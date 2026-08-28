@@ -12,7 +12,7 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady
 }
 
 oracle_reasons_for() {  # <condition>
@@ -25,6 +25,7 @@ oracle_reasons_for() {  # <condition>
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink ;;
+    BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported ;;
     event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted ;;
     *) return 1 ;;
   esac
@@ -74,6 +75,13 @@ oracle_severity() {  # <reason>
     ShrinkingTopology) echo info ;;
     Draining) echo info ;;
     AwaitingSTSShrink) echo info ;;
+    BackupSucceeded) echo info ;;
+    BackupInProgress) echo info ;;
+    BackupJobFailed) echo error ;;
+    BackupTargetNotFound) echo warn ;;
+    BackupEditionUnsupported) echo error ;;
+    BackupListenerDisabled) echo warn ;;
+    BackupDestinationUnsupported) echo error ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;
@@ -85,7 +93,7 @@ oracle_severity() {  # <reason>
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|SecretMounted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|SecretMounted) return 0 ;;
     *) return 1 ;;
   esac
 }
