@@ -1,0 +1,17 @@
+# The one-shot Neo4jBackup applied by backup/create after the target Neo4j is Ready.
+# A Full backup of the neo4j database into the pre-created PVC destination (e2e-backup-dest).
+# __CR_NAME__ is substituted (globally) with the case CR name; the record is <cr>-run and its
+# owned run-to-completion Job is <cr>-run-backup.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: __CR_NAME__-run
+spec:
+  neo4jRef:
+    name: __CR_NAME__
+  databases: ["neo4j"]
+  type: Full
+  destination:
+    type: pvc
+    pvc:
+      claimName: e2e-backup-dest

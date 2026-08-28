@@ -1,0 +1,27 @@
+name: feature-backup
+description: >
+  Neo4jBackup end to end (ADR-015 / BDR-014). Deploys an Enterprise Standalone Neo4j with the
+  backup listener enabled (features.backup + connectivity.listeners.backup) and a pre-created PVC
+  destination, waits for the workload to be Ready, creates a Full Neo4jBackup, then asserts the
+  record reaches Succeeded (BackupReady=True/BackupSucceeded), the owned run-to-completion Job
+  (<cr>-run-backup) completes, and status.chain + status.artifacts[].uri are populated.
+brief_ref: neo4j-backup-run
+use_pipeline: neo4j-suite
+on_case_failure: stop
+# deploy/neo4j (case_run) applies the target + destination PVC; the backup is created only after
+# the workload is Ready (backup/create), so the Job never races the target's boot.
+pipeline:
+  case_assert:
+    - assert/standalone-ready
+    - backup/create
+    - assert/backup-succeeded
+  case_teardown:
+    - backup/cleanup
+
+cases:
+  - id: pvc-full
+    comment: BDR-014 — a Full backup to a pre-created PVC completes; Neo4jBackup reaches Succeeded and the owned Job (<cr>-run-backup) is Complete.
+    fixture: tests/fixtures/neo4j-backup-pvc.yaml
+    assert: backup-succeeded
+    expect: success
+    cr_name: e2e-backup

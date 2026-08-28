@@ -59,6 +59,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - policy
   resources:
   - poddisruptionbudgets
@@ -104,6 +116,26 @@ rules:
   - neo4j.com
   resources:
   - neo4js/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4jbackups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4jbackups/status
   verbs:
   - get
   - patch
