@@ -3,3 +3,6 @@
 # It should be run by config/default
 resources:
 - neo4j.com_neo4js.yaml
+- neo4j.com_neo4jbackups.yaml
+- neo4j.com_neo4jbackupschedules.yaml
+- neo4j.com_neo4jrestores.yaml

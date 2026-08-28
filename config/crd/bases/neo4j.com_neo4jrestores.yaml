@@ -1,0 +1,271 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
+  name: neo4jrestores.neo4j.com
+spec:
+  group: neo4j.com
+  names:
+    kind: Neo4jRestore
+    listKind: Neo4jRestoreList
+    plural: neo4jrestores
+    shortNames:
+    - n4jr
+    singular: neo4jrestore
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.neo4jRef.name
+      name: Cluster
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: Neo4jRestore is an immutable, one-shot restore record (BDR-014).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              Neo4jRestoreSpec is the desired state of a one-shot, immutable restore record.
+              Restore covers user databases only; system is rejected (BDR-014 §8).
+            properties:
+              databases:
+                description: Databases lists user databases to restore; "*" means
+                  all user databases (never system).
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              forceOffline:
+                description: |-
+                  ForceOffline stops the database before replacing it to fence in-flight writes,
+                  then restarts it. Requires overwrite (§11).
+                type: boolean
+              neo4jRef:
+                description: Neo4jRef is the target cluster (must exist and be formation-stable).
+                properties:
+                  name:
+                    description: Name of the target Neo4j resource in the same namespace.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              overwrite:
+                description: |-
+                  Overwrite allows replacing a database that already exists. Default false refuses
+                  (a name clash fails and CREATE OR REPLACE / recreate destroys the current store — BDR-014 §11).
+                type: boolean
+              source:
+                description: Source is what to restore from.
+                properties:
+                  backupRef:
+                    description: BackupRef is the name of a Neo4jBackup in the same
+                      namespace (recommended).
+                    type: string
+                  credentials:
+                    description: Credentials for a raw source; omit for workload identity.
+                    properties:
+                      secretName:
+                        description: SecretName is a Secret in the same namespace
+                          with the provider credentials.
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  pvc:
+                    description: PVC targets an in-cluster volume as a raw source.
+                    properties:
+                      claimName:
+                        description: ClaimName binds an existing PersistentVolumeClaim.
+                        type: string
+                      size:
+                        description: Size provisions a new claim (e.g. 100Gi). Ceiling
+                          enforced in admission.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        type: string
+                      storageClassName:
+                        description: StorageClassName for a provisioned claim (omit
+                          for the cluster default).
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: set pvc.claimName (existing) or pvc.size (provision),
+                        not both
+                      rule: has(self.claimName) != (has(self.size) || has(self.storageClassName))
+                  type:
+                    description: Type selects the raw store backend (with url).
+                    enum:
+                    - s3
+                    - gcs
+                    - azure
+                    - pvc
+                    type: string
+                  url:
+                    description: URL is a raw provider URI to seed from (with type).
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: set source.backupRef (a Neo4jBackup) or source.url (raw),
+                    not both
+                  rule: has(self.backupRef) != has(self.url)
+                - message: source.type is required with source.url
+                  rule: '!has(self.url) || has(self.type)'
+                - message: source.type/pvc/credentials are only valid with source.url,
+                    not source.backupRef
+                  rule: '!has(self.backupRef) || (!has(self.type) && !has(self.pvc)
+                    && !has(self.credentials))'
+            required:
+            - databases
+            - neo4jRef
+            - source
+            type: object
+            x-kubernetes-validations:
+            - message: system cannot be restored via Neo4jRestore; whole-cluster DR
+                is a manual runbook (BDR-014 §8)
+              rule: '!self.databases.exists(d, d == ''system'')'
+            - message: 'forceOffline requires overwrite: true'
+              rule: '!self.forceOffline || self.overwrite'
+          status:
+            description: Neo4jRestoreStatus is the observed state of a restore run.
+            properties:
+              conditions:
+                description: Conditions are Kubernetes-standard signals.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              databases:
+                description: Databases reports per-database progress.
+                items:
+                  description: RestoreDatabaseStatus is the per-database outcome of
+                    a restore.
+                  properties:
+                    message:
+                      description: Message is a human-readable detail.
+                      type: string
+                    name:
+                      description: Name of the database.
+                      type: string
+                    phase:
+                      description: Phase of this database's restore.
+                      enum:
+                      - Pending
+                      - Running
+                      - Succeeded
+                      - Failed
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              message:
+                description: Message is a human-readable detail.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the last spec generation reconciled.
+                format: int64
+                type: integer
+              phase:
+                description: |-
+                  Phase is the coarse run state (Failed + reason=DatabaseExists when a target
+                  exists and overwrite is false).
+                enum:
+                - Pending
+                - Running
+                - Succeeded
+                - Failed
+                type: string
+              reason:
+                description: Reason is a stable machine reason on failure (oracle
+                  catalog).
+                type: string
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: Neo4jRestore spec is immutable (it is a run-to-completion record)
+          rule: self.spec == oldSelf.spec
+    served: true
+    storage: true
+    subresources:
+      status: {}

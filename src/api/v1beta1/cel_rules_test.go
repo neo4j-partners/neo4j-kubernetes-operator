@@ -2,6 +2,7 @@ package v1beta1
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/cel-go/cel"
@@ -12,26 +13,26 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// crdPath is the generated manifest, so this test covers the rules the apiserver will
-// actually compile rather than the markers in Go source.
-const crdPath = "../../../config/crd/bases/neo4j.com_neo4js.yaml"
+// crdBasesDir holds every generated manifest, so this test covers the rules the apiserver
+// will actually compile rather than the markers in Go source.
+const crdBasesDir = "../../../config/crd/bases"
 
-// TestCELRulesCompile parses every x-kubernetes-validations rule in the CRD and compiles it.
-// The apiserver rejects the whole CRD when any rule fails to compile, so an invalid rule is
-// not a soft failure: it blocks install. Catching it here keeps that out of `kubectl apply`.
+// TestCELRulesCompile parses every x-kubernetes-validations rule in every generated CRD and
+// compiles it. The apiserver rejects the whole CRD when any rule fails to compile, so an
+// invalid rule is not a soft failure: it blocks install. Catching it here keeps that out of
+// `kubectl apply`.
 //
 // ponytail: `self` is declared as Dyn rather than as the real schema type, so this catches
 // syntax and macro misuse (for example has() on a comprehension variable, which is what
 // broke TLS-002c and TLS-002d) but not type mismatches. Upgrade path: build a typed
 // environment from the schema the way apiextensions does.
 func TestCELRulesCompile(t *testing.T) {
-	raw, err := os.ReadFile(crdPath)
+	crds, err := filepath.Glob(filepath.Join(crdBasesDir, "neo4j.com_*.yaml"))
 	if err != nil {
-		t.Fatalf("read CRD (run make manifests): %v", err)
-	}
-	var crd map[string]interface{}
-	if err := yaml.Unmarshal(raw, &crd); err != nil {
 		t.Fatal(err)
+	}
+	if len(crds) == 0 {
+		t.Fatalf("no CRDs found in %s (run make manifests)", crdBasesDir)
 	}
 
 	// library.Quantity is the same extension the apiserver exposes to CRD rules, so a typo in
@@ -46,16 +47,29 @@ func TestCELRulesCompile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rules := collectRules(crd, "")
-	if len(rules) == 0 {
+	total := 0
+	for _, crdPath := range crds {
+		raw, err := os.ReadFile(crdPath)
+		if err != nil {
+			t.Fatalf("read CRD %s (run make manifests): %v", crdPath, err)
+		}
+		var crd map[string]interface{}
+		if err := yaml.Unmarshal(raw, &crd); err != nil {
+			t.Fatalf("%s: %v", crdPath, err)
+		}
+		name := filepath.Base(crdPath)
+		rules := collectRules(crd, name)
+		for _, r := range rules {
+			if _, issues := env.Compile(r.rule); issues != nil && issues.Err() != nil {
+				t.Errorf("%s: rule does not compile: %v\n  rule: %s", r.path, issues.Err(), r.rule)
+			}
+		}
+		total += len(rules)
+	}
+	if total == 0 {
 		t.Fatal("no x-kubernetes-validations rules found; CRD generation changed shape")
 	}
-	for _, r := range rules {
-		if _, issues := env.Compile(r.rule); issues != nil && issues.Err() != nil {
-			t.Errorf("%s: rule does not compile: %v\n  rule: %s", r.path, issues.Err(), r.rule)
-		}
-	}
-	t.Logf("compiled %d CEL rules", len(rules))
+	t.Logf("compiled %d CEL rules across %d CRDs", total, len(crds))
 }
 
 type celRule struct {
