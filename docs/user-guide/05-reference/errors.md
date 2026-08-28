@@ -68,6 +68,12 @@ Reasons that report a problem, a decision, or an operation in progress.
 | ServersPendingDrain | Draining | info | condition | Server drain / `DEALLOCATE DATABASES` in progress |
 | ServersPendingDrain | AwaitingSTSShrink | info | condition | Waiting for the StatefulSet replica shrink after drain |
 | ServersPendingDrain | DrainTimeout | warn | condition+event | A scale-in has stayed pending past the operator's budget; the message names the member Neo4j has not released, what it still reports it hosting, and how long the scale-in has waited. The StatefulSet stays at its current size — no data is at risk, but the scale-in needs a look |
+| BackupReady | BackupInProgress | info | condition | The backup Job is running |
+| BackupReady | BackupJobFailed | error | condition+event | The backup Job failed; the message carries the failure detail |
+| BackupReady | BackupTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| BackupReady | BackupEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
+| BackupReady | BackupListenerDisabled | warn | condition | The target has no backup listener; set `features.backup` and `connectivity.listeners.backup` |
+| BackupReady | BackupDestinationUnsupported | error | condition+event | The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName) |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
@@ -93,6 +99,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | TLSReady | SecretsPresent | info | condition | Required TLS secrets and keys are present |
 | ClusterFormed | Formed | info | condition | All desired servers are enabled in the Neo4j cluster |
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
+| BackupReady | BackupSucceeded | info | condition | The backup Job completed and artifacts were written |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
 <!-- END GENERATED oracle:steady -->
