@@ -1,0 +1,37 @@
+# Restore e2e target: an Enterprise Standalone Neo4j with the backup listener enabled
+# (features.backup + connectivity.listeners.backup). No destination PVC — the restore suite
+# produces its seed artifact in the pod's own /tmp via `neo4j-admin database backup` and seeds a
+# fresh database from it over a credential-free file: URI (ADR-015). Applied by deploy/neo4j;
+# restore/seed runs only after the workload is Ready. __CR_NAME__/__DATA_SIZE__/__STORAGE_CLASS__
+# are substituted by the harness (same placeholders as the other fixtures).
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true
