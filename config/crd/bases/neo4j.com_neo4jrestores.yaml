@@ -138,8 +138,10 @@ spec:
                 - message: set source.backupRef (a Neo4jBackup) or source.url (raw),
                     not both
                   rule: has(self.backupRef) != has(self.url)
-                - message: source.type is required with source.url
-                  rule: '!has(self.url) || has(self.type)'
+                - message: 'source.type is required with source.url, except credential-free
+                    file:/server: seeds (ADR-015)'
+                  rule: '!has(self.url) || has(self.type) || self.url.startsWith(''file:'')
+                    || self.url.startsWith(''server:'')'
                 - message: source.type/pvc/credentials are only valid with source.url,
                     not source.backupRef
                   rule: '!has(self.backupRef) || (!has(self.type) && !has(self.pvc)
