@@ -226,6 +226,8 @@ var (
 		"A server dropped from the spec is still registered in Neo4j and waiting to be drained")
 	ConditionBackupReady = declareCondition("BackupReady", GateFalseBlocks,
 		"At least one successful backup exists for this Neo4j instance")
+	ConditionRestoreReady = declareCondition("RestoreReady", GateFalseBlocks,
+		"At least one successful restore exists for this Neo4j instance")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -351,6 +353,31 @@ var (
 		on(ConditionBackupReady, "The target has no backup listener; set `features.backup` and `connectivity.listeners.backup`"))
 	ReasonBackupDestinationUnsupported = declare("BackupDestinationUnsupported", SeverityError, SurfaceBoth,
 		on(ConditionBackupReady, "The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName)"))
+)
+
+// RestoreReady — a Neo4jRestore run-to-completion record (BDR-014 / ADR-015). Restore runs
+// over Bolt (seed-from-URI), so its failure modes are Bolt/formation/database ones, not Job ones.
+var (
+	ReasonRestoreSucceeded = declareNominal("RestoreSucceeded", SurfaceCondition,
+		on(ConditionRestoreReady, "Every requested database was seeded and is online"))
+	ReasonRestoreInProgress = declare("RestoreInProgress", SeverityInfo, SurfaceCondition,
+		on(ConditionRestoreReady, "Databases are being seeded from the source; waiting for them to come online"))
+	ReasonRestoreTargetNotFound = declare("RestoreTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionRestoreReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonRestoreEditionUnsupported = declare("RestoreEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "Restore requires Enterprise edition; the target is community"))
+	ReasonRestoreBeforeFormation = declare("RestoreBeforeFormation", SeverityWarn, SurfaceCondition,
+		on(ConditionRestoreReady, "The target is not formation-stable (ClusterFormed) yet; restore waits to avoid seeding over an incomplete server set"))
+	ReasonRestoreSourceNotFound = declare("RestoreSourceNotFound", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "`source.backupRef` does not resolve to a succeeded Neo4jBackup, or the resolved artifact has no usable location"))
+	ReasonRestoreSourceUnsupported = declare("RestoreSourceUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "The source cannot be turned into a seedURI the servers can read (e.g. a PVC-backed artifact requires the RWX `backups` volume path — not yet wired)"))
+	ReasonRestoreDatabaseExists = declare("RestoreDatabaseExists", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "A target database already exists and `overwrite` is false; nothing was dropped or seeded"))
+	ReasonRestoreBoltUnavailable = declare("RestoreBoltUnavailable", SeverityWarn, SurfaceCondition,
+		on(ConditionRestoreReady, "The operator could not reach the target's system database over Bolt; it will retry"))
+	ReasonRestoreSeedFailed = declare("RestoreSeedFailed", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "A CREATE/seed statement failed; the message carries the Neo4j error detail"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

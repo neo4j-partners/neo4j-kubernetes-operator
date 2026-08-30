@@ -74,6 +74,15 @@ Reasons that report a problem, a decision, or an operation in progress.
 | BackupReady | BackupEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
 | BackupReady | BackupListenerDisabled | warn | condition | The target has no backup listener; set `features.backup` and `connectivity.listeners.backup` |
 | BackupReady | BackupDestinationUnsupported | error | condition+event | The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName) |
+| RestoreReady | RestoreInProgress | info | condition | Databases are being seeded from the source; waiting for them to come online |
+| RestoreReady | RestoreTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| RestoreReady | RestoreEditionUnsupported | error | condition+event | Restore requires Enterprise edition; the target is community |
+| RestoreReady | RestoreBeforeFormation | warn | condition | The target is not formation-stable (ClusterFormed) yet; restore waits to avoid seeding over an incomplete server set |
+| RestoreReady | RestoreSourceNotFound | error | condition+event | `source.backupRef` does not resolve to a succeeded Neo4jBackup, or the resolved artifact has no usable location |
+| RestoreReady | RestoreSourceUnsupported | error | condition+event | The source cannot be turned into a seedURI the servers can read (e.g. a PVC-backed artifact requires the RWX `backups` volume path — not yet wired) |
+| RestoreReady | RestoreDatabaseExists | error | condition+event | A target database already exists and `overwrite` is false; nothing was dropped or seeded |
+| RestoreReady | RestoreBoltUnavailable | warn | condition | The operator could not reach the target's system database over Bolt; it will retry |
+| RestoreReady | RestoreSeedFailed | error | condition+event | A CREATE/seed statement failed; the message carries the Neo4j error detail |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
@@ -100,6 +109,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | ClusterFormed | Formed | info | condition | All desired servers are enabled in the Neo4j cluster |
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
 | BackupReady | BackupSucceeded | info | condition | The backup Job completed and artifacts were written |
+| RestoreReady | RestoreSucceeded | info | condition | Every requested database was seeded and is online |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
 <!-- END GENERATED oracle:steady -->
