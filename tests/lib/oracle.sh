@@ -12,7 +12,7 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady RestoreReady
 }
 
 oracle_reasons_for() {  # <condition>
@@ -30,6 +30,7 @@ oracle_reasons_for() {  # <condition>
 =======
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink ;;
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported ;;
+    RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed ;;
     event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted ;;
 >>>>>>> abed929 (feat(backup): reconcile Neo4jBackup into a neo4j-admin Job)
     *) return 1 ;;
@@ -91,6 +92,16 @@ oracle_severity() {  # <reason>
     BackupEditionUnsupported) echo error ;;
     BackupListenerDisabled) echo warn ;;
     BackupDestinationUnsupported) echo error ;;
+    RestoreSucceeded) echo info ;;
+    RestoreInProgress) echo info ;;
+    RestoreTargetNotFound) echo warn ;;
+    RestoreEditionUnsupported) echo error ;;
+    RestoreBeforeFormation) echo warn ;;
+    RestoreSourceNotFound) echo error ;;
+    RestoreSourceUnsupported) echo error ;;
+    RestoreDatabaseExists) echo error ;;
+    RestoreBoltUnavailable) echo warn ;;
+    RestoreSeedFailed) echo error ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;
@@ -103,7 +114,7 @@ oracle_severity() {  # <reason>
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|SecretMounted|StorageResizeCompleted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|SecretMounted|StorageResizeCompleted) return 0 ;;
     *) return 1 ;;
   esac
 }
