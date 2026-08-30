@@ -238,3 +238,79 @@ func (a *driverAdmin) DropServer(ctx context.Context, name string) error {
 		neo4j.ExecuteQueryWithDatabase("system"))
 	return err
 }
+
+func (a *driverAdmin) ShowDatabases(ctx context.Context) ([]DatabaseState, error) {
+	result, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"SHOW DATABASES YIELD name, currentStatus",
+		nil, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	if err != nil {
+		return nil, err
+	}
+	// One row per allocation; a database is Online only when every row is online.
+	online := map[string]bool{}
+	seen := map[string]bool{}
+	for _, rec := range result.Records {
+		name, _ := rec.Get("name")
+		n, _ := name.(string)
+		if n == "" {
+			continue
+		}
+		status, _ := rec.Get("currentStatus")
+		s, _ := status.(string)
+		isOnline := strings.EqualFold(strings.TrimSpace(s), "online")
+		if !seen[n] {
+			seen[n] = true
+			online[n] = isOnline
+		} else {
+			online[n] = online[n] && isOnline
+		}
+	}
+	out := make([]DatabaseState, 0, len(seen))
+	for n := range seen {
+		out = append(out, DatabaseState{Name: n, Online: online[n]})
+	}
+	return out, nil
+}
+
+func (a *driverAdmin) CreateDatabaseWithSeed(ctx context.Context, name, seedURI string, primaries, secondaries int64) error {
+	return a.createSeeded(ctx, "CREATE DATABASE", name, seedURI, primaries, secondaries)
+}
+
+func (a *driverAdmin) CreateOrReplaceDatabaseWithSeed(ctx context.Context, name, seedURI string, primaries, secondaries int64) error {
+	return a.createSeeded(ctx, "CREATE OR REPLACE DATABASE", name, seedURI, primaries, secondaries)
+}
+
+// createSeeded issues a seed-from-URI create. seedURI is a literal (params are rejected in
+// OPTIONS), so the caller must have run ValidateSeedURI. TOPOLOGY is added only for a cluster
+// (primaries>0); standalone omits it and lets the DBMS use its single allocation.
+func (a *driverAdmin) createSeeded(ctx context.Context, verb, name, seedURI string, primaries, secondaries int64) error {
+	if err := ValidateSeedURI(seedURI); err != nil {
+		return err
+	}
+	topology := ""
+	if primaries > 0 {
+		topology = fmt.Sprintf(" TOPOLOGY %d PRIMARIES %d SECONDARIES", primaries, secondaries)
+	}
+	q := fmt.Sprintf("%s $name%s OPTIONS { seedURI: '%s' }", verb, topology, seedURI)
+	_, err := neo4j.ExecuteQuery(ctx, a.driver, q,
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+func (a *driverAdmin) StopDatabase(ctx context.Context, name string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"STOP DATABASE $name",
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+func (a *driverAdmin) StartDatabase(ctx context.Context, name string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"START DATABASE $name",
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
