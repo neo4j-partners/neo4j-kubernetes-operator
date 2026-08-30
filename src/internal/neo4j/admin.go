@@ -28,6 +28,14 @@ type DatabaseTopology struct {
 	HasTopology          bool // false for composite / null counts
 }
 
+// DatabaseState is the aggregated status of one database across its allocations (restore).
+type DatabaseState struct {
+	Name string
+	// Online is true only when every allocation reports currentStatus=online — the
+	// signal RestoreReconciler polls to declare a per-database restore Succeeded.
+	Online bool
+}
+
 // Admin is the allowlisted Neo4j cluster-admin surface (ADR-007).
 type Admin interface {
 	ShowServers(ctx context.Context) ([]Server, error)
@@ -38,7 +46,30 @@ type Admin interface {
 	EnableServer(ctx context.Context, name, modeConstraint string) error
 	DeallocateDatabases(ctx context.Context, name string) error
 	DropServer(ctx context.Context, name string) error
+
+	// Restore surface (ADR-015 seed-from-URI). seedURI is interpolated as a Cypher literal
+	// (Neo4j rejects parameters inside OPTIONS), so callers MUST validate it first
+	// (ValidateSeedURI). primaries==0 omits the TOPOLOGY clause (standalone).
+	ShowDatabases(ctx context.Context) ([]DatabaseState, error)
+	CreateDatabaseWithSeed(ctx context.Context, name, seedURI string, primaries, secondaries int64) error
+	CreateOrReplaceDatabaseWithSeed(ctx context.Context, name, seedURI string, primaries, secondaries int64) error
+	StopDatabase(ctx context.Context, name string) error
+	StartDatabase(ctx context.Context, name string) error
+
 	Close(ctx context.Context) error
+}
+
+// ValidateSeedURI guards the one value that must be interpolated as a Cypher literal.
+// A single quote would break out of the OPTIONS { seedURI: '…' } literal, so it is refused
+// outright rather than escaped (no legitimate seed URI contains one).
+func ValidateSeedURI(uri string) error {
+	if strings.TrimSpace(uri) == "" {
+		return fmt.Errorf("seedURI is empty")
+	}
+	if strings.ContainsAny(uri, "'\n\r\\") {
+		return fmt.Errorf("seedURI contains an illegal character (quote/backslash/newline): %q", uri)
+	}
+	return nil
 }
 
 // FindByAddress returns the server whose address matches (with or without :7687).

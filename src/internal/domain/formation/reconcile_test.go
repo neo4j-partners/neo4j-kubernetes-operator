@@ -103,6 +103,19 @@ func (f *fakeAdmin) DropServer(_ context.Context, name string) error {
 
 func (f *fakeAdmin) Close(context.Context) error { return nil }
 
+// Restore surface — unused by formation tests; present to satisfy intneo4j.Admin.
+func (f *fakeAdmin) ShowDatabases(context.Context) ([]intneo4j.DatabaseState, error) {
+	return nil, nil
+}
+func (f *fakeAdmin) CreateDatabaseWithSeed(context.Context, string, string, int64, int64) error {
+	return nil
+}
+func (f *fakeAdmin) CreateOrReplaceDatabaseWithSeed(context.Context, string, string, int64, int64) error {
+	return nil
+}
+func (f *fakeAdmin) StopDatabase(context.Context, string) error  { return nil }
+func (f *fakeAdmin) StartDatabase(context.Context, string) error { return nil }
+
 func testClusterCR(primaries int32) *neo4jv1beta1.Neo4j {
 	return &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
