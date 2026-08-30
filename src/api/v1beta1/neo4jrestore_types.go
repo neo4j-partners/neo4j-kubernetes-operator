@@ -24,7 +24,7 @@ import (
 // record (backupRef, recommended — the operator resolves the url and walks the chain)
 // or a raw artifact url for external/manual artifacts. Exactly one form.
 // +kubebuilder:validation:XValidation:rule="has(self.backupRef) != has(self.url)",message="set source.backupRef (a Neo4jBackup) or source.url (raw), not both"
-// +kubebuilder:validation:XValidation:rule="!has(self.url) || has(self.type)",message="source.type is required with source.url"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || has(self.type) || self.url.startsWith('file:') || self.url.startsWith('server:')",message="source.type is required with source.url, except credential-free file:/server: seeds (ADR-015)"
 // +kubebuilder:validation:XValidation:rule="!has(self.backupRef) || (!has(self.type) && !has(self.pvc) && !has(self.credentials))",message="source.type/pvc/credentials are only valid with source.url, not source.backupRef"
 type RestoreSource struct {
 	// BackupRef is the name of a Neo4jBackup in the same namespace (recommended).
