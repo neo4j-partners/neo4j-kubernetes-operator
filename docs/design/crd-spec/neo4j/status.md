@@ -1,7 +1,7 @@
 # `Neo4j` — status model
 
 **API**: `neo4j.com/v1beta1` · **Subresource**: `status`  
-**Sources**: [BDR-002](../../decision-records/business/002-neo4j-crd-topology.md) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [`20-operator-proposal.md`](../../20-operator-proposal.md) §3.1 · `OP-1-003` / `AC-OP-STATUS-*`
+**Sources**: [BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [ADR-004](../../decision-records/architecture/004-status-and-conditions.md) · [ADR-014](../../decision-records/architecture/014-operator-observability.md) · `OP-1-003` / `AC-OP-STATUS-*`
 
 ---
 
@@ -11,12 +11,12 @@
 |------|--------|
 | **Observed state only** | `status` reflects what the operator measured — never user intent from `spec`. |
 | **Conditions for automation** | Controllers and users gate on `Ready`, `Reconciling`, `Error` — not on `phase` alone. |
-| **Topology warnings ≠ errors** | BDR-002 non-HA guidance surfaces as `TopologyWarning` — workload may still be `Ready`. |
+| **Topology warnings ≠ errors** | BDR-002 non-HA guidance must never block `Ready`. The `TopologyWarning` condition that carries it is [planned, not written](#planned-for-a-later-version). |
 | **Generation tracking** | `observedGeneration` must match `metadata.generation` before `Ready=True` after spec changes. |
-| **Phase non-regression** | Established phases must **not** regress to earlier bootstrap phases (e.g. `Running` → `Bootstrapping`) unless the object is deleted and recreated. Sub-states (TLS pending, cluster formation, upgrade in progress) surface via **conditions**, `status.upgrade`, or `message` — not phase downgrade. Avoids UI / alert flicker. |
+| **Phase non-regression** | Established phases should **not** regress to earlier bootstrap phases (e.g. `Running` → `Bootstrapping`) unless the object is deleted and recreated; sub-states surface via **conditions** or `message`, not a phase downgrade. **Not enforced today** — the writer recomputes `phase` from observed state on every pass, so a `Running` CR that loses a member does report `Bootstrapping` again. Whether the rule or the writer gives way is open (ADR-004). |
 | **Long-running work in sub-status** | `status.phase` stays coarse. Upgrade, scale-down drain, and similar workflows use dedicated sub-blocks (`upgrade`, domain conditions) — not a generic `Reconciling` message alone. |
 | **Diagnostics ≠ Ready path** | Bolt diagnostics (`SHOW SERVERS`, `SHOW DATABASES`, …) are optional and non-fatal. Collection failure sets `diagnostics.collectionError` — does **not** force `Ready=False`. |
-| **Health decoupled from Ready** | `ServersHealthy` / `DatabasesHealthy` reflect live Neo4j observability when monitoring is on. `Ready=True` with `ServersHealthy=Unknown` is valid when diagnostics are disabled. |
+| **Health decoupled from Ready** | Live Neo4j health must not gate `Ready`: a workload that serves clients is `Ready` even when diagnostics are off. The `ServersHealthy` / `DatabasesHealthy` conditions that would report it are [planned, not written](#planned-for-a-later-version). |
 
 ---
 
@@ -28,15 +28,15 @@
 | `conditions` | `[]Condition` | Always | Kubernetes-standard conditions — primary automation surface. |
 | `observedGeneration` | int64 | Always | Last `metadata.generation` fully reconciled. |
 | `version` | string | When known | **Effective** Neo4j version on the workload (image / DBMS). During upgrade: reflects version **already running** on members; see `upgrade.targetVersion` for intent. |
-| `lastUpgradeTime` | `metav1.Time` | After successful upgrade | Timestamp when `upgrade.phase` last reached `Completed`. Audit / SRE. |
+| `lastUpgradeTime` | `metav1.Time` | **Not written yet** | Timestamp when `upgrade.phase` last reached `Completed`. Audit / SRE. |
 | `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). Not `spec.topology.secondaries`. |
-| `upgrade` | `UpgradeStatus` | During / after `spec.version` change | Rolling upgrade state machine (see below). |
-| `members` | `[]MemberStatus` | Cluster + detail path; Standalone optional | Per-server summary (pool, plugins, K8s + Neo4j server state). |
-| `diagnostics` | `DiagnosticsStatus` | When `spec.monitoring` enables deep collection and workload ready | Deep observability — separate from `members[]` summary. |
+| `upgrade` | `UpgradeStatus` | **Not written yet** | Rolling upgrade state machine (see below) — the schema is settled, the writer is not implemented. |
+| `members` | `[]MemberStatus` | **Not written yet** | Per-server summary (pool, plugins, K8s + Neo4j server state). |
+| `diagnostics` | `DiagnosticsStatus` | **Not written yet** | Deep observability — needs the Bolt collector, which does not exist. |
 | `endpoints` | `EndpointsStatus` | When Services exist | Client URIs + connection examples. |
 | `credentials` | `CredentialsStatus` | When auth Secret exists | Reference to auth Secret — never the password itself. |
-| `clusterInfo` | `ClusterInfoStatus` | Cluster + Bolt reachable | Cluster ID, logical database states (summary). |
-| `propertyShardingReady` | bool | When property sharding opt-in configured (V2) | Feature-scoped readiness — prerequisites met for sharding capability. |
+| `clusterInfo` | `ClusterInfoStatus` | **Not written yet** | Cluster ID, logical database states (summary). |
+| `propertyShardingReady` | bool | **Not written yet** (V2) | Feature-scoped readiness — prerequisites met for sharding capability. |
 
 ### `status.version` semantics
 
@@ -54,13 +54,17 @@ Coarse enum — **does not** encode upgrade step or scale sub-state.
 
 | Phase | Meaning | Typical next phase |
 |-------|---------|-------------------|
-| `Pending` | CR accepted; reconciliation not started or waiting on prerequisites. | `Provisioning` |
-| `Provisioning` | Creating RBAC, TLS material, ConfigMaps, Services, StatefulSet. | `Bootstrapping` |
-| `Bootstrapping` | Pods exist; Neo4j starting or cluster forming. | `Running` |
-| `Running` | Required members ready; cluster formed (if applicable). Upgrade may be in progress — see `status.upgrade`. | `Degraded` / `Maintenance` / `Failed` |
-| `Degraded` | Partial availability — some members not ready or operational conditions false. | `Running` / `Failed` |
-| `Failed` | Unrecoverable error — see `Error` condition. | manual fix |
-| `Maintenance` | `spec.maintenance.offlineMode: true` or operator-led maintenance window. | `Running` |
+| `Pending` | CR accepted; reconciliation not started or waiting on prerequisites. **Never assigned today** — the first pass already reports `Provisioning`. | `Provisioning` |
+| `Provisioning` | No StatefulSet observed yet. | `Bootstrapping` |
+| `Bootstrapping` | A StatefulSet exists but `Ready` is not met — pods starting, PVCs binding, or the cluster still forming. | `Running` |
+| `Running` | `Ready=True`. | `Bootstrapping` / `Maintenance` / `Failed` |
+| `Degraded` | Partial availability. **Never assigned today** — a `Running` CR that loses a member returns to `Bootstrapping` instead. | `Running` / `Failed` |
+| `Failed` | A pipeline step returned an error — see the `Error` condition. | manual fix |
+| `Maintenance` | `spec.maintenance.offlineMode: true`. | `Running` |
+
+`Pending` and `Degraded` are published in the CRD enum, so automation may legitimately match on
+them; they simply never occur. Either the writer starts assigning them or they leave the enum —
+open, with the non-regression rule above (ADR-004).
 
 **Not top-level phases:** `Upgrading`, `Scaling`, `Restoring` — tracked in `status.upgrade`, domain conditions, or day-2 CRD status (`Neo4jRestore`).
 
@@ -143,40 +147,45 @@ Optional primary STS ceiling while `system` still has a single primary (blocks u
 
 Standard condition schema: `type`, `status` (`True` \| `False` \| `Unknown`), `reason`, `message`, `lastTransitionTime`, `observedGeneration`.
 
-### Infrastructure conditions (V1)
+### What the operator writes
 
-| Type | `True` when | `False` reason examples | Blocks `Ready`? |
-|------|-------------|-------------------------|-----------------|
-| `Ready` | Workload reachable; reconciliation complete for current generation. | `MembersNotReady`, `ClusterNotFormed`, `TLSNotReady` | — (this *is* Ready) |
-| `Reconciling` | Active reconcile in progress (short-lived slices). | — | Yes (`Ready` should be `False`) |
-| `Installed` | Base K8s objects created (STS, Services, ConfigMaps). | `ProvisioningFailed` | Yes |
-| `Error` | Last reconcile failed irrecoverably. | `ValidationFailed`, `StorageBindingFailed`, `UpgradeFailed` | Yes |
-| `ClusterFormed` | Cluster quorum / system DB healthy (`mode: Cluster`). | `QuorumLost`, `FormationTimeout` | Yes (Cluster) |
-| `TLSReady` | Required TLS secrets exist and are mounted (`trust.enabled`). | `SecretMissing`, `MountFailed` | Yes when TLS on |
-| `LicenseValid` | Enterprise license accepted. | `LicenseExpired` | Yes |
-| `StorageReady` | All member PVCs bound. | `PVCPending` | Yes |
-| `TopologyWarning` | Non-blocking topology guidance (BDR-002). | — | **No** |
+The table below is **generated** from the condition catalog in `src/internal/oracle` by
+`make errors`, and `make test` fails if it is stale ([ADR-014](../../decision-records/architecture/014-operator-observability.md)). Two consequences worth stating: a
+condition the operator does not write cannot appear here, and a condition renamed in Go cannot
+stay right in this page and wrong in the next release. Do not hand-edit between the markers.
 
-### Domain conditions — operational (V1+)
+The reasons each condition can carry, with their severity and what they mean, are the other
+projection of the same catalog: the [error reference](../../../user-guide/05-reference/errors.md).
 
-Neo4j-specific workflows beyond infra. Populated when Bolt admin API is reachable (may be `Unknown` when monitoring off).
+<!-- BEGIN GENERATED oracle:conditions -->
+| Type | `True` when | Blocks `Ready`? |
+|------|-------------|-----------------|
+| `Ready` | Every desired server is ready, the data claims are bound, trust material is in place, and in Cluster mode the cluster is formed with no drain outstanding | — this *is* `Ready` |
+| `Reconciling` | A reconcile pass is in flight; the writer clears it at the end of every pass, so it narrates progress rather than gating anything | No |
+| `Installed` | At least one StatefulSet exists for the active pools | Yes — `False` holds `Ready` back |
+| `Error` | The last pipeline pass returned an error; the same reason is recorded as a Warning Event | Yes — `True` clears `Ready` |
+| `StorageReady` | Every data PVC the operator manages is Bound | Yes — `False` holds `Ready` back |
+| `TLSReady` | Trust is disabled, or every required TLS Secret and key is present | Yes — `False` holds `Ready` back |
+| `ClusterFormed` | Every desired server is enabled in the Neo4j cluster | Cluster mode — `False` holds `Ready` back |
+| `ServersPendingDrain` | A server dropped from the spec is still registered in Neo4j and waiting to be drained | Cluster mode — `True` holds `Ready` back |
+<!-- END GENERATED oracle:conditions -->
 
-| Type | `True` when | Blocks `Ready`? | Notes |
-|------|-------------|-----------------|-------|
-| `ServersHealthy` | All servers `health: Available` per `SHOW SERVERS`. | No | `Unknown` when diagnostics disabled |
-| `DatabasesHealthy` | User databases online per `SHOW DATABASES`. | No | |
-| `ServersPendingDrain` | Scale-down: servers still registered in Neo4j but removed from spec. | Yes during scale-in | Cleared when deallocation complete |
+### Planned for a later version
 
-Future (day-2 / V2): conditions for restore in progress, sharding migration, etc. — prefer domain conditions over new top-level phases.
+Not written by any code path today. They are kept here because the need is real and the names are
+reserved — but nothing may gate on them: no e2e assert, no runbook, no alert. A reader should treat
+their absence from a live CR as normal, not as a defect. Promoting one means declaring it in the
+catalog, which puts it in the generated table above automatically.
 
-### TopologyWarning (BDR-002)
+| Type | Intended meaning | Why it is not written yet |
+|------|------------------|---------------------------|
+| `LicenseValid` | Enterprise licence accepted and not expired. | Admission already refuses `edition: enterprise` without `license.accept` (CEL, [ADR-001](../../decision-records/architecture/001-crd-validation-process.md)), so the only case left is runtime expiry — which needs a licence probe the operator does not perform. |
+| `TopologyWarning` | Non-HA topology guidance ([BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md)) — surfaced without blocking `Ready`. | The case is live: admission requires `primaries.members >= 1` and an odd count, so a single-primary Cluster is accepted. Nothing computes the guidance yet. |
+| `ServersHealthy` | All servers `health: Available` per `SHOW SERVERS`. | Needs the Bolt diagnostics collector behind `status.diagnostics`, which is not implemented. |
+| `DatabasesHealthy` | User databases online per `SHOW DATABASES`. | Same collector. |
 
-| Reason | Trigger | Example message |
-|--------|---------|-----------------|
-| `NonHA` | _(removed)_ | Cluster admission requires `primaries.members >= 3` |
-| `LowPrimaryCount` | _(removed)_ | Cluster admission requires `primaries.members >= 3` |
-
-`TopologyWarning=True` does **not** set `Ready=False` unless members are actually unhealthy.
+Later day-2 needs — restore in progress, sharding migration — should follow the same route: a new
+condition in the catalog, never a new top-level phase.
 
 ---
 
@@ -330,23 +339,29 @@ Pattern: `status.<feature>Ready` for opt-in capabilities — avoid overloading `
 
 ## Ready semantics
 
-`Ready=True` requires **all** of:
+`Ready=True` requires **all** of, as `internal/status.Writer` computes it:
 
-1. `observedGeneration == metadata.generation`
-2. `Error=False`, `Reconciling=False`
-3. `Installed=True`
-4. `serverSummary.ready == serverSummary.servers` (or equivalent pod gate)
-5. `ClusterFormed=True` when `mode: Cluster`
-6. `TLSReady=True` when `trust.enabled: true`
-7. `LicenseValid=True`
-8. `ServersPendingDrain=False` when scale-down in progress
-9. `upgrade.phase` is `""` or `Completed` (upgrade failure sets `Error=True`)
+1. `Installed=True` — at least one StatefulSet observed for the active pools
+2. `serverSummary.ready == serverSummary.servers`, with `servers > 0`
+3. `StorageReady=True` — every data PVC Bound
+4. `TLSReady=True` — trust disabled, or all required Secrets and keys present
+5. `ClusterFormed=True` **and** `ServersPendingDrain != True`, when `mode: Cluster`
 
-**Explicitly not required for `Ready`:**
+Two things sit outside that list rather than in it. A failed pass takes the other route: it sets
+`Error=True` and clears `Ready` directly, so `Error=True` always means `Ready=False` even though
+`Ready` is not computed from it. And `spec.maintenance.offlineMode: true` overrides the whole
+calculation — `Ready=False` with reason `OfflineMaintenance`, phase `Maintenance` — because the
+pods run a sleep loop and no client can connect.
 
-- `diagnostics.collectionError` empty
-- `ServersHealthy` / `DatabasesHealthy` (informational)
-- `TopologyWarning` (guidance only)
+`Reconciling` does **not** gate `Ready`: the writer clears it at the end of every pass, before
+computing `Ready` in the same pass.
+
+**Read `observedGeneration` before trusting `Ready`.** The writer sets it in the same pass, so a
+`Ready=True` observed while `observedGeneration < metadata.generation` describes the *previous*
+spec — the usual Kubernetes caveat, not an operator quirk.
+
+Deliberately not part of `Ready`: the diagnostics collection error, and every condition in
+[Planned for a later version](#planned-for-a-later-version).
 
 ---
 
@@ -367,61 +382,59 @@ Phase / condition transitions should increment event counters or structured log 
 
 ---
 
-## Example (Cluster, post-upgrade)
+## Example (Cluster, steady state)
+
+What a healthy three-primary Cluster reports today, with trust enabled. The fields marked
+**Not written yet** above are absent, so this is what `kubectl get neo4j -o yaml` actually shows —
+not what the schema allows.
 
 ```yaml
 status:
   phase: Running
   observedGeneration: 7
   version: "2026.05.0"
-  lastUpgradeTime: "2026-06-22T15:00:00Z"
   serverSummary:
     servers: 3
     ready: 3
-  upgrade:
-    phase: Completed
-    targetVersion: "2026.05.0"
-    previousVersion: "5.26.0"
-    currentPartition: 0
-    progress: { total: 3, upgraded: 3, pending: 0 }
-    lastError: ""
   conditions:
     - type: Ready
       status: "True"
       reason: AllMembersReady
       message: "3/3 servers ready"
-    - type: ServersHealthy
+    - type: Reconciling
+      status: "False"
+      reason: Completed
+    - type: Installed
       status: "True"
-      reason: AllAvailable
-    - type: DatabasesHealthy
+      reason: ObjectsCreated
+    - type: Error
+      status: "False"
+      reason: NoError
+    - type: StorageReady
       status: "True"
-      reason: AllOnline
+      reason: PVCBound
+    - type: TLSReady
+      status: "True"
+      reason: SecretsPresent
     - type: ClusterFormed
       status: "True"
-      reason: QuorumHealthy
-    - type: TopologyWarning
+      reason: Formed
+    - type: ServersPendingDrain
       status: "False"
-  members:
-    - name: my-graph-0
-      pool: primary
-      address: my-graph-0.my-graph.graph-prod.svc:7687
-      neo4jState: Enabled
-      neo4jHealth: Available
-      hostingDatabases: 2
-      podReady: true
-      version: "2026.05.0"
-  diagnostics:
-    lastCollectedTime: "2026-06-22T15:05:00Z"
-    collectionError: ""
+      reason: NoDrain
   endpoints:
-    bolt: "neo4j+s://my-graph-lb.graph-prod.svc:7687"
-    https: "https://my-graph-lb.graph-prod.svc:7473"
+    bolt: "neo4j+s://my-graph.graph-prod.svc:7687"
+    https: "https://my-graph.graph-prod.svc:7473"
+    internal: "my-graph-server.graph-prod.svc:7687"
     connectionExamples:
-      boltURI: "neo4j+s://my-graph-lb.graph-prod.svc:7687"
-      portForward: "kubectl port-forward -n graph-prod svc/my-graph-client 7687:7687"
+      boltURI: "neo4j+s://my-graph.graph-prod.svc:7687"
+      neo4jURI: "neo4j+s://my-graph.graph-prod.svc:7687"
+      portForward: "kubectl port-forward -n graph-prod svc/my-graph 7687:7687 # then bolt+s://127.0.0.1:7687 (use bolt+s, not neo4j+s, over port-forward)"
   credentials:
     secretName: my-graph-auth
     generated: true
+  drainOK: true
+  drainOKGeneration: 7
 ```
 
 ---
@@ -432,7 +445,7 @@ status:
 |-------------|-----------------|
 | `OP-1-003` | conditions + phase + upgrade |
 | `OP-2-003-STATUS-01` | `Ready`, `Reconciling`, `Error`, `Installed` |
-| `OP-2-003-STATUS-02` | `upgrade` sub-status (not deferred); domain conditions |
-| `AC-NEO-CLUSTER` | `ClusterFormed`, `members[]`, `serverSummary` |
-| `AC-NEO-STANDALONE` | `Ready`, `serverSummary`, optional single `members[]` |
-| BDR-002 | `TopologyWarning` / `NonHA` |
+| `OP-2-003-STATUS-02` | `upgrade` sub-status and the operational conditions — both planned, neither written |
+| `AC-NEO-CLUSTER` | `ClusterFormed`, `serverSummary` (`members[]` planned) |
+| `AC-NEO-STANDALONE` | `Ready`, `serverSummary` |
+| BDR-002 | `TopologyWarning` — planned, not written |

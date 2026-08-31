@@ -19,19 +19,70 @@ limitations under the License.
 // reason that is not declared here cannot reach a setCondition or an EventRecorder call: the
 // package refuses to compile rather than shipping an identifier no test and no page knows about.
 //
-// Both projections are generated from this file by `make errors` and must not be hand-edited:
-// the tables in docs/user-guide/05-reference/errors.md and the shell oracle in
-// tests/lib/oracle.sh, which the e2e asserts source instead of copying reason strings.
+// All three projections are generated from this file by `make errors` and must not be
+// hand-edited: the tables in docs/user-guide/05-reference/errors.md, the condition table in
+// docs/design/crd-spec/neo4j/status.md, and the shell oracle in tests/lib/oracle.sh, which the
+// e2e asserts source instead of copying reason strings.
 package oracle
 
 // Condition is a status.conditions[].type the operator writes. The zero value marks a reason
 // carried by an Event alone.
-type Condition struct{ name string }
+type Condition struct {
+	name string
+	gate Gate
+	// summary states what True means, and is the generated status contract — so it describes
+	// what the writer measures, not what a future version might measure.
+	summary string
+}
 
 func (c Condition) String() string { return c.name }
 
 // IsZero reports whether the condition is the Event-only placeholder.
 func (c Condition) IsZero() bool { return c.name == "" }
+
+// Summary states what True means for this condition.
+func (c Condition) Summary() string { return c.summary }
+
+// Gate reports how this condition holds Ready back.
+func (c Condition) Gate() Gate { return c.gate }
+
+// Gate is a condition's effect on Ready, as internal/status.Writer computes it. Kept next to the
+// condition because the published contract is what gates Ready, and a doc paragraph drifts from
+// the writer while a declared value is regenerated with it.
+type Gate uint8
+
+const (
+	// GateSelf marks Ready itself.
+	GateSelf Gate = iota
+	// GateNone marks a condition Ready is computed independently of.
+	GateNone
+	// GateFalseBlocks marks a condition Ready needs True.
+	GateFalseBlocks
+	// GateTrueBlocks marks a condition Ready needs False.
+	GateTrueBlocks
+	// GateClusterFalseBlocks needs True, in Cluster mode only.
+	GateClusterFalseBlocks
+	// GateClusterTrueBlocks needs False, in Cluster mode only.
+	GateClusterTrueBlocks
+)
+
+// String is the cell the generated contract table shows.
+func (g Gate) String() string {
+	switch g {
+	case GateSelf:
+		return "— this *is* `Ready`"
+	case GateFalseBlocks:
+		return "Yes — `False` holds `Ready` back"
+	case GateTrueBlocks:
+		return "Yes — `True` clears `Ready`"
+	case GateClusterFalseBlocks:
+		return "Cluster mode — `False` holds `Ready` back"
+	case GateClusterTrueBlocks:
+		return "Cluster mode — `True` holds `Ready` back"
+	default:
+		return "No"
+	}
+}
 
 // Reason is a stable status.conditions[].reason — and the Event reason where the same
 // identifier carries both surfaces. It is a contract: runbooks, alerts and e2e asserts match
@@ -107,8 +158,8 @@ func Lookup(c Condition, r Reason) (Entry, bool) {
 	return Entry{}, false
 }
 
-func declareCondition(name string) Condition {
-	c := Condition{name: name}
+func declareCondition(name string, gate Gate, summary string) Condition {
+	c := Condition{name: name, gate: gate, summary: summary}
 	conditions = append(conditions, c)
 	return c
 }
@@ -152,17 +203,27 @@ func register(name string, severity Severity, surface Surface, nominal bool, pla
 	return r
 }
 
-// Conditions the operator writes. Declared before any reason so both registries keep file
-// order, which is the order the generated tables read in.
+// Conditions the operator writes, with what True means and how each one gates Ready — the
+// summaries and gates below are the published contract, so they track internal/status.Writer and
+// nothing else. Declared before any reason so both registries keep file order, which is the order
+// the generated tables read in.
 var (
-	ConditionReady               = declareCondition("Ready")
-	ConditionReconciling         = declareCondition("Reconciling")
-	ConditionInstalled           = declareCondition("Installed")
-	ConditionError               = declareCondition("Error")
-	ConditionStorageReady        = declareCondition("StorageReady")
-	ConditionTLSReady            = declareCondition("TLSReady")
-	ConditionClusterFormed       = declareCondition("ClusterFormed")
-	ConditionServersPendingDrain = declareCondition("ServersPendingDrain")
+	ConditionReady = declareCondition("Ready", GateSelf,
+		"Every desired server is ready, the data claims are bound, trust material is in place, and in Cluster mode the cluster is formed with no drain outstanding")
+	ConditionReconciling = declareCondition("Reconciling", GateNone,
+		"A reconcile pass is in flight; the writer clears it at the end of every pass, so it narrates progress rather than gating anything")
+	ConditionInstalled = declareCondition("Installed", GateFalseBlocks,
+		"At least one StatefulSet exists for the active pools")
+	ConditionError = declareCondition("Error", GateTrueBlocks,
+		"The last pipeline pass returned an error; the same reason is recorded as a Warning Event")
+	ConditionStorageReady = declareCondition("StorageReady", GateFalseBlocks,
+		"Every data PVC the operator manages is Bound")
+	ConditionTLSReady = declareCondition("TLSReady", GateFalseBlocks,
+		"Trust is disabled, or every required TLS Secret and key is present")
+	ConditionClusterFormed = declareCondition("ClusterFormed", GateClusterFalseBlocks,
+		"Every desired server is enabled in the Neo4j cluster")
+	ConditionServersPendingDrain = declareCondition("ServersPendingDrain", GateClusterTrueBlocks,
+		"A server dropped from the spec is still registered in Neo4j and waiting to be drained")
 )
 
 // Ready — the headline condition (ADR-004).

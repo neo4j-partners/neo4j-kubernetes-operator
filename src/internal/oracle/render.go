@@ -21,17 +21,19 @@ import (
 	"strings"
 )
 
-// Generated blocks in docs/user-guide/05-reference/errors.md. The prose around them is written by
-// hand, so only what sits between a pair of markers is replaced.
+// Generated blocks in the two pages below. The prose around them is written by hand, so only what
+// sits between a pair of markers is replaced.
 const (
-	BlockCatalog = "oracle:catalog"
-	BlockSteady  = "oracle:steady"
+	BlockCatalog    = "oracle:catalog"
+	BlockSteady     = "oracle:steady"
+	BlockConditions = "oracle:conditions"
 )
 
-// DocPath and ShellPath are the two projections, relative to the module root.
+// The three projections, relative to the module root.
 const (
-	DocPath   = "docs/user-guide/05-reference/errors.md"
-	ShellPath = "tests/lib/oracle.sh"
+	DocPath       = "docs/user-guide/05-reference/errors.md"
+	StatusDocPath = "docs/design/crd-spec/neo4j/status.md"
+	ShellPath     = "tests/lib/oracle.sh"
 )
 
 // eventConditionCell is how an Event-only row names its (absent) condition.
@@ -41,13 +43,30 @@ const eventConditionCell = "— (Event only)"
 // keyed on the empty string would be indistinguishable from a caller passing nothing.
 const EventKey = "event"
 
-// RenderMarkdown returns page with both generated tables refreshed from the catalog.
+// RenderMarkdown returns the error reference with both reason tables refreshed from the catalog.
 func RenderMarkdown(page string) (string, error) {
-	out, err := replaceBlock(page, BlockCatalog, table(problemRows()))
+	out, err := replaceBlock(page, DocPath, BlockCatalog, table(problemRows()))
 	if err != nil {
 		return "", err
 	}
-	return replaceBlock(out, BlockSteady, table(steadyRows()))
+	return replaceBlock(out, DocPath, BlockSteady, table(steadyRows()))
+}
+
+// RenderStatusMarkdown returns the status contract with the condition table refreshed. The
+// conditions the operator writes are declared once, in the catalog, so the contract page cannot
+// keep advertising a condition that was renamed or never implemented (ADR-014).
+func RenderStatusMarkdown(page string) (string, error) {
+	return replaceBlock(page, StatusDocPath, BlockConditions, conditionTable())
+}
+
+func conditionTable() string {
+	var b strings.Builder
+	b.WriteString("| Type | `True` when | Blocks `Ready`? |\n")
+	b.WriteString("|------|-------------|-----------------|\n")
+	for _, c := range conditions {
+		fmt.Fprintf(&b, "| `%s` | %s | %s |\n", c, c.Summary(), c.Gate())
+	}
+	return b.String()
 }
 
 func problemRows() []Entry {
@@ -85,18 +104,25 @@ func table(rows []Entry) string {
 	return b.String()
 }
 
-func replaceBlock(page, name, body string) (string, error) {
+func replaceBlock(page, rel, name, body string) (string, error) {
 	begin := fmt.Sprintf("<!-- BEGIN GENERATED %s -->", name)
 	end := fmt.Sprintf("<!-- END GENERATED %s -->", name)
 	i := strings.Index(page, begin)
 	j := strings.Index(page, end)
 	if i < 0 || j < 0 {
-		return "", fmt.Errorf("%s: markers %s / %s not found — the page must keep them around the generated table", DocPath, begin, end)
+		return "", fmt.Errorf("%s: markers %s / %s not found — the page must keep them around the generated table", rel, begin, end)
 	}
 	if j < i {
-		return "", fmt.Errorf("%s: marker %s appears before %s", DocPath, end, begin)
+		return "", fmt.Errorf("%s: marker %s appears before %s", rel, end, begin)
 	}
-	return page[:i+len(begin)] + "\n" + body + page[j:], nil
+	newline := "\n"
+	// Pages in docs/design/ are committed with CRLF; emitting LF into one would leave the
+	// projection permanently stale and every regeneration would rewrite the whole block.
+	if strings.Contains(page, "\r\n") {
+		newline = "\r\n"
+		body = strings.ReplaceAll(body, "\n", "\r\n")
+	}
+	return page[:i+len(begin)] + newline + body + page[j:], nil
 }
 
 // RenderShell returns tests/lib/oracle.sh: the same catalog as shell lookups, so an e2e assert

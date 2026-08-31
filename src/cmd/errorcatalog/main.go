@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command errorcatalog projects the reason catalog of internal/oracle onto its two consumers:
-// the tables in the user-facing error reference, and the shell oracle the e2e asserts source.
-// Run it through `make errors`, and `make errors-check` in CI to refuse a stale projection.
+// Command errorcatalog projects the catalog of internal/oracle onto its three consumers: the
+// reason tables in the user-facing error reference, the condition table in the status contract,
+// and the shell oracle the e2e asserts source. Run it through `make errors`, and `make
+// errors-check` in CI to refuse a stale projection.
 package main
 
 import (
@@ -37,18 +38,11 @@ func main() {
 		fail(err)
 	}
 
-	docPath := filepath.Join(root, oracle.DocPath)
-	page, err := os.ReadFile(docPath)
-	if err != nil {
-		fail(fmt.Errorf("read %s: %w", oracle.DocPath, err))
-	}
-	rendered, err := oracle.RenderMarkdown(string(page))
-	if err != nil {
+	stale := 0
+	if err := syncPage(root, oracle.DocPath, oracle.RenderMarkdown, *check, &stale); err != nil {
 		fail(err)
 	}
-
-	stale := 0
-	if err := sync(docPath, oracle.DocPath, []byte(rendered), *check, &stale); err != nil {
+	if err := syncPage(root, oracle.StatusDocPath, oracle.RenderStatusMarkdown, *check, &stale); err != nil {
 		fail(err)
 	}
 	if err := sync(filepath.Join(root, oracle.ShellPath), oracle.ShellPath, []byte(oracle.RenderShell()), *check, &stale); err != nil {
@@ -58,6 +52,20 @@ func main() {
 	if *check && stale > 0 {
 		fail(fmt.Errorf("%d projection(s) out of date — run `make errors` and commit the result", stale))
 	}
+}
+
+// syncPage rewrites the generated blocks of a page in place, leaving the hand-written prose alone.
+func syncPage(root, rel string, render func(string) (string, error), check bool, stale *int) error {
+	path := filepath.Join(root, rel)
+	page, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", rel, err)
+	}
+	rendered, err := render(string(page))
+	if err != nil {
+		return err
+	}
+	return sync(path, rel, []byte(rendered), check, stale)
 }
 
 // sync writes body unless check is set, in which case it only counts the files that differ.
