@@ -125,3 +125,67 @@ func hasVolume(vols []corev1.Volume, name string) bool {
 	}
 	return false
 }
+
+func TestBackupJobPVCExplicitDBsCreatesPointer(t *testing.T) {
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1beta1.BackupTypeFull,
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b)
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	// A seedable PVC backup is wrapped in sh -c so it can hardlink the deterministic pointer.
+	if len(c.Command) != 3 || c.Command[0] != "sh" || c.Command[1] != "-c" {
+		t.Fatalf("expected sh -c wrapper; got command=%v args=%v", c.Command, c.Args)
+	}
+	if c.Args != nil {
+		t.Errorf("args should be nil when wrapped; got %v", c.Args)
+	}
+	script := c.Command[2]
+	for _, want := range []string{
+		"neo4j-admin database backup",
+		"--to-path=/" + pvcMountPath,
+		"ln -f",
+		"/" + pvcMountPath + "/neo4j.latest.backup",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script missing %q; got: %s", want, script)
+		}
+	}
+}
+
+func TestSeedablePointers(t *testing.T) {
+	pvc := func(dbs []string, typ neo4jv1beta1.BackupType) *neo4jv1beta1.Neo4jBackup {
+		return &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Databases:   dbs,
+			Type:        typ,
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "b"}},
+		}}
+	}
+	cases := []struct {
+		name string
+		b    *neo4jv1beta1.Neo4jBackup
+		want bool
+	}{
+		{"pvc explicit full", pvc([]string{"neo4j"}, neo4jv1beta1.BackupTypeFull), true},
+		{"pvc explicit auto", pvc([]string{"a", "b"}, neo4jv1beta1.BackupTypeAuto), true},
+		{"pvc wildcard", pvc([]string{"*"}, neo4jv1beta1.BackupTypeFull), false},
+		{"pvc incremental", pvc([]string{"neo4j"}, neo4jv1beta1.BackupTypeIncremental), false},
+		{"object store", &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/"},
+		}}, false},
+	}
+	for _, tc := range cases {
+		if _, ok := SeedablePointers(tc.b); ok != tc.want {
+			t.Errorf("%s: SeedablePointers ok=%v, want %v", tc.name, ok, tc.want)
+		}
+	}
+}
