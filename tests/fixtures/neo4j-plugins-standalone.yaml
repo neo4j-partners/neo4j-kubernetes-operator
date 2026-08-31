@@ -3,7 +3,8 @@
 # render into apoc.conf. Here the procedures must actually be callable over bolt.
 #
 # APOC + GDS are the two verifiable-on-a-runner plugins: declaring them sets NEO4J_PLUGINS, the
-# Neo4j image downloads the JARs at start, and the operator opens dbms.security.procedures.allowlist
+# image entrypoint installs the JARs from inside the image at start, and the operator opens
+# dbms.security.procedures.allowlist
 # to apoc.*/gds.*. Neither needs a license to answer a version function — GDS runs in Community form
 # without one (a license only unlocks Enterprise features), so no licenseSecretRef is set and no
 # license Secret has to exist. Bloom is intentionally left out: it is an unmanaged HTTP extension,
