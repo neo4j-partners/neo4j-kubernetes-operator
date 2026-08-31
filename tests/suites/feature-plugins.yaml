@@ -45,6 +45,17 @@ cases:
     expect: success
     cr_name: plg-gds
 
+  # From a94cc4f, which landed a feature-plugins suite on main while this branch was open. Kept
+  # as it was written: it boots both plugins on one CR and calls the version *functions*, where
+  # the two cases above assert registration via SHOW PROCEDURES — a procedure can be listed and
+  # still fail to execute, so this is the case that would catch that.
+  - id: apoc-gds-runtime
+    comment: BDR-004 — APOC + GDS assigned via spec.plugins; apoc.version()/gds.version() callable over bolt and the allowlist opened to both.
+    fixture: tests/fixtures/neo4j-plugins-standalone.yaml
+    assert: plugins-runtime
+    expect: success
+    cr_name: e2e-plugins
+
   - id: procedure-allowlists
     comment: Two plugins assigned — the generated procedure allowlists carry both patterns and are effective on the running server.
     fixture: tests/fixtures/neo4j-plugins-apoc-gds.yaml
