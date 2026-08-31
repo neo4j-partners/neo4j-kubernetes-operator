@@ -195,6 +195,14 @@ spec:
                     database:
                       description: Database this artifact belongs to.
                       type: string
+                    path:
+                      description: |-
+                        Path is the deterministic, seed-ready artifact name relative to the destination root
+                        (e.g. "neo4j.latest.backup"), written by the backup Job as a stable pointer to the
+                        timestamped artifact. Restore-by-backupRef seeds file:/backups/<path> when the target
+                        mounts the destination claim as its backups volume (ADR-015 round-trip). Empty for
+                        wildcard or incremental backups, whose artifact is not a single seedable file.
+                      type: string
                     sizeBytes:
                       description: SizeBytes of the artifact.
                       format: int64

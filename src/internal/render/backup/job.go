@@ -50,6 +50,34 @@ const (
 // JobName is the deterministic Job name for a Neo4jBackup (owner-referenced by it).
 func JobName(backup *neo4jv1beta1.Neo4jBackup) string { return backup.Name + "-backup" }
 
+// PointerName is the stable, seed-ready artifact name the backup Job hardlinks to the newest
+// timestamped artifact of a database (ADR-015 round-trip). Deterministic so restore can build
+// file:/backups/<PointerName> without knowing the timestamp neo4j-admin chose.
+func PointerName(db string) string { return db + ".latest.backup" }
+
+// SeedablePointers reports the databases a PVC-destination backup can expose as single seedable
+// files, and true when pointer creation applies at all. Only Full/Auto backups of explicitly
+// named databases qualify: a wildcard ("*") has no known names at render time, and an
+// incremental artifact is not restorable on its own (it needs the whole chain).
+func SeedablePointers(backup *neo4jv1beta1.Neo4jBackup) ([]string, bool) {
+	if backup.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
+		return nil, false
+	}
+	if backup.Spec.Type == neo4jv1beta1.BackupTypeIncremental {
+		return nil, false
+	}
+	dbs := backup.Spec.Databases
+	if len(dbs) == 0 {
+		return nil, false
+	}
+	for _, db := range dbs {
+		if db == "*" || db == "" {
+			return nil, false
+		}
+	}
+	return dbs, true
+}
+
 // DestinationURI is the stable, user-facing location of a backup's artifacts, recorded on
 // each Neo4jBackup.status.artifacts[] so Neo4jRestore.source.backupRef can resolve it (BDR-014
 // §13). Object stores report the url; a PVC reports pvc://<claimName>.
@@ -102,12 +130,20 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*ba
 	ttl := backupTTLSeconds
 	backoff := backupBackoff
 
+	args := backupArgs(ctx, backup, toPath)
 	container := corev1.Container{
 		Name:         containerName,
 		Image:        ctx.ImageRef(),
 		Command:      []string{"neo4j-admin"},
-		Args:         backupArgs(ctx, backup, toPath),
+		Args:         args,
 		VolumeMounts: mounts,
+	}
+	// PVC destinations get a stable per-database pointer hardlinked to the newest artifact so
+	// restore can seed file:/backups/<db>.latest.backup deterministically (ADR-015 round-trip).
+	// This requires a shell, so wrap neo4j-admin in sh -c; object stores keep the bare command.
+	if dbs, ok := SeedablePointers(backup); ok {
+		container.Command = []string{"sh", "-c", backupScript(args, toPath, dbs)}
+		container.Args = nil
 	}
 	if neo4j.Spec.Image != nil && neo4j.Spec.Image.PullPolicy != "" {
 		container.ImagePullPolicy = corev1.PullPolicy(neo4j.Spec.Image.PullPolicy)
@@ -163,6 +199,27 @@ func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []cor
 		return "", nil, nil, fmt.Errorf("object-store destination requires url")
 	}
 	return d.URL, nil, nil, nil
+}
+
+// backupScript runs neo4j-admin then writes a deterministic pointer per database to the newest
+// artifact it produced (<db>-<timestamp>.backup -> <db>.latest.backup), so restore can seed
+// file:/backups/<db>.latest.backup without knowing the timestamp. The pointer resolves through
+// both the Job's destination mount and the server's /backups mount.
+//
+// It prefers a hardlink (same inode, no extra storage) but falls back to a copy: Azure Files
+// (SMB) — the common RWX class on AKS — supports neither hardlinks nor symlinks, so ln fails
+// there and cp is the only portable pointer. ponytail: cp doubles the latest full's storage on
+// such shares (upgrade: exact-name capture); the pointer shares the .backup suffix, which a
+// future aggregate/retention scan must skip; args are space-joined (neo4j-admin flags carry no
+// spaces — switch to a quoted argv if extraArgs ever needs them).
+func backupScript(args []string, toPath string, dbs []string) string {
+	script := "neo4j-admin " + strings.Join(args, " ")
+	for _, db := range dbs {
+		ptr := fmt.Sprintf("%s/%s", toPath, PointerName(db))
+		script += fmt.Sprintf(" && a=\"$(ls -t %s/%s-*.backup | head -1)\" && { ln -f \"$a\" \"%s\" 2>/dev/null || cp -f \"$a\" \"%s\"; }",
+			toPath, db, ptr, ptr)
+	}
+	return script
 }
 
 // backupArgs composes the neo4j-admin argument vector from operator-owned flags, typed

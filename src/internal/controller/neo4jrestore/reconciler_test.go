@@ -291,6 +291,62 @@ func TestRestoreBackupRefResolvesArtifactURI(t *testing.T) {
 	}
 }
 
+func backupsVolumeNeo4j(claim string) *neo4jv1beta1.Neo4j {
+	n := readyNeo4j()
+	n.Spec.Storage = &neo4jv1beta1.StorageSpec{
+		Volumes: &neo4jv1beta1.VolumesSpec{
+			Backups: &neo4jv1beta1.AuxiliaryVolumeSpec{
+				Mode:     neo4jv1beta1.VolumeModeExisting,
+				Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: claim},
+			},
+		},
+	}
+	return n
+}
+
+func pvcBackup(path string) *neo4jv1beta1.Neo4jBackup {
+	return &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Status: neo4jv1beta1.Neo4jBackupStatus{
+			Phase:     neo4jv1beta1.RunPhaseSucceeded,
+			Artifacts: []neo4jv1beta1.BackupArtifact{{Database: "neo4j", URI: "pvc://bk", Path: path}},
+		},
+	}
+}
+
+func TestRestoreBackupRefPVCMountedSeedsFileURI(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	r, _ := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"),
+		restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+			r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+		}))
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if got := admin.seededWith["neo4j"]; got != "file:/backups/neo4j.latest.backup" {
+		t.Errorf("seedURI = %q, want file:/backups/neo4j.latest.backup", got)
+	}
+}
+
+func TestRestoreBackupRefPVCNotMountedUnsupported(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	// Target does NOT mount claim "bk" as its backups volume -> not server-readable.
+	r, c := newReconciler(t, admin, readyNeo4j(), pvcBackup("neo4j.latest.backup"),
+		restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+			r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+		}))
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getRestore(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreSourceUnsupported" {
+		t.Errorf("want Failed/RestoreSourceUnsupported, got %q/%q", got.Status.Phase, got.Status.Reason)
+	}
+	if len(admin.created) != 0 {
+		t.Error("must not seed when the backup PVC is not mounted on the target")
+	}
+}
+
 func TestRestoreBackupRefPVCArtifactUnsupported(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},

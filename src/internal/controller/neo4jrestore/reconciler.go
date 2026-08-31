@@ -125,7 +125,7 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.poll(ctx, &restore, admin)
 	}
 
-	seedFor, reason, msg := r.resolveSeeds(ctx, &restore)
+	seedFor, reason, msg := r.resolveSeeds(ctx, &restore, &neo4j)
 	if reason != nil {
 		return r.fail(ctx, &restore, *reason, msg)
 	}
@@ -227,7 +227,7 @@ func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4
 
 // resolveSeeds maps each requested database to a seedURI (ADR-015 §2 / BDR-014 §13). On a
 // terminal problem it returns a catalogued reason + message and a nil map.
-func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (map[string]string, *oracle.Reason, string) {
+func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j) (map[string]string, *oracle.Reason, string) {
 	for _, db := range restore.Spec.Databases {
 		if db == "*" {
 			reason := oracle.ReasonRestoreSourceUnsupported
@@ -263,28 +263,71 @@ func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1be
 	}
 	seedFor := map[string]string{}
 	for _, db := range restore.Spec.Databases {
-		uri, ok := artifactURIFor(&backup, db)
+		a, ok := artifactFor(&backup, db)
 		if !ok {
 			reason := oracle.ReasonRestoreSourceNotFound
 			return nil, &reason, "backupRef " + src.BackupRef + " has no artifact for database " + db
 		}
-		if reason, msg := validateSeedURI(uri); reason != nil {
+		seedURI, reason, msg := seedURIFromArtifact(neo4j, a)
+		if reason != nil {
 			return nil, reason, "database " + db + ": " + msg
 		}
-		seedFor[db] = uri
+		seedFor[db] = seedURI
 	}
 	return seedFor, nil, ""
 }
 
-// artifactURIFor finds the recorded artifact for a database (an exact match, or a "*" artifact
+// backupsMountPath is where the workload mounts the storage.volumes.backups volume (see
+// render/storage/volumes.go). A PVC-backed backup is seedable only when the server can read it
+// here, so restore builds file:/backups/<pointer>.
+const backupsMountPath = "/backups"
+
+// artifactFor finds the recorded artifact for a database (an exact match, or a "*" artifact
 // that stands for all databases).
-func artifactURIFor(backup *neo4jv1beta1.Neo4jBackup, db string) (string, bool) {
-	for _, a := range backup.Status.Artifacts {
-		if a.Database == db || a.Database == "*" {
-			return a.URI, true
+func artifactFor(backup *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.BackupArtifact, bool) {
+	for i := range backup.Status.Artifacts {
+		if a := &backup.Status.Artifacts[i]; a.Database == db || a.Database == "*" {
+			return a, true
 		}
 	}
-	return "", false
+	return nil, false
+}
+
+// seedURIFromArtifact turns a recorded backup artifact into a seedURI the servers can read.
+// A PVC-backed artifact becomes file:/backups/<path>, valid only when the target mounts that
+// exact claim as its storage.volumes.backups (Existing) volume — that is what puts the artifact
+// on the servers' filesystem (ADR-015 round-trip). Object-store URIs pass through unchanged.
+func seedURIFromArtifact(neo4j *neo4jv1beta1.Neo4j, a *neo4jv1beta1.BackupArtifact) (string, *oracle.Reason, string) {
+	if strings.HasPrefix(a.URI, "pvc://") {
+		claim := strings.TrimPrefix(a.URI, "pvc://")
+		if a.Path == "" {
+			reason := oracle.ReasonRestoreSourceUnsupported
+			return "", &reason, "backup has no seedable pointer (wildcard or incremental backup); restore from an explicit Full/Auto backup"
+		}
+		if !mountsBackupsClaim(neo4j, claim) {
+			reason := oracle.ReasonRestoreSourceUnsupported
+			return "", &reason, "target does not mount backup PVC " + claim + " as storage.volumes.backups (Existing); a PVC-backed seed must be readable by the servers at " + backupsMountPath
+		}
+		seed := "file:" + backupsMountPath + "/" + a.Path
+		if reason, msg := validateSeedURI(seed); reason != nil {
+			return "", reason, msg
+		}
+		return seed, nil, ""
+	}
+	if reason, msg := validateSeedURI(a.URI); reason != nil {
+		return "", reason, msg
+	}
+	return a.URI, nil, ""
+}
+
+// mountsBackupsClaim is true when the target mounts claim as its storage.volumes.backups volume.
+func mountsBackupsClaim(neo4j *neo4jv1beta1.Neo4j, claim string) bool {
+	s := neo4j.Spec.Storage
+	if s == nil || s.Volumes == nil || s.Volumes.Backups == nil {
+		return false
+	}
+	b := s.Volumes.Backups
+	return b.Mode == neo4jv1beta1.VolumeModeExisting && b.Existing != nil && b.Existing.ClaimName == claim
 }
 
 // validateSeedURI rejects schemes a Neo4j server cannot read as a seed (notably pvc://) and any
