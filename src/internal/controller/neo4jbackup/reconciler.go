@@ -147,8 +147,9 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 
 // artifactsFor records one artifact per requested database, pointing at the destination
 // (BDR-014 §13 — restore-by-backupRef resolves this). The requested type is recorded as-is.
-// ponytail: exact per-object filename + sizeBytes require parsing neo4j-admin output; that is
-// a follow-up. This is the folder/location the backup wrote into, which is what restore needs.
+// For PVC destinations of explicitly named Full/Auto databases it also records Path, the
+// deterministic pointer the Job hardlinks, so restore can seed file:/backups/<path> without
+// parsing filenames. ponytail: sizeBytes still needs neo4j-admin output parsing (follow-up).
 func artifactsFor(b *neo4jv1beta1.Neo4jBackup) []neo4jv1beta1.BackupArtifact {
 	uri := renderbackup.DestinationURI(b.Spec.Destination)
 	now := metav1.Now()
@@ -156,14 +157,19 @@ func artifactsFor(b *neo4jv1beta1.Neo4jBackup) []neo4jv1beta1.BackupArtifact {
 	if len(dbs) == 0 {
 		dbs = []string{"*"}
 	}
+	_, seedable := renderbackup.SeedablePointers(b)
 	out := make([]neo4jv1beta1.BackupArtifact, 0, len(dbs))
 	for _, db := range dbs {
-		out = append(out, neo4jv1beta1.BackupArtifact{
+		a := neo4jv1beta1.BackupArtifact{
 			Database:    db,
 			Type:        b.Spec.Type,
 			URI:         uri,
 			CompletedAt: &now,
-		})
+		}
+		if seedable {
+			a.Path = renderbackup.PointerName(db)
+		}
+		out = append(out, a)
 	}
 	return out
 }
