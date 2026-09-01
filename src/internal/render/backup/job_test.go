@@ -102,6 +102,21 @@ func TestBackupJobPVCExistingClaim(t *testing.T) {
 	if !hasVolume(job.Spec.Template.Spec.Volumes, pvcVolume) {
 		t.Errorf("pvc volume missing; got %v", job.Spec.Template.Spec.Volumes)
 	}
+	// The destination must mount the "backups" subPath so the Job writes where the workload's
+	// backups volume reads (ADR-015 round-trip); otherwise restore seeds file:/backups/<ptr> and
+	// the server can't find it.
+	var mount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == pvcVolume {
+			mount = &c.VolumeMounts[i]
+		}
+	}
+	if mount == nil {
+		t.Fatalf("pvc mount missing; got %v", c.VolumeMounts)
+	}
+	if mount.SubPath != pvcSubPath {
+		t.Errorf("pvc mount subPath = %q, want %q (must match workload backups mount)", mount.SubPath, pvcSubPath)
+	}
 }
 
 func TestBackupJobPVCProvisioningUnsupported(t *testing.T) {
@@ -158,6 +173,38 @@ func TestBackupJobPVCExplicitDBsCreatesPointer(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("script missing %q; got: %s", want, script)
 		}
+	}
+}
+
+func TestBackupJobSatisfiesRestrictedPodSecurity(t *testing.T) {
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/"},
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b)
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	pod := job.Spec.Template.Spec
+	if pod.SecurityContext == nil || pod.SecurityContext.RunAsNonRoot == nil || !*pod.SecurityContext.RunAsNonRoot {
+		t.Error("pod securityContext must set runAsNonRoot=true (restricted PSS)")
+	}
+	if pod.SecurityContext.SeccompProfile == nil || pod.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Error("pod securityContext must set seccompProfile=RuntimeDefault")
+	}
+	c := pod.Containers[0].SecurityContext
+	if c == nil {
+		t.Fatal("container securityContext must be set (restricted PSS)")
+	}
+	if c.AllowPrivilegeEscalation == nil || *c.AllowPrivilegeEscalation {
+		t.Error("container must set allowPrivilegeEscalation=false")
+	}
+	if c.Capabilities == nil || len(c.Capabilities.Drop) == 0 || c.Capabilities.Drop[0] != "ALL" {
+		t.Errorf("container must drop ALL capabilities; got %+v", c.Capabilities)
 	}
 }
 
