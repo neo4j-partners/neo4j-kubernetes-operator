@@ -12,6 +12,9 @@
 # Runs for a Standalone and for a Cluster unchanged — the claims are discovered from labels, so a
 # 3-primary cluster exercises three ordinals across a pool without the assert being told so.
 #
+# No member may be restarted by any of this: the grow reaches the claims, never the PodTemplate.
+# That is asserted on pod UIDs and restart counts at the end.
+#
 # Two platform facts are handled rather than assumed. kind's local-path class forbids expansion, so
 # the class is flipped for the duration and restored. And local-path has no resizer behind it: it
 # takes the larger request and never updates the capacity, so the claim would sit half-grown
@@ -71,6 +74,21 @@ if [[ "$(storage_class_expansion "${CLASS}")" != "true" ]]; then
   storage_set_class_expansion "${CLASS}" true
 fi
 
+# Every pod of the CR, with the UID that changes when it is recreated and the restart count that
+# rises when it is restarted in place. A grow patches the claims and touches nothing else, so the
+# question "are the members restarted one at a time" has a stronger answer here than for a config
+# change: they must not be restarted at all. Rolling them one by one is the discipline for a
+# PodTemplate change (RSTR-02); a size change never reaches the PodTemplate, and a roll would be an
+# availability cost paid for nothing. This is also the tripwire for the day someone adds an offline
+# resize path — a CSI driver without ONLINE_EXPANSION needs the pod bounced for the filesystem to
+# follow, and that roll would have to be ordered and quorum-aware rather than simultaneous.
+workload_identity() {
+  kubectl get pods -n "${NEO4J_NAMESPACE}" \
+    -l "app.kubernetes.io/instance=${NEO4J_CR_NAME}" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" uid="}{.metadata.uid}{" restarts="}{.status.containerStatuses[?(@.name=="neo4j")].restartCount}{"\n"}{end}' \
+    2>/dev/null | sort
+}
+
 # ---------------------------------------------------------------------------
 # 1. Baseline — every claim, and the templates that must not move
 # ---------------------------------------------------------------------------
@@ -86,6 +104,7 @@ storage_claim_table
 log "templates: ${BASELINE_TEMPLATES}"
 
 BASELINE_COMPLETED="$(storage_event_count "${COMPLETED_REASON}")"
+BASELINE_PODS="$(workload_identity)"
 
 # ---------------------------------------------------------------------------
 # 2. Ask for the larger size
@@ -113,10 +132,30 @@ if [[ -n "${pending}" ]]; then
 fi
 log "every claim requests ${TARGET}"
 
-# A stale-size claim must never read as healthy. Being Bound is not enough.
-reason="$(storage_condition StorageReady reason)"
-[[ "${reason}" != "${BOUND_REASON}" || "$(storage_claim_field "${CLAIMS[0]}" actual)" == "${TARGET}" ]] \
-  || { storage_dump "grow"; die "StorageReady reports ${BOUND_REASON} while a claim is still serving the old size"; }
+# A claim that is Bound but still serving the old size must not read as healthy — that is half of
+# the reported defect. The condition is written by whichever reconcile pass runs next, not at the
+# instant of the patch, so this waits instead of sampling once: sampled immediately it catches the
+# pre-patch PVCBound, which is merely stale and not the defect.
+#
+# Either outcome is correct, and which one appears depends on the provisioner. A resize still in
+# flight must say ${RESIZING_REASON}; one a fast CSI already finished may legitimately be back to
+# ${BOUND_REASON}, but only once every claim actually serves the new size.
+log "Waiting for StorageReady to account for the new size"
+deadline=$((SECONDS + 120))
+verdict=""
+while [[ "${SECONDS}" -lt "${deadline}" ]]; do
+  reason="$(storage_condition StorageReady reason)"
+  behind=""
+  for pvc in "${CLAIMS[@]}"; do
+    [[ "$(storage_claim_field "${pvc}" actual)" == "${TARGET}" ]] || behind="${behind} ${pvc}"
+  done
+  [[ "${reason}" == "${RESIZING_REASON}" ]] && { verdict="reported ${RESIZING_REASON} while capacity lags"; break; }
+  [[ -z "${behind}" && "${reason}" == "${BOUND_REASON}" ]] && { verdict="already settled at ${TARGET}"; break; }
+  sleep 3
+done
+[[ -n "${verdict}" ]] \
+  || { storage_dump "grow"; die "StorageReady stayed ${reason:-<absent>} while claim(s)${behind} still serve the old size — a stale-size claim must not read as healthy, which is the defect this case guards"; }
+log "StorageReady ${verdict}"
 
 # ---------------------------------------------------------------------------
 # 4. Capacity follows — or is stood in for, where the provisioner has no resizer
@@ -184,5 +223,16 @@ now_templates="$(storage_template_sizes)"
   || die "volumeClaimTemplates changed from '${BASELINE_TEMPLATES}' to '${now_templates}' — they are immutable after create, so a change here means the StatefulSet was recreated"
 log "templates unchanged (${now_templates}) — the grow went to the claims, as it must"
 
+# ---------------------------------------------------------------------------
+# 7. Not one member was restarted
+# ---------------------------------------------------------------------------
+NOW_PODS="$(workload_identity)"
+if [[ "${NOW_PODS}" != "${BASELINE_PODS}" ]]; then
+  printf 'before:\n%s\nafter:\n%s\n' "${BASELINE_PODS}" "${NOW_PODS}" >&2
+  storage_dump "grow"
+  die "the grow disturbed the members — same pod UIDs and restart counts expected, because growing a claim never reaches the PodTemplate. A restart here means the volume was resized offline, which on a cluster must be ordered one member at a time with quorum held, not left to happen at once"
+fi
+log "no member restarted: $(wc -l <<<"${BASELINE_PODS}" | tr -d ' ') pod(s) kept their UID and restart count"
+
 storage_claim_table
-log "data volume grown to ${TARGET} on ${#CLAIMS[@]} claim(s) with Neo4j serving throughout"
+log "data volume grown to ${TARGET} on ${#CLAIMS[@]} claim(s), with every member left running"

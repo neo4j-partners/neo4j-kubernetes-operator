@@ -13,5 +13,9 @@ export NEO4J_USE_STORAGE_CLASS=false
 export NEO4J_TOPOLOGY_MODE=Cluster
 export NEO4J_POOL=primary
 export CLUSTER_EXPECTED_MEMBERS=3
+# The suite runs its whole assert list for every case, so this case has to describe the cluster to
+# the shared asserts as fully as any other. The fixture sets defaultPrimariesCount=3, so the neo4j
+# database spans all three primaries.
+export CLUSTER_EXPECTED_DB_PRIMARIES=3
 export STORAGE_GROW_TO="${STORAGE_GROW_TO:-10Gi}"
 export STORAGE_GROW_TIMEOUT="${STORAGE_GROW_TIMEOUT:-900}"

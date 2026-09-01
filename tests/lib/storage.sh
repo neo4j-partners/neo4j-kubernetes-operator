@@ -151,10 +151,17 @@ storage_simulate_resizer() {
 
 # storage_event_count <reason> — how many times the operator recorded that reason on this CR.
 # Counts matter here: the completion Event is edge-triggered and must land exactly once.
+#
+# Selected on the object's UID, not its name. Events outlive the object they describe (an hour by
+# default), so a CR deleted and recreated under the same name — which every local rerun of a case
+# does — would inherit its predecessor's Events and be credited with a resize it never performed.
 storage_event_count() {
-  local total
+  local uid total
+  uid="$(kubectl get "neo4j/${NEO4J_CR_NAME}" -n "${NEO4J_NAMESPACE}" \
+    -o jsonpath='{.metadata.uid}' 2>/dev/null || true)"
+  [[ -n "${uid}" ]] || { printf '0'; return; }
   total="$(kubectl get events -n "${NEO4J_NAMESPACE}" \
-    --field-selector "involvedObject.name=${NEO4J_CR_NAME},reason=$1" \
+    --field-selector "involvedObject.uid=${uid},reason=$1" \
     -o jsonpath='{range .items[*]}{.count}{"\n"}{end}' 2>/dev/null \
     | awk '{s += ($1 == "" ? 1 : $1)} END {print s + 0}')"
   printf '%s' "${total:-0}"

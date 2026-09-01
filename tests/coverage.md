@@ -70,6 +70,7 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] A departing secondary is released on what it still hosts (`SHOW SERVERS.hosting`), not on its state label: Neo4j can leave it `Deallocating` for good once only `system` is left, which used to hold the StatefulSet at its old size forever — ADR-007
 - [x] Resizing a secondary pool never moves the primary: same pod UID, same restart count and an unchanged config checksum, because `initial.dbms.default_secondaries_count` is kept out of the checksum — on one primary a needless roll is a full outage
 - [x] Growing `storage.volumes.data.dynamic.size` on a formed 3-primary cluster reaches **every** ordinal's claim from one CR patch, while the StatefulSet's `volumeClaimTemplate` keeps its original size — BDR-005 (case `storage-grow`; readiness read ordinal 0 alone before, so two members left behind went unnoticed)
+- [x] A grow restarts no member at all — same pod UIDs and restart counts across the whole operation. Rolling one-by-one is the discipline for a PodTemplate change (RSTR-02); a size change never reaches the PodTemplate, so a roll would cost availability for nothing. This is the tripwire for an offline-resize path, which would need the bounce ordered and quorum-aware
 - [ ] Scale-in to a single primary refused (`ServersPendingDrain`/`UnsupportedSinglePrimary`) while a multi-primary database exists — now reachable at admission (a 3 → 1 patch is accepted when `defaultPrimariesCount` is unset), so the operator-side refusal can finally be asserted
 
 ### `feature-connectivity` — NEO-2-007
