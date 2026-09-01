@@ -122,6 +122,38 @@ func TestApplyExistingClaimName(t *testing.T) {
 	}
 }
 
+// The workload's backups mount is the read side of the PVC backup→restore round-trip: it must use
+// the exported contract (BackupsMountPath + BackupsSubPath) that render/backup writes to and the
+// restore controller seeds from. If this drifts, the round-trip breaks with "seed not found".
+func TestBackupsMountUsesRoundTripContract(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage: &neo4jv1beta1.StorageSpec{
+				Volumes: &neo4jv1beta1.VolumesSpec{
+					Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
+					Backups: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeExisting, Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "bk"}},
+				},
+			},
+		},
+	}
+	c := &corev1.Container{}
+	Apply(render.StandaloneContext(neo4j), c, &corev1.PodSpec{})
+	var mount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].MountPath == BackupsMountPath {
+			mount = &c.VolumeMounts[i]
+		}
+	}
+	if mount == nil {
+		t.Fatalf("no backups mount at %s; got %#v", BackupsMountPath, c.VolumeMounts)
+	}
+	if mount.SubPathExpr != BackupsSubPath {
+		t.Errorf("backups subPath = %q, want %q (round-trip contract)", mount.SubPathExpr, BackupsSubPath)
+	}
+}
+
 func baseStorage() *neo4jv1beta1.StorageSpec {
 	return &neo4jv1beta1.StorageSpec{
 		Volumes: &neo4jv1beta1.VolumesSpec{

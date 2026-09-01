@@ -41,6 +41,7 @@ import (
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 )
 
 // seedProviderSchemes are the URI schemes a Neo4j server can read as a seed. pvc:// is
@@ -277,10 +278,10 @@ func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1be
 	return seedFor, nil, ""
 }
 
-// backupsMountPath is where the workload mounts the storage.volumes.backups volume (see
-// render/storage/volumes.go). A PVC-backed backup is seedable only when the server can read it
-// here, so restore builds file:/backups/<pointer>.
-const backupsMountPath = "/backups"
+// backupsMountPath is where the workload mounts the storage.volumes.backups volume. Single-sourced
+// from render/storage so the seed URI restore builds (file:<backupsMountPath>/<pointer>) always
+// matches where the servers actually read the claim — a divergence here breaks the round-trip.
+const backupsMountPath = storage.BackupsMountPath
 
 // artifactFor finds the recorded artifact for a database (an exact match, or a "*" artifact
 // that stands for all databases).

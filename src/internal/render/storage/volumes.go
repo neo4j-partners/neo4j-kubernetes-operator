@@ -14,6 +14,17 @@ import (
 
 const dataVolumeName = "data"
 
+// BackupsMountPath and BackupsSubPath define where the backups volume is mounted inside the
+// Neo4j workload and the sub-directory it exposes within the claim. They are the shared contract
+// for the PVC backup→restore round-trip (ADR-015): the backup Job must write under the same
+// sub-path, and restore must read file:BackupsMountPath/<artifact>. Exported so render/backup and
+// the restore controller reference one source of truth instead of duplicating the literals — a
+// mismatch there silently breaks the round-trip ("seed not found").
+const (
+	BackupsMountPath = "/backups"
+	BackupsSubPath   = "backups"
+)
+
 type auxRole struct {
 	name      string
 	mountPath string
@@ -105,7 +116,7 @@ func DataPVCLookup(ctx render.Context) (name string, ok bool) {
 
 func auxRoles(vols *neo4jv1beta1.VolumesSpec) []auxRole {
 	return []auxRole{
-		{name: "backups", mountPath: "/backups", spec: vols.Backups},
+		{name: "backups", mountPath: BackupsMountPath, spec: vols.Backups},
 		{name: "logs", mountPath: "/logs", spec: vols.Logs},
 		{name: "metrics", mountPath: "/metrics", spec: vols.Metrics},
 		{name: "import", mountPath: "/import", spec: vols.Import},
@@ -158,6 +169,10 @@ func shareSubPathExpr(role string) string {
 	switch role {
 	case "logs", "metrics":
 		return role + "/$(POD_NAME)"
+	case "backups":
+		// Pinned to the exported round-trip contract (equals the role name, but stated
+		// explicitly so the backup Job / restore coupling is not an accident).
+		return BackupsSubPath
 	default:
 		return role
 	}
