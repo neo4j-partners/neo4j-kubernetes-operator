@@ -296,7 +296,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		Client:       c,
 		Scheme:       scheme,
 		Recorder:     mgr.GetEventRecorderFor("neo4j-controller"),
-		Persistence:  persistence.New(c),
+		Persistence:  persistence.New(c, mgr.GetEventRecorderFor("neo4j-controller")),
 		Trust:        trust.New(c, scheme),
 		ServerConfig: serverconfig.New(c, scheme),
 		Workload:     workload.New(c, scheme),

@@ -7,7 +7,7 @@ This is not the Neo4j *workload* chart (`helm-charts/neo4j`).
 ## Prerequisites
 
 - Helm 3.8+
-- Kubernetes 1.28+
+- Kubernetes 1.35+ (enforced by the chart's `kubeVersion`)
 - Operator image reachable by the cluster (`image.repository` / `tag`)
 
 ## Install from the published chart (OCI)

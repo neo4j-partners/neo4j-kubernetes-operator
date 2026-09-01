@@ -7,24 +7,36 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 )
 
-// Reconciler validates storage spec and reports the PVC/volume plan.
-// Dynamic PVCs are created by the StatefulSet controller from volumeClaimTemplates;
-// Existing modes bind claimName / raw volumes (no operator-owned PVC create).
+// Reconciler validates storage spec, reports the PVC/volume plan, and grows claims whose size moved
+// up. Dynamic PVCs are created by the StatefulSet controller from volumeClaimTemplates; Existing
+// modes bind claimName / raw volumes (no operator-owned PVC create). Expansion is the one PVC write
+// on the converge path — the operator patches the claim, never the immutable template (BDR-005).
 type Reconciler struct {
-	Client client.Client
+	Client   client.Client
+	Recorder record.EventRecorder
+	// advisories keeps a repeated expansion refusal to one Event per generation: a StorageClass that
+	// forbids expansion refuses on every pass, and left unchecked would spend the object's whole
+	// Event budget. Zero value is usable, so every construction path gets it, tests included.
+	advisories events.Advisory
 }
 
-func New(c client.Client) *Reconciler { return &Reconciler{Client: c} }
+func New(c client.Client, recorder record.EventRecorder) *Reconciler {
+	return &Reconciler{Client: c, Recorder: recorder}
+}
 
 func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
@@ -49,6 +61,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			"pinned", string(*neo4j.Status.VolumeClaimRetentionWhenDeleted))
 	}
 
+	// Read before expandVolumes patches anything: the condition still carries what the previous pass
+	// published, which is how this pass knows a grow was in flight and can report it finished.
+	wasResizing := storageReasonIs(neo4j, oracle.ReasonStorageResizing)
+
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		logDataPlan(log, ctxRender)
@@ -58,7 +74,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			return shared.Failed(err)
 		}
 	}
+
+	r.expandVolumes(ctx, neo4j)
+	r.reportResizeCompleted(neo4j, wasResizing, r.claimsBehindCapacity(ctx, neo4j))
 	return shared.Done()
+}
+
+func storageReasonIs(neo4j *neo4jv1beta1.Neo4j, reason oracle.Reason) bool {
+	c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionStorageReady.String())
+	return c != nil && c.Reason == reason.String()
 }
 
 func logDataPlan(log logr.Logger, ctxRender render.Context) {

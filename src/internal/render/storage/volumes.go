@@ -61,6 +61,22 @@ func Apply(ctx render.Context, container *corev1.Container, podSpec *corev1.PodS
 	return vcts
 }
 
+// VolumeClaimTemplates returns just the claims a pool's StatefulSet is rendered with, without the
+// mounts Apply also produces. PVC expansion and the drift guard both need the desired claims on
+// their own, and neither has a container to hand (BDR-005).
+func VolumeClaimTemplates(ctx render.Context) []corev1.PersistentVolumeClaim {
+	var container corev1.Container
+	var podSpec corev1.PodSpec
+	return Apply(ctx, &container, &podSpec)
+}
+
+// ClaimName is the PVC a StatefulSet creates for one volume and one ordinal. Kubernetes derives it
+// as {volume}-{statefulset}-{ordinal} and the operator has to reconstruct it to grow claims: the
+// StatefulSet exposes no list of the claims it owns.
+func ClaimName(volume, stsName string, ordinal int32) string {
+	return fmt.Sprintf("%s-%s-%d", volume, stsName, ordinal)
+}
+
 // DataPVCLookup returns the PVC name to observe for StorageReady, if any.
 // ok=false means readiness cannot be inferred from a PVC (e.g. raw Volume).
 func DataPVCLookup(ctx render.Context) (name string, ok bool) {

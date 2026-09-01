@@ -23,6 +23,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
+	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
@@ -124,7 +125,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			"image", ctxRender.ImageRef(),
 		)
 		if exists {
-			log.V(1).Info("statefulset volumeClaimTemplates are immutable after create; PVC size/class changes require recreate",
+			// volumeClaimTemplates are immutable after create, so a size change is applied to the
+			// claims by the persistence step and the template stays behind — that difference is
+			// expected and not drift. Anything else means the spec cannot be realised, and applying
+			// the pod template alone is what would leave it mounting a volume no template backs.
+			if drift := renderstorage.VolumeClaimDrift(stsDesired.Spec.VolumeClaimTemplates, existing.Spec.VolumeClaimTemplates); drift != "" {
+				err := fmt.Errorf("%w: %s", renderstorage.ErrTemplateDrift, drift)
+				log.Error(err, "refusing statefulset update", "pool", string(pool), "name", stsDesired.Name)
+				return shared.Failed(err)
+			}
+			log.V(1).Info("statefulset volumeClaimTemplates are immutable after create; a size change is applied to the claims instead",
 				"pool", string(pool), "name", stsDesired.Name)
 		}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, sts, func() error {

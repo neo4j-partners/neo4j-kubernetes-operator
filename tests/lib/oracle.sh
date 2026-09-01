@@ -17,15 +17,15 @@ oracle_conditions() {
 
 oracle_reasons_for() {  # <condition>
   case "$1" in
-    Ready) printf '%s\n' AllMembersReady MembersNotReady TLSNotReady OfflineMaintenance ReconcileError ;;
+    Ready) printf '%s\n' AllMembersReady MembersNotReady TLSNotReady StorageNotReady OfflineMaintenance ReconcileError ;;
     Reconciling) printf '%s\n' InProgress Completed Failed ;;
     Installed) printf '%s\n' ObjectsCreated Pending ;;
-    Error) printf '%s\n' NoError ReconcileFailed SecretNotMountable SecretNotDelegated AuthSecretInvalid ;;
-    StorageReady) printf '%s\n' PVCBound PVCPending ;;
+    Error) printf '%s\n' NoError ReconcileFailed SecretNotMountable SecretNotDelegated AuthSecretInvalid StorageTemplateDrift ;;
+    StorageReady) printf '%s\n' PVCBound PVCPending StorageResizing StorageResizeFailed ;;
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
-    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted ;;
+    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
     *) return 1 ;;
   esac
 }
@@ -43,6 +43,7 @@ oracle_severity() {  # <reason>
     AllMembersReady) echo info ;;
     MembersNotReady) echo warn ;;
     TLSNotReady) echo warn ;;
+    StorageNotReady) echo warn ;;
     OfflineMaintenance) echo info ;;
     ReconcileError) echo error ;;
     InProgress) echo info ;;
@@ -55,8 +56,11 @@ oracle_severity() {  # <reason>
     SecretNotMountable) echo error ;;
     SecretNotDelegated) echo error ;;
     AuthSecretInvalid) echo error ;;
+    StorageTemplateDrift) echo error ;;
     PVCBound) echo info ;;
     PVCPending) echo warn ;;
+    StorageResizing) echo info ;;
+    StorageResizeFailed) echo error ;;
     TrustDisabled) echo info ;;
     SecretsPresent) echo info ;;
     SecretMissing) echo error ;;
@@ -80,13 +84,14 @@ oracle_severity() {  # <reason>
     InsecureAdminConnection) echo warn ;;
     AdminBoltTLSRequired) echo warn ;;
     SecretMounted) echo info ;;
+    StorageResizeCompleted) echo info ;;
     *) return 1 ;;
   esac
 }
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|SecretMounted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|SecretMounted|StorageResizeCompleted) return 0 ;;
     *) return 1 ;;
   esac
 }

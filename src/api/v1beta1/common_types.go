@@ -166,6 +166,13 @@ type AuthSpec struct {
 }
 
 // DynamicVolumeSpec configures dynamically provisioned PVCs.
+// The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+// another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+// StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+// (BDR-005, ADR-001 STO-004).
+// +kubebuilder:validation:XValidation:rule="(has(self.storageClassName) ? self.storageClassName : '') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName : '')",message="dynamic.storageClassName is immutable after create: changing the StorageClass requires reprovisioning, which the operator does not do"
+// +kubebuilder:validation:XValidation:rule="(has(self.accessMode) ? self.accessMode : '') == (has(oldSelf.accessMode) ? oldSelf.accessMode : '')",message="dynamic.accessMode is immutable after create"
+// +kubebuilder:validation:XValidation:rule="!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size) || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size)) >= 0",message="dynamic.size cannot be decreased: Kubernetes does not support shrinking a PVC"
 type DynamicVolumeSpec struct {
 	// +kubebuilder:validation:Pattern=`^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$`
 	// Ceiling is enforced in admission (16Ti, NEO-014) — quantity max is not expressible in OpenAPI.
@@ -187,6 +194,11 @@ type ExistingVolumeSpec struct {
 }
 
 // DataVolumeSpec is required persistence for Neo4j data.
+// Everything but the dynamic size is frozen at create, so the volumeClaimTemplate the StatefulSet
+// was built with stays renderable for the life of the CR (BDR-005).
+// +kubebuilder:validation:XValidation:rule="self.mode == oldSelf.mode",message="data volume mode is immutable after create"
+// +kubebuilder:validation:XValidation:rule="(has(self.disableSubPathExpr) ? self.disableSubPathExpr : false) == (has(oldSelf.disableSubPathExpr) ? oldSelf.disableSubPathExpr : false)",message="data volume disableSubPathExpr is immutable after create: it changes the mount layout of existing data"
+// +kubebuilder:validation:XValidation:rule="has(self.existing) == has(oldSelf.existing) && (!has(self.existing) || self.existing == oldSelf.existing)",message="data volume existing binding is immutable after create"
 type DataVolumeSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Dynamic;Existing
@@ -197,6 +209,11 @@ type DataVolumeSpec struct {
 }
 
 // AuxiliaryVolumeSpec configures backups, logs, metrics, import, or licenses volumes.
+// Same freeze as the data volume: a mode flip would swap a shared sub-path for a PVC of its own,
+// which is a migration, not an update (BDR-005).
+// +kubebuilder:validation:XValidation:rule="(has(self.mode) ? self.mode : '') == (has(oldSelf.mode) ? oldSelf.mode : '')",message="auxiliary volume mode is immutable after create"
+// +kubebuilder:validation:XValidation:rule="(has(self.shareFrom) ? self.shareFrom : '') == (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '')",message="auxiliary volume shareFrom is immutable after create"
+// +kubebuilder:validation:XValidation:rule="has(self.existing) == has(oldSelf.existing) && (!has(self.existing) || self.existing == oldSelf.existing)",message="auxiliary volume existing binding is immutable after create"
 type AuxiliaryVolumeSpec struct {
 	// +kubebuilder:validation:Enum=Share;Dynamic;Existing
 	Mode VolumeMode `json:"mode,omitempty"`
@@ -208,6 +225,10 @@ type AuxiliaryVolumeSpec struct {
 
 // VolumesSpec mirrors Helm values.yaml volumes block (BDR-005), plus operator extension `plugins`
 // (persist NEO4J_PLUGINS downloads under /plugins — not in Helm volumes).
+// The set of roles is frozen at create. Adding or removing one changes the volumeClaimTemplates the
+// StatefulSet would need, and Kubernetes will not take a new set — the pod template would end up
+// mounting a volume no template backs. `import` is spelled `__import__` because CEL reserves it.
+// +kubebuilder:validation:XValidation:rule="has(self.backups) == has(oldSelf.backups) && has(self.logs) == has(oldSelf.logs) && has(self.metrics) == has(oldSelf.metrics) && has(self.__import__) == has(oldSelf.__import__) && has(self.licenses) == has(oldSelf.licenses) && has(self.plugins) == has(oldSelf.plugins)",message="auxiliary volumes cannot be added or removed after create"
 type VolumesSpec struct {
 	// +kubebuilder:validation:Required
 	Data DataVolumeSpec `json:"data"`
@@ -258,6 +279,7 @@ type SecretMountSpec struct {
 // StorageSpec groups persistence volumes and pod-level mount configuration (BDR-005).
 // +kubebuilder:validation:XValidation:rule="!has(self.volumes) || !has(self.volumes.data) || self.volumes.data.mode != 'Dynamic' || (has(self.volumes.data.dynamic) && has(self.volumes.data.dynamic.size) && self.volumes.data.dynamic.size != '')",message="data volume size is required when mode is Dynamic"
 // +kubebuilder:validation:XValidation:rule="!has(self.volumes) || !has(self.volumes.data) || self.volumes.data.mode != 'Share'",message="data volume cannot use Share mode"
+// +kubebuilder:validation:XValidation:rule="has(self.volumes) == has(oldSelf.volumes)",message="storage.volumes cannot be added or removed after create"
 type StorageSpec struct {
 	Volumes *VolumesSpec `json:"volumes,omitempty"`
 	// VolumeClaimRetention controls PVC lifecycle when the StatefulSet is deleted or scaled (OP-2-005-UNINST-*).

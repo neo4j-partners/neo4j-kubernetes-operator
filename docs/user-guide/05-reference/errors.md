@@ -40,6 +40,7 @@ Reasons that report a problem, a decision, or an operation in progress.
 |-----------|--------|----------|---------|---------|
 | Ready | MembersNotReady | warn | condition | Fewer servers ready than desired; the message carries both counts |
 | Ready | TLSNotReady | warn | condition | Held back by TLSReady — trust material is missing or still being issued |
+| Ready | StorageNotReady | warn | condition | Held back by StorageReady — a claim is unbound, still growing, or smaller than the spec asks for. The members themselves may all be up, which is why this is not MembersNotReady |
 | Ready | OfflineMaintenance | info | condition | `spec.maintenance.offlineMode` is true, so the Neo4j process is not running |
 | Ready | ReconcileError | error | condition | Ready cleared because reconcile failed |
 | Reconciling | Failed | error | condition | Reconciling stopped after failure |
@@ -48,7 +49,10 @@ Reasons that report a problem, a decision, or an operation in progress.
 | Error | SecretNotMountable | error | condition+event | Referenced Secret lacks the `neo4j.com/mountable-by-operator` opt-in label (NEO-005) |
 | Error | SecretNotDelegated | error | condition+event | BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01) |
 | Error | AuthSecretInvalid | error | condition+event | Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop |
+| Error | StorageTemplateDrift | error | condition+event | The volumeClaimTemplates the spec renders differ from the live StatefulSet's in more than size, and Kubernetes accepts no new set. The operator applies nothing rather than leave the pod template mounting a volume no template backs; the message names the volumes that diverge |
 | StorageReady | PVCPending | warn | condition | Data PVC not Bound yet; the message names the StorageClass, or reports that none is set |
+| StorageReady | StorageResizing | info | condition | A volume grow is in flight: the claims already carry the larger request and the message names those whose capacity has not caught up. Neo4j keeps serving from the old size throughout |
+| StorageReady | StorageResizeFailed | error | condition+event | A claim is still smaller than the spec asks for. The Event carries the API server's own words, most often a StorageClass with `allowVolumeExpansion: false`; nothing was changed and the old size still serves |
 | TLSReady | SecretMissing | error | condition | Required TLS/auth Secret is missing or incomplete |
 | TLSReady | CertificatePending | warn | condition | Waiting for cert-manager to issue the certificate into the operator-provisioned Secret |
 | ClusterFormed | EnablingServer | info | condition | `ENABLE SERVER` in progress for a server that joined the pool |
@@ -90,6 +94,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | ClusterFormed | Formed | info | condition | All desired servers are enabled in the Neo4j cluster |
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
+| — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
 <!-- END GENERATED oracle:steady -->
 
 ## DuplicateEntry

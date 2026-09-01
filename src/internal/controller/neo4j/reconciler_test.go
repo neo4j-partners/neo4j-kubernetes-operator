@@ -23,7 +23,7 @@ func TestStandalonePersistenceStep(t *testing.T) {
 			},
 		},
 	}
-	out := persistence.New(nil).Reconcile(t.Context(), neo4j)
+	out := persistence.New(nil, nil).Reconcile(t.Context(), neo4j)
 	if out.Err != nil {
 		t.Fatalf("persistence step failed: %v", out.Err)
 	}

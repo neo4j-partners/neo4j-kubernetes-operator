@@ -86,6 +86,62 @@ kubectl get neo4j <name> -o jsonpath='{.status.conditions[?(@.type=="StorageRead
 - On kind, install a local path provisioner or use the default standard StorageClass.
 - `kubectl describe pvc <name>` for the provisioner/event detail behind the Pending phase.
 
+## Growing a volume: what to expect, and when it will not work
+
+Raising `spec.storage.volumes.data.dynamic.size` grows the claims in place. Neo4j keeps serving the
+whole time — nothing is recreated and no data is moved.
+
+```bash
+kubectl patch neo4j <name> --type merge \
+  -p '{"spec":{"storage":{"volumes":{"data":{"dynamic":{"size":"20Gi"}}}}}}'
+```
+
+While it runs, the CR reports `StorageReady=False/StorageResizing` and `Ready=False/StorageNotReady`,
+and the message names each claim with its current capacity and its target. When the last claim
+catches up, `StorageReady` returns to `PVCBound` and one `StorageResizeCompleted` Event is recorded.
+
+**The StatefulSet's `volumeClaimTemplates` still show the old size, and that is correct.** Kubernetes
+makes them immutable once the StatefulSet exists, so the operator patches the claims instead. Do not
+read the template to check whether a grow landed — read the PVCs:
+
+```bash
+kubectl get pvc -l app.kubernetes.io/instance=<name> \
+  -o custom-columns='NAME:.metadata.name,REQUESTED:.spec.resources.requests.storage,ACTUAL:.status.capacity.storage'
+```
+
+**Symptom:** `StorageReady=False/StorageResizeFailed`, and the claims never leave their old size.
+
+**Cause:** the StorageClass does not allow expansion. The Warning Event carries the API server's own
+words:
+
+```bash
+kubectl get events --field-selector involvedObject.name=<name> | grep StorageResizeFailed
+kubectl get storageclass <class> -o jsonpath='{.allowVolumeExpansion}{"\n"}'
+```
+
+**Fix:** there is no in-place path. `storageClassName` is immutable, so moving to a class that does
+allow expansion means creating a new resource and restoring into it. Revert `size` to its previous
+value to clear the condition; the data was never touched. If the class *does* allow expansion but the
+capacity never moves, the provisioner has no resizer — kind's `rancher.io/local-path` is the common
+case, and it will sit in `StorageResizing` indefinitely.
+
+## Storage change rejected at apply time
+
+**Symptom:** `kubectl apply` or `patch` fails with a message about a storage field being immutable.
+
+Everything about a volume except its size is fixed when the resource is created: `mode`,
+`storageClassName`, `accessMode`, `disableSubPathExpr`, the `existing` binding, and **which auxiliary
+volumes exist**. A shrink is refused too, including one hidden by a unit change such as `5Gi` to
+`4000Mi`.
+
+This is deliberate rather than a gap. Each of those fields decides the shape of a
+`volumeClaimTemplate`, and Kubernetes accepts no new set of templates on a StatefulSet that already
+exists — so a change the API accepted could never be applied, and used to leave the resource
+half-converged. Refusing at admission tells you immediately instead.
+
+**Fix:** plan the volume layout before creating the resource. To change any of it afterwards, create a
+new `Neo4j` and restore into it.
+
 ## Auth Secret / password
 
 When `spec.auth.generatePassword: true`, the operator creates `{metadata.name}-auth`

@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,6 +49,8 @@ func PipelineErrorReason(err error) oracle.Reason {
 		return oracle.ReasonSecretNotDelegated
 	case errors.Is(err, rendersecrets.ErrAuthValueRejected):
 		return oracle.ReasonAuthSecretInvalid
+	case errors.Is(err, renderstorage.ErrTemplateDrift):
+		return oracle.ReasonStorageTemplateDrift
 	default:
 		return oracle.ReasonReconcileFailed
 	}
@@ -77,11 +80,15 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 		poolDesired := ctxRender.PoolReplicas()
 
 		var sts appsv1.StatefulSet
+		var liveReplicas int32
 		stsKey := types.NamespacedName{Name: ctxRender.STSName(), Namespace: ctxRender.Namespace()}
 		if w.Client.Get(ctx, stsKey, &sts) == nil {
 			anySTSFound = true
 			desired += poolDesired
 			ready += sts.Status.ReadyReplicas
+			if sts.Spec.Replicas != nil {
+				liveReplicas = *sts.Spec.Replicas
+			}
 			if stsRolling(sts) {
 				rolling = true
 			}
@@ -93,7 +100,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 				"rolling", stsRolling(sts),
 			)
 		}
-		if ok, reason, msg := w.observePoolStorageReady(ctx, ctxRender); !ok {
+		if ok, reason, msg := w.observePoolStorageReady(ctx, ctxRender, liveReplicas); !ok {
 			storageReady = false
 			// First failing pool wins — same pattern as TLS observation.
 			if storageMsg == "" {
@@ -135,7 +142,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 		setCondition(neo4j, oracle.ConditionReady, metav1.ConditionFalse, oracle.ReasonOfflineMaintenance,
 			"spec.maintenance.offlineMode is true; Neo4j process is not running")
 	} else {
-		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady), readyMessage(ready, desired))
+		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady, storageReady), readyMessage(ready, desired))
 		if allReady {
 			neo4j.Status.Version = neo4j.Spec.Version
 		}
@@ -163,33 +170,127 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	return w.Client.Status().Update(ctx, neo4j)
 }
 
-// observePoolStorageReady reports data-PVC readiness for one pool.
+// observePoolStorageReady reports claim readiness for one pool: every claim bound, one still behind
+// the size the spec asks for, or one whose capacity has not caught up with its own request.
+//
+// It judges every claim the pool's StatefulSet owns, not just ordinal 0, and it compares sizes
+// rather than stopping at Bound — a claim can be Bound and still be serving the old size, which is
+// exactly the state a grow passes through and the state a StorageClass that forbids expansion
+// leaves behind for good. replicas is the live StatefulSet's size so that a claim a scale-out has
+// not created yet is not held against the CR; 0 means no StatefulSet, where ordinal 0 is what is
+// expected next.
 // ponytail: no StorageClass Get — V1 RBAC is namespace Role only (cluster-scoped SC needs ClusterRole).
 // Surface storageClassName from the PVC/spec so describe shows why Pending.
-func (w *Writer) observePoolStorageReady(ctx context.Context, ctxRender render.Context) (ok bool, reason oracle.Reason, message string) {
-	pvcName, lookupOK := renderstorage.DataPVCLookup(ctxRender)
-	if !lookupOK {
+func (w *Writer) observePoolStorageReady(ctx context.Context, ctxRender render.Context,
+	replicas int32) (ok bool, reason oracle.Reason, message string) {
+	claims := poolClaims(ctxRender, replicas)
+	if len(claims) == 0 {
 		// Existing.volume (raw VolumeSource) — no PVC to observe.
 		return true, oracle.ReasonPVCBound, ""
 	}
-	var pvc corev1.PersistentVolumeClaim
-	if err := w.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: ctxRender.Namespace()}, &pvc); err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, oracle.ReasonPVCPending, fmt.Sprintf("waiting for PVC %q", pvcName)
+	var behind, resizing []string
+	for _, claim := range claims {
+		var pvc corev1.PersistentVolumeClaim
+		key := types.NamespacedName{Name: claim.name, Namespace: ctxRender.Namespace()}
+		if err := w.Client.Get(ctx, key, &pvc); err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, oracle.ReasonPVCPending, fmt.Sprintf("waiting for PVC %q", claim.name)
+			}
+			return false, oracle.ReasonPVCPending, err.Error()
 		}
-		return false, oracle.ReasonPVCPending, err.Error()
+		if pvc.Status.Phase != corev1.ClaimBound {
+			return false, oracle.ReasonPVCPending, pendingMessage(claim.name, &pvc, ctxRender)
+		}
+		requested := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		if claim.want == nil || requested.IsZero() {
+			// Nothing to hold the claim to, or a claim that records no request at all — there is no
+			// size question to answer, only whether it is bound, which it is.
+			continue
+		}
+		if claim.want.Cmp(requested) > 0 {
+			behind = append(behind, fmt.Sprintf("%s requests %s", claim.name, requested.String()))
+			continue
+		}
+		if actual := pvc.Status.Capacity[corev1.ResourceStorage]; actual.Cmp(requested) < 0 {
+			resizing = append(resizing, fmt.Sprintf("%s at %s of %s", claim.name, actual.String(), requested.String()))
+		}
 	}
-	if pvc.Status.Phase == corev1.ClaimBound {
-		return true, oracle.ReasonPVCBound, ""
+	switch {
+	case len(behind) > 0:
+		return false, oracle.ReasonStorageResizeFailed, fmt.Sprintf(
+			"the spec asks for %s but %s; if this persists the StorageClass likely has allowVolumeExpansion: false — see the StorageResizeFailed Event",
+			desiredDataSize(ctxRender), strings.Join(behind, ", "))
+	case len(resizing) > 0:
+		return false, oracle.ReasonStorageResizing, fmt.Sprintf(
+			"volume expansion in flight: %s", strings.Join(resizing, ", "))
 	}
-	sc := storageClassNameOf(&pvc, ctxRender)
-	if sc != "" {
-		return false, oracle.ReasonPVCPending, fmt.Sprintf(
+	return true, oracle.ReasonPVCBound, ""
+}
+
+// claimWant is one PVC the pool should have, and the size the spec holds it to. want is nil for a
+// claim the operator does not template — an Existing claimName, where binding is all there is to
+// check.
+type claimWant struct {
+	name string
+	want *resource.Quantity
+}
+
+// poolClaims names every claim a pool's StatefulSet owns right now. The rendered templates give the
+// volumes and the replica count gives the ordinals, because a StatefulSet publishes no list of the
+// claims it created.
+func poolClaims(ctxRender render.Context, replicas int32) []claimWant {
+	if replicas < 1 {
+		replicas = 1
+	}
+	var out []claimWant
+	for _, vct := range renderstorage.VolumeClaimTemplates(ctxRender) {
+		var want *resource.Quantity
+		if q, has := vct.Spec.Resources.Requests[corev1.ResourceStorage]; has {
+			size := q
+			want = &size
+		}
+		for ordinal := int32(0); ordinal < replicas; ordinal++ {
+			out = append(out, claimWant{
+				name: renderstorage.ClaimName(vct.Name, ctxRender.STSName(), ordinal),
+				want: want,
+			})
+		}
+	}
+	// A data volume bound by Existing.claimName renders no template, so it would otherwise go
+	// unobserved even though it is the volume Neo4j actually runs on.
+	if name, ok := renderstorage.DataPVCLookup(ctxRender); ok && !named(out, name) {
+		out = append(out, claimWant{name: name})
+	}
+	return out
+}
+
+func named(claims []claimWant, name string) bool {
+	for _, c := range claims {
+		if c.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func pendingMessage(pvcName string, pvc *corev1.PersistentVolumeClaim, ctxRender render.Context) string {
+	if sc := storageClassNameOf(pvc, ctxRender); sc != "" {
+		return fmt.Sprintf(
 			"PVC %q is Pending (storageClassName=%q); ensure the StorageClass exists and the provisioner is healthy",
 			pvcName, sc)
 	}
-	return false, oracle.ReasonPVCPending, fmt.Sprintf(
-		"PVC %q is Pending (no storageClassName set; waiting for a default StorageClass)", pvcName)
+	return fmt.Sprintf("PVC %q is Pending (no storageClassName set; waiting for a default StorageClass)", pvcName)
+}
+
+func desiredDataSize(ctxRender render.Context) string {
+	if ctxRender.Neo4j.Spec.Storage == nil || ctxRender.Neo4j.Spec.Storage.Volumes == nil {
+		return "the rendered size"
+	}
+	data := ctxRender.Neo4j.Spec.Storage.Volumes.Data
+	if data.Dynamic != nil && data.Dynamic.Size != "" {
+		return data.Dynamic.Size
+	}
+	return "the rendered size"
 }
 
 func storageClassNameOf(pvc *corev1.PersistentVolumeClaim, ctxRender render.Context) string {
@@ -337,14 +438,20 @@ func installedReason(ok bool) oracle.Reason {
 	return oracle.ReasonPending
 }
 
-func readyReason(ok, tlsReady bool) oracle.Reason {
-	if ok {
+// readyReason names what is holding Ready back, so the reason never contradicts the message: a
+// storage problem on a pool whose members are all up would otherwise read MembersNotReady next to
+// "1/1 servers ready".
+func readyReason(ok, tlsReady, storageReady bool) oracle.Reason {
+	switch {
+	case ok:
 		return oracle.ReasonAllMembersReady
-	}
-	if !tlsReady {
+	case !tlsReady:
 		return oracle.ReasonTLSNotReady
+	case !storageReady:
+		return oracle.ReasonStorageNotReady
+	default:
+		return oracle.ReasonMembersNotReady
 	}
-	return oracle.ReasonMembersNotReady
 }
 
 func readyMessage(ready, desired int32) string {

@@ -101,6 +101,9 @@ _config_reset_case_vars() {
   unset CLUSTER_SCALE_OUT_MEMBERS CLUSTER_SCALE_IN_MEMBERS CLUSTER_SCALE_DB CLUSTER_SCALE_TIMEOUT
   unset CLUSTER_SCALE_STABLE_SECONDS
   unset SECONDARY_SCALE_POOL SECONDARY_SCALE_OUT_MEMBERS SECONDARY_SCALE_IN_MEMBERS SECONDARY_SCALE_TIMEOUT
+  # Storage grow knobs — a leaked STORAGE_GROW_TO would grow a volume in a case whose subject is
+  # something else entirely, and the grow cannot be undone: a shrink back is refused at admission.
+  unset STORAGE_GROW_TO STORAGE_GROW_TIMEOUT
   # Credentials knobs — cases run in one shell, so without this a case reading
   # ${AUTH_KNOWN_PASSWORD:-default} silently inherits the previous case's password and
   # asserts the wrong thing (the same holds for the expected Secret name and reason).

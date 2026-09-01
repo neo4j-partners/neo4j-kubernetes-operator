@@ -61,6 +61,7 @@ mirror the released image into your registry without building anything, which is
 | [3. Neo4j](03-neo4j/readme.md) | One page per concern: topology, storage, connectivity, security, configuration, plugins, monitoring, operations |
 | [4. Troubleshooting](04-troubleshooting/01-common-issues.md) | Symptom-driven fixes, and how to read the operator log |
 | [5. Reference](05-reference/api.md) | Complete `Neo4j` API reference, error catalog, operator-owned settings |
+| [FAQ](faq.md) | Support scope, and which changes restart your pods |
 
 ## The two objects you work with
 

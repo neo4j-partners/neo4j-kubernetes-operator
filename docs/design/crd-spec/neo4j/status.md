@@ -171,7 +171,7 @@ projection of the same catalog: the [error reference](../../../user-guide/05-ref
 | `Reconciling` | A reconcile pass is in flight; the writer clears it at the end of every pass, so it narrates progress rather than gating anything | No |
 | `Installed` | At least one StatefulSet exists for the active pools | Yes — `False` holds `Ready` back |
 | `Error` | The last pipeline pass returned an error; the same reason is recorded as a Warning Event | Yes — `True` clears `Ready` |
-| `StorageReady` | Every data PVC the operator manages is Bound | Yes — `False` holds `Ready` back |
+| `StorageReady` | Every claim the operator manages is Bound and serving the size the spec asks for | Yes — `False` holds `Ready` back |
 | `TLSReady` | Trust is disabled, or every required TLS Secret and key is present | Yes — `False` holds `Ready` back |
 | `ClusterFormed` | Every desired server is enabled in the Neo4j cluster | Cluster mode — `False` holds `Ready` back |
 | `ServersPendingDrain` | A server dropped from the spec is still registered in Neo4j and waiting to be drained | Cluster mode — `True` holds `Ready` back |
@@ -350,7 +350,11 @@ Pattern: `status.<feature>Ready` for opt-in capabilities — avoid overloading `
 
 1. `Installed=True` — at least one StatefulSet observed for the active pools
 2. `serverSummary.ready == serverSummary.servers`, with `servers > 0`
-3. `StorageReady=True` — every data PVC Bound
+3. `StorageReady=True` — every claim the operator manages is Bound **and** serving the size the spec
+   asks for. A claim that is Bound but still growing reports `StorageResizing`; one the StorageClass
+   refused to grow reports `StorageResizeFailed` and stays there until the spec or the class changes.
+   Both hold `Ready` back under the reason `StorageNotReady`, so the reason never claims the members
+   are down when they are up.
 4. `TLSReady=True` — trust disabled, or all required Secrets and keys present
 5. `ClusterFormed=True` **and** `ServersPendingDrain != True`, when `mode: Cluster`
 

@@ -1,0 +1,27 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          # Literal: the assert attempts shrinks against this exact number, including one
+          # disguised by a unit change (9000Mi), so it cannot come from a case variable.
+          size: 10Gi
+          storageClassName: __CLOUD_STORAGE_CLASS__
+      # Present so the assert can try to remove it, and `metrics` is deliberately absent so it
+      # can try to add one. Which auxiliary roles exist is frozen at create.
+      logs:
+        mode: Share
+        shareFrom: data
+  auth:
+    generatePassword: true

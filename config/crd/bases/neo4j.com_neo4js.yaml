@@ -5188,14 +5188,23 @@ spec:
                     description: |-
                       VolumesSpec mirrors Helm values.yaml volumes block (BDR-005), plus operator extension `plugins`
                       (persist NEO4J_PLUGINS downloads under /plugins — not in Helm volumes).
+                      The set of roles is frozen at create. Adding or removing one changes the volumeClaimTemplates the
+                      StatefulSet would need, and Kubernetes will not take a new set — the pod template would end up
+                      mounting a volume no template backs. `import` is spelled `__import__` because CEL reserves it.
                     properties:
                       backups:
-                        description: AuxiliaryVolumeSpec configures backups, logs,
-                          metrics, import, or licenses volumes.
+                        description: |-
+                          AuxiliaryVolumeSpec configures backups, logs, metrics, import, or licenses volumes.
+                          Same freeze as the data volume: a mode flip would swap a shared sub-path for a PVC of its own,
+                          which is a migration, not an update (BDR-005).
                         properties:
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -5214,6 +5223,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -7254,15 +7279,32 @@ spec:
                               volumes (V1: data only).'
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: auxiliary volume mode is immutable after create
+                          rule: '(has(self.mode) ? self.mode : '''') == (has(oldSelf.mode)
+                            ? oldSelf.mode : '''')'
+                        - message: auxiliary volume shareFrom is immutable after create
+                          rule: '(has(self.shareFrom) ? self.shareFrom : '''') ==
+                            (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '''')'
+                        - message: auxiliary volume existing binding is immutable
+                            after create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                       data:
-                        description: DataVolumeSpec is required persistence for Neo4j
-                          data.
+                        description: |-
+                          DataVolumeSpec is required persistence for Neo4j data.
+                          Everything but the dynamic size is frozen at create, so the volumeClaimTemplate the StatefulSet
+                          was built with stays renderable for the life of the CR (BDR-005).
                         properties:
                           disableSubPathExpr:
                             type: boolean
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -7281,6 +7323,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -9313,13 +9371,31 @@ spec:
                         required:
                         - mode
                         type: object
+                        x-kubernetes-validations:
+                        - message: data volume mode is immutable after create
+                          rule: self.mode == oldSelf.mode
+                        - message: 'data volume disableSubPathExpr is immutable after
+                            create: it changes the mount layout of existing data'
+                          rule: '(has(self.disableSubPathExpr) ? self.disableSubPathExpr
+                            : false) == (has(oldSelf.disableSubPathExpr) ? oldSelf.disableSubPathExpr
+                            : false)'
+                        - message: data volume existing binding is immutable after
+                            create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                       import:
-                        description: AuxiliaryVolumeSpec configures backups, logs,
-                          metrics, import, or licenses volumes.
+                        description: |-
+                          AuxiliaryVolumeSpec configures backups, logs, metrics, import, or licenses volumes.
+                          Same freeze as the data volume: a mode flip would swap a shared sub-path for a PVC of its own,
+                          which is a migration, not an update (BDR-005).
                         properties:
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -9338,6 +9414,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -11378,13 +11470,30 @@ spec:
                               volumes (V1: data only).'
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: auxiliary volume mode is immutable after create
+                          rule: '(has(self.mode) ? self.mode : '''') == (has(oldSelf.mode)
+                            ? oldSelf.mode : '''')'
+                        - message: auxiliary volume shareFrom is immutable after create
+                          rule: '(has(self.shareFrom) ? self.shareFrom : '''') ==
+                            (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '''')'
+                        - message: auxiliary volume existing binding is immutable
+                            after create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                       licenses:
-                        description: AuxiliaryVolumeSpec configures backups, logs,
-                          metrics, import, or licenses volumes.
+                        description: |-
+                          AuxiliaryVolumeSpec configures backups, logs, metrics, import, or licenses volumes.
+                          Same freeze as the data volume: a mode flip would swap a shared sub-path for a PVC of its own,
+                          which is a migration, not an update (BDR-005).
                         properties:
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -11403,6 +11512,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -13443,13 +13568,30 @@ spec:
                               volumes (V1: data only).'
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: auxiliary volume mode is immutable after create
+                          rule: '(has(self.mode) ? self.mode : '''') == (has(oldSelf.mode)
+                            ? oldSelf.mode : '''')'
+                        - message: auxiliary volume shareFrom is immutable after create
+                          rule: '(has(self.shareFrom) ? self.shareFrom : '''') ==
+                            (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '''')'
+                        - message: auxiliary volume existing binding is immutable
+                            after create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                       logs:
-                        description: AuxiliaryVolumeSpec configures backups, logs,
-                          metrics, import, or licenses volumes.
+                        description: |-
+                          AuxiliaryVolumeSpec configures backups, logs, metrics, import, or licenses volumes.
+                          Same freeze as the data volume: a mode flip would swap a shared sub-path for a PVC of its own,
+                          which is a migration, not an update (BDR-005).
                         properties:
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -13468,6 +13610,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -15508,13 +15666,30 @@ spec:
                               volumes (V1: data only).'
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: auxiliary volume mode is immutable after create
+                          rule: '(has(self.mode) ? self.mode : '''') == (has(oldSelf.mode)
+                            ? oldSelf.mode : '''')'
+                        - message: auxiliary volume shareFrom is immutable after create
+                          rule: '(has(self.shareFrom) ? self.shareFrom : '''') ==
+                            (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '''')'
+                        - message: auxiliary volume existing binding is immutable
+                            after create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                       metrics:
-                        description: AuxiliaryVolumeSpec configures backups, logs,
-                          metrics, import, or licenses volumes.
+                        description: |-
+                          AuxiliaryVolumeSpec configures backups, logs, metrics, import, or licenses volumes.
+                          Same freeze as the data volume: a mode flip would swap a shared sub-path for a PVC of its own,
+                          which is a migration, not an update (BDR-005).
                         properties:
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -15533,6 +15708,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -17573,13 +17764,28 @@ spec:
                               volumes (V1: data only).'
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: auxiliary volume mode is immutable after create
+                          rule: '(has(self.mode) ? self.mode : '''') == (has(oldSelf.mode)
+                            ? oldSelf.mode : '''')'
+                        - message: auxiliary volume shareFrom is immutable after create
+                          rule: '(has(self.shareFrom) ? self.shareFrom : '''') ==
+                            (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '''')'
+                        - message: auxiliary volume existing binding is immutable
+                            after create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                       plugins:
                         description: Plugins mounts /plugins (typically Share from
                           data so NEO4J_PLUGINS downloads persist).
                         properties:
                           dynamic:
-                            description: DynamicVolumeSpec configures dynamically
-                              provisioned PVCs.
+                            description: |-
+                              DynamicVolumeSpec configures dynamically provisioned PVCs.
+                              The provisioning shape is fixed when the PVC is created: a bound PVC cannot be reprovisioned onto
+                              another class or access mode, and StatefulSet volumeClaimTemplates are immutable once the
+                              StatefulSet exists. Only size moves, and only upwards — the operator grows the PVCs in place
+                              (BDR-005, ADR-001 STO-004).
                             properties:
                               accessMode:
                                 default: ReadWriteOnce
@@ -17598,6 +17804,22 @@ spec:
                               storageClassName:
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: 'dynamic.storageClassName is immutable after
+                                create: changing the StorageClass requires reprovisioning,
+                                which the operator does not do'
+                              rule: '(has(self.storageClassName) ? self.storageClassName
+                                : '''') == (has(oldSelf.storageClassName) ? oldSelf.storageClassName
+                                : '''')'
+                            - message: dynamic.accessMode is immutable after create
+                              rule: '(has(self.accessMode) ? self.accessMode : '''')
+                                == (has(oldSelf.accessMode) ? oldSelf.accessMode :
+                                '''')'
+                            - message: 'dynamic.size cannot be decreased: Kubernetes
+                                does not support shrinking a PVC'
+                              rule: '!has(self.size) || !has(oldSelf.size) || !isQuantity(self.size)
+                                || !isQuantity(oldSelf.size) || quantity(self.size).compareTo(quantity(oldSelf.size))
+                                >= 0'
                           existing:
                             description: |-
                               ExistingVolumeSpec binds pre-provisioned storage (exactly one source when mode is Existing).
@@ -19638,9 +19860,27 @@ spec:
                               volumes (V1: data only).'
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: auxiliary volume mode is immutable after create
+                          rule: '(has(self.mode) ? self.mode : '''') == (has(oldSelf.mode)
+                            ? oldSelf.mode : '''')'
+                        - message: auxiliary volume shareFrom is immutable after create
+                          rule: '(has(self.shareFrom) ? self.shareFrom : '''') ==
+                            (has(oldSelf.shareFrom) ? oldSelf.shareFrom : '''')'
+                        - message: auxiliary volume existing binding is immutable
+                            after create
+                          rule: has(self.existing) == has(oldSelf.existing) && (!has(self.existing)
+                            || self.existing == oldSelf.existing)
                     required:
                     - data
                     type: object
+                    x-kubernetes-validations:
+                    - message: auxiliary volumes cannot be added or removed after
+                        create
+                      rule: has(self.backups) == has(oldSelf.backups) && has(self.logs)
+                        == has(oldSelf.logs) && has(self.metrics) == has(oldSelf.metrics)
+                        && has(self.__import__) == has(oldSelf.__import__) && has(self.licenses)
+                        == has(oldSelf.licenses) && has(self.plugins) == has(oldSelf.plugins)
                 type: object
                 x-kubernetes-validations:
                 - message: data volume size is required when mode is Dynamic
@@ -19650,6 +19890,8 @@ spec:
                 - message: data volume cannot use Share mode
                   rule: '!has(self.volumes) || !has(self.volumes.data) || self.volumes.data.mode
                     != ''Share'''
+                - message: storage.volumes cannot be added or removed after create
+                  rule: has(self.volumes) == has(oldSelf.volumes)
               topology:
                 description: Topology defines Standalone vs Cluster mode and member
                   pool sizes.
@@ -21450,6 +21692,8 @@ spec:
           rule: self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers))
             || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers)
             && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))
+        - message: spec.storage cannot be added or removed after create
+          rule: self == oldSelf || has(self.spec.storage) == has(oldSelf.spec.storage)
     served: true
     storage: true
     subresources:

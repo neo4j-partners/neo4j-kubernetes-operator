@@ -163,6 +163,7 @@ type Neo4jStatus struct {
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="self == oldSelf || self.spec.topology.mode == oldSelf.spec.topology.mode",message="topology.mode cannot change"
 // +kubebuilder:validation:XValidation:rule="self == oldSelf || ((!has(self.spec.topology.minimumMembers) && !has(oldSelf.spec.topology.minimumMembers)) || (has(self.spec.topology.minimumMembers) && has(oldSelf.spec.topology.minimumMembers) && self.spec.topology.minimumMembers == oldSelf.spec.topology.minimumMembers))",message="topology.minimumMembers cannot change after create (it is read at bootstrap only)"
+// +kubebuilder:validation:XValidation:rule="self == oldSelf || has(self.spec.storage) == has(oldSelf.spec.storage)",message="spec.storage cannot be added or removed after create"
 type Neo4j struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
