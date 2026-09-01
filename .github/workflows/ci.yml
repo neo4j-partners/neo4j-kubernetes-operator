@@ -1,5 +1,13 @@
 name: CI
 
+# Only manual runs get a version-bearing title. Left unconditional it would replace the default
+# run name on every push and pull request — the commit message and the pull request title, which
+# are far more useful there. An expression that evaluates to empty restores that default.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('CI — K {0}, Neo4j {1}', inputs.kubernetes-version, inputs.neo4j-version)
+      || '' }}
+
 # Gate for every change: unit tests and audit, then every e2e suite on kind, one job each.
 # Azure is deliberately excluded — it is slow and costs money, so it runs in
 # the nightly workflow instead.
@@ -57,6 +65,10 @@ jobs:
       - name: Resolve the versions under test
         env:
           NEO4J_VERSION_SELECTOR: ${{ inputs.neo4j-version || 'pinned' }}
+          KUBERNETES_VERSION_SELECTOR: ${{ inputs.kubernetes-version || 'pinned' }}
+          # This job runs once per run, unlike the suite matrix, so it is the one place that can
+          # record the resolved versions on the run page without repeating itself fourteen times.
+          VERSIONS_JOB_SUMMARY: "true"
         run: bash tests/bin/resolve-versions.sh
 
       - name: Resolve the Neo4j image

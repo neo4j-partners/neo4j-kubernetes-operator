@@ -1,5 +1,13 @@
 name: E2E — all platforms
 
+# Puts the versions on the Actions list page, so a run is identifiable without opening it. It can
+# only show what was selected, not what that resolved to: run-name is evaluated before any job
+# starts and reaches only the `github` and `inputs` contexts. The resolved numbers go to each job's
+# summary instead — see VERSIONS_JOB_SUMMARY below.
+run-name: >-
+  E2E AP — K ${{ inputs.kubernetes-version || 'latest' }},
+  Neo4j ${{ inputs.neo4j-version || 'latest' }}
+
 # The same suites as CI, on kind and on real AKS, GKE and EKS clusters in parallel.
 # The managed clusters live here rather than in CI because each run creates and
 # destroys one, so this is scheduled daily instead of gating pull requests.
@@ -42,6 +50,14 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  # Have the version resolver state the versions it picked in the job summary, so the run page
+  # carries the exact numbers that `latest` stood for on the day — the one thing the run name
+  # above cannot say. Set for the whole workflow because every job here is a platform, making one
+  # line per job informative; CI keeps it off, since fanning out per suite would repeat it
+  # fourteen times.
+  VERSIONS_JOB_SUMMARY: "true"
 
 jobs:
   unit:

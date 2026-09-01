@@ -56,3 +56,14 @@ if [[ -n "${GITHUB_ENV:-}" ]]; then
   fi
   echo "NEO4J_VERSION=${neo4j}" >>"${GITHUB_ENV}"
 fi
+
+# One line on the run page, for the workflows that opt in. A run's name can only carry the
+# selector, since GitHub evaluates it before any job starts — and `latest` says nothing about which
+# version that stood for once a few weeks have passed. This is where the numbers are recorded.
+if [[ "${VERSIONS_JOB_SUMMARY:-false}" == "true" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  if [[ -n "${kubernetes}" ]]; then
+    echo "Kubernetes \`${kubernetes}\` · Neo4j \`${neo4j}\`" >>"${GITHUB_STEP_SUMMARY}"
+  else
+    echo "Kubernetes fixed by \`${E2E_CLOUD}\` · Neo4j \`${neo4j}\`" >>"${GITHUB_STEP_SUMMARY}"
+  fi
+fi
