@@ -217,7 +217,7 @@ var (
 	ConditionError = declareCondition("Error", GateTrueBlocks,
 		"The last pipeline pass returned an error; the same reason is recorded as a Warning Event")
 	ConditionStorageReady = declareCondition("StorageReady", GateFalseBlocks,
-		"Every data PVC the operator manages is Bound")
+		"Every claim the operator manages is Bound and serving the size the spec asks for")
 	ConditionTLSReady = declareCondition("TLSReady", GateFalseBlocks,
 		"Trust is disabled, or every required TLS Secret and key is present")
 	ConditionClusterFormed = declareCondition("ClusterFormed", GateClusterFalseBlocks,
@@ -234,6 +234,8 @@ var (
 		on(ConditionReady, "Fewer servers ready than desired; the message carries both counts"))
 	ReasonTLSNotReady = declare("TLSNotReady", SeverityWarn, SurfaceCondition,
 		on(ConditionReady, "Held back by TLSReady — trust material is missing or still being issued"))
+	ReasonStorageNotReady = declare("StorageNotReady", SeverityWarn, SurfaceCondition,
+		on(ConditionReady, "Held back by StorageReady — a claim is unbound, still growing, or smaller than the spec asks for. The members themselves may all be up, which is why this is not MembersNotReady"))
 	ReasonOfflineMaintenance = declare("OfflineMaintenance", SeverityInfo, SurfaceCondition,
 		on(ConditionReady, "`spec.maintenance.offlineMode` is true, so the Neo4j process is not running"))
 	ReasonReconcileError = declare("ReconcileError", SeverityError, SurfaceCondition,
@@ -270,6 +272,8 @@ var (
 		on(ConditionError, "BYO auth Secret is not delegated to this Neo4j via `neo4j.com/allowed-for` (ADD-01)"))
 	ReasonAuthSecretInvalid = declare("AuthSecretInvalid", SeverityError, SurfaceBoth,
 		on(ConditionError, "Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop"))
+	ReasonStorageTemplateDrift = declare("StorageTemplateDrift", SeverityError, SurfaceBoth,
+		on(ConditionError, "The volumeClaimTemplates the spec renders differ from the live StatefulSet's in more than size, and Kubernetes accepts no new set. The operator applies nothing rather than leave the pod template mounting a volume no template backs; the message names the volumes that diverge"))
 )
 
 // StorageReady — the data claim (BDR-005).
@@ -278,6 +282,10 @@ var (
 		on(ConditionStorageReady, "The data PVC is Bound"))
 	ReasonPVCPending = declare("PVCPending", SeverityWarn, SurfaceCondition,
 		on(ConditionStorageReady, "Data PVC not Bound yet; the message names the StorageClass, or reports that none is set"))
+	ReasonStorageResizing = declare("StorageResizing", SeverityInfo, SurfaceCondition,
+		on(ConditionStorageReady, "A volume grow is in flight: the claims already carry the larger request and the message names those whose capacity has not caught up. Neo4j keeps serving from the old size throughout"))
+	ReasonStorageResizeFailed = declare("StorageResizeFailed", SeverityError, SurfaceBoth,
+		on(ConditionStorageReady, "A claim is still smaller than the spec asks for. The Event carries the API server's own words, most often a StorageClass with `allowVolumeExpansion: false`; nothing was changed and the old size still serves"))
 )
 
 // TLSReady — trust material (BDR-006).
@@ -338,4 +346,6 @@ var (
 		asEvent("The operator refuses to dial admin Bolt without `trust.certificates.bolt` or `trust.insecureAdminConnection` (NEO-004)"))
 	ReasonSecretMounted = declareNominal("SecretMounted", SurfaceEvent,
 		asEvent("A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label"))
+	ReasonStorageResizeCompleted = declareNominal("StorageResizeCompleted", SurfaceEvent,
+		asEvent("Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass"))
 )

@@ -1,5 +1,5 @@
 name: feature-storage
-description: Storage surface (spec.storage) — data modes, aux Share, additionalMounts, and invalid-storage failures
+description: Storage surface (spec.storage) — data modes, aux Share, additionalMounts, invalid-storage failures, growing a data volume, and the changes refused at admission because no StatefulSet could apply them
 brief_ref: neo4j-storage-surface
 use_pipeline: storage-suite
 on_case_failure: continue
@@ -78,3 +78,26 @@ cases:
     assert: storage-additional
     expect: success
     cr_name: st-add
+
+  - id: grow
+    comment: STO-004 — raising dynamic.size grows the live claims in place while Neo4j keeps serving, the StatefulSet's immutable volumeClaimTemplate stays at the original size, and StorageResizeCompleted is recorded exactly once. Guards the defect where a size change was accepted, discarded, and still reported Ready.
+    fixture: tests/fixtures/neo4j-storage-grow.yaml
+    assert: storage-grow
+    neo4j_case: standalone-storage-grow
+    expect: success
+    cr_name: st-grow
+
+  - id: grow-refused
+    comment: A grow the StorageClass forbids — the operator attempts the patch rather than reading the cluster-scoped class (NEO-016), then reports StorageReady=False/StorageResizeFailed with the API server's own words in a Warning Event. The claims are untouched and the database keeps serving.
+    fixture: tests/fixtures/neo4j-storage-grow.yaml
+    assert: storage-grow-refused
+    neo4j_case: standalone-storage-grow
+    expect: success
+    cr_name: st-grow-no
+
+  - id: immutable-fields
+    comment: Every storage change that could never be applied is refused at admission — shrink (including one hidden by a unit change), storageClassName, accessMode, mode, disableSubPathExpr, and adding or removing an auxiliary volume. A grow is attempted last as the positive control.
+    fixture: tests/fixtures/neo4j-storage-immutable.yaml
+    assert: storage-immutable
+    expect: success
+    cr_name: st-immutable

@@ -61,6 +61,7 @@ Adjacent knobs on **data**: `volumes.data.labels` (**safe**), `volumes.data.disa
 | `Existing` accepts exactly one binding shape | `claimName`, `volume`, or `volumeClaimTemplate` — CEL `oneOf` |
 | Aux `mode: Share` mounts the same volume source as `shareFrom` | V1: `shareFrom` may only be `data` |
 | `mode`, binding shapes, and `disableSubPathExpr` immutable after create | CEL `x-kubernetes-validations`; `size` may expand only |
+| The set of auxiliary volumes is fixed at create | Adding or removing a role changes the `volumeClaimTemplates` a StatefulSet would need, and Kubernetes accepts no new set — the pod template would end up mounting a volume no template backs |
 
 ---
 
@@ -339,7 +340,22 @@ Option A is rejected (too heavy). Escape hatches follow **Option E** (`spec.addi
 2. **Validate `Existing.volumeClaimTemplate`** minimally — structural schema only.
 3. **Reject `volumes.data.mode: Share`** at admission (CEL STO-005).
 4. **Webhook:** cluster + aux `Share` + RWO data — warn or error when invalid.
-5. Immutable after create: `mode`, binding shapes, `disableSubPathExpr`; only `dynamic.size` may grow.
+5. Immutable after create: `mode`, binding shapes, `disableSubPathExpr`, `storageClassName`, `accessMode`, and the set of auxiliary roles; only `dynamic.size` may grow.
+
+   **How a grow is applied.** A StatefulSet's `volumeClaimTemplates` are immutable once it exists, so
+   the operator patches the claims themselves and leaves the template at the size the StatefulSet was
+   created with. Two consequences follow. A claim a later scale-out creates is born at the old size,
+   so the expansion step runs on every pass over every ordinal and corrects it within a reconcile.
+   And the live template will permanently differ from what the spec renders — which is why the drift
+   guard compares everything about a template *except* its size.
+
+   Because every other storage field is frozen at admission, the set of templates can never change,
+   and the wedge that a half-applied storage change used to cause — a pod template mounting a volume
+   no template backs — is no longer reachable.
+
+   The operator does not read the StorageClass to check `allowVolumeExpansion`: that object is
+   cluster-scoped and NEO-016 keeps V1 RBAC to a namespaced Role. It attempts the patch and reports
+   the API server's refusal verbatim (`StorageResizeFailed`), which says the same thing.
 6. **Escape hatches (Option E):** STO-008…010.
 7. **API key is `spec.volumes`**, not `persistence` (BDR-005 supersedes `20-operator-proposal.md` naming).
 8. Document `Neo4jRestore` credentials vs `spec.secretMounts` overlap.

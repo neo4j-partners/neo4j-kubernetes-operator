@@ -1,0 +1,26 @@
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          # Literal, not __DATA_SIZE__: the subject of this case is the size moving, so the
+          # baseline the assert grows from has to be fixed here rather than inherited from a
+          # case variable that another case could change.
+          size: 5Gi
+          # Resolved from the cloud profile. Naming the class explicitly matters here: the
+          # assert reads its allowVolumeExpansion, and flips it where the platform's default
+          # class forbids expansion (kind's rancher.io/local-path).
+          storageClassName: __CLOUD_STORAGE_CLASS__
+  auth:
+    generatePassword: true

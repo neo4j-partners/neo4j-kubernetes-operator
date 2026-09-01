@@ -5,6 +5,10 @@ import (
 	"testing"
 
 	"github.com/google/cel-go/cel"
+	// k8s.io/apiserver is reached from tests only — no package under src/ imports it, so the
+	// manager binary still does not link it. src/cmd/manager/metrics.go avoids it on purpose
+	// (it drags CEL, otel and grpc in); that decision stands, this is not a reversal of it.
+	"k8s.io/apiserver/pkg/cel/library"
 	"sigs.k8s.io/yaml"
 )
 
@@ -30,7 +34,14 @@ func TestCELRulesCompile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env, err := cel.NewEnv(cel.Variable("self", cel.DynType), cel.Variable("oldSelf", cel.DynType))
+	// library.Quantity is the same extension the apiserver exposes to CRD rules, so a typo in
+	// quantity()/compareTo fails here rather than at CRD install time. It needs Kubernetes 1.29+,
+	// well under the 1.35 floor the project supports.
+	env, err := cel.NewEnv(
+		cel.Variable("self", cel.DynType),
+		cel.Variable("oldSelf", cel.DynType),
+		library.Quantity(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

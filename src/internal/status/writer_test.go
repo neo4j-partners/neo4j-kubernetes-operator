@@ -86,7 +86,7 @@ func TestObservePoolStorageReadyPendingWithStorageClass(t *testing.T) {
 		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimPending},
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
-	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j), 1)
 	if ok || reason != oracle.ReasonPVCPending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
@@ -106,7 +106,7 @@ func TestObservePoolStorageReadyPendingNoStorageClass(t *testing.T) {
 		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimPending},
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
-	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j), 1)
 	if ok || reason != oracle.ReasonPVCPending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}
@@ -126,7 +126,7 @@ func TestObservePoolStorageReadyBound(t *testing.T) {
 		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimBound},
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build())
-	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j), 1)
 	if !ok || reason != oracle.ReasonPVCBound || msg != "" {
 		t.Fatalf("ok=%v reason=%q msg=%q", ok, reason, msg)
 	}
@@ -139,7 +139,7 @@ func TestObservePoolStorageReadyPVCMissing(t *testing.T) {
 
 	neo4j := standaloneWithDynamicSC("dev", "default", "standard")
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
-	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j))
+	ok, reason, msg := w.observePoolStorageReady(t.Context(), render.StandaloneContext(neo4j), 1)
 	if ok || reason != oracle.ReasonPVCPending {
 		t.Fatalf("ok=%v reason=%q", ok, reason)
 	}

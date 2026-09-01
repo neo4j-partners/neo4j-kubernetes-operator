@@ -16,7 +16,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo` | [suites/feature-tls-byo.yaml](suites/feature-tls-byo.yaml) | TLS from Bring-Your-Own Secrets — Standalone bolt leaf supplied via labelled Secrets, operator mounts and verifies it (Ready is the SAN gate), Neo4j serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo-cluster` | [suites/feature-tls-byo-cluster.yaml](suites/feature-tls-byo-cluster.yaml) | Cluster BYO TLS — private CA signs shared bolt + cluster leaves with per-member SANs, members do mTLS (clientAuth Require), cluster forms and serves Bolt over TLS |
-| `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, and invalid-storage failures |
+| `feature-storage` | [suites/feature-storage.yaml](suites/feature-storage.yaml) | `spec.storage` data modes, Share logs/metrics, additionalMounts, invalid-storage failures, growing a data volume (and the grow a StorageClass refuses), and the changes refused at admission because no StatefulSet could apply them |
 | `feature-uninstall` | [suites/feature-uninstall.yaml](suites/feature-uninstall.yaml) | Deleting the CR preserves the data PVC by default (NEO-2-018) |
 | `feature-plugins` | [suites/feature-plugins.yaml](suites/feature-plugins.yaml) | Plugin runtime — APOC + GDS procedures actually callable over bolt on a Standalone server, and the operator opens the procedure allowlist to exactly the assigned plugins (BDR-004) |
 | `operator-admission` | [suites/operator-admission.yaml](suites/operator-admission.yaml) | Admission rejections + one happy case |
@@ -66,6 +66,10 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] A database requesting more primaries than the scale-in target does not block the shrink; it is narrowed to the target count and stays online
 - [x] The narrowing — the only topology rewrite the operator performs — is never silent: `DatabaseTopologyResized` Warning Event on the CR and an operator log entry, both naming the database and the counts before/after
 - [x] A resize that would leave `defaultPrimariesCount` above `primaries.members` is refused at admission on update, and the running cluster is untouched
+- [x] Scale a secondary (read) pool out then in (1 → 2 → 1) on a single-primary cluster — NEO-3-011-SRV-01 · AC-NEO-SCALE (case `scale-secondary`)
+- [x] A departing secondary is released on what it still hosts (`SHOW SERVERS.hosting`), not on its state label: Neo4j can leave it `Deallocating` for good once only `system` is left, which used to hold the StatefulSet at its old size forever — ADR-007
+- [x] Resizing a secondary pool never moves the primary: same pod UID, same restart count and an unchanged config checksum, because `initial.dbms.default_secondaries_count` is kept out of the checksum — on one primary a needless roll is a full outage
+- [x] Growing `storage.volumes.data.dynamic.size` on a formed 3-primary cluster reaches **every** ordinal's claim from one CR patch, while the StatefulSet's `volumeClaimTemplate` keeps its original size — BDR-005 (case `storage-grow`; readiness read ordinal 0 alone before, so two members left behind went unnoticed)
 - [ ] Scale-in to a single primary refused (`ServersPendingDrain`/`UnsupportedSinglePrimary`) while a multi-primary database exists — now reachable at admission (a 3 → 1 patch is accepted when `defaultPrimariesCount` is unset), so the operator-side refusal can finally be asserted
 
 ### `feature-connectivity` — NEO-2-007
@@ -158,6 +162,17 @@ member's service FQDN as a SAN. Reuses `assert/tls-ready` with `TLS_EXPECT_CERTI
 - [x] Ephemeral `emptyDir` (no PVC)
 - [x] logs+metrics Share the data volume
 - [x] `additionalMounts` mounted at their paths
+
+A size change used to be accepted at admission, dropped on the way to the StatefulSet, and still
+reported `Ready`/`StorageReady=True`. The `volumeClaimTemplate` is immutable once a StatefulSet
+exists, so a grow can only reach the claims themselves — and everything that would need the
+template rewritten has to be refused before it is accepted. The cases below assert both halves
+(BDR-005, ADR-001 amended).
+
+- [x] Grow the data volume: every claim requests the new size, capacity follows, `StorageReady` reports `StorageResizing` while it does and `Ready` holds back under `StorageNotReady`, then a single `StorageResizeCompleted` Event — the template never moves
+- [x] Grow refused by the StorageClass (`allowVolumeExpansion: false`): `StorageReady=False/StorageResizeFailed` carrying the API server's own message as a Warning Event, claims untouched, and the server keeps serving — the operator asks and surfaces the refusal rather than reading the class first
+- [x] Every storage change that could not be applied is refused at admission (CEL transition rules): shrink — including one hidden by units, `10Gi` → `9000Mi`, which is why the supported Kubernetes floor is 1.35 and its quantity library — plus `storageClassName`, data `mode`, `disableSubPathExpr`, adding or removing an auxiliary volume, changing an auxiliary `mode`, and dropping `spec.storage`; a grow is attempted last as the positive control, since a rule set that refused everything would pass every rejection check
+- [ ] `accessMode` change — unreachable today: the field is an enum of one value, so the API server refuses any other before CEL runs. The immutability rule behind it is the backstop for the day that enum widens
 
 A data PVC that cannot bind keeps the CR **Pending**: `StorageReady=False` with reason `PVCPending`
 and a message naming the PVC and its `storageClassName`, never `phase=Failed` and never `Ready`. The

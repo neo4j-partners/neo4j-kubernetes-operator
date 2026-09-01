@@ -95,7 +95,6 @@ CEL supports: `has()`, `all()`, `exists()`, list/map operations, arithmetic (`% 
 | StorageClass exists | **Webhook** | STO-003 |
 | Semver major.minor match | **Webhook** | PLG-006 |
 | Version downgrade blocked | **Webhook** | VER-002 |
-| PVC shrink blocked (needs live PVC) | **Webhook** | STO-004 |
 | Scale-in below formed cluster | **Webhook** | TOPO-010 |
 | GDS on secondary pool needs analytics config | **Webhook** | PLG-008, EDT-005 |
 | Non-HA topology guidance | **Reconciler** → `TopologyWarning` | TOPO-011, TOPO-012 |
@@ -123,7 +122,23 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 - **Plugin placement** — GDS/Bloom forbidden on `primaries.plugins` in Cluster; `licenseSecretRef` required when `gds` referenced
 - **Edition / enum** guards — `enterprise` or `community`, the latter confined to Standalone and denied the Enterprise-only features (`features.backup`, `features.monitoring.prometheus`); `license.accept` required on `enterprise` only
 - **TLS structure** — `trust.enabled` + Cluster ⇒ `cluster` cert ref; HTTPS port ⇒ `trust.enabled`
-- **Immutability** — `topology.mode` cannot change after create
+- **Immutability** — `topology.mode` cannot change after create; the whole storage provisioning shape
+  is frozen (volume `mode`, `storageClassName`, `accessMode`, `existing` binding, `disableSubPathExpr`,
+  and the set of auxiliary volumes), so the `volumeClaimTemplates` a StatefulSet was created with can
+  never need to change
+- **PVC shrink blocked** (STO-004) — `quantity(self.size).compareTo(quantity(oldSelf.size)) >= 0`
+
+**Amendment (storage).** STO-004 was first assigned to the webhook, on the grounds that it "needs a
+live PVC". It does not: the spec's own previous value is what a shrink must be compared against, and
+`oldSelf` carries it. The webhook is off by default, so a rule that lives only there is unenforced on
+a stock install — which is how a shrink came to be accepted in practice. Comparing quantities needs
+the CEL quantity library, and that is why the supported Kubernetes floor is 1.35 (see
+[BDR-005](../business/neo4j/005-storage-volume-mode.md) and the prerequisites page).
+
+STO-003 keeps its webhook assignment but is not implemented: reading a cluster-scoped StorageClass to
+check `allowVolumeExpansion` would need a ClusterRole, which NEO-016 rules out for V1. The operator
+attempts the claim patch instead and reports the API server's refusal verbatim under
+`StorageResizeFailed`, which reaches the user with the same information and no new RBAC.
 
 **Authoring:** rule IDs and CEL sketches live in [`09-crd-spec/<crd>/validation.md`](../../09-crd-spec/neo4j/validation.md); implementers copy into kubebuilder `+kubebuilder:validation:XValidation` markers or generated CRD YAML.
 

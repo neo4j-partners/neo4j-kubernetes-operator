@@ -67,7 +67,9 @@ func TestCRDContainsCELValidations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read CRD: %v", err)
 	}
-	content := string(data)
+	// Collapse whitespace before matching: the YAML writer folds a long message across lines at a
+	// space, so a fragment spanning the fold would not be found in the raw file.
+	content := strings.Join(strings.Fields(string(data)), " ")
 	for _, fragment := range []string{
 		"x-kubernetes-validations",
 		"primaries.members is required when mode is Cluster",
@@ -81,6 +83,19 @@ func TestCRDContainsCELValidations(t *testing.T) {
 		"features.backup requires Enterprise edition",
 		"features.monitoring.prometheus requires Enterprise edition",
 		"statusReplicasPath: .status.readPoolReplicas",
+		// Storage change rules (BDR-005). Everything but a size increase is frozen at create, so the
+		// volumeClaimTemplates the StatefulSet was built with never need to change.
+		"dynamic.size cannot be decreased",
+		"dynamic.storageClassName is immutable after create",
+		"dynamic.accessMode is immutable after create",
+		"data volume mode is immutable after create",
+		"data volume disableSubPathExpr is immutable after create",
+		"data volume existing binding is immutable after create",
+		"auxiliary volume mode is immutable after create",
+		"auxiliary volume shareFrom is immutable after create",
+		"auxiliary volumes cannot be added or removed after create",
+		"storage.volumes cannot be added or removed after create",
+		"spec.storage cannot be added or removed after create",
 	} {
 		if !strings.Contains(content, fragment) {
 			t.Fatalf("CRD missing expected fragment %q", fragment)

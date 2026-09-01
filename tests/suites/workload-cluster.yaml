@@ -16,11 +16,15 @@ on_case_failure: continue
 # threshold exists so a forming cluster is not killed by the kubelet. It inspects the
 # primary pool StatefulSet only. status-conditions runs after the CR has settled.
 #
-# The two scale steps come last because they are the only mutating ones: they resize a pool, so
-# every assertion above them describes the declared shape. Each is a no-op unless the case declares
-# its trigger — CLUSTER_SCALE_OUT_MEMBERS for the primary pool, SECONDARY_SCALE_POOL for a
-# secondary one (a case cannot carry its own step list). They resize different pools and no case
-# declares both.
+# The mutating steps come last because they change the declared shape, so every assertion above
+# them describes the cluster as the case declared it. Each is a no-op unless the case declares its
+# trigger — STORAGE_GROW_TO to grow the volumes, CLUSTER_SCALE_OUT_MEMBERS for the primary pool,
+# SECONDARY_SCALE_POOL for a secondary one (a case cannot carry its own step list). No case declares
+# more than one of the three.
+#
+# storage-grow runs here rather than in feature-storage because it needs a real multi-member pool:
+# one patch of the CR has to reach every ordinal's claim, and the StatefulSet template it cannot
+# touch is shared by all of them.
 pipeline:
   case_assert:
     - assert/cluster-members
@@ -30,6 +34,7 @@ pipeline:
     - assert/cluster-db-routing
     - assert/cluster-routing
     - assert/status-conditions
+    - assert/storage-grow
     - assert/cluster-scale-out-in
     - assert/cluster-scale-secondary
 
@@ -61,6 +66,13 @@ cases:
     neo4j_case: cluster-scale-out-in
     expect: success
     cr_name: e2e-cluster-scale
+
+  - id: storage-grow
+    comment: Grow the data volume 5Gi to 10Gi on a formed 3-primary cluster — one patch of the CR must reach all three claims, since the StatefulSet's volumeClaimTemplate is immutable and keeps the original size. Readiness used to be read from ordinal 0 alone, which would have hidden two members left on the old size.
+    fixture: tests/fixtures/neo4j-cluster-3primaries.yaml
+    neo4j_case: cluster-storage-grow
+    expect: success
+    cr_name: e2e-cluster-grow
 
   - id: scale-secondary
     comment: Scale a read pool 1 to 2 then back in to 1 on a single-primary cluster — a departing secondary ends up hosting only the system database, which Neo4j can keep reporting as Deallocating, so the operator releases it on what it hosts rather than on that label. The primary must not move in either direction.

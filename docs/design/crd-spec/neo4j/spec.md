@@ -240,7 +240,18 @@ Mirrors Helm `values.yaml` → **`volumes:`** ([BDR-005](../../decision-records/
 | `existing.volumeClaimTemplate` | object | oneOf | — | yes | Raw K8s VCT — incl. `selector` (`NEO-3-006-PVC-04/05`). |
 | `disableSubPathExpr` | bool | no | `false` | yes | Mount `subPathExpr` control for `/data`. |
 
-†`dynamic.size` expansion allowed; shrink blocked.
+†`dynamic.size` may only grow. A shrink is refused at admission by a CEL rule that compares the two
+quantities, so `5Gi` → `4000Mi` is caught as the reduction it is rather than passing a string
+comparison. Every field marked immutable above is likewise refused at admission, not silently
+dropped.
+
+A grow is applied to the claims themselves — the StatefulSet's `volumeClaimTemplates` are immutable
+once it exists, so the template keeps the original size for good and that is not a fault. While the
+volumes are growing the CR reports `StorageReady=False/StorageResizing` and `Ready=False`; when the
+last claim reaches its new capacity the condition returns to `PVCBound` and one
+`StorageResizeCompleted` Event is recorded. If the StorageClass does not allow expansion the claim
+stays at its old size, Neo4j keeps serving, and the CR reports
+`StorageReady=False/StorageResizeFailed` with the API server's refusal in a Warning Event.
 
 **`Existing`:** exactly one of `claimName`, `volume`, or `volumeClaimTemplate` (CEL `oneOf`).
 
@@ -248,14 +259,19 @@ Mirrors Helm `values.yaml` → **`volumes:`** ([BDR-005](../../decision-records/
 
 Roles: `backups`, `logs`, `metrics`, `import`, `licenses`. Each supports:
 
-| Field | Values | Default |
-|-------|--------|---------|
-| `mode` | `Share` \| `Dynamic` \| `Existing` | `Share` |
-| `shareFrom` | `data` (V1 only) | `data` when `mode: Share` |
-| `dynamic` | same shape as `data.dynamic` | — |
-| `existing` | same oneOf as `data.existing` | — |
+| Field | Values | Default | Immutable |
+|-------|--------|---------|-----------|
+| `mode` | `Share` \| `Dynamic` \| `Existing` | `Share` | yes |
+| `shareFrom` | `data` (V1 only) | `data` when `mode: Share` | yes |
+| `dynamic` | same shape as `data.dynamic` | — | size may grow; the rest is fixed |
+| `existing` | same oneOf as `data.existing` | — | yes |
 
 V1 Helm default: aux volumes **share** the data volume. `volumes.data.mode: Share` is **forbidden**.
+
+**Which roles exist is fixed at create.** Adding or removing an auxiliary volume is refused at
+admission, because it would change the set of `volumeClaimTemplates` the StatefulSet needs and
+Kubernetes accepts no new set — the pod template would be left mounting a volume nothing backs. Plan
+the roles you want before you create the resource.
 
 ---
 
