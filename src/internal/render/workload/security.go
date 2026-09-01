@@ -106,6 +106,19 @@ func validateContainerSecurityContext(csc *corev1.SecurityContext) error {
 	return nil
 }
 
+// PodSecurityContext and ContainerSecurityContext expose the hardened operand security contexts
+// (defaults plus CR overrides) for reuse by satellite renders such as the backup Job. Sharing
+// them makes those pods pass restricted Pod Security and, crucially, run with the operand's
+// fsGroup so files the Job writes to a shared backups PVC are readable by the Neo4j servers.
+func PodSecurityContext(ctx render.Context) *corev1.PodSecurityContext {
+	return podSecurityContext(ctx)
+}
+
+// ContainerSecurityContext — see PodSecurityContext.
+func ContainerSecurityContext(ctx render.Context) *corev1.SecurityContext {
+	return containerSecurityContext(ctx)
+}
+
 func podSecurityContext(ctx render.Context) *corev1.PodSecurityContext {
 	out := defaultPodSecurityContext()
 	if ctx.Neo4j.Spec.Security == nil || ctx.Neo4j.Spec.Security.PodSecurityContext == nil {

@@ -420,6 +420,48 @@ func TestUserNeo4jConfigOverridesPluginDefaults(t *testing.T) {
 	}
 }
 
+// A mounted backups volume enables FileSeedProvider so restore-by-backupRef can seed
+// file:/backups/<artifact> (ADR-015 round-trip). Absent the volume, the key is not set.
+func TestSeedProviderDefaultFollowsBackupsVolume(t *testing.T) {
+	const key = "dbms.databases.seed_from_uri_providers"
+	backups := func() *neo4jv1beta1.StorageSpec {
+		return &neo4jv1beta1.StorageSpec{
+			Volumes: &neo4jv1beta1.VolumesSpec{
+				Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
+				Backups: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeExisting, Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "bk"}},
+			},
+		}
+	}
+
+	with := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Storage:  backups(),
+		},
+	}
+	if got := ConfigMap(render.StandaloneContext(with)).Data[key]; got != "FileSeedProvider,CloudSeedProvider" {
+		t.Fatalf("%s = %q, want FileSeedProvider,CloudSeedProvider when backups volume mounted", key, got)
+	}
+
+	without := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		},
+	}
+	if _, ok := ConfigMap(render.StandaloneContext(without)).Data[key]; ok {
+		t.Fatalf("%s must not be set without a backups volume", key)
+	}
+
+	// User override wins (defaults layer).
+	override := with.DeepCopy()
+	override.Spec.Config = &neo4jv1beta1.ConfigSpec{Neo4j: map[string]string{key: "S3SeedProvider"}}
+	if got := ConfigMap(render.StandaloneContext(override)).Data[key]; got != "S3SeedProvider" {
+		t.Fatalf("%s = %q, want user override S3SeedProvider", key, got)
+	}
+}
+
 func TestNeo4jConfDataHasNoNeo4jConfBlobKey(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},

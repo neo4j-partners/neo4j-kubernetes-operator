@@ -39,7 +39,13 @@ func Connect(ctx context.Context, uri, user, password string, opts ConnectOpts) 
 	if err != nil {
 		return nil, err
 	}
-	if err := d.VerifyConnectivity(ctx); err != nil {
+	// Verify against the system database, not the DBMS default: every admin op we issue targets
+	// system, and the default database (e.g. neo4j) may legitimately be STOPPED — a prior
+	// forceOffline restore, a maintenance stop, etc. VerifyConnectivity routes to the default db
+	// and would fail spuriously ("no routing table for database 'neo4j'") while system is healthy.
+	// system rejects arbitrary Cypher (e.g. RETURN 1), so probe with an admin command.
+	if _, err := neo4j.ExecuteQuery(ctx, d, "SHOW DATABASES YIELD name", nil, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system")); err != nil {
 		_ = d.Close(ctx)
 		return nil, fmt.Errorf("bolt connect: %w", err)
 	}
@@ -292,7 +298,10 @@ func (a *driverAdmin) createSeeded(ctx context.Context, verb, name, seedURI stri
 	if primaries > 0 {
 		topology = fmt.Sprintf(" TOPOLOGY %d PRIMARIES %d SECONDARIES", primaries, secondaries)
 	}
-	q := fmt.Sprintf("%s $name%s OPTIONS { seedURI: '%s' }", verb, topology, seedURI)
+	// existingData:'use' is mandatory with seedURI under Cypher 5 (the server rejects the seed
+	// without it) and merely deprecated/no-op under Cypher 25, so including it always is the
+	// version-safe form across Neo4j releases.
+	q := fmt.Sprintf("%s $name%s OPTIONS { existingData: 'use', seedURI: '%s' }", verb, topology, seedURI)
 	_, err := neo4j.ExecuteQuery(ctx, a.driver, q,
 		map[string]any{"name": name}, neo4j.EagerResultTransformer,
 		neo4j.ExecuteQueryWithDatabase("system"))
