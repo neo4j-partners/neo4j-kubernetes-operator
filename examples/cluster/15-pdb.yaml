@@ -30,8 +30,8 @@ spec:
   auth:
     generatePassword: true
   trust:
-    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
-    # Prefer trust.certificates.bolt for verified TLS instead.
+    # Cluster admission requires an admin Bolt path for the operator (NEO-004): this plaintext
+    # opt-in (Warning event), or trust.certificates.bolt for verified TLS. Standalone needs neither.
     enabled: false
     insecureAdminConnection: true
   podDisruptionBudget:

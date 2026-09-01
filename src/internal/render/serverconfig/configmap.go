@@ -64,11 +64,26 @@ func neo4jConfData(ctx render.Context) map[string]string {
 	return data
 }
 
+// bootstrapOnlyKeys are settings Neo4j reads once, when the DBMS initialises, and that formation
+// re-applies to a running cluster over Bolt (dbms.setDefaultAllocationNumbers, ADR-007). They stay
+// in the ConfigMap so a member created later starts with the current value, but they are kept out
+// of the checksum: both track the pool sizes, so hashing them would roll every member each time a
+// pool is resized, to deliver a value Neo4j will not read again. On a single-primary cluster that
+// restart is a full outage — for nothing. Same reasoning as render.Context.MinimumMembers, which
+// refuses to track the pool for exactly this reason.
+var bootstrapOnlyKeys = map[string]bool{
+	"initial.dbms.default_primaries_count":   true,
+	"initial.dbms.default_secondaries_count": true,
+}
+
 // ConfigChecksum returns a stable SHA-256 digest of rendered ConfigMap data.
 func ConfigChecksum(ctx render.Context) string {
 	data := neo4jConfData(ctx)
 	keys := make([]string, 0, len(data))
 	for k := range data {
+		if bootstrapOnlyKeys[k] {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)

@@ -321,6 +321,8 @@ var (
 		on(ConditionServersPendingDrain, "Server drain / `DEALLOCATE DATABASES` in progress"))
 	ReasonAwaitingSTSShrink = declare("AwaitingSTSShrink", SeverityInfo, SurfaceCondition,
 		on(ConditionServersPendingDrain, "Waiting for the StatefulSet replica shrink after drain"))
+	ReasonDrainTimeout = declare("DrainTimeout", SeverityWarn, SurfaceBoth,
+		on(ConditionServersPendingDrain, "A scale-in has stayed pending past the operator's budget; the message names the member Neo4j has not released, what it still reports it hosting, and how long the scale-in has waited. The StatefulSet stays at its current size — no data is at risk, but the scale-in needs a look"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

@@ -56,3 +56,29 @@ func TestFindActiveByAddressSkipsDropped(t *testing.T) {
 		t.Fatal("dropped-only should miss")
 	}
 }
+
+// HostsOnly decides whether a departing member still owes anyone data, so a wrong answer either
+// wedges a scale-in or drops a member that was still hosting a database.
+func TestHostsOnly(t *testing.T) {
+	exempt := map[string]bool{"system": true, "shards": true}
+	cases := []struct {
+		name    string
+		hosting []string
+		want    bool
+	}{
+		{"drained down to system", []string{"system"}, true},
+		{"still hosting a user database", []string{"neo4j", "system"}, false},
+		{"composites do not count — Neo4j lists them on every server", []string{"system", "shards"}, true},
+		{"a database not in the exempt set counts, composite-looking name or not", []string{"system", "orders"}, false},
+		// Neo4j reports its own spelling; the catalog and the CR need not agree on case.
+		{"case and padding are Neo4j's, not ours", []string{" System ", "SHARDS"}, true},
+		{"nothing reported at all", nil, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := HostsOnly(Server{Name: "r1", Hosting: tc.hosting}, exempt); got != tc.want {
+				t.Errorf("HostsOnly(%v) = %v, want %v", tc.hosting, got, tc.want)
+			}
+		})
+	}
+}

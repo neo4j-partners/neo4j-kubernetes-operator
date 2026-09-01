@@ -101,6 +101,19 @@ We will implement **Option A** for V1; revisit Option B if in-pod bootstrap prov
 2. Deallocate / remove server via admin API.
 3. After Neo4j confirms removed, allow STS scale-down ([ADR-003](003-neo4j-reconcile-pipeline.md) order — formation before replica drop).
 
+What counts as *confirmed removed*, since the answer differs by pool:
+
+| Departing member | Confirmation the operator acts on |
+|---|---|
+| Primary | The `Deallocated` state in `SHOW SERVERS`. Neo4j walks a primary there itself — it holds each primary copy until another server has started its own, and the raft membership has to change — so the state is the only safe signal. |
+| Secondary | The `hosting` column, down to `system` and composite databases. That *is* Neo4j's definition of `Deallocated` ("no longer hosts any databases besides the system database"), and a drained secondary can keep the `Deallocating` label indefinitely, so waiting on the label alone wedges the scale-in. Safe here and only here: a secondary's copies are read replicas and its `system` copy does not vote. Neo4j's own recovery procedure drops servers in this state. |
+
+Both paths are gated by the database topologies already reporting `current == requested`, so the
+copies that matter are elsewhere before any member is dropped. Neither path waits forever: past a
+drain budget the operator reports `ServersPendingDrain/DrainTimeout` with what Neo4j still says the
+member hosts, leaves the StatefulSet at its current size and slows its requeue — it surfaces the
+stall rather than forcing it.
+
 **Standalone:** formation package noops; `ClusterFormed` not required.
 
 ### Error handling

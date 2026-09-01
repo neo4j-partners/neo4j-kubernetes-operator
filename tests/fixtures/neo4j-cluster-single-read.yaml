@@ -1,0 +1,36 @@
+# Cluster mode with a single primary and a read pool — the topology a secondary resize is drained
+# on, and the one the reported scale-in hang was found on. Mirrors examples/cluster/02-lab-single-
+# primary.yaml plus a read pool; the primary pool never moves in this case, only the read pool.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 1
+    secondaries:
+      read:
+        members: 1
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
+  trust:
+    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    # Prefer trust.certificates.bolt for verified TLS instead.
+    enabled: false
+    insecureAdminConnection: true

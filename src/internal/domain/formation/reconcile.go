@@ -121,8 +121,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 
 	// Shrink DB topologies to fit remaining servers before DEALLOCATE (else Neo4j ArgumentError).
+	// The same read serves ensureDropped: it names the databases whose presence in a member's
+	// hosting list does not mean the member still owes anyone data.
+	var drainExempt map[string]bool
 	if scalingIn {
-		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j)
+		dbs, err := admin.ShowDatabaseTopologies(ctx)
+		if err != nil {
+			return adminErrResult(neo4j, err)
+		}
+		drainExempt = drainExemptDatabases(dbs)
+		ok, err := r.ensureDatabaseTopologies(ctx, admin, neo4j, dbs)
 		if err != nil {
 			if isUnsupportedSinglePrimary(err) {
 				log.Error(err, "scale-in blocked", "reason", oracle.ReasonUnsupportedSinglePrimary.String())
@@ -162,11 +170,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			pendingDrain = true
 			for _, m := range TailMembers(neo4j, pool, current) {
 				log.Info("draining member", "pool", string(pool), "pod", m.PodName, "ordinal", m.Ordinal)
-				done, err := r.ensureDropped(ctx, admin, servers, m)
+				done, err := r.ensureDropped(ctx, admin, servers, m, drainExempt)
 				if err != nil {
 					return adminErrResult(neo4j, err)
 				}
 				if !done {
+					if waited := drainWaited(neo4j); waited > drainBudget {
+						return r.reportDrainTimeout(ctx, neo4j, servers, m, waited)
+					}
 					setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonDraining,
 						fmt.Sprintf("draining %s", m.PodName))
 					return shared.Requeue(requeueAfter)
@@ -383,7 +394,11 @@ func (r *Reconciler) ensureEnabled(ctx context.Context, admin intneo4j.Admin, ne
 	return false, nil // requeue to confirm Enabled
 }
 
-func (r *Reconciler) ensureDropped(ctx context.Context, admin intneo4j.Admin, servers []intneo4j.Server, m Member) (bool, error) {
+// ensureDropped drives one departing member out of the Neo4j cluster view: DEALLOCATE, then DROP
+// once the member has handed its databases over. exempt names the databases whose presence in a
+// hosting list does not mean the member still owes anyone data.
+func (r *Reconciler) ensureDropped(ctx context.Context, admin intneo4j.Admin, servers []intneo4j.Server,
+	m Member, exempt map[string]bool) (bool, error) {
 	s, found := intneo4j.FindByAddress(servers, m.BoltAddress)
 	if !found {
 		return true, nil // already gone from Neo4j
@@ -392,16 +407,23 @@ func (r *Reconciler) ensureDropped(ctx context.Context, admin intneo4j.Admin, se
 		return true, nil // DROP already done; entry may linger in SHOW SERVERS
 	}
 	if intneo4j.IsDeallocated(s.State) {
-		if err := admin.DropServer(ctx, s.Name); err != nil {
-			if strings.Contains(err.Error(), "already dropped") {
-				return true, nil
-			}
-			return false, fmt.Errorf("DROP SERVER %s: %w", s.Name, err)
-		}
-		return false, nil
+		return dropServer(ctx, admin, s)
 	}
 	if intneo4j.IsDeallocating(s.State) {
-		return false, nil
+		// Neo4j defines Deallocated by what a member still hosts, so read that rather than wait for
+		// a label a drained secondary can keep for good: hosting down to system (and composites,
+		// virtual and listed on every server) means there is nothing left to hand over, and Neo4j's
+		// own recovery procedure drops servers in this very state. Secondaries only — their copies
+		// are read replicas and their system copy does not vote, so dropping one costs neither data
+		// nor quorum, where a primary still in the raft group could cost both. And the caller only
+		// reaches this line once every user database reports current == requested, so the copies
+		// that matter are already elsewhere (ensureDatabaseTopologies).
+		if m.ModeConstraint != "SECONDARY" || !intneo4j.HostsOnly(s, exempt) {
+			return false, nil
+		}
+		ctrllog.FromContext(ctx).Info("dropping a drained secondary Neo4j still labels Deallocating",
+			"pod", m.PodName, "hosting", s.Hosting)
+		return dropServer(ctx, admin, s)
 	}
 	// Enabled / Free still hosting — deallocate.
 	if err := admin.DeallocateDatabases(ctx, s.Name); err != nil {
@@ -410,17 +432,81 @@ func (r *Reconciler) ensureDropped(ctx context.Context, admin intneo4j.Admin, se
 	return false, nil
 }
 
+// dropServer removes one server from the cluster view. Never done on success: the next pass reads
+// the state back and confirms Dropped instead of assuming it.
+func dropServer(ctx context.Context, admin intneo4j.Admin, s intneo4j.Server) (bool, error) {
+	if err := admin.DropServer(ctx, s.Name); err != nil {
+		if strings.Contains(err.Error(), "already dropped") {
+			return true, nil
+		}
+		return false, fmt.Errorf("DROP SERVER %s: %w", s.Name, err)
+	}
+	return false, nil
+}
+
+// drainExemptDatabases lists the databases that may stay in a departing member's hosting without
+// holding the drain back: system, which Neo4j's own Deallocated definition excludes, and composite
+// databases, which have no store and are reported on every server.
+func drainExemptDatabases(dbs []intneo4j.DatabaseTopology) map[string]bool {
+	exempt := map[string]bool{"system": true}
+	for _, db := range dbs {
+		if strings.EqualFold(db.Type, "composite") {
+			exempt[strings.ToLower(db.Name)] = true
+		}
+	}
+	return exempt
+}
+
+// drainBudget is how long a whole scale-in may stay pending before the operator says so — the
+// reallocation of the database topologies included, since that is the same wait seen from the
+// user's side. A small cluster releases a member in about a minute, so reaching this means
+// something is worth a look: usually a topology that cannot fit the remaining servers, sometimes
+// just a large store still moving. Hence a report and a slower requeue rather than any action.
+const drainBudget = 10 * time.Minute
+
+// drainWaited is how long ServersPendingDrain has been True. meta.SetStatusCondition only moves
+// LastTransitionTime when the status itself changes, and a scale-in holds the condition True
+// throughout while only the reason moves (ShrinkingTopology → Draining), so the condition already
+// dates the episode and no extra status field has to.
+func drainWaited(neo4j *neo4jv1beta1.Neo4j) time.Duration {
+	c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionServersPendingDrain.String())
+	if c == nil || c.Status != metav1.ConditionTrue || c.LastTransitionTime.IsZero() {
+		return 0
+	}
+	return time.Since(c.LastTransitionTime.Time)
+}
+
+// reportDrainTimeout surfaces a drain that outlived its budget: the catalogued reason on
+// ServersPendingDrain with what Neo4j still reports, one Warning Event per generation, and a
+// slower requeue. The operator forces nothing — the StatefulSet keeps its current size, so the
+// cluster is intact and a human decides what to do.
+func (r *Reconciler) reportDrainTimeout(ctx context.Context, neo4j *neo4jv1beta1.Neo4j,
+	servers []intneo4j.Server, m Member, waited time.Duration) shared.StepResult {
+	detail := "Neo4j no longer reports it in SHOW SERVERS"
+	if s, ok := intneo4j.FindByAddress(servers, m.BoltAddress); ok {
+		detail = fmt.Sprintf("Neo4j reports it %s, hosting %v", s.State, s.Hosting)
+	}
+	ctrllog.FromContext(ctx).Info("drain budget exceeded",
+		"pod", m.PodName, "pending", waited.String(), "budget", drainBudget.String(), "detail", detail)
+	setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonDrainTimeout,
+		fmt.Sprintf("scale-in pending for %s: %s has not been released yet — %s. The StatefulSet keeps its current size, so no data is at risk, but the scale-in cannot finish until Neo4j releases the member",
+			waited.Round(time.Second), m.PodName, detail))
+	// The budget rather than the live duration, so the text is stable and the Advisory keeps this
+	// to one Event per generation instead of one per requeue.
+	r.advisories.Emitf(r.Recorder, neo4j, corev1.EventTypeWarning, oracle.ReasonDrainTimeout,
+		"scale-in still pending after %s: %s has not been released yet — %s. The StatefulSet keeps its current size; nothing is at risk",
+		drainBudget, m.PodName, detail)
+	return shared.Requeue(5 * time.Minute)
+}
+
 // ensureDatabaseTopologies caps standard database topologies to what the pools still hold.
 // Scale-in only: Neo4j refuses to DEALLOCATE a server while a database claims more hosts than
 // remain, so a topology wider than the target pool has to come down first. It never widens a
 // topology and never pushes one toward topology.defaultPrimariesCount — a topology chosen by
 // its owner is theirs (TOPO-006). Skips system/composite.
-func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1beta1.Neo4j) (bool, error) {
+func (r *Reconciler) ensureDatabaseTopologies(ctx context.Context, admin intneo4j.Admin,
+	neo4j *neo4jv1beta1.Neo4j, dbs []intneo4j.DatabaseTopology) (bool, error) {
 	poolP, poolS := hostingCapacity(neo4j)
-	dbs, err := admin.ShowDatabaseTopologies(ctx)
-	if err != nil {
-		return false, err
-	}
 	pending := false
 	for _, db := range dbs {
 		if !db.HasTopology {

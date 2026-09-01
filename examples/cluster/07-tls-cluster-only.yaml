@@ -27,6 +27,9 @@ spec:
   auth:
     generatePassword: true
   trust:
+    # The certificates below encrypt member-to-member traffic only — the operator's admin Bolt
+    # has none of its own here, so NEO-004 still needs this plaintext opt-in (Warning event).
+    # Adding trust.certificates.bolt would replace it with verified TLS.
     insecureAdminConnection: true
     enabled: true
     certificates:

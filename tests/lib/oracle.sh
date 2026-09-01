@@ -24,7 +24,7 @@ oracle_reasons_for() {  # <condition>
     StorageReady) printf '%s\n' PVCBound PVCPending ;;
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
-    ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink ;;
+    ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
     event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted ;;
     *) return 1 ;;
   esac
@@ -74,6 +74,7 @@ oracle_severity() {  # <reason>
     ShrinkingTopology) echo info ;;
     Draining) echo info ;;
     AwaitingSTSShrink) echo info ;;
+    DrainTimeout) echo warn ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;

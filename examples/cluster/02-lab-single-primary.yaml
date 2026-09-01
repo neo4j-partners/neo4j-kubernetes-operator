@@ -35,6 +35,7 @@ spec:
         dynamic:
           size: 10Gi
   trust:
-    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    # Cluster admission requires an admin Bolt path for the operator (NEO-004): this plaintext
+    # opt-in (Warning event), or trust.certificates.bolt for verified TLS. Standalone needs neither.
     enabled: false
     insecureAdminConnection: true

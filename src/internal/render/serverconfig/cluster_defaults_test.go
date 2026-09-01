@@ -154,6 +154,50 @@ func TestScalingDoesNotChangeConfigChecksum(t *testing.T) {
 	}
 }
 
+// Resizing a secondary pool used to roll every member, primaries included: the read/analytics
+// total lands in initial.dbms.default_secondaries_count, which every pool carries. Neo4j never
+// reads that key again after initialisation — formation pushes the new value over Bolt — so the
+// restart bought nothing, and on a single-primary cluster it took the whole DBMS down each time
+// somebody scaled a read pool.
+func TestSecondaryScalingDoesNotChangeConfigChecksum(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{
+				Mode:      neo4jv1beta1.TopologyModeCluster,
+				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 1},
+				Secondaries: &neo4jv1beta1.SecondariesSpec{
+					Read: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
+				},
+			},
+		},
+	}
+	pools := []render.PoolID{render.PoolPrimary, render.PoolRead}
+	before := map[render.PoolID]string{}
+	for _, pool := range pools {
+		before[pool] = ConfigChecksum(render.ContextForPool(neo4j, pool))
+	}
+
+	for _, members := range []int32{2, 1} {
+		neo4j.Spec.Topology.Secondaries.Read.Members = members
+		for _, pool := range pools {
+			if got := ConfigChecksum(render.ContextForPool(neo4j, pool)); got != before[pool] {
+				t.Errorf("read pool resized to %d changed the %s checksum (%s → %s): the pool would roll",
+					members, pool, before[pool], got)
+			}
+		}
+	}
+
+	// The ConfigMap still has to carry the current count: a member created after the resize reads
+	// it at first start, which is the one moment Neo4j uses it.
+	neo4j.Spec.Topology.Secondaries.Read.Members = 2
+	data := ConfigMap(render.ContextForPool(neo4j, render.PoolPrimary)).Data
+	if data["initial.dbms.default_secondaries_count"] != "2" {
+		t.Errorf("default_secondaries_count = %q, want 2 — the key is only kept out of the checksum, not out of the ConfigMap",
+			data["initial.dbms.default_secondaries_count"])
+	}
+}
+
 func TestDefaultPrimariesCountDrivesDefaultDBTopology(t *testing.T) {
 	def := int32(3)
 	neo4j := &neo4jv1beta1.Neo4j{

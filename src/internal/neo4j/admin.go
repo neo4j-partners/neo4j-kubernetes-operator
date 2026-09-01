@@ -11,6 +11,10 @@ type Server struct {
 	Name    string
 	Address string
 	State   string
+	// Hosting is the databases the server currently runs. Neo4j defines the Deallocated state by
+	// this list — "no longer hosts any databases besides the system database" — so it is the
+	// evidence a drain is over, while the State label above can lag behind it indefinitely.
+	Hosting []string
 }
 
 // DatabaseTopology is the requested/current hosting topology for one database.
@@ -93,6 +97,20 @@ func IsDropped(state string) bool {
 
 func IsDeallocating(state string) bool {
 	return strings.EqualFold(strings.TrimSpace(state), "Deallocating")
+}
+
+// HostsOnly reports whether s runs no database outside exempt — Neo4j's own definition of the
+// Deallocated state ("no longer hosts any databases besides the system database"), read from the
+// hosting list rather than from the state label, which a drained secondary can keep at
+// Deallocating for good. exempt must carry the composite database names alongside system: they
+// are virtual, so Neo4j lists them in hosting on every server and they never leave it.
+func HostsOnly(s Server, exempt map[string]bool) bool {
+	for _, db := range s.Hosting {
+		if !exempt[strings.ToLower(strings.TrimSpace(db))] {
+			return false
+		}
+	}
+	return true
 }
 
 // ParseAuthSecret reads NEO4J_AUTH value "neo4j/<password>".
