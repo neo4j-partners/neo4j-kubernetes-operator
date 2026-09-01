@@ -13,7 +13,8 @@
 | **Conditions for automation** | Controllers and users gate on `Ready`, `Reconciling`, `Error` — not on `phase` alone. |
 | **Topology warnings ≠ errors** | BDR-002 non-HA guidance must never block `Ready`. The `TopologyWarning` condition that carries it is [planned, not written](#planned-for-a-later-version). |
 | **Generation tracking** | `observedGeneration` must match `metadata.generation` before `Ready=True` after spec changes. |
-| **Phase non-regression** | Established phases should **not** regress to earlier bootstrap phases (e.g. `Running` → `Bootstrapping`) unless the object is deleted and recreated; sub-states surface via **conditions** or `message`, not a phase downgrade. **Not enforced today** — the writer recomputes `phase` from observed state on every pass, so a `Running` CR that loses a member does report `Bootstrapping` again. Whether the rule or the writer gives way is open (ADR-004). |
+| **Phase non-regression** | Once a CR has been `Ready`, `phase` does **not** regress to `Provisioning` or `Bootstrapping` — those two mean *this workload has never served*. Sub-states surface via **conditions** or `message`, never a phase downgrade. |
+| **Phase says intent, conditions say health** | A not-ready state the user asked for — a roll after a config change, a scale, an upgrade — keeps `phase: Running`; `Ready=False` and its reason carry the health. `Degraded` is for an unplanned loss only. See [phase](#phase-statusphase) and ADR-004. |
 | **Long-running work in sub-status** | `status.phase` stays coarse. Upgrade, scale-down drain, and similar workflows use dedicated sub-blocks (`upgrade`, domain conditions) — not a generic `Reconciling` message alone. |
 | **Diagnostics ≠ Ready path** | Bolt diagnostics (`SHOW SERVERS`, `SHOW DATABASES`, …) are optional and non-fatal. Collection failure sets `diagnostics.collectionError` — does **not** force `Ready=False`. |
 | **Health decoupled from Ready** | Live Neo4j health must not gate `Ready`: a workload that serves clients is `Ready` even when diagnostics are off. The `ServersHealthy` / `DatabasesHealthy` conditions that would report it are [planned, not written](#planned-for-a-later-version). |
@@ -56,19 +57,25 @@ Coarse enum — **does not** encode upgrade step or scale sub-state.
 |-------|---------|-------------------|
 | `Pending` | CR accepted; reconciliation not started or waiting on prerequisites. **Never assigned today** — the first pass already reports `Provisioning`. | `Provisioning` |
 | `Provisioning` | No StatefulSet observed yet. | `Bootstrapping` |
-| `Bootstrapping` | A StatefulSet exists but `Ready` is not met — pods starting, PVCs binding, or the cluster still forming. | `Running` |
-| `Running` | `Ready=True`. | `Bootstrapping` / `Maintenance` / `Failed` |
-| `Degraded` | Partial availability. **Never assigned today** — a `Running` CR that loses a member returns to `Bootstrapping` instead. | `Running` / `Failed` |
+| `Bootstrapping` | A StatefulSet exists, `Ready` is not met, and the CR has **never** been `Ready` — pods starting, PVCs binding, or the cluster still forming for the first time. | `Running` |
+| `Running` | `Ready=True`, **or** a change the user asked for is in flight (a roll, a scale, an upgrade) on a CR that has already served. | `Degraded` / `Maintenance` / `Failed` |
+| `Degraded` | Availability reduced or lost after the CR had served, with nothing in flight that would explain it. Covers a member gone from a cluster and a Standalone whose only pod is down — `Ready=False` and its reason say which. | `Running` / `Failed` |
 | `Failed` | A pipeline step returned an error — see the `Error` condition. | manual fix |
 | `Maintenance` | `spec.maintenance.offlineMode: true`. | `Running` |
 
-`Pending` and `Degraded` are published in the CRD enum, so automation may legitimately match on
-them; they simply never occur. Either the writer starts assigning them or they leave the enum —
-open, with the non-regression rule above (ADR-004).
+How the writer picks between them is decided in ADR-004: offline maintenance first, then `Ready`,
+then a workload with no StatefulSet, then one that has never been `Ready`, then a change in
+flight — anything left is `Degraded`. "Has ever been `Ready`" is read from `status.version`, which is
+written only when everything was serving, so it survives the `Failed` a transient reconcile error
+leaves behind.
+
+`Pending` is published in the CRD enum, so automation may legitimately match on it, but it never
+occurs — the first pass already reports `Provisioning`. Either the writer starts assigning it or it
+leaves the enum; still open.
 
 **Not top-level phases:** `Upgrading`, `Scaling`, `Restoring` — tracked in `status.upgrade`, domain conditions, or day-2 CRD status (`Neo4jRestore`).
 
-While `upgrade.phase != Completed` and `upgrade.phase != ""`, `status.phase` remains `Running` or `Degraded` (if members unhealthy) — never a dedicated `Upgrading` phase at top level.
+While `upgrade.phase != Completed` and `upgrade.phase != ""`, `status.phase` remains `Running` — never a dedicated `Upgrading` phase at top level. It stays `Running` even while members are not ready, because a rolling update makes them not ready one at a time by design and no cheap signal separates that from a member failing on its own; `Ready=False` and its reason report the health throughout.
 
 ---
 
