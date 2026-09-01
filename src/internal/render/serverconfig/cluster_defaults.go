@@ -73,7 +73,25 @@ func operatorDefaultNeo4jConfKeys(ctx render.Context) map[string]string {
 	for k, v := range pluginConfKeys(ctx) {
 		keys[k] = v
 	}
+	for k, v := range seedProviderConfKeys(ctx) {
+		keys[k] = v
+	}
 	return keys
+}
+
+// seedProviderConfKeys enables FileSeedProvider (alongside the cloud providers) when a backups
+// volume is mounted, so restore-by-backupRef can seed file:/backups/<artifact> from that claim
+// (ADR-015 round-trip). Since Neo4j 2025.01 file: has no seed provider by default, so the round
+// trip is dead without this. It lives in the defaults layer so a user can override the provider
+// list via spec.config.neo4j; no backups volume → no file: seed path → nothing to enable.
+func seedProviderConfKeys(ctx render.Context) map[string]string {
+	s := ctx.Neo4j.Spec.Storage
+	if s == nil || s.Volumes == nil || s.Volumes.Backups == nil {
+		return nil
+	}
+	return map[string]string{
+		"dbms.databases.seed_from_uri_providers": "FileSeedProvider,CloudSeedProvider",
+	}
 }
 
 // operatorInjectedNeo4jConfKeys win over user config (topology / connectivity / trust).

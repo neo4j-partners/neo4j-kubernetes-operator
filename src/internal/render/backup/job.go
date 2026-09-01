@@ -29,6 +29,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
 const (
@@ -39,6 +40,12 @@ const (
 	// pvcMountPath is where a PVC destination is mounted inside the Job pod.
 	pvcMountPath = "destination"
 	pvcVolume    = "destination"
+	// pvcSubPath is the subdirectory within the claim the Job writes into. It must match the
+	// workload's backups mount (render/storage/volumes.go shareSubPathExpr("backups") == "backups"),
+	// which mounts the same claim at /backups via that subPath. Without this the Job writes to the
+	// claim root while the server reads <claim>/backups/, so restore seeds file:/backups/<ptr> and
+	// the server reports "not found" (ADR-015 round-trip).
+	pvcSubPath = "backups"
 	// backupTTLSeconds keeps a finished Job (and its logs) around for a day so the cause of a
 	// failure survives GC (ADR-015 — logs & observability).
 	// ponytail: fixed 24h; upgrade path is a schedule/operator flag when someone needs it.
@@ -132,11 +139,12 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*ba
 
 	args := backupArgs(ctx, backup, toPath)
 	container := corev1.Container{
-		Name:         containerName,
-		Image:        ctx.ImageRef(),
-		Command:      []string{"neo4j-admin"},
-		Args:         args,
-		VolumeMounts: mounts,
+		Name:            containerName,
+		Image:           ctx.ImageRef(),
+		Command:         []string{"neo4j-admin"},
+		Args:            args,
+		VolumeMounts:    mounts,
+		SecurityContext: workload.ContainerSecurityContext(ctx),
 	}
 	// PVC destinations get a stable per-database pointer hardlinked to the newest artifact so
 	// restore can seed file:/backups/<db>.latest.backup deterministically (ADR-015 round-trip).
@@ -168,9 +176,10 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*ba
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers:    []corev1.Container{container},
-					Volumes:       volumes,
+					RestartPolicy:   corev1.RestartPolicyNever,
+					Containers:      []corev1.Container{container},
+					Volumes:         volumes,
+					SecurityContext: workload.PodSecurityContext(ctx),
 				},
 			},
 		},
@@ -192,7 +201,7 @@ func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []cor
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: d.PVC.ClaimName},
 			},
 		}}
-		mounts = []corev1.VolumeMount{{Name: pvcVolume, MountPath: "/" + pvcMountPath}}
+		mounts = []corev1.VolumeMount{{Name: pvcVolume, MountPath: "/" + pvcMountPath, SubPath: pvcSubPath}}
 		return "/" + pvcMountPath, volumes, mounts, nil
 	}
 	if d.URL == "" {
