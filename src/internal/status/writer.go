@@ -68,7 +68,7 @@ func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
 func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) error {
 	log := ctrllog.FromContext(ctx).WithName("status").WithValues("domain", "status", "reconciler", "status")
 	var ready, desired int32
-	var anySTSFound bool
+	var anySTSFound, rolling bool
 	storageReady := true
 	storageReason, storageMsg := oracle.ReasonPVCBound, ""
 
@@ -82,11 +82,15 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			anySTSFound = true
 			desired += poolDesired
 			ready += sts.Status.ReadyReplicas
+			if stsRolling(sts) {
+				rolling = true
+			}
 			log.V(1).Info("observed statefulset",
 				"pool", string(pool),
 				"name", sts.Name,
 				"readyReplicas", sts.Status.ReadyReplicas,
 				"desiredReplicas", poolDesired,
+				"rolling", stsRolling(sts),
 			)
 		}
 		if ok, reason, msg := w.observePoolStorageReady(ctx, ctxRender); !ok {
@@ -106,34 +110,40 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	neo4j.Status.ServerSummary = &neo4jv1beta1.ReplicaSummary{Servers: desired, Ready: ready}
 	setCondition(neo4j, oracle.ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
 
+	// Read once: it gates allReady just below, and it is also the signal that a scale-in the user
+	// asked for is in flight, which decides the phase (ADR-004).
+	drainPending := false
+	if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionServersPendingDrain.String()); c != nil {
+		drainPending = c.Status == metav1.ConditionTrue
+	}
+
 	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady
 	if render.IsClusterMode(neo4j) && allReady {
 		if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionClusterFormed.String()); c == nil || c.Status != metav1.ConditionTrue {
 			allReady = false
 		}
-		if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionServersPendingDrain.String()); c != nil && c.Status == metav1.ConditionTrue {
+		if drainPending {
 			allReady = false
 		}
 	}
 	setCondition(neo4j, oracle.ConditionReconciling, metav1.ConditionFalse, oracle.ReasonCompleted, "")
 	setCondition(neo4j, oracle.ConditionError, metav1.ConditionFalse, oracle.ReasonNoError, "")
 
-	if offlineMode(neo4j) {
+	offline := offlineMode(neo4j)
+	if offline {
 		// Pods run a sleep loop (NotReady via Bolt readiness) — do not report Running/Ready.
 		setCondition(neo4j, oracle.ConditionReady, metav1.ConditionFalse, oracle.ReasonOfflineMaintenance,
 			"spec.maintenance.offlineMode is true; Neo4j process is not running")
-		neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseMaintenance
 	} else {
 		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady), readyMessage(ready, desired))
 		if allReady {
-			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseRunning
 			neo4j.Status.Version = neo4j.Spec.Version
-		} else if anySTSFound {
-			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseBootstrapping
-		} else {
-			neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseProvisioning
 		}
 	}
+	changing := changeInFlight(neo4j, rolling, drainPending)
+	// Status is passed whole and read before the assignment: the previously published phase and
+	// version are what let the decision refuse to regress (ADR-004).
+	neo4j.Status.Phase = nextPhase(neo4j.Status, offline, allReady, anySTSFound, changing)
 
 	neo4j.Status.Endpoints = buildEndpoints(render.ClientServiceContext(neo4j))
 	neo4j.Status.ObservedGeneration = neo4j.Generation
@@ -146,6 +156,9 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 		"storageReason", storageReason.String(),
 		"tlsReady", tlsReady,
 		"allReady", allReady,
+		"rolling", rolling,
+		"drainPending", drainPending,
+		"changeInFlight", changing,
 	)
 	return w.Client.Status().Update(ctx, neo4j)
 }
@@ -336,6 +349,51 @@ func readyReason(ok, tlsReady bool) oracle.Reason {
 
 func readyMessage(ready, desired int32) string {
 	return fmt.Sprintf("%d/%d servers ready", ready, desired)
+}
+
+// nextPhase decides status.phase (ADR-004). Phase answers where the object is in its life and what
+// the operator is doing; health is carried by Ready and the domain conditions, never by a phase
+// downgrade. Hence the two ordering rules below: a workload that has already been ready never falls
+// back to Provisioning or Bootstrapping, and a not-ready state the user asked for keeps Running.
+func nextPhase(prior neo4jv1beta1.Neo4jStatus, offline, allReady, anySTSFound,
+	changing bool) neo4jv1beta1.Neo4jPhase {
+	switch {
+	case offline:
+		return neo4jv1beta1.Neo4jPhaseMaintenance
+	case allReady:
+		return neo4jv1beta1.Neo4jPhaseRunning
+	case !anySTSFound:
+		return neo4jv1beta1.Neo4jPhaseProvisioning
+	case !established(prior):
+		return neo4jv1beta1.Neo4jPhaseBootstrapping // never been ready — a genuine first install
+	case changing:
+		return neo4jv1beta1.Neo4jPhaseRunning // a roll, a scale or an upgrade we asked for
+	default:
+		return neo4jv1beta1.Neo4jPhaseDegraded // unplanned loss after the object was established
+	}
+}
+
+// changeInFlight reports whether the workload is unsettled by something the user asked for rather
+// than by something that went wrong: a spec change not yet absorbed, a StatefulSet still moving pods
+// onto a new revision, or a scale-in waiting on Neo4j to release a member (ADR-007). This is the
+// predicate that keeps a routine roll from being reported as a degradation.
+func changeInFlight(neo4j *neo4jv1beta1.Neo4j, rolling, drainPending bool) bool {
+	return neo4j.Generation != neo4j.Status.ObservedGeneration || rolling || drainPending
+}
+
+// established reports whether the workload has ever been fully ready, read from status.version:
+// the writer sets it only under allReady, and unlike phase it survives the Failed value a transient
+// pipeline error leaves behind — so a CR that has served is never called Bootstrapping again.
+func established(prior neo4jv1beta1.Neo4jStatus) bool {
+	return prior.Version != ""
+}
+
+// stsRolling reports whether a StatefulSet is still moving pods onto a new revision. Both revisions
+// must be set: on a StatefulSet being created for the first time only the update revision exists,
+// and that is an install, not a roll.
+func stsRolling(sts appsv1.StatefulSet) bool {
+	return sts.Status.CurrentRevision != "" && sts.Status.UpdateRevision != "" &&
+		sts.Status.CurrentRevision != sts.Status.UpdateRevision
 }
 
 // IsReady reports whether the Ready condition is True.

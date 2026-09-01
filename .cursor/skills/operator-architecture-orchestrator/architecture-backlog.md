@@ -94,6 +94,7 @@ Legend: `✓` decided · `○` draft exists · `·` open · `—` N/A V1
 | F-04 | Warning vs Error conditions (reconciler-only rules) | · | ADR-001 | |
 | F-05 | Event recorder messages (user-facing hints) | · | — | |
 | F-06 | Status patch conflict handling | · | — | retry on conflict |
+| F-07 | `status.phase` computation & non-regression | ADR-004 | F-03 | phase = intent, health = conditions |
 
 ---
 
