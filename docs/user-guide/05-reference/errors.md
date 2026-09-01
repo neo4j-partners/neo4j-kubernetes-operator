@@ -63,6 +63,7 @@ Reasons that report a problem, a decision, or an operation in progress.
 | ServersPendingDrain | ShrinkingTopology | info | condition | Scale-in in progress |
 | ServersPendingDrain | Draining | info | condition | Server drain / `DEALLOCATE DATABASES` in progress |
 | ServersPendingDrain | AwaitingSTSShrink | info | condition | Waiting for the StatefulSet replica shrink after drain |
+| ServersPendingDrain | DrainTimeout | warn | condition+event | A scale-in has stayed pending past the operator's budget; the message names the member Neo4j has not released, what it still reports it hosting, and how long the scale-in has waited. The StatefulSet stays at its current size — no data is at risk, but the scale-in needs a look |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |

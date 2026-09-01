@@ -100,6 +100,7 @@ _config_reset_case_vars() {
   unset NEO4J_POOL CLUSTER_EXPECTED_MEMBERS CLUSTER_EXPECTED_DB_PRIMARIES CLUSTER_DEFAULT_DB
   unset CLUSTER_SCALE_OUT_MEMBERS CLUSTER_SCALE_IN_MEMBERS CLUSTER_SCALE_DB CLUSTER_SCALE_TIMEOUT
   unset CLUSTER_SCALE_STABLE_SECONDS
+  unset SECONDARY_SCALE_POOL SECONDARY_SCALE_OUT_MEMBERS SECONDARY_SCALE_IN_MEMBERS SECONDARY_SCALE_TIMEOUT
   # Credentials knobs — cases run in one shell, so without this a case reading
   # ${AUTH_KNOWN_PASSWORD:-default} silently inherits the previous case's password and
   # asserts the wrong thing (the same holds for the expected Secret name and reason).

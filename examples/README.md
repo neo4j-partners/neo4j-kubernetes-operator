@@ -151,6 +151,12 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 - **TLS:** generated on demand with `./hack/gen-cluster-tls.sh <namespace> <name> <primary-count>`
   (script labels the three Secrets). Full walkthrough, `EXTRA_DNS` for LoadBalancer/Browser HTTPS,
   and `bolt+s://` vs `neo4j+s://` notes: [`secrets/README.md`](secrets/README.md).
+- **Operator admin Bolt (NEO-004):** the operator manages a Neo4j cluster over Bolt, so **Cluster**
+  mode is only admitted with a path for that connection — either `trust.certificates.bolt` with
+  `trust.enabled: true` (verified TLS), or `trust.insecureAdminConnection: true`, which the cluster
+  examples use for brevity and which makes the operator record a Warning event on the CR. The
+  Standalone examples set neither on purpose: the operator never dials Bolt outside Cluster mode,
+  so the field would change nothing.
 - **Plugins:** APOC needs no license. GDS/Bloom Enterprise features need a real license file
   referenced via `pluginDefinitions.{gds,bloom}.licenseSecretRef` — placeholder Secrets (with a
   dummy `REPLACE_ME` value **and the mountable label**) are in

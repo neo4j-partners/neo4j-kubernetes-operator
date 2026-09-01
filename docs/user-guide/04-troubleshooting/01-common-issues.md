@@ -131,6 +131,41 @@ kubectl get neo4j <name> -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}
 
 Wait for `ServersPendingDrain` to clear after formation finishes `DEALLOCATE`/`DROP`. Do not forge the annotation.
 
+## Scale-in reports DrainTimeout
+
+**Symptom:** `ServersPendingDrain=True` with `reason=DrainTimeout` (plus a `Warning` Event under the
+same reason), and the pool StatefulSet still declares its old size.
+
+**Cause:** the scale-in has stayed pending past the operator's budget — 10 minutes, counted from the
+moment `ServersPendingDrain` went `True`, so the reallocation of the database topologies counts
+towards it too. The condition message names the member Neo4j has not released, how long the scale-in
+has waited, and what `SHOW SERVERS` still reports it hosting — which is the part that says why.
+
+**Check:**
+
+```bash
+kubectl get neo4j <name> -o jsonpath='{range .status.conditions[?(@.type=="ServersPendingDrain")]}{.reason}{": "}{.message}{"\n"}{end}'
+# From a member pod, the two views the operator decides on:
+cypher-shell -d system "SHOW SERVERS YIELD name, address, state, health, hosting, requestedHosting;"
+cypher-shell -d system "SHOW DATABASES YIELD name, currentStatus, requestedPrimariesCount, currentPrimariesCount, requestedSecondariesCount, currentSecondariesCount, statusMessage;"
+```
+
+Nothing is at risk while this lasts: the StatefulSet keeps its current size, so no member is removed
+under Neo4j's feet, and the operator keeps retrying on a slower cadence. What it means depends on
+what the member still hosts:
+
+- **A user database.** The reallocation has not finished. Check that the remaining servers can host
+  the requested topology — a database asking for more copies than the smaller pool can hold blocks
+  the drain, and `SHOW DATABASES.statusMessage` usually names the reason.
+- **Only `system` (and composite databases), on a primary.** The operator deliberately waits for
+  Neo4j's `Deallocated` state here rather than dropping a member whose `system` copy still votes.
+  Deallocating a primary requires somewhere to move its copies: verify the remaining primaries are
+  `Available`.
+
+Do not scale the StatefulSet by hand — that removes the member from Kubernetes while Neo4j still
+counts it, which is the state [Scale-out ENABLE fails](#scale-out-enable-fails-server-deallocated-or-dropped)
+describes.
+
 ## BYO auth Secret rejected: not delegated (ADD-01)
 
 **Symptom:** `Error=True` / `reason=SecretNotDelegated` (plus a `Warning` Event under the same

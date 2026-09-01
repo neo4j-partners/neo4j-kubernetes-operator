@@ -16,9 +16,11 @@ on_case_failure: continue
 # threshold exists so a forming cluster is not killed by the kubelet. It inspects the
 # primary pool StatefulSet only. status-conditions runs after the CR has settled.
 #
-# cluster-scale-out-in comes last because it is the only mutating step: it resizes the pool,
-# so every assertion above it describes the declared shape. It is a no-op for cases that do
-# not declare CLUSTER_SCALE_OUT_MEMBERS (a case cannot carry its own step list).
+# The two scale steps come last because they are the only mutating ones: they resize a pool, so
+# every assertion above them describes the declared shape. Each is a no-op unless the case declares
+# its trigger — CLUSTER_SCALE_OUT_MEMBERS for the primary pool, SECONDARY_SCALE_POOL for a
+# secondary one (a case cannot carry its own step list). They resize different pools and no case
+# declares both.
 pipeline:
   case_assert:
     - assert/cluster-members
@@ -29,6 +31,7 @@ pipeline:
     - assert/cluster-routing
     - assert/status-conditions
     - assert/cluster-scale-out-in
+    - assert/cluster-scale-secondary
 
 cases:
   - id: lab-single-primary
@@ -58,3 +61,10 @@ cases:
     neo4j_case: cluster-scale-out-in
     expect: success
     cr_name: e2e-cluster-scale
+
+  - id: scale-secondary
+    comment: Scale a read pool 1 to 2 then back in to 1 on a single-primary cluster — a departing secondary ends up hosting only the system database, which Neo4j can keep reporting as Deallocating, so the operator releases it on what it hosts rather than on that label. The primary must not move in either direction.
+    fixture: tests/fixtures/neo4j-cluster-single-read.yaml
+    neo4j_case: cluster-scale-secondary
+    expect: success
+    cr_name: e2e-cluster-scale-read

@@ -76,7 +76,7 @@ func (a *driverAdmin) Close(ctx context.Context) error {
 
 func (a *driverAdmin) ShowServers(ctx context.Context) ([]Server, error) {
 	result, err := neo4j.ExecuteQuery(ctx, a.driver,
-		"SHOW SERVERS YIELD name, address, state",
+		"SHOW SERVERS YIELD name, address, state, hosting",
 		nil, neo4j.EagerResultTransformer,
 		neo4j.ExecuteQueryWithDatabase("system"))
 	if err != nil {
@@ -94,9 +94,27 @@ func (a *driverAdmin) ShowServers(ctx context.Context) ([]Server, error) {
 		if v, ok := rec.Get("state"); ok {
 			s.State, _ = v.(string)
 		}
+		if v, ok := rec.Get("hosting"); ok {
+			s.Hosting = asStringList(v)
+		}
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// asStringList reads a Cypher LIST OF STRING column, which the driver hands over as []any.
+func asStringList(v any) []string {
+	list, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (a *driverAdmin) ShowDatabaseTopologies(ctx context.Context) ([]DatabaseTopology, error) {
