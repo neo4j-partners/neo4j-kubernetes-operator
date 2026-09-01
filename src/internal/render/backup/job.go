@@ -29,6 +29,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
@@ -40,12 +41,11 @@ const (
 	// pvcMountPath is where a PVC destination is mounted inside the Job pod.
 	pvcMountPath = "destination"
 	pvcVolume    = "destination"
-	// pvcSubPath is the subdirectory within the claim the Job writes into. It must match the
-	// workload's backups mount (render/storage/volumes.go shareSubPathExpr("backups") == "backups"),
-	// which mounts the same claim at /backups via that subPath. Without this the Job writes to the
-	// claim root while the server reads <claim>/backups/, so restore seeds file:/backups/<ptr> and
-	// the server reports "not found" (ADR-015 round-trip).
-	pvcSubPath = "backups"
+	// pvcSubPath is the subdirectory within the claim the Job writes into. It is the workload's
+	// backups sub-path (single-sourced in render/storage): the server mounts the same claim at
+	// /backups via that subPath, so the Job must write there too or restore seeds
+	// file:/backups/<ptr> against an empty dir and the server reports "not found" (ADR-015).
+	pvcSubPath = storage.BackupsSubPath
 	// backupTTLSeconds keeps a finished Job (and its logs) around for a day so the cause of a
 	// failure survives GC (ADR-015 — logs & observability).
 	// ponytail: fixed 24h; upgrade path is a schedule/operator flag when someone needs it.
