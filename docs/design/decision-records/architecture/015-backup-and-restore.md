@@ -194,6 +194,16 @@ func (r *BackupReconciler) Reconcile(ctx, req) (Result, error) {
 
 **Standalone** may use the same seed-from-URI, or an offline `neo4j-admin database restore` Job (single store, no distribution concern).
 
+### PVC round-trip (`file:` seed) & storage requirements
+
+When `source.backupRef` points at a **PVC-destination** backup, the operator resolves the artifact to `file:/backups/<db>.latest.backup` and the **servers** read it off their own filesystem — no cloud credential (ADR-016) is involved. This makes the round-trip work, but only under specific storage and config conditions the operator either enforces or documents:
+
+- **The target must mount the same claim** as `storage.volumes.backups` (`Existing`, same `claimName`). The workload mounts it at `/backups`; a backup whose claim the target does not mount is rejected (`reason=RestoreSourceUnsupported`).
+- **Write/read paths must agree on the sub-directory.** The workload mounts the backups claim with `subPath: backups` (`shareSubPathExpr("backups")`), so the backup Job also writes under that sub-path — otherwise the Job writes to the claim root while the server reads `<claim>/backups/` and the seed is "not found".
+- **A deterministic pointer** `<db>.latest.backup` is hardlinked (copy fallback for SMB) to the newest timestamped artifact, so restore builds the `file:` URI without knowing the timestamp. Recorded as `status.artifacts[].path`.
+- **`FileSeedProvider` is auto-enabled.** Since Neo4j 2025.01 `file:` has no default seed provider, so the operator writes `dbms.databases.seed_from_uri_providers=FileSeedProvider,CloudSeedProvider` whenever a backups volume is mounted (defaults layer — overridable via `spec.config.neo4j`; cloud providers kept so the default cloud seeding is not regressed).
+- **Shared PVC storage must be RWX *and* POSIX-compliant.** A cluster (or any multi-pod target) seeds every allocation from the one claim, so it needs `ReadWriteMany`. Azure Files **SMB/CIFS is not POSIX** and fails backup artifact creation (`Operation not permitted`) and file locking — use **Azure Files NFS v4.1** (or another POSIX RWX class). `ReadWriteOnce` (e.g. Azure Disk) is fine only for single-pod standalone. Object-store destinations sidestep this entirely.
+
 **`system` / whole-cluster DR is out of scope for automated `Neo4jRestore` in the first release** — it requires cluster-wide downtime and `unbind-system-db` on every member (see Context). The procedure, recovery order, non-crash scenarios, and cluster prerequisites are documented in [Disaster recovery](../../backup-restore/disaster-recovery.md). `ponytail:` manual runbook for now; the upgrade path is a future guarded maintenance-mode flow (ties into [ADR-008](008-finalizers-and-deletion.md) and offline maintenance) once the online per-database path is proven.
 
 ### Finalizers
