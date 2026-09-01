@@ -8,6 +8,7 @@ Each domain has its own **base** + **classic cases**. A **profile** picks one ca
 tests/config/
   load.sh                 # sources reconcile.sh
   reconcile.sh            # merge profile + cases + cloud
+  versions.sh             # pinned + latest Kubernetes and Neo4j — see ../contribute.md
   derive.sh               # derived Neo4j resource names
 
   operator/
@@ -37,13 +38,17 @@ tests/config/
 ## Reconciliation
 
 ```
-final config = operator/base
+final config = versions (Kubernetes + Neo4j pins)
+             + operator/base
              + operator/cases/<operator-case>
              + neo4j/base
              + neo4j/cases/<neo4j-case>
              + cloud/<cloud>
              + derive (STS name, secrets, …)
 ```
+
+`versions.sh` comes first so every layer below it — the kind node image in `cloud/local-kind.sh`,
+the `NEO4J_VERSION` in `neo4j/base.sh` — defaults to one pin rather than carrying its own copy.
 
 ### Profiles
 

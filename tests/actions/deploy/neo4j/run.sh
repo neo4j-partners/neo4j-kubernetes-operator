@@ -38,7 +38,18 @@ sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
     -e "s|storageClassName: __CLOUD_STORAGE_CLASS__|storageClassName: ${STORAGE_CLASS_NAME:-}|g" \
     -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
     -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
+    -e "s|__NEO4J_VERSION__|${NEO4J_VERSION}|g" \
   "${fixture}" >"${rendered}"
+
+# A marker the substitutions above do not know about reaches the API server verbatim, and the
+# rejection that follows names the field rather than the fixture — so catch it here, where the
+# fixture and the missing marker can both be named. Comment lines are skipped: a fixture may well
+# explain which marker it deliberately does not use, as neo4j-storage-grow.yaml does.
+if leftover="$(grep -v '^[[:space:]]*#' "${rendered}" | grep -o '__[A-Z0-9_]*__' | sort -u | paste -sd' ' -)" &&
+  [[ -n "${leftover}" ]]; then
+  rm -f "${rendered}" "${stderr_file}"
+  die "fixture ${NEO4J_STANDALONE_FIXTURE} left placeholders unresolved: ${leftover}"
+fi
 
 # Persist the resolved mount name/path so assert/storage-additional (a separate
 # subprocess) can verify the exact point inside the neo4j container.

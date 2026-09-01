@@ -8,7 +8,26 @@ on:
     # 05:00 UTC — 07:00 in Paris on summer time, 06:00 on winter time.
     # GitHub cron has no timezone support, so the hour shifts with DST.
     - cron: "0 5 * * *"
+  # This is the run that tracks the newest versions, which is why the selectors default to
+  # `latest` here and to `pinned` in CI: upstream drift shows up within a day, on a run nobody is
+  # waiting on, instead of turning a pull request red for a reason its author did not cause. When
+  # a nightly has been green on `latest` for a while, promote it by moving PINNED in
+  # tests/config/versions.sh.
+  #
+  # The option lists are hand-maintained copies of that file — GitHub requires `type: choice`
+  # options to be literal YAML, so they cannot be generated from it.
   workflow_dispatch:
+    inputs:
+      kubernetes-version:
+        description: "Kubernetes version — kind leg only, the managed clusters keep their own"
+        type: choice
+        default: latest
+        options: [latest, pinned, "1.37.0", "1.36.4", "1.35.0"]
+      neo4j-version:
+        description: "Neo4j version the suites deploy, on every platform"
+        type: choice
+        default: latest
+        options: [latest, pinned, "2026.07.1", "2026.06.0", "2026.05.0", "5.26.29"]
 
 concurrency:
   # Deliberately not keyed on the ref: every run of this workflow, whether from
@@ -44,6 +63,10 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: local-kind
+          # Empty on the scheduled run, where `inputs` carries nothing — the fallback is what
+          # makes the nightly the leg that tracks upstream.
+          kubernetes-version: ${{ inputs.kubernetes-version || 'latest' }}
+          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
 
   e2e-azure-aks:
     name: Azure
@@ -75,6 +98,8 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: azure-aks
+          # No kubernetes-version: ensure-aks.sh owns the cluster version, and reuses the cluster.
+          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
 
       # Always tear down the platform (AKS + ACR + RG), even when a suite fails or the run is
       # cancelled — an orphaned AKS cluster bills by the hour. This stays a job step rather than
@@ -134,6 +159,8 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: gcp-gke
+          # No kubernetes-version: ensure-gke.sh owns the cluster version, and reuses the cluster.
+          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
 
       # Same reasoning as Azure: a GKE cluster bills by the hour, and `always()` inside the
       # composite would track the action rather than the job. Only the cluster goes — the
@@ -187,6 +214,8 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: aws-eks
+          # No kubernetes-version: ensure-eks.sh owns the cluster version, and reuses the cluster.
+          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
 
       # Same reasoning as the other two clouds, with one addition: EKS refuses to delete a cluster
       # that still owns a nodegroup, so the order and the bounded wait live in a script rather than

@@ -142,18 +142,25 @@ turns it into a unit-test failure before anything runs at all, and a whitelist r
 Declare it in `src/internal/oracle/catalog.go` and run `make errors` — see
 [Adding a condition or Event reason](../docs/developer-guide/02-changing-the-code.md#adding-a-condition-or-event-reason).
 
-### Fixtures must not hard-code a platform
+### Fixtures must not hard-code a platform or a version
 
 Every suite runs on kind, on AKS and on GKE, so a fixture may not name a StorageClass that
-exists on only one of them. Use a placeholder instead:
+exists on only one of them. And every suite has to be runnable against another Neo4j release, so
+it may not name a version either. Use a placeholder instead:
 
 | Placeholder | Rendered as |
 |---|---|
+| `version: "__NEO4J_VERSION__"` | the version the run resolved — see [Which versions a run tests](#which-versions-a-run-tests) |
 | `storageClassName: __STORAGE_CLASS__` | the cloud profile's class when the case sets `NEO4J_USE_STORAGE_CLASS=true`; the line is **dropped** otherwise, leaving the cluster default |
 | `storageClassName: __CLOUD_STORAGE_CLASS__` | always the cloud profile's class — for cases whose subject *is* naming an existing class |
 
 An invalid class the operator is expected to reject (`no-such-storage-class`) is portable and
 stays literal. Add a `clouds:` key only when the case cannot mean anything on another platform.
+
+`deploy/neo4j` fails the case if any `__MARKER__` survives rendering, so a fixture using a
+placeholder nothing substitutes is named here rather than reaching the API server verbatim and
+coming back as a validation error against a field. Comment lines are exempt, so a fixture can
+explain which placeholder it deliberately does not use.
 
 ### Case comments
 
@@ -192,6 +199,51 @@ them all in one job per platform. Neither hardcodes the list — it comes from `
 
 The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
 and 06:00 in winter.
+
+### Which versions a run tests
+
+[`config/versions.sh`](config/versions.sh) holds two pairs, and the split is the whole point:
+
+| | Kubernetes | Neo4j | Who runs it |
+|---|---|---|---|
+| `*_PINNED` | node image kind boots | `spec.version` the fixtures deploy | Every pull request and push |
+| `*_LATEST` | same | same | The nightly `e2e-all-platforms` run |
+
+Holding the pinned pair still is what makes a red check on a pull request mean *this change broke
+something*, rather than a Kubernetes or Neo4j release having landed overnight on a branch nobody
+touched. The nightly carries that risk instead, on a run no one is waiting on, so upstream drift
+still surfaces within a day. When a nightly has been green on `latest` for a while, promote it by
+moving `*_PINNED` in that one file.
+
+Both workflows also expose the two as dropdowns under **Run workflow**, which is how you reproduce
+a nightly failure on a pull request branch, or try a version before promoting it. A selector is
+`pinned`, `latest` or an explicit version; [`bin/resolve-versions.sh`](bin/resolve-versions.sh)
+maps it, and run with no arguments it prints what it would pick without changing anything.
+
+Three limits worth knowing. GitHub requires `type: choice` options to be literal YAML, so the
+option lists in the two workflow files are hand-maintained copies of `versions.sh` — move a pin and
+add the value there in the same change.
+
+A Kubernetes version is only usable if `kindest/node` publishes an image for that exact patch, and
+kind publishes a handful per minor rather than one per release — `v1.36.0` never existed, for
+instance. Take the patch levels from the release notes of the kind version pinned in
+`.github/actions/e2e/action.yml`: those are the pairing that release was tested against, and the
+binary and the image have to move together. Locally the same applies, so `kind version` needs to be
+at least that one before you can select the newer entries.
+
+And the Kubernetes selector reaches kind only: AKS, GKE and
+EKS clusters are created, and then reused, by their `ensure` script, so their version is that
+script's business. The resolver says so in the log rather than printing a number nothing honours.
+
+Locally the same knobs are plain environment variables:
+
+```bash
+# Anything the harness runs picks these up — node image, fixtures, image pre-pull.
+KUBERNETES_VERSION=1.34.0 NEO4J_VERSION=2026.06.0 ./tests/bin/setup-local-kind.sh
+```
+
+`setup-local-kind.sh` refuses to reuse a cluster built on a different node image rather than
+silently testing a version other than the one asked for; delete it first when you switch.
 
 ### Leftover clusters
 

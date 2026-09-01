@@ -21,6 +21,16 @@ inputs:
     description: "Artifact holding pre-built operator + Neo4j images. Empty builds and pulls in-job."
     required: false
     default: ""
+  kubernetes-version:
+    description: >-
+      Kubernetes version selector — pinned, latest, or an explicit version. Applies to kind only:
+      the managed clusters keep whatever version their ensure script created them with.
+    required: false
+    default: pinned
+  neo4j-version:
+    description: "Neo4j version selector — pinned, latest, or an explicit version. Applies to every platform."
+    required: false
+    default: pinned
 
 runs:
   using: composite
@@ -35,12 +45,30 @@ runs:
       shell: bash
       run: find tests -name '*.sh' -exec chmod +x {} +
 
+    # Ahead of everything that reads a version — the kind node image, the fixtures' spec.version,
+    # the image pre-pull — since each of those defaults to the pins in tests/config/versions.sh
+    # unless this step overrides them for the rest of the job.
+    - name: Resolve the versions under test
+      shell: bash
+      env:
+        KUBERNETES_VERSION_SELECTOR: ${{ inputs.kubernetes-version }}
+        NEO4J_VERSION_SELECTOR: ${{ inputs.neo4j-version }}
+        # Lets the script say which versions this platform actually honours, rather than printing
+        # a Kubernetes version a managed cluster was never going to adopt.
+        E2E_CLOUD: ${{ inputs.cloud }}
+      run: bash tests/bin/resolve-versions.sh
+
     # ---------------------------------------------------------------- kind
+    # Pinned rather than left to the action's default, because the kind binary and the node image
+    # are a pair: each kind release publishes and tests a handful of kindest/node tags, and the
+    # ones named in tests/config/versions.sh come from this release's notes. Letting the default
+    # drift would move one half of that pair on its own. Raise both together.
     - name: Install kind
       if: inputs.cloud == 'local-kind'
       uses: helm/kind-action@v1
       with:
         install_only: true
+        version: v0.33.0
 
     # One operator build and one Docker Hub pull per RUN, not per suite. Without this the
     # matrix would rebuild the operator and re-pull Neo4j for every suite; the pull is

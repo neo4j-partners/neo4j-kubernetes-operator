@@ -8,7 +8,25 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # A push or a pull request always runs the pinned pair, so a red check means the change under
+  # review broke something rather than an upstream release having landed overnight. The nightly
+  # e2e-all-platforms run is what tracks the newest versions; these dropdowns are for reproducing
+  # one of its failures here, or for trying a version before promoting it.
+  #
+  # The option lists are hand-maintained copies of tests/config/versions.sh — GitHub requires
+  # `type: choice` options to be literal YAML, so they cannot be generated from it.
   workflow_dispatch:
+    inputs:
+      kubernetes-version:
+        description: "Kubernetes version for the kind clusters"
+        type: choice
+        default: pinned
+        options: [pinned, latest, "1.37.0", "1.36.4", "1.35.0"]
+      neo4j-version:
+        description: "Neo4j version the suites deploy"
+        type: choice
+        default: pinned
+        options: [pinned, latest, "2026.07.1", "2026.06.0", "2026.05.0", "5.26.29"]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -33,11 +51,19 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # The suite jobs resolve this for themselves; this job has to as well, because it is the one
+      # that decides which tag to pull and cache. Both go through the same script, so the image
+      # shared across the matrix cannot be a different version from the one the fixtures deploy.
+      - name: Resolve the versions under test
+        env:
+          NEO4J_VERSION_SELECTOR: ${{ inputs.neo4j-version || 'pinned' }}
+        run: bash tests/bin/resolve-versions.sh
+
       - name: Resolve the Neo4j image
         id: neo4j
         run: |
-          # tests/config/neo4j/base.sh is the single source of truth for the pinned version,
-          # and is what setup-local-kind.sh derives its image name from too.
+          # base.sh yields to the NEO4J_VERSION the step above exported, and falls back to the pin
+          # in tests/config/versions.sh — the same path setup-local-kind.sh takes.
           . tests/config/neo4j/base.sh
           if [ "${NEO4J_EDITION}" = "enterprise" ]; then
             image="neo4j:${NEO4J_VERSION}-enterprise"
@@ -114,3 +140,7 @@ jobs:
           cloud: local-kind
           suite: ${{ matrix.suite }}
           images-artifact: e2e-images
+          # Empty on push and pull_request, where `inputs` carries nothing — the fallback is what
+          # makes those runs the reproducible ones.
+          kubernetes-version: ${{ inputs.kubernetes-version || 'pinned' }}
+          neo4j-version: ${{ inputs.neo4j-version || 'pinned' }}
