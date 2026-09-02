@@ -34,6 +34,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackupschedule"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -141,10 +142,14 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 	b.Status.Reason = ""
 	b.Status.Message = ""
 	b.Status.Artifacts = artifactsFor(b, r.artifactPaths(ctx, job))
-	// ponytail: chain = the record name (each ad-hoc backup anchors its own chain).
-	// A Neo4jBackupSchedule will own real cross-backup chain ids in a later increment.
+	// A scheduled backup carries its chain id as a label (the schedule owns cross-backup chains);
+	// an ad-hoc backup anchors its own chain, so it falls back to the record name.
 	if b.Status.Chain == "" {
-		b.Status.Chain = b.Name
+		if chain := b.Labels[neo4jbackupschedule.LabelChain]; chain != "" {
+			b.Status.Chain = chain
+		} else {
+			b.Status.Chain = b.Name
+		}
 	}
 	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionTrue, oracle.ReasonBackupSucceeded, "backup completed")
 	return ctrl.Result{}, r.writeStatus(ctx, b)

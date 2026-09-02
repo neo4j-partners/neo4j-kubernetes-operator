@@ -33,6 +33,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	neo4jctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4j"
 	neo4jbackupctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackup"
+	neo4jschedulectrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackupschedule"
 	neo4jrestorectrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jrestore"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
@@ -160,6 +161,11 @@ func main() {
 
 	if err := neo4jrestorectrl.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Neo4jRestore")
+		os.Exit(1)
+	}
+
+	if err := neo4jschedulectrl.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Neo4jBackupSchedule")
 		os.Exit(1)
 	}
 

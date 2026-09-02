@@ -85,6 +85,10 @@ Reasons that report a problem, a decision, or an operation in progress.
 | RestoreReady | RestoreSeedFailed | error | condition+event | A CREATE/seed statement failed; the message carries the Neo4j error detail |
 | RestoreReady | RestoreAggregating | info | condition | A pre-seed `neo4j-admin backup aggregate` Job is collapsing the backup chain before seeding |
 | RestoreReady | RestoreAggregateFailed | error | condition+event | The pre-seed aggregate Job failed; the message carries the neo4j-admin failure detail |
+| ScheduleReady | ScheduleSuspended | info | condition | `spec.suspend` is true; no backups are emitted until it is cleared |
+| ScheduleReady | ScheduleTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| ScheduleReady | ScheduleEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
+| ScheduleReady | ScheduleInvalidCron | error | condition+event | A cron expression (full / incremental / aggregate) could not be parsed |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
@@ -112,6 +116,8 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
 | BackupReady | BackupSucceeded | info | condition | The backup Job completed and artifacts were written |
 | RestoreReady | RestoreSucceeded | info | condition | Every requested database was seeded and is online |
+| ScheduleReady | ScheduleActive | info | condition | Cadences are parsed and the schedule is emitting Neo4jBackup objects on time |
+| — (Event only) | ScheduleBackupEmitted | info | event | A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
 <!-- END GENERATED oracle:steady -->
