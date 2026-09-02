@@ -24,15 +24,10 @@ oracle_reasons_for() {  # <condition>
     StorageReady) printf '%s\n' PVCBound PVCPending StorageResizing StorageResizeFailed ;;
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
-<<<<<<< HEAD
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
-    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
-=======
-    ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink ;;
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported ;;
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreAggregating RestoreAggregateFailed ;;
-    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted ;;
->>>>>>> abed929 (feat(backup): reconcile Neo4jBackup into a neo4j-admin Job)
+    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
     *) return 1 ;;
   esac
 }
@@ -85,6 +80,7 @@ oracle_severity() {  # <reason>
     ShrinkingTopology) echo info ;;
     Draining) echo info ;;
     AwaitingSTSShrink) echo info ;;
+    DrainTimeout) echo warn ;;
     BackupSucceeded) echo info ;;
     BackupInProgress) echo info ;;
     BackupJobFailed) echo error ;;
