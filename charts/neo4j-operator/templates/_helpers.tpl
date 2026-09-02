@@ -201,6 +201,7 @@ rules:
   - neo4j.com
   resources:
   - neo4jbackups
+  - neo4jbackupschedules
   - neo4jrestores
   verbs:
   - create
@@ -214,6 +215,7 @@ rules:
   - neo4j.com
   resources:
   - neo4jbackups/status
+  - neo4jbackupschedules/status
   - neo4jrestores/status
   verbs:
   - get
