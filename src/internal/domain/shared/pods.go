@@ -18,6 +18,7 @@ package shared
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,16 +76,36 @@ func JobPodTerminationMessage(ctx context.Context, c client.Client, namespace, j
 	return msg
 }
 
-// ParseNamedArtifacts parses the "<db>=<file>" lines a backup/aggregate Job writes to its
-// termination message into a map. Empty names and malformed lines are skipped.
-func ParseNamedArtifacts(message string) map[string]string {
-	out := map[string]string{}
+// NamedArtifact is a filename plus optional byte size recorded by a backup/aggregate Job.
+type NamedArtifact struct {
+	Name      string
+	SizeBytes int64
+}
+
+// ParseNamedArtifacts parses the "<db>=<file>[|<bytes>]" lines a backup/aggregate Job writes to
+// its termination message into a map keyed by database. The "|<bytes>" suffix is optional (older
+// Jobs omit it, and stat can fail) so a bare "<db>=<file>" still parses with SizeBytes 0. Empty
+// names and malformed lines are skipped.
+func ParseNamedArtifacts(message string) map[string]NamedArtifact {
+	out := map[string]NamedArtifact{}
 	for _, line := range strings.Split(message, "\n") {
-		if i := strings.IndexByte(line, '='); i > 0 {
-			if name := strings.TrimSpace(line[i+1:]); name != "" {
-				out[strings.TrimSpace(line[:i])] = name
+		i := strings.IndexByte(line, '=')
+		if i <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:i])
+		val := strings.TrimSpace(line[i+1:])
+		na := NamedArtifact{Name: val}
+		if j := strings.LastIndexByte(val, '|'); j >= 0 {
+			na.Name = strings.TrimSpace(val[:j])
+			if n, err := strconv.ParseInt(strings.TrimSpace(val[j+1:]), 10, 64); err == nil {
+				na.SizeBytes = n
 			}
 		}
+		if key == "" || na.Name == "" {
+			continue
+		}
+		out[key] = na
 	}
 	return out
 }
