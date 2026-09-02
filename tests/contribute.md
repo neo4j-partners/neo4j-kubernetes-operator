@@ -184,6 +184,9 @@ not a YAML library):
 Rationale that only matters when reading the suite file (undecided behaviour, pointers to a
 decision record) stays a `#` comment above the case.
 
+The comment is also the "Covers" column of the job summary described below, which is the version
+someone reads without opening the log — worth a sentence that stands alone.
+
 ## Which workflow runs what
 
 | Workflow | Trigger | Targets |
@@ -199,6 +202,25 @@ them all in one job per platform. Neither hardcodes the list — it comes from `
 
 The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
 and 06:00 in winter.
+
+### The job summary
+
+[`lib/summary.sh`](lib/summary.sh) writes a table per suite to `GITHUB_STEP_SUMMARY`, which GitHub
+renders on the run's own page: one row per case, with its outcome, how long it took and its
+`comment:`. The goal is that a red run says *which case, on which platform, on which versions*
+without anyone opening a log; the log remains the only place that says why.
+
+It is inert outside Actions — the variable is unset on a laptop and every function returns
+immediately — so running a suite locally is unaffected.
+
+The file is per **step**, not per job, which is what lets one implementation serve both shapes:
+`ci.yml` gives each suite its own job and so its own table, while a cloud leg runs all fourteen
+suites in a single step and their tables stack into one summary. That is why each table repeats
+its suite and platform instead of relying on the job title.
+
+Cases that never ran are recorded too, since a missing row and a suite silently dropped from the
+run look identical otherwise: one restricted to other platforms shows as `skip`, and the ones
+abandoned after a failure under `on_case_failure: stop` are counted as "not run" in the footer.
 
 ### Which versions a run tests
 

@@ -50,8 +50,8 @@ if [[ ! "${neo4j}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
-# `if` rather than `[[ ]] && assignment`: under `set -e` a false test makes the list exit
-# non-zero, ending the script two lines before it prints anything.
+# Whether the number came from a dropdown or from the file, so the log says which — a run that
+# tested the default and one that was asked for the same version read identically otherwise.
 if [[ -n "${KUBERNETES_VERSION_INPUT:-}" ]]; then
   origin_k8s="requested"
 else
@@ -69,8 +69,6 @@ echo "Neo4j      ${neo4j} (${origin_neo4j})"
 # GITHUB_ENV is how one step hands values to the next. Everything downstream — the kind node image,
 # the cloud ensure scripts, the fixtures' spec.version, the image CI pre-pulls — reads these
 # through a `:-` default, so setting them here overrides the file without touching it.
-# `if` rather than `[[ ]] && echo`: a false test makes the list exit non-zero, which under
-# `set -e` would end the script here instead of falling through to the next line.
 if [[ -n "${GITHUB_ENV:-}" ]]; then
   echo "KUBERNETES_VERSION=${kubernetes}" >>"${GITHUB_ENV}"
   echo "NEO4J_VERSION=${neo4j}" >>"${GITHUB_ENV}"
