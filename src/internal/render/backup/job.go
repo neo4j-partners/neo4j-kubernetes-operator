@@ -57,20 +57,14 @@ const (
 // JobName is the deterministic Job name for a Neo4jBackup (owner-referenced by it).
 func JobName(backup *neo4jv1beta1.Neo4jBackup) string { return backup.Name + "-backup" }
 
-// PointerName is the stable, seed-ready artifact name the backup Job hardlinks to the newest
-// timestamped artifact of a database (ADR-015 round-trip). Deterministic so restore can build
-// file:/backups/<PointerName> without knowing the timestamp neo4j-admin chose.
-func PointerName(db string) string { return db + ".latest.backup" }
-
-// SeedablePointers reports the databases a PVC-destination backup can expose as single seedable
-// files, and true when pointer creation applies at all. Only Full/Auto backups of explicitly
-// named databases qualify: a wildcard ("*") has no known names at render time, and an
-// incremental artifact is not restorable on its own (it needs the whole chain).
-func SeedablePointers(backup *neo4jv1beta1.Neo4jBackup) ([]string, bool) {
+// SeedableDatabases reports the databases a PVC-destination backup exposes as file: seeds, and
+// true when that applies at all. Only explicitly named databases on a PVC qualify: a wildcard
+// ("*") has no known names at render time (so the Job cannot record which artifact to seed), and
+// object-store destinations seed from their URL directly. Incrementals qualify too — restore
+// seeds the artifact this backup produced (the chain's last link) and Neo4j replays the whole
+// chain from the same directory (ADR-015).
+func SeedableDatabases(backup *neo4jv1beta1.Neo4jBackup) ([]string, bool) {
 	if backup.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
-		return nil, false
-	}
-	if backup.Spec.Type == neo4jv1beta1.BackupTypeIncremental {
 		return nil, false
 	}
 	dbs := backup.Spec.Databases
@@ -139,17 +133,22 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*ba
 
 	args := backupArgs(ctx, backup, toPath)
 	container := corev1.Container{
-		Name:            containerName,
-		Image:           ctx.ImageRef(),
-		Command:         []string{"neo4j-admin"},
-		Args:            args,
-		VolumeMounts:    mounts,
-		SecurityContext: workload.ContainerSecurityContext(ctx),
+		Name:    containerName,
+		Image:   ctx.ImageRef(),
+		Command: []string{"neo4j-admin"},
+		Args:    args,
+		// FallbackToLogsOnError copies the tail of the container's own output into the pod's
+		// termination message when it exits non-zero, so the reconciler can surface the real
+		// neo4j-admin cause (e.g. "Differential backups require ... a full backup") in
+		// status.message instead of the Job controller's generic "backoff limit exceeded".
+		TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+		VolumeMounts:             mounts,
+		SecurityContext:          workload.ContainerSecurityContext(ctx),
 	}
-	// PVC destinations get a stable per-database pointer hardlinked to the newest artifact so
-	// restore can seed file:/backups/<db>.latest.backup deterministically (ADR-015 round-trip).
+	// PVC destinations record the real artifact filename per database so restore can seed
+	// file:/backups/<name> (the chain's last link) without a renamed pointer (ADR-015 round-trip).
 	// This requires a shell, so wrap neo4j-admin in sh -c; object stores keep the bare command.
-	if dbs, ok := SeedablePointers(backup); ok {
+	if dbs, ok := SeedableDatabases(backup); ok {
 		container.Command = []string{"sh", "-c", backupScript(args, toPath, dbs)}
 		container.Args = nil
 	}
@@ -210,23 +209,25 @@ func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []cor
 	return d.URL, nil, nil, nil
 }
 
-// backupScript runs neo4j-admin then writes a deterministic pointer per database to the newest
-// artifact it produced (<db>-<timestamp>.backup -> <db>.latest.backup), so restore can seed
-// file:/backups/<db>.latest.backup without knowing the timestamp. The pointer resolves through
-// both the Job's destination mount and the server's /backups mount.
+// backupScript runs neo4j-admin then records the real artifact filename neo4j-admin chose for
+// each database (its newest <db>-<timestamp>.backup) so restore can seed file:/backups/<name> —
+// the chain's true last link — without a renamed pointer. A renamed hardlink/copy would leave a
+// duplicate .backup in the directory that confuses Neo4j's chain resolution (and copies are the
+// only portable pointer on Azure Files SMB, which supports neither hardlinks nor symlinks), so
+// we record the name instead of duplicating the file.
 //
-// It prefers a hardlink (same inode, no extra storage) but falls back to a copy: Azure Files
-// (SMB) — the common RWX class on AKS — supports neither hardlinks nor symlinks, so ln fails
-// there and cp is the only portable pointer. ponytail: cp doubles the latest full's storage on
-// such shares (upgrade: exact-name capture); the pointer shares the .backup suffix, which a
-// future aggregate/retention scan must skip; args are space-joined (neo4j-admin flags carry no
+// The name is emitted as "<db>=<file>" to /dev/termination-log, which the kubelet surfaces in the
+// pod's terminated message (terminationMessagePolicy=FallbackToLogsOnError) for the reconciler to
+// read on success. Recording is best-effort: the group always exits 0 (trailing `true`) so a
+// missing artifact or an unwritable termination-log never fails an otherwise-good backup —
+// restore then reports the missing path. args are space-joined (neo4j-admin flags carry no
 // spaces — switch to a quoted argv if extraArgs ever needs them).
 func backupScript(args []string, toPath string, dbs []string) string {
 	script := "neo4j-admin " + strings.Join(args, " ")
 	for _, db := range dbs {
-		ptr := fmt.Sprintf("%s/%s", toPath, PointerName(db))
-		script += fmt.Sprintf(" && a=\"$(ls -t %s/%s-*.backup | head -1)\" && { ln -f \"$a\" \"%s\" 2>/dev/null || cp -f \"$a\" \"%s\"; }",
-			toPath, db, ptr, ptr)
+		script += fmt.Sprintf(
+			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")\" >> /dev/termination-log 2>/dev/null; true; }",
+			toPath, db, db)
 	}
 	return script
 }
