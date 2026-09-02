@@ -202,44 +202,67 @@ and 06:00 in winter.
 
 ### Which versions a run tests
 
-[`config/versions.sh`](config/versions.sh) holds two pairs, and the split is the whole point:
+[`config/versions.sh`](config/versions.sh) holds one concrete version per platform, plus one for
+Neo4j and a floor for envtest:
 
-| | Kubernetes | Neo4j | Who runs it |
-|---|---|---|---|
-| `*_PINNED` | node image kind boots | `spec.version` the fixtures deploy | Every pull request and push |
-| `*_LATEST` | same | same | The nightly `e2e-all-platforms` run |
+| Variable | What it fixes | Shape |
+|---|---|---|
+| `KUBERNETES_VERSION_KIND` | the `kindest/node` image kind boots | exact patch |
+| `KUBERNETES_VERSION_AKS` | `az aks create --kubernetes-version` | minor; Azure selects the patch |
+| `KUBERNETES_VERSION_GKE` | `gcloud container clusters create --cluster-version` | minor; Google selects the patch and its `-gke` build |
+| `KUBERNETES_VERSION_EKS` | `aws eks create-cluster --kubernetes-version` | minor only; a patch is rejected |
+| `KUBERNETES_VERSION_FLOOR` | the version envtest runs the unit tests on | exact patch |
+| `NEO4J_VERSION_DEFAULT` | `spec.version` the fixtures deploy | exact version |
 
-Holding the pinned pair still is what makes a red check on a pull request mean *this change broke
-something*, rather than a Kubernetes or Neo4j release having landed overnight on a branch nobody
-touched. The nightly carries that risk instead, on a run no one is waiting on, so upstream drift
-still surfaces within a day. When a nightly has been green on `latest` for a while, promote it by
-moving `*_PINNED` in that one file.
+Four Kubernetes values rather than one, because the platforms neither offer the same versions nor
+accept the same shape. The ceiling common to all four is 1.36 today: only kind can run 1.37.
 
-Both workflows also expose the two as dropdowns under **Run workflow**, which is how you reproduce
-a nightly failure on a pull request branch, or try a version before promoting it. A selector is
-`pinned`, `latest` or an explicit version; [`bin/resolve-versions.sh`](bin/resolve-versions.sh)
-maps it, and run with no arguments it prints what it would pick without changing anything.
+Nothing resolves itself at run time. There is no `latest` that asks a registry what is newest, and
+so no second `pinned` value to keep in step with it either: a static list makes the default both
+current *and* reproducible, which is what someone reproducing a nightly failure weeks later needs.
+Moving a version is an edit to that one file, reviewed like any other change.
 
-Three limits worth knowing. GitHub requires `type: choice` options to be literal YAML, so the
-option lists in the two workflow files are hand-maintained copies of `versions.sh` — move a pin and
-add the value there in the same change.
+`KUBERNETES_VERSION_FLOOR` is deliberately not what any cluster runs. It is the minimum the chart
+declares in `kubeVersion`, and envtest runs the unit tests there so the CRD's CEL rules are proved
+against the oldest Kubernetes the operator claims to support — the version where a rule written
+against a newer CEL library would fail, and the one no other job exercises.
 
-A Kubernetes version is only usable if `kindest/node` publishes an image for that exact patch, and
-kind publishes a handful per minor rather than one per release — `v1.36.0` never existed, for
-instance. Take the patch levels from the release notes of the kind version pinned in
+Both workflows expose these as dropdowns under **Run workflow**, which is how you reproduce a
+nightly failure on a branch, or try a version before making it the default. `e2e-all-platforms`
+also takes a **platform** — `all`, `local-kind`, `azure`, `gcp` or `aws` — and offers one
+Kubernetes list per platform, since GitHub cannot narrow a list to the platform picked in the same
+form; the lists that do not apply are simply ignored.
+[`bin/resolve-versions.sh`](bin/resolve-versions.sh) turns a dropdown value, or the absence of one,
+into the versions a platform gets. Run outside Actions it prints what it would pick and changes
+nothing, which is how to check a value before dispatching:
+
+```bash
+E2E_CLOUD=aws-eks ./tests/bin/resolve-versions.sh
+```
+
+Two limits worth knowing. GitHub requires `type: choice` options to be literal YAML, so the option
+lists in the two workflow files — and the fallbacks in their `run-name:`, which GitHub evaluates
+before any job could read a file — are hand-maintained copies of `versions.sh`. Move a version
+there and in both workflows in the same change.
+
+And a kind version is only usable if `kindest/node` publishes an image for that exact patch, which
+it does a handful of times per minor rather than once per release — `v1.36.0` never existed. Take
+the patch levels from the release notes of the kind version pinned in
 `.github/actions/e2e/action.yml`: those are the pairing that release was tested against, and the
 binary and the image have to move together. Locally the same applies, so `kind version` needs to be
 at least that one before you can select the newer entries.
 
-And the Kubernetes selector reaches kind only: AKS, GKE and
-EKS clusters are created, and then reused, by their `ensure` script, so their version is that
-script's business. The resolver says so in the log rather than printing a number nothing honours.
+A managed cluster that is already there gets checked rather than reused blindly: running a
+different version from the one requested, the `ensure` script refuses and says how to delete it.
+Upgrading in place is not the alternative — it takes tens of minutes and would leave the suites
+testing a control plane mid-upgrade. The nightly tears its clusters down at the end of every run,
+so this only comes up locally, or after a teardown that did not complete.
 
 Locally the same knobs are plain environment variables:
 
 ```bash
 # Anything the harness runs picks these up — node image, fixtures, image pre-pull.
-KUBERNETES_VERSION=1.34.0 NEO4J_VERSION=2026.06.0 ./tests/bin/setup-local-kind.sh
+KUBERNETES_VERSION=1.36.4 NEO4J_VERSION=2026.06.0 ./tests/bin/setup-local-kind.sh
 ```
 
 `setup-local-kind.sh` refuses to reuse a cluster built on a different node image rather than

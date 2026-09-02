@@ -22,3 +22,7 @@ GKE_NODE_COUNT="${GKE_NODE_COUNT:-2}"
 # 4 vCPU / 16 GiB per node, matching the AKS profile's Standard_D4s_v3 so a Cluster suite has the
 # same room on both clouds.
 GKE_MACHINE_TYPE="${GKE_MACHINE_TYPE:-e2-standard-4}"
+
+# Version for the control plane, passed to `gcloud container clusters create`. A minor is enough:
+# GKE resolves it to a patch and its own -gke build number, which no one should have to track here.
+KUBERNETES_VERSION="${KUBERNETES_VERSION:-${KUBERNETES_VERSION_GKE}}"

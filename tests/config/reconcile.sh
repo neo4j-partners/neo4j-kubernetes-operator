@@ -6,7 +6,7 @@ set -euo pipefail
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # First, so the layers below (and the cloud profiles load_cloud_config sources) can default their
-# image tags to the pinned versions rather than each carrying its own copy.
+# image tags to the versions that file names rather than each carrying its own copy.
 # shellcheck source=versions.sh
 source "${CONFIG_DIR}/versions.sh"
 # shellcheck source=operator/base.sh

@@ -1,12 +1,16 @@
 name: E2E — all platforms
 
-# Puts the versions on the Actions list page, so a run is identifiable without opening it. It can
-# only show what was selected, not what that resolved to: run-name is evaluated before any job
-# starts and reaches only the `github` and `inputs` contexts. The resolved numbers go to each job's
-# summary instead — see VERSIONS_JOB_SUMMARY below.
+# Puts the platform and the versions on the Actions list page, so a run is identifiable without
+# opening it. GitHub evaluates this before any job starts and reaches only the `github` and
+# `inputs` contexts, so the fallbacks — what a scheduled run gets, since it fills in no form — are
+# literal copies of tests/config/versions.sh. Move a default there and here in one change.
+#
+# With `all` selected there are four Kubernetes versions in play and no room to name them, hence
+# "per platform"; each job records its own pair in its summary, see VERSIONS_JOB_SUMMARY below.
 run-name: >-
-  E2E AP — K ${{ inputs.kubernetes-version || 'latest' }},
-  Neo4j ${{ inputs.neo4j-version || 'latest' }}
+  E2E — Platform ${{ inputs.platform || 'all' }},
+  Kubernetes ${{ (inputs.platform == 'local-kind' && inputs.kind-kubernetes-version) || (inputs.platform == 'azure' && inputs.aks-kubernetes-version) || (inputs.platform == 'gcp' && inputs.gke-kubernetes-version) || (inputs.platform == 'aws' && inputs.eks-kubernetes-version) || 'per platform' }},
+  Neo4j ${{ inputs.neo4j-version || '2026.07.1' }}
 
 # The same suites as CI, on kind and on real AKS, GKE and EKS clusters in parallel.
 # The managed clusters live here rather than in CI because each run creates and
@@ -16,26 +20,52 @@ on:
     # 05:00 UTC — 07:00 in Paris on summer time, 06:00 on winter time.
     # GitHub cron has no timezone support, so the hour shifts with DST.
     - cron: "0 5 * * *"
-  # This is the run that tracks the newest versions, which is why the selectors default to
-  # `latest` here and to `pinned` in CI: upstream drift shows up within a day, on a run nobody is
-  # waiting on, instead of turning a pull request red for a reason its author did not cause. When
-  # a nightly has been green on `latest` for a while, promote it by moving PINNED in
-  # tests/config/versions.sh.
+  # Every list holds concrete versions and every default is the newest of them. There is no
+  # `latest` that resolves itself at run time: a nightly failure has to be reproducible on the
+  # same version weeks later, and holding the list still is what makes the default both current
+  # and reproducible — which is why there is no second `pinned` value either. Moving a version is
+  # an edit to tests/config/versions.sh, reviewed like any other.
   #
-  # The option lists are hand-maintained copies of that file — GitHub requires `type: choice`
-  # options to be literal YAML, so they cannot be generated from it.
+  # One Kubernetes list per platform, because the four cannot be given the same number: kind pulls
+  # a published kindest/node tag and needs the exact patch, AKS and GKE take a minor and choose the
+  # patch themselves, and EKS rejects a patch outright. The ceiling common to all four is 1.36 —
+  # only kind can run 1.37 today. GitHub cannot narrow a list to the platform picked in the same
+  # form, so the three lists that do not apply are simply ignored.
+  #
+  # The option lists are hand-maintained copies of tests/config/versions.sh — GitHub requires
+  # `type: choice` options to be literal YAML, so they cannot be generated from it.
   workflow_dispatch:
     inputs:
-      kubernetes-version:
-        description: "Kubernetes version — kind leg only, the managed clusters keep their own"
+      platform:
+        description: "Which platform to run"
         type: choice
-        default: latest
-        options: [latest, pinned, "1.37.0", "1.36.4", "1.35.0"]
+        default: all
+        options: [all, local-kind, azure, gcp, aws]
+      kind-kubernetes-version:
+        description: "Kubernetes for kind — exact patch, and only a tag kind publishes"
+        type: choice
+        default: "1.37.0"
+        options: ["1.37.0", "1.36.4", "1.35.8"]
+      aks-kubernetes-version:
+        description: "Kubernetes for AKS — minor; Azure selects the patch"
+        type: choice
+        default: "1.36"
+        options: ["1.36", "1.35"]
+      gke-kubernetes-version:
+        description: "Kubernetes for GKE — minor; Google selects the patch and its -gke build"
+        type: choice
+        default: "1.36"
+        options: ["1.36", "1.35"]
+      eks-kubernetes-version:
+        description: "Kubernetes for EKS — minor only; 1.34 is the oldest in standard support"
+        type: choice
+        default: "1.36"
+        options: ["1.36", "1.35", "1.34"]
       neo4j-version:
         description: "Neo4j version the suites deploy, on every platform"
         type: choice
-        default: latest
-        options: [latest, pinned, "2026.07.1", "2026.06.0", "2026.05.0", "5.26.29"]
+        default: "2026.07.1"
+        options: ["2026.07.1", "2026.06.0", "2026.05.0", "5.26.29"]
 
 concurrency:
   # Deliberately not keyed on the ref: every run of this workflow, whether from
@@ -73,20 +103,23 @@ jobs:
   e2e-local-kind:
     name: kind
     needs: unit
+    # An empty platform is a scheduled run: it fills in no form, so it runs all four.
+    if: inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'local-kind'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/e2e
         with:
           cloud: local-kind
-          # Empty on the scheduled run, where `inputs` carries nothing — the fallback is what
-          # makes the nightly the leg that tracks upstream.
-          kubernetes-version: ${{ inputs.kubernetes-version || 'latest' }}
-          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
+          # Both empty on the scheduled run, where `inputs` carries nothing. The action then takes
+          # this platform's default from tests/config/versions.sh rather than guessing here.
+          kubernetes-version: ${{ inputs.kind-kubernetes-version }}
+          neo4j-version: ${{ inputs.neo4j-version }}
 
   e2e-azure-aks:
     name: Azure
     needs: unit
+    if: inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'azure'
     runs-on: ubuntu-latest
     env:
       # Azure resource names — override via repository Variables
@@ -114,8 +147,11 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: azure-aks
-          # No kubernetes-version: ensure-aks.sh owns the cluster version, and reuses the cluster.
-          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
+          # A minor: ensure-aks.sh passes it to `az aks create` and Azure selects the patch. The
+          # nightly destroys the cluster at the end of the run, so this is honoured on every run
+          # rather than being frozen by whatever the first cluster was created with.
+          kubernetes-version: ${{ inputs.aks-kubernetes-version }}
+          neo4j-version: ${{ inputs.neo4j-version }}
 
       # Always tear down the platform (AKS + ACR + RG), even when a suite fails or the run is
       # cancelled — an orphaned AKS cluster bills by the hour. This stays a job step rather than
@@ -135,6 +171,7 @@ jobs:
   e2e-gcp-gke:
     name: GCP
     needs: unit
+    if: inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'gcp'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -175,8 +212,10 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: gcp-gke
-          # No kubernetes-version: ensure-gke.sh owns the cluster version, and reuses the cluster.
-          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
+          # A minor: ensure-gke.sh passes it to `gcloud container clusters create` and Google
+          # selects both the patch and its -gke build number.
+          kubernetes-version: ${{ inputs.gke-kubernetes-version }}
+          neo4j-version: ${{ inputs.neo4j-version }}
 
       # Same reasoning as Azure: a GKE cluster bills by the hour, and `always()` inside the
       # composite would track the action rather than the job. Only the cluster goes — the
@@ -196,6 +235,7 @@ jobs:
   e2e-aws-eks:
     name: AWS
     needs: unit
+    if: inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'aws'
     runs-on: ubuntu-latest
     env:
       # AWS names and sizing — override via repository Variables
@@ -230,8 +270,10 @@ jobs:
       - uses: ./.github/actions/e2e
         with:
           cloud: aws-eks
-          # No kubernetes-version: ensure-eks.sh owns the cluster version, and reuses the cluster.
-          neo4j-version: ${{ inputs.neo4j-version || 'latest' }}
+          # A minor, and EKS takes nothing else — ensure-eks.sh truncates a longer value before
+          # calling create-cluster, since the API rejects a patch rather than rounding it down.
+          kubernetes-version: ${{ inputs.eks-kubernetes-version }}
+          neo4j-version: ${{ inputs.neo4j-version }}
 
       # Same reasoning as the other two clouds, with one addition: EKS refuses to delete a cluster
       # that still owns a nodegroup, so the order and the bounded wait live in a script rather than

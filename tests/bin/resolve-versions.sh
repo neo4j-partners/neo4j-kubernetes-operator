@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Turn the version selectors the workflows pass into the concrete Kubernetes and Neo4j versions a
-# run tests, and hand them to the steps that follow.
+# Decide which Kubernetes and Neo4j versions a run tests, and hand them to the steps that follow.
 #
-# A selector is `pinned`, `latest`, an explicit version, or empty — empty meaning `pinned`, so a
-# push or pull request that sets nothing gets the reproducible pair. The mapping lives here rather
-# than in a workflow expression for two reasons: one copy serves both workflows, and GitHub's
-# `a && b || c` idiom silently returns `c` whenever `b` is an empty string, which is exactly the
-# case this has to get right.
+# The workflows pass a version straight from a dropdown, or nothing at all — nothing being the
+# scheduled nightly and every push and pull request, none of which fill in a form. Empty means
+# "this platform's default", which tests/config/versions.sh holds one of per platform, because
+# kind, AKS, GKE and EKS cannot be given the same number.
+#
+# The mapping lives here rather than in a workflow expression so one copy serves both workflows,
+# and so a laptop run reaches the same answer as CI.
 #
 # Outside Actions it prints what it would pick and changes nothing, which is how to check a
-# selector before dispatching a run.
+# dropdown value before dispatching a run.
 
 set -euo pipefail
 
@@ -17,53 +18,67 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../config/versions.sh
 source "${REPO_ROOT}/tests/config/versions.sh"
 
-resolve() {
-  local selector=$1 pinned=$2 latest=$3
-  case "${selector}" in
-    "" | pinned) printf '%s' "${pinned}" ;;
-    latest) printf '%s' "${latest}" ;;
-    *) printf '%s' "${selector}" ;;
-  esac
-}
+cloud="${E2E_CLOUD:-local-kind}"
 
-kubernetes="$(resolve "${KUBERNETES_VERSION_SELECTOR:-}" "${KUBERNETES_VERSION_PINNED}" "${KUBERNETES_VERSION_LATEST}")"
-neo4j="$(resolve "${NEO4J_VERSION_SELECTOR:-}" "${NEO4J_VERSION_PINNED}" "${NEO4J_VERSION_LATEST}")"
+case "${cloud}" in
+  local-kind) default_kubernetes="${KUBERNETES_VERSION_KIND}" ;;
+  azure-aks) default_kubernetes="${KUBERNETES_VERSION_AKS}" ;;
+  gcp-gke) default_kubernetes="${KUBERNETES_VERSION_GKE}" ;;
+  aws-eks) default_kubernetes="${KUBERNETES_VERSION_EKS}" ;;
+  *)
+    echo "unknown platform ${cloud} — expected local-kind, azure-aks, gcp-gke or aws-eks" >&2
+    exit 1
+    ;;
+esac
+
+kubernetes="${KUBERNETES_VERSION_INPUT:-${default_kubernetes}}"
+neo4j="${NEO4J_VERSION_INPUT:-${NEO4J_VERSION_DEFAULT}}"
 
 # kindest/node tags carry a leading v and Kubernetes versions are written both ways, so accept
-# either and store the bare number the cloud profile expects.
+# either and store the bare number every platform expects.
 kubernetes="${kubernetes#v}"
 
-# Only kind takes its Kubernetes version from here. AKS, GKE and EKS clusters are created — and
-# then reused across runs — by their ensure script, so a selector could not move their version
-# without recreating the cluster; printing one anyway would put a number in the log that nothing
-# in the run honours.
-if [[ "${E2E_CLOUD:-local-kind}" == "local-kind" ]]; then
-  echo "Kubernetes ${kubernetes} (selector: ${KUBERNETES_VERSION_SELECTOR:-pinned})"
-else
-  echo "Kubernetes owned by ${E2E_CLOUD} — its ensure script fixes the cluster version"
-  kubernetes=""
+# The dropdowns once offered the words `pinned` and `latest`. They no longer do, and a caller still
+# passing one would otherwise reach the cluster as a version string and fail somewhere far from
+# here — `kindest/node:vpinned` is a pull error, not an explanation.
+if [[ ! "${kubernetes}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "Kubernetes version ${kubernetes} is not a version number — the selectors were removed, pass 1.36 or 1.37.0" >&2
+  exit 1
 fi
-echo "Neo4j      ${neo4j} (selector: ${NEO4J_VERSION_SELECTOR:-pinned})"
+if [[ ! "${neo4j}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Neo4j version ${neo4j} is not a version number — the selectors were removed, pass 2026.07.1 or 5.26.29" >&2
+  exit 1
+fi
 
-# GITHUB_ENV is how one step hands values to the next. Everything downstream — the cloud profile's
-# node image, the fixtures' spec.version, the image CI pre-pulls — reads these through a `:-`
-# default, so setting them here overrides the pins without touching a file.
+# `if` rather than `[[ ]] && assignment`: under `set -e` a false test makes the list exit
+# non-zero, ending the script two lines before it prints anything.
+if [[ -n "${KUBERNETES_VERSION_INPUT:-}" ]]; then
+  origin_k8s="requested"
+else
+  origin_k8s="default for ${cloud}"
+fi
+if [[ -n "${NEO4J_VERSION_INPUT:-}" ]]; then
+  origin_neo4j="requested"
+else
+  origin_neo4j="default"
+fi
+
+echo "Kubernetes ${kubernetes} (${origin_k8s})"
+echo "Neo4j      ${neo4j} (${origin_neo4j})"
+
+# GITHUB_ENV is how one step hands values to the next. Everything downstream — the kind node image,
+# the cloud ensure scripts, the fixtures' spec.version, the image CI pre-pulls — reads these
+# through a `:-` default, so setting them here overrides the file without touching it.
 # `if` rather than `[[ ]] && echo`: a false test makes the list exit non-zero, which under
-# `set -e` would end the script here instead of falling through to the Neo4j line.
+# `set -e` would end the script here instead of falling through to the next line.
 if [[ -n "${GITHUB_ENV:-}" ]]; then
-  if [[ -n "${kubernetes}" ]]; then
-    echo "KUBERNETES_VERSION=${kubernetes}" >>"${GITHUB_ENV}"
-  fi
+  echo "KUBERNETES_VERSION=${kubernetes}" >>"${GITHUB_ENV}"
   echo "NEO4J_VERSION=${neo4j}" >>"${GITHUB_ENV}"
 fi
 
-# One line on the run page, for the workflows that opt in. A run's name can only carry the
-# selector, since GitHub evaluates it before any job starts — and `latest` says nothing about which
-# version that stood for once a few weeks have passed. This is where the numbers are recorded.
+# One line on the run page, for the workflows that opt in. A run's name is evaluated before any job
+# starts, so it can only carry what the dropdowns said; with `all` selected it cannot name four
+# different Kubernetes versions at once. This is where each platform records the number it ran.
 if [[ "${VERSIONS_JOB_SUMMARY:-false}" == "true" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-  if [[ -n "${kubernetes}" ]]; then
-    echo "Kubernetes \`${kubernetes}\` · Neo4j \`${neo4j}\`" >>"${GITHUB_STEP_SUMMARY}"
-  else
-    echo "Kubernetes fixed by \`${E2E_CLOUD}\` · Neo4j \`${neo4j}\`" >>"${GITHUB_STEP_SUMMARY}"
-  fi
+  echo "\`${cloud}\` — Kubernetes \`${kubernetes}\` · Neo4j \`${neo4j}\`" >>"${GITHUB_STEP_SUMMARY}"
 fi

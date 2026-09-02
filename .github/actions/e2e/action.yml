@@ -23,14 +23,15 @@ inputs:
     default: ""
   kubernetes-version:
     description: >-
-      Kubernetes version selector — pinned, latest, or an explicit version. Applies to kind only:
-      the managed clusters keep whatever version their ensure script created them with.
+      Kubernetes version for the cluster this run creates. Empty takes the platform's default from
+      tests/config/versions.sh, which holds one per platform because the four cannot be given the
+      same number — kind needs a published patch, EKS accepts a minor and nothing else.
     required: false
-    default: pinned
+    default: ""
   neo4j-version:
-    description: "Neo4j version selector — pinned, latest, or an explicit version. Applies to every platform."
+    description: "Neo4j version the suites deploy. Empty takes the default from tests/config/versions.sh."
     required: false
-    default: pinned
+    default: ""
 
 runs:
   using: composite
@@ -45,16 +46,17 @@ runs:
       shell: bash
       run: find tests -name '*.sh' -exec chmod +x {} +
 
-    # Ahead of everything that reads a version — the kind node image, the fixtures' spec.version,
-    # the image pre-pull — since each of those defaults to the pins in tests/config/versions.sh
-    # unless this step overrides them for the rest of the job.
+    # Ahead of everything that reads a version — the kind node image, the version the three cloud
+    # ensure scripts create their cluster on, the fixtures' spec.version, the image pre-pull —
+    # since each of those defaults to tests/config/versions.sh unless this step overrides them for
+    # the rest of the job.
     - name: Resolve the versions under test
       shell: bash
       env:
-        KUBERNETES_VERSION_SELECTOR: ${{ inputs.kubernetes-version }}
-        NEO4J_VERSION_SELECTOR: ${{ inputs.neo4j-version }}
-        # Lets the script say which versions this platform actually honours, rather than printing
-        # a Kubernetes version a managed cluster was never going to adopt.
+        KUBERNETES_VERSION_INPUT: ${{ inputs.kubernetes-version }}
+        NEO4J_VERSION_INPUT: ${{ inputs.neo4j-version }}
+        # Which default applies when no version was passed, and which platform the job summary
+        # attributes the numbers to.
         E2E_CLOUD: ${{ inputs.cloud }}
       run: bash tests/bin/resolve-versions.sh
 

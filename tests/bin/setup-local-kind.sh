@@ -70,7 +70,7 @@ fi
 # wait. The image tag is not "latest", so pods use imagePullPolicy=IfNotPresent and reuse
 # the cached node image. Best-effort: on failure, pods fall back to pulling on demand.
 # Both come from tests/config/neo4j/base.sh, which reconcile.sh sourced above — repeating the
-# defaults here is how the pinned version drifted from the one the fixtures deploy.
+# defaults here is how this version drifted from the one the fixtures deploy.
 if [[ "${NEO4J_EDITION}" == "enterprise" ]]; then
   NEO4J_IMAGE="neo4j:${NEO4J_VERSION}-enterprise"
 else

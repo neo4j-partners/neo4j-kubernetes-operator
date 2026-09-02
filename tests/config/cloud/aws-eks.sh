@@ -18,6 +18,11 @@ AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-}"
 AWS_ECR_REPOSITORY="${AWS_ECR_REPOSITORY:-neo4j-operator-ci}"
 
 AWS_EKS_NAME="${AWS_EKS_NAME:-neo4j-operator-ci-eks}"
+# Version for the control plane, passed to `aws eks create-cluster`. EKS takes a minor and rejects
+# a patch outright, so tests/aws/ensure-eks.sh truncates anything longer before it calls the API.
+# Only 1.36, 1.35 and 1.34 are in standard support; older minors still work but bill an extra
+# per-cluster-hour extended-support fee, which is not something a test run should opt into quietly.
+KUBERNETES_VERSION="${KUBERNETES_VERSION:-${KUBERNETES_VERSION_EKS}}"
 # Comma-separated subnets spanning two availability zones. Empty means "discover the default VPC",
 # which is what CI relies on; set it for an account without a default VPC, or to pin the network.
 AWS_EKS_SUBNET_IDS="${AWS_EKS_SUBNET_IDS:-}"

@@ -5,7 +5,7 @@ name: CI
 # are far more useful there. An expression that evaluates to empty restores that default.
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch'
-      && format('CI — K {0}, Neo4j {1}', inputs.kubernetes-version, inputs.neo4j-version)
+      && format('CI — Kubernetes {0}, Neo4j {1}', inputs.kubernetes-version, inputs.neo4j-version)
       || '' }}
 
 # Gate for every change: unit tests and audit, then every e2e suite on kind, one job each.
@@ -16,25 +16,30 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # A push or a pull request always runs the pinned pair, so a red check means the change under
-  # review broke something rather than an upstream release having landed overnight. The nightly
-  # e2e-all-platforms run is what tracks the newest versions; these dropdowns are for reproducing
-  # one of its failures here, or for trying a version before promoting it.
+  # A push or a pull request passes nothing and gets the defaults in tests/config/versions.sh. Those
+  # are concrete versions moved by hand, so a red check still means the change under review broke
+  # something rather than an upstream release having landed overnight — the reproducibility comes
+  # from the list being static, not from a separate pinned value.
+  #
+  # These dropdowns are for reproducing a nightly failure here, or for trying a version before
+  # making it the default. Only kind runs in this workflow, so there is one Kubernetes list and it
+  # carries exact patches: kind pulls a published kindest/node tag, and a plausible-looking value
+  # simply 404s. The managed platforms and their own lists live in e2e-all-platforms.yml.
   #
   # The option lists are hand-maintained copies of tests/config/versions.sh — GitHub requires
   # `type: choice` options to be literal YAML, so they cannot be generated from it.
   workflow_dispatch:
     inputs:
       kubernetes-version:
-        description: "Kubernetes version for the kind clusters"
+        description: "Kubernetes for the kind clusters — exact patch, and only a tag kind publishes"
         type: choice
-        default: pinned
-        options: [pinned, latest, "1.37.0", "1.36.4", "1.35.0"]
+        default: "1.37.0"
+        options: ["1.37.0", "1.36.4", "1.35.8"]
       neo4j-version:
         description: "Neo4j version the suites deploy"
         type: choice
-        default: pinned
-        options: [pinned, latest, "2026.07.1", "2026.06.0", "2026.05.0", "5.26.29"]
+        default: "2026.07.1"
+        options: ["2026.07.1", "2026.06.0", "2026.05.0", "5.26.29"]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -64,10 +69,10 @@ jobs:
       # shared across the matrix cannot be a different version from the one the fixtures deploy.
       - name: Resolve the versions under test
         env:
-          NEO4J_VERSION_SELECTOR: ${{ inputs.neo4j-version || 'pinned' }}
-          KUBERNETES_VERSION_SELECTOR: ${{ inputs.kubernetes-version || 'pinned' }}
+          NEO4J_VERSION_INPUT: ${{ inputs.neo4j-version }}
+          KUBERNETES_VERSION_INPUT: ${{ inputs.kubernetes-version }}
           # This job runs once per run, unlike the suite matrix, so it is the one place that can
-          # record the resolved versions on the run page without repeating itself fourteen times.
+          # record the versions on the run page without repeating itself fourteen times.
           VERSIONS_JOB_SUMMARY: "true"
         run: bash tests/bin/resolve-versions.sh
 
@@ -152,7 +157,9 @@ jobs:
           cloud: local-kind
           suite: ${{ matrix.suite }}
           images-artifact: e2e-images
-          # Empty on push and pull_request, where `inputs` carries nothing — the fallback is what
-          # makes those runs the reproducible ones.
-          kubernetes-version: ${{ inputs.kubernetes-version || 'pinned' }}
-          neo4j-version: ${{ inputs.neo4j-version || 'pinned' }}
+          # Both empty on push and pull_request, where `inputs` carries nothing. The action then
+          # takes the defaults from tests/config/versions.sh — the same path the images job above
+          # took, so the image shared across the matrix cannot be a different version from the one
+          # the fixtures deploy.
+          kubernetes-version: ${{ inputs.kubernetes-version }}
+          neo4j-version: ${{ inputs.neo4j-version }}

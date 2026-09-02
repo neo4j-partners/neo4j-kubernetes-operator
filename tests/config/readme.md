@@ -8,7 +8,7 @@ Each domain has its own **base** + **classic cases**. A **profile** picks one ca
 tests/config/
   load.sh                 # sources reconcile.sh
   reconcile.sh            # merge profile + cases + cloud
-  versions.sh             # pinned + latest Kubernetes and Neo4j — see ../contribute.md
+  versions.sh             # Kubernetes per platform + Neo4j — see ../contribute.md
   derive.sh               # derived Neo4j resource names
 
   operator/

@@ -40,14 +40,19 @@ AR_HOST="${GCP_REGION}-docker.pkg.dev"
 
 if ! gcloud container clusters describe "${GKE_CLUSTER_NAME}" \
   --zone "${GCP_ZONE}" >/dev/null 2>&1; then
-  log "Creating GKE cluster ${GKE_CLUSTER_NAME} in ${GCP_ZONE}"
+  log "Creating GKE cluster ${GKE_CLUSTER_NAME} in ${GCP_ZONE} on Kubernetes ${KUBERNETES_VERSION}"
   gcloud container clusters create "${GKE_CLUSTER_NAME}" \
     --zone "${GCP_ZONE}" \
+    --cluster-version "${KUBERNETES_VERSION}" \
     --num-nodes "${GKE_NODE_COUNT}" \
     --machine-type "${GKE_MACHINE_TYPE}" \
     --quiet
 else
-  log "GKE cluster ${GKE_CLUSTER_NAME} exists"
+  gke_running="$(gcloud container clusters describe "${GKE_CLUSTER_NAME}" \
+    --zone "${GCP_ZONE}" --format="value(currentMasterVersion)")"
+  require_cluster_version "GKE cluster ${GKE_CLUSTER_NAME}" "${gke_running}" "${KUBERNETES_VERSION}" \
+    "delete it first: gcloud container clusters delete ${GKE_CLUSTER_NAME} --zone ${GCP_ZONE} --quiet"
+  log "GKE cluster ${GKE_CLUSTER_NAME} exists on Kubernetes ${gke_running}"
 fi
 
 # Nodes pull the operator image straight from Artifact Registry, so the node identity needs read
