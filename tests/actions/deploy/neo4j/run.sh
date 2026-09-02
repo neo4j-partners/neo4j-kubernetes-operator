@@ -15,6 +15,13 @@ stderr_file="$(mktemp)"
 MOUNT_NAME="${STORAGE_MOUNT_NAME:-e2e-extra-${RANDOM}${RANDOM}}"
 MOUNT_PATH="${STORAGE_MOUNT_PATH:-/mnt/${MOUNT_NAME}}"
 
+# Plugin licence placeholders (only the licensed-plugins fixture carries them). CI exports the
+# real material from the LICENSE_GDS / LICENSE_BLOOM repository secrets; unset — locally and on
+# fork PRs — falls back to a dummy, which mounts fine but no plugin accepts. Base64 into `data:`
+# because a licence is an opaque blob: one line whatever newlines or punctuation it holds, so it
+# survives sed and YAML intact, and the plaintext never reaches a command line.
+license_b64() { printf '%s' "${1:-e2e-dummy-not-a-real-license}" | base64 | tr -d '\n'; }
+
 # Two storage-class placeholders, on purpose:
 #   __STORAGE_CLASS__       opt-in — substituted when the case sets
 #                           NEO4J_USE_STORAGE_CLASS=true, dropped otherwise so the
@@ -38,6 +45,8 @@ sed -e "s|name: __CR_NAME__|name: ${NEO4J_CR_NAME}|" \
     -e "s|storageClassName: __CLOUD_STORAGE_CLASS__|storageClassName: ${STORAGE_CLASS_NAME:-}|g" \
     -e "s|__MOUNT_NAME__|${MOUNT_NAME}|g" \
     -e "s|__MOUNT_PATH__|${MOUNT_PATH}|g" \
+    -e "s|__GDS_LICENSE_B64__|$(license_b64 "${LICENSE_GDS:-}")|" \
+    -e "s|__BLOOM_LICENSE_B64__|$(license_b64 "${LICENSE_BLOOM:-}")|" \
   "${fixture}" >"${rendered}"
 
 # Persist the resolved mount name/path so assert/storage-additional (a separate

@@ -1,0 +1,89 @@
+# Both licensed catalog plugins in one CR: two licence Secrets, two mount paths, two config
+# keys pointing each plugin at its own file. One boot proves the whole chain rather than two.
+#
+# The licence bodies are placeholders resolved by actions/deploy/neo4j — real material from the
+# LICENSE_GDS / LICENSE_BLOOM repository secrets in CI, a dummy everywhere else. `data:` rather
+# than `stringData:` because the substituted value is base64: a licence is an opaque blob and
+# must reach the Secret unaltered.
+#
+# The Secret key sets the filename — plugin_volumes.go projects the whole Secret with no
+# `items` — so gds.license/bloom.license must match the *.license_file config below.
+#
+# neo4j.com/mountable-by-operator is mandatory (NEO-005) — without it the operator refuses the
+# CR before rendering operands, which is the license-secret-unlabeled case.
+# managed-by=neo4j-e2e is what storage/cleanup-extra deletes on teardown.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plg-lic-gds
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    app.kubernetes.io/managed-by: neo4j-e2e
+type: Opaque
+data:
+  gds.license: __GDS_LICENSE_B64__
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plg-lic-bloom
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    app.kubernetes.io/managed-by: neo4j-e2e
+type: Opaque
+data:
+  bloom.license: __BLOOM_LICENSE_B64__
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # WORKAROUND, not part of the subject. Both *.license_file keys below are plugin-namespaced,
+  # and the image validates neo4j.conf before the plugin that declares them is on the validator's
+  # classpath: it crash-loops with "No declared setting with name: gds.enterprise.license_file".
+  # The image's own escape — rewriting plugin defaults into neo4j.conf — cannot run against the
+  # operator's read-only projected ConfigMap. Until the operator passes these as NEO4J_* env vars
+  # instead, strict validation has to be off or no licence can be pointed at. Drop this block
+  # when that is fixed; the case fails loudly if it is dropped too early.
+  config:
+    neo4j:
+      server.config.strict_validation.enabled: "false"
+      # Same root cause, second symptom. Installing a bundled plugin, the image appends
+      # `dbms.security.procedures.unrestricted=gds.*,bloom.*` to neo4j.conf — verified against
+      # 2026.05.0-enterprise. That write cannot happen against a read-only ConfigMap, so under
+      # the operator the sandbox keeps every plugin procedure that touches database internals,
+      # and bloom.checkLicenseCompliance() answers 52N34 instead of a result. Only bloom.* is
+      # opted in here, the narrowest grant the assert needs; the operator leaving `unrestricted`
+      # empty by default is deliberate (NEO-024) and procedure-allowlists still pins it.
+      dbms.security.procedures.unrestricted: "bloom.*"
+  plugins: [gds, bloom]
+  pluginDefinitions:
+    gds:
+      licenseSecretRef: plg-lic-gds
+      config:
+        gds.enterprise.license_file: /licenses/gds/gds.license
+    bloom:
+      licenseSecretRef: plg-lic-bloom
+      config:
+        dbms.bloom.license_file: /licenses/bloom/bloom.license
+        # Bloom is only reachable once its server extension is mounted. The image would set
+        # this itself when installing the plugin (neo4j-plugins.json carries it as a default)
+        # but that write never reaches the config the server reads, so a user has to declare
+        # it — which is what docs/user-guide/03-neo4j/07-plugins.md now shows.
+        server.unmanaged_extension_classes: com.neo4j.bloom.server=/bloom

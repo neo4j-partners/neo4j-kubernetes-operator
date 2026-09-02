@@ -218,6 +218,30 @@ make teardown-e2e-eks
 The image registries are left in place on purpose — ACR, Artifact Registry and ECR each hold a few
 image layers and save a full push on the next run.
 
+## Plugin licence secrets (maintainers)
+
+`feature-plugins` boots GDS and Bloom with a licence Secret each. The bodies come from two
+repository secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `LICENSE_GDS` | Contents of the GDS Enterprise licence file |
+| `LICENSE_BLOOM` | Contents of the Bloom licence file |
+
+Both are optional. Unset — locally, and on fork PRs, where GitHub withholds secrets — the fixture
+falls back to a dummy body: the Secrets still mount and the `*.license_file` settings are still
+asserted, only the two acceptance checks log a SKIP. Export them to get the full case locally:
+
+```bash
+export LICENSE_GDS="$(cat ~/licences/gds.license)"
+export LICENSE_BLOOM="$(cat ~/licences/bloom.license)"
+./tests/bin/run-e2e.sh feature-plugins
+```
+
+The value is base64-encoded into the Secret's `data:` before it reaches YAML, so a licence file
+with newlines or punctuation survives verbatim, and the plaintext never reaches a command line
+or a log.
+
 ## Azure CI setup (maintainers)
 
 ### Required secrets
