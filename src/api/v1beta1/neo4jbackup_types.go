@@ -153,11 +153,12 @@ type BackupArtifact struct {
 	Type BackupType `json:"type,omitempty"`
 	// URI is the exact object written (recorded so restore never parses filenames).
 	URI string `json:"uri,omitempty"`
-	// Path is the deterministic, seed-ready artifact name relative to the destination root
-	// (e.g. "neo4j.latest.backup"), written by the backup Job as a stable pointer to the
-	// timestamped artifact. Restore-by-backupRef seeds file:/backups/<path> when the target
-	// mounts the destination claim as its backups volume (ADR-015 round-trip). Empty for
-	// wildcard or incremental backups, whose artifact is not a single seedable file.
+	// Path is the real artifact filename neo4j-admin produced for this database, relative to the
+	// destination root (e.g. "neo4j-2026-09-01T15-08-49.backup"), recorded by the backup Job.
+	// Restore-by-backupRef seeds file:/backups/<path> when the target mounts the destination claim
+	// as its backups volume (ADR-015 round-trip); for an incremental this is the chain's last link
+	// and Neo4j replays the full chain from the same directory. Empty for wildcard backups or when
+	// the Job could not record the name.
 	Path string `json:"path,omitempty"`
 	// SizeBytes of the artifact.
 	SizeBytes int64 `json:"sizeBytes,omitempty"`
