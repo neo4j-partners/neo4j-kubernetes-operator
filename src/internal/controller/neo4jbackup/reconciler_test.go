@@ -134,6 +134,94 @@ func TestReconcileCommunityFailsTerminally(t *testing.T) {
 	}
 }
 
+func TestReconcileFailedJobSurfacesPodMessage(t *testing.T) {
+	s := scheme(t)
+	backup := backupCR()
+	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controllerutil.SetControllerReference(backup, job, s); err != nil {
+		t.Fatal(err)
+	}
+	// Job condition carries only the generic controller message.
+	job.Status.Conditions = []batchv1.JobCondition{{
+		Type: batchv1.JobFailed, Status: corev1.ConditionTrue,
+		Reason: "BackoffLimitExceeded", Message: "Job has reached the specified backoff limit",
+	}}
+	// The failed pod carries the real neo4j-admin cause in its termination message.
+	realMsg := "Differential backups require that a full backup of the same database exists"
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: job.Name + "-abc", Namespace: "ns", Labels: map[string]string{"job-name": job.Name}},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+			Name:  "neo4j-admin",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Message: realMsg, FinishedAt: metav1.Now()}},
+		}}},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(s).
+		WithObjects(enterpriseNeo4j(), backup, job, pod).
+		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
+
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getBackup(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+		t.Fatalf("phase = %q, want Failed", got.Status.Phase)
+	}
+	if got.Status.Message != realMsg {
+		t.Errorf("status.message = %q, want the pod's neo4j-admin cause %q", got.Status.Message, realMsg)
+	}
+}
+
+func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
+	s := scheme(t)
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "bk"}},
+			Type:        neo4jv1beta1.BackupTypeFull,
+		},
+	}
+	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controllerutil.SetControllerReference(backup, job, s); err != nil {
+		t.Fatal(err)
+	}
+	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	// The Job's pod recorded the real artifact filename on success (via /dev/termination-log).
+	realName := "neo4j-2026-09-01T15-08-49.backup"
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: job.Name + "-xyz", Namespace: "ns", Labels: map[string]string{"job-name": job.Name}},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+			Name:  "neo4j-admin",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: "neo4j=" + realName + "\n", FinishedAt: metav1.Now()}},
+		}}},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(s).
+		WithObjects(enterpriseNeo4j(), backup, job, pod).
+		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
+
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getBackup(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+		t.Fatalf("phase = %q, want Succeeded", got.Status.Phase)
+	}
+	if len(got.Status.Artifacts) != 1 || got.Status.Artifacts[0].Path != realName {
+		t.Errorf("artifact Path = %+v, want the real filename %q", got.Status.Artifacts, realName)
+	}
+}
+
 func TestReconcileMirrorsJobCompletion(t *testing.T) {
 	s := scheme(t)
 	backup := backupCR()

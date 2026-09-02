@@ -19,6 +19,7 @@ package neo4jbackup
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -113,8 +114,13 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	switch complete, failed, msg := jobState(&owned); {
 	case complete:
-		return r.succeed(ctx, &backup)
+		return r.succeed(ctx, &backup, &owned)
 	case failed:
+		// Prefer the real neo4j-admin cause (tailed into the pod's termination message) over the
+		// Job controller's generic "backoff limit exceeded", so status.message is actionable.
+		if podMsg := r.podTerminationMessage(ctx, &owned); podMsg != "" {
+			msg = podMsg
+		}
 		log.Info("backup job failed", "job", owned.Name, "detail", msg)
 		return r.fail(ctx, &backup, oracle.ReasonBackupJobFailed, msg)
 	default:
@@ -131,11 +137,11 @@ func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4j
 	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 }
 
-func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) (ctrl.Result, error) {
+func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) (ctrl.Result, error) {
 	b.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
 	b.Status.Reason = ""
 	b.Status.Message = ""
-	b.Status.Artifacts = artifactsFor(b)
+	b.Status.Artifacts = artifactsFor(b, r.artifactPaths(ctx, job))
 	// ponytail: chain = the record name (each ad-hoc backup anchors its own chain).
 	// A Neo4jBackupSchedule will own real cross-backup chain ids in a later increment.
 	if b.Status.Chain == "" {
@@ -147,17 +153,16 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 
 // artifactsFor records one artifact per requested database, pointing at the destination
 // (BDR-014 §13 — restore-by-backupRef resolves this). The requested type is recorded as-is.
-// For PVC destinations of explicitly named Full/Auto databases it also records Path, the
-// deterministic pointer the Job hardlinks, so restore can seed file:/backups/<path> without
-// parsing filenames. ponytail: sizeBytes still needs neo4j-admin output parsing (follow-up).
-func artifactsFor(b *neo4jv1beta1.Neo4jBackup) []neo4jv1beta1.BackupArtifact {
+// For PVC destinations it records Path, the real artifact filename the Job reported (paths[db]),
+// so restore can seed file:/backups/<path> — the chain's last link — without parsing filenames.
+// ponytail: sizeBytes still needs neo4j-admin output parsing (follow-up).
+func artifactsFor(b *neo4jv1beta1.Neo4jBackup, paths map[string]string) []neo4jv1beta1.BackupArtifact {
 	uri := renderbackup.DestinationURI(b.Spec.Destination)
 	now := metav1.Now()
 	dbs := b.Spec.Databases
 	if len(dbs) == 0 {
 		dbs = []string{"*"}
 	}
-	_, seedable := renderbackup.SeedablePointers(b)
 	out := make([]neo4jv1beta1.BackupArtifact, 0, len(dbs))
 	for _, db := range dbs {
 		a := neo4jv1beta1.BackupArtifact{
@@ -166,10 +171,27 @@ func artifactsFor(b *neo4jv1beta1.Neo4jBackup) []neo4jv1beta1.BackupArtifact {
 			URI:         uri,
 			CompletedAt: &now,
 		}
-		if seedable {
-			a.Path = renderbackup.PointerName(db)
+		if p := paths[db]; p != "" {
+			a.Path = p
 		}
 		out = append(out, a)
+	}
+	return out
+}
+
+// artifactPaths reads the real artifact filename the backup Job recorded per database. The Job
+// echoes "<db>=<file>" to /dev/termination-log on success, which the kubelet surfaces in the pod's
+// terminated message (terminationMessagePolicy=FallbackToLogsOnError). Restore seeds
+// file:/backups/<file> from these — the chain's last link, not a renamed pointer. Best-effort: an
+// empty/unreadable message yields no paths, and restore then reports the gap.
+func (r *BackupReconciler) artifactPaths(ctx context.Context, job *batchv1.Job) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(r.podTerminationMessage(ctx, job), "\n") {
+		if i := strings.IndexByte(line, '='); i > 0 {
+			if name := strings.TrimSpace(line[i+1:]); name != "" {
+				out[strings.TrimSpace(line[:i])] = name
+			}
+		}
 	}
 	return out
 }
@@ -209,6 +231,33 @@ func (r *BackupReconciler) writeStatus(ctx context.Context, b *neo4jv1beta1.Neo4
 		return err
 	}
 	return nil
+}
+
+// podTerminationMessage returns the most recent terminated container message across the Job's
+// pods. With terminationMessagePolicy=FallbackToLogsOnError, on success this is what the backup
+// container wrote to /dev/termination-log (the recorded artifact names) and on failure it is the
+// tail of neo4j-admin's own output (the real cause). Empty when no pod recorded one. Best-effort:
+// list/read errors are swallowed.
+func (r *BackupReconciler) podTerminationMessage(ctx context.Context, job *batchv1.Job) string {
+	var pods corev1.PodList
+	if err := r.List(ctx, &pods, client.InNamespace(job.Namespace), client.MatchingLabels{"job-name": job.Name}); err != nil {
+		return ""
+	}
+	var msg string
+	var latest time.Time
+	for i := range pods.Items {
+		for _, cs := range pods.Items[i].Status.ContainerStatuses {
+			t := cs.State.Terminated
+			if t == nil || strings.TrimSpace(t.Message) == "" {
+				continue
+			}
+			if msg == "" || t.FinishedAt.After(latest) {
+				latest = t.FinishedAt.Time
+				msg = strings.TrimSpace(t.Message)
+			}
+		}
+	}
+	return msg
 }
 
 // jobState reports whether a Job reached a terminal condition and, on failure, a short reason.
