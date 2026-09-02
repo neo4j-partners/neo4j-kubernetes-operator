@@ -120,7 +120,7 @@ func aggregateScript(toPath string, dbArtifacts map[string]string) string {
 			"neo4j-admin backup aggregate --from-path=%s/%s --keep-old-backup=true --temp-path=%s",
 			toPath, dbArtifacts[db], scratchMountPath)
 		fmt.Fprintf(&b,
-			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")\" >> /dev/termination-log 2>/dev/null; true; }",
+			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")|$(stat -c%%s \"$a\" 2>/dev/null)\" >> /dev/termination-log 2>/dev/null; true; }",
 			toPath, db, db)
 	}
 	return b.String()

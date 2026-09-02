@@ -216,9 +216,11 @@ func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []cor
 // only portable pointer on Azure Files SMB, which supports neither hardlinks nor symlinks), so
 // we record the name instead of duplicating the file.
 //
-// The name is emitted as "<db>=<file>" to /dev/termination-log, which the kubelet surfaces in the
-// pod's terminated message (terminationMessagePolicy=FallbackToLogsOnError) for the reconciler to
-// read on success. Recording is best-effort: the group always exits 0 (trailing `true`) so a
+// The name is emitted as "<db>=<file>|<bytes>" to /dev/termination-log, which the kubelet surfaces
+// in the pod's terminated message (terminationMessagePolicy=FallbackToLogsOnError) for the
+// reconciler to read on success (name → status.artifacts[].path, bytes → sizeBytes). The size is
+// best-effort: if stat fails the suffix is empty and the parser records size 0. Recording overall
+// is best-effort: the group always exits 0 (trailing `true`) so a
 // missing artifact or an unwritable termination-log never fails an otherwise-good backup —
 // restore then reports the missing path. args are space-joined (neo4j-admin flags carry no
 // spaces — switch to a quoted argv if extraArgs ever needs them).
@@ -226,7 +228,7 @@ func backupScript(args []string, toPath string, dbs []string) string {
 	script := "neo4j-admin " + strings.Join(args, " ")
 	for _, db := range dbs {
 		script += fmt.Sprintf(
-			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")\" >> /dev/termination-log 2>/dev/null; true; }",
+			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")|$(stat -c%%s \"$a\" 2>/dev/null)\" >> /dev/termination-log 2>/dev/null; true; }",
 			toPath, db, db)
 	}
 	return script

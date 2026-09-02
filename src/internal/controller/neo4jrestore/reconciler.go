@@ -366,7 +366,7 @@ func (r *RestoreReconciler) ensureAggregate(ctx context.Context, restore *neo4jv
 		names := shared.ParseNamedArtifacts(shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name))
 		seedFor = map[string]string{}
 		for _, db := range restore.Spec.Databases {
-			n := names[db]
+			n := names[db].Name
 			if n == "" {
 				res, err = r.fail(ctx, restore, oracle.ReasonRestoreAggregateFailed, "aggregate produced no recovered artifact for database "+db)
 				return nil, false, res, err
