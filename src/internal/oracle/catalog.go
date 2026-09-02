@@ -228,6 +228,8 @@ var (
 		"At least one successful backup exists for this Neo4j instance")
 	ConditionRestoreReady = declareCondition("RestoreReady", GateFalseBlocks,
 		"At least one successful restore exists for this Neo4j instance")
+	ConditionScheduleReady = declareCondition("ScheduleReady", GateNone,
+		"The backup schedule's cron cadences are valid and active, or intentionally suspended")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -382,6 +384,22 @@ var (
 		on(ConditionRestoreReady, "A pre-seed `neo4j-admin backup aggregate` Job is collapsing the backup chain before seeding"))
 	ReasonRestoreAggregateFailed = declare("RestoreAggregateFailed", SeverityError, SurfaceBoth,
 		on(ConditionRestoreReady, "The pre-seed aggregate Job failed; the message carries the neo4j-admin failure detail"))
+)
+
+// Neo4jBackupSchedule — cron owner that emits Neo4jBackup objects (BDR-014 §10).
+var (
+	ReasonScheduleActive = declareNominal("ScheduleActive", SurfaceCondition,
+		on(ConditionScheduleReady, "Cadences are parsed and the schedule is emitting Neo4jBackup objects on time"))
+	ReasonScheduleSuspended = declare("ScheduleSuspended", SeverityInfo, SurfaceCondition,
+		on(ConditionScheduleReady, "`spec.suspend` is true; no backups are emitted until it is cleared"))
+	ReasonScheduleTargetNotFound = declare("ScheduleTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionScheduleReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonScheduleEditionUnsupported = declare("ScheduleEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionScheduleReady, "Backup requires Enterprise edition; the target is community"))
+	ReasonScheduleInvalidCron = declare("ScheduleInvalidCron", SeverityError, SurfaceBoth,
+		on(ConditionScheduleReady, "A cron expression (full / incremental / aggregate) could not be parsed"))
+	ReasonScheduleBackupEmitted = declareNominal("ScheduleBackupEmitted", SurfaceEvent,
+		asEvent("A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

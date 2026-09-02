@@ -7,6 +7,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/cel-go v0.20.1
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.0
+	github.com/robfig/cron/v3 v3.0.1
 	go.uber.org/zap v1.26.0
 	k8s.io/api v0.31.0
 	k8s.io/apimachinery v0.31.0

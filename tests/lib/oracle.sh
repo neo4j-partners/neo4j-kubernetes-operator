@@ -12,7 +12,7 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady RestoreReady
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady
 }
 
 oracle_reasons_for() {  # <condition>
@@ -27,7 +27,8 @@ oracle_reasons_for() {  # <condition>
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported ;;
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreAggregating RestoreAggregateFailed ;;
-    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
+    ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
+    event) printf '%s\n' ScheduleBackupEmitted DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
     *) return 1 ;;
   esac
 }
@@ -100,6 +101,12 @@ oracle_severity() {  # <reason>
     RestoreSeedFailed) echo error ;;
     RestoreAggregating) echo info ;;
     RestoreAggregateFailed) echo error ;;
+    ScheduleActive) echo info ;;
+    ScheduleSuspended) echo info ;;
+    ScheduleTargetNotFound) echo warn ;;
+    ScheduleEditionUnsupported) echo error ;;
+    ScheduleInvalidCron) echo error ;;
+    ScheduleBackupEmitted) echo info ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;
@@ -112,7 +119,7 @@ oracle_severity() {  # <reason>
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|SecretMounted|StorageResizeCompleted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SecretMounted|StorageResizeCompleted) return 0 ;;
     *) return 1 ;;
   esac
 }
