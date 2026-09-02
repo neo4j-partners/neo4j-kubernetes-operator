@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,10 +15,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
+	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
 )
 
 // fakeAdmin records restore verbs and answers SHOW DATABASES from an in-memory map.
@@ -371,5 +375,110 @@ func TestRestoreBackupRefPVCArtifactUnsupported(t *testing.T) {
 	}
 	if len(admin.created) != 0 {
 		t.Error("pvc:// artifact must not be seeded in R1")
+	}
+}
+
+// aggregateJob builds the pre-seed aggregate Job controlled by restore, in the given terminal
+// state (neither flag → still running).
+func aggregateJob(t *testing.T, restore *neo4jv1beta1.Neo4jRestore, complete, failed bool) *batchv1.Job {
+	t.Helper()
+	j := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: renderbackup.AggregateJobName(restore), Namespace: "ns"}}
+	if err := controllerutil.SetControllerReference(restore, j, scheme(t)); err != nil {
+		t.Fatal(err)
+	}
+	switch {
+	case complete:
+		j.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	case failed:
+		j.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded", Message: "backoff"}}
+	}
+	return j
+}
+
+func aggregatePod(restore *neo4jv1beta1.Neo4jRestore, message string) *corev1.Pod {
+	name := renderbackup.AggregateJobName(restore)
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: name + "-x", Namespace: "ns", Labels: map[string]string{"job-name": name}},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+			Name:  "neo4j-admin",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: message, FinishedAt: metav1.Now()}},
+		}}},
+	}
+}
+
+func TestRestoreAggregateSeedsRecoveredFull(t *testing.T) {
+	admin := newFakeAdmin(nil) // neo4j does not exist -> fresh create
+	restore := restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb", Aggregate: true}
+	})
+	job := aggregateJob(t, restore, true, false)
+	pod := aggregatePod(restore, "neo4j=neo4j-AGG.backup\n")
+	r, _ := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j-2026-09-01T00-00-00.backup"), restore, job, pod)
+
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if got := admin.seededWith["neo4j"]; got != "file:/backups/neo4j-AGG.backup" {
+		t.Errorf("seedURI = %q, want file:/backups/neo4j-AGG.backup (the aggregated full)", got)
+	}
+}
+
+func TestRestoreAggregateRunningRequeues(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	restore := restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb", Aggregate: true}
+	})
+	job := aggregateJob(t, restore, false, false) // still running
+	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j-latest.backup"), restore, job)
+
+	res, err := r.Reconcile(context.Background(), req())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if res.RequeueAfter == 0 {
+		t.Error("expected requeue while the aggregate Job runs")
+	}
+	got := getRestore(t, c)
+	if got.Status.Reason != "RestoreAggregating" {
+		t.Errorf("reason = %q, want RestoreAggregating", got.Status.Reason)
+	}
+	if len(admin.created) != 0 {
+		t.Error("must not seed before aggregation completes")
+	}
+}
+
+func TestRestoreAggregateFailedSurfacesPodMessage(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	restore := restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb", Aggregate: true}
+	})
+	job := aggregateJob(t, restore, false, true)
+	pod := aggregatePod(restore, "aggregate boom: chain broken")
+	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j-latest.backup"), restore, job, pod)
+
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getRestore(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreAggregateFailed" {
+		t.Errorf("want Failed/RestoreAggregateFailed, got %q/%q", got.Status.Phase, got.Status.Reason)
+	}
+	if got.Status.Message != "aggregate boom: chain broken" {
+		t.Errorf("message = %q, want the pod's aggregate cause", got.Status.Message)
+	}
+}
+
+func TestRestoreAggregateRequiresBackupRef(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	// aggregate with a raw url (no backupRef) is unsupported: the Job needs recorded PVC artifacts.
+	r, c := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/x", Aggregate: true}
+	}))
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getRestore(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreSourceUnsupported" {
+		t.Errorf("want Failed/RestoreSourceUnsupported, got %q/%q", got.Status.Phase, got.Status.Reason)
 	}
 }
