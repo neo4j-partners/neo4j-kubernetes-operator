@@ -152,10 +152,10 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 
 // artifactsFor records one artifact per requested database, pointing at the destination
 // (BDR-014 §13 — restore-by-backupRef resolves this). The requested type is recorded as-is.
-// For PVC destinations it records Path, the real artifact filename the Job reported (paths[db]),
-// so restore can seed file:/backups/<path> — the chain's last link — without parsing filenames.
-// ponytail: sizeBytes still needs neo4j-admin output parsing (follow-up).
-func artifactsFor(b *neo4jv1beta1.Neo4jBackup, paths map[string]string) []neo4jv1beta1.BackupArtifact {
+// For PVC destinations it records Path, the real artifact filename the Job reported (arts[db].Name),
+// so restore can seed file:/backups/<path> — the chain's last link — without parsing filenames,
+// plus SizeBytes when the Job could stat it.
+func artifactsFor(b *neo4jv1beta1.Neo4jBackup, arts map[string]shared.NamedArtifact) []neo4jv1beta1.BackupArtifact {
 	uri := renderbackup.DestinationURI(b.Spec.Destination)
 	now := metav1.Now()
 	dbs := b.Spec.Databases
@@ -170,20 +170,21 @@ func artifactsFor(b *neo4jv1beta1.Neo4jBackup, paths map[string]string) []neo4jv
 			URI:         uri,
 			CompletedAt: &now,
 		}
-		if p := paths[db]; p != "" {
-			a.Path = p
+		if art, ok := arts[db]; ok {
+			a.Path = art.Name
+			a.SizeBytes = art.SizeBytes
 		}
 		out = append(out, a)
 	}
 	return out
 }
 
-// artifactPaths reads the real artifact filename the backup Job recorded per database. The Job
-// echoes "<db>=<file>" to /dev/termination-log on success, which the kubelet surfaces in the pod's
-// terminated message (terminationMessagePolicy=FallbackToLogsOnError). Restore seeds
-// file:/backups/<file> from these — the chain's last link, not a renamed pointer. Best-effort: an
-// empty/unreadable message yields no paths, and restore then reports the gap.
-func (r *BackupReconciler) artifactPaths(ctx context.Context, job *batchv1.Job) map[string]string {
+// artifactPaths reads the real artifact filename (and size) the backup Job recorded per database.
+// The Job echoes "<db>=<file>|<bytes>" to /dev/termination-log on success, which the kubelet
+// surfaces in the pod's terminated message (terminationMessagePolicy=FallbackToLogsOnError).
+// Restore seeds file:/backups/<file> from these — the chain's last link, not a renamed pointer.
+// Best-effort: an empty/unreadable message yields no paths, and restore then reports the gap.
+func (r *BackupReconciler) artifactPaths(ctx context.Context, job *batchv1.Job) map[string]shared.NamedArtifact {
 	return shared.ParseNamedArtifacts(shared.JobPodTerminationMessage(ctx, r.Client, job.Namespace, job.Name))
 }
 

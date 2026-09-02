@@ -195,13 +195,13 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
-	// The Job's pod recorded the real artifact filename on success (via /dev/termination-log).
+	// The Job's pod recorded the real artifact filename and size on success (/dev/termination-log).
 	realName := "neo4j-2026-09-01T15-08-49.backup"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: job.Name + "-xyz", Namespace: "ns", Labels: map[string]string{"job-name": job.Name}},
 		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
 			Name:  "neo4j-admin",
-			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: "neo4j=" + realName + "\n", FinishedAt: metav1.Now()}},
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: "neo4j=" + realName + "|4096\n", FinishedAt: metav1.Now()}},
 		}}},
 	}
 
@@ -219,6 +219,9 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 	}
 	if len(got.Status.Artifacts) != 1 || got.Status.Artifacts[0].Path != realName {
 		t.Errorf("artifact Path = %+v, want the real filename %q", got.Status.Artifacts, realName)
+	}
+	if got.Status.Artifacts[0].SizeBytes != 4096 {
+		t.Errorf("artifact SizeBytes = %d, want 4096 (parsed from the recorded |bytes suffix)", got.Status.Artifacts[0].SizeBytes)
 	}
 }
 

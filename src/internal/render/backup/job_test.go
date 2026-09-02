@@ -168,6 +168,7 @@ func TestBackupJobPVCExplicitDBsRecordsArtifactName(t *testing.T) {
 		"neo4j-admin database backup",
 		"--to-path=/" + pvcMountPath,
 		"ls -t /" + pvcMountPath + "/neo4j-*.backup",
+		"|$(stat -c%s",
 		"/dev/termination-log",
 	} {
 		if !strings.Contains(script, want) {
