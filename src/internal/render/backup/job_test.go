@@ -141,7 +141,7 @@ func hasVolume(vols []corev1.Volume, name string) bool {
 	return false
 }
 
-func TestBackupJobPVCExplicitDBsCreatesPointer(t *testing.T) {
+func TestBackupJobPVCExplicitDBsRecordsArtifactName(t *testing.T) {
 	b := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
@@ -156,7 +156,7 @@ func TestBackupJobPVCExplicitDBsCreatesPointer(t *testing.T) {
 		t.Fatalf("BackupJob: %v", err)
 	}
 	c := job.Spec.Template.Spec.Containers[0]
-	// A seedable PVC backup is wrapped in sh -c so it can hardlink the deterministic pointer.
+	// A seedable PVC backup is wrapped in sh -c so it can record the real artifact filename.
 	if len(c.Command) != 3 || c.Command[0] != "sh" || c.Command[1] != "-c" {
 		t.Fatalf("expected sh -c wrapper; got command=%v args=%v", c.Command, c.Args)
 	}
@@ -167,12 +167,21 @@ func TestBackupJobPVCExplicitDBsCreatesPointer(t *testing.T) {
 	for _, want := range []string{
 		"neo4j-admin database backup",
 		"--to-path=/" + pvcMountPath,
-		"ln -f",
-		"/" + pvcMountPath + "/neo4j.latest.backup",
+		"ls -t /" + pvcMountPath + "/neo4j-*.backup",
+		"/dev/termination-log",
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("script missing %q; got: %s", want, script)
 		}
+	}
+	// The fragile renamed pointer must be gone (it would duplicate a .backup and confuse chains).
+	for _, unwanted := range []string{"ln -f", "cp -f", "latest.backup"} {
+		if strings.Contains(script, unwanted) {
+			t.Errorf("script must not create a renamed pointer (%q); got: %s", unwanted, script)
+		}
+	}
+	if c.TerminationMessagePolicy != corev1.TerminationMessageFallbackToLogsOnError {
+		t.Errorf("terminationMessagePolicy = %q, want FallbackToLogsOnError (surfaces recorded name)", c.TerminationMessagePolicy)
 	}
 }
 
@@ -208,7 +217,7 @@ func TestBackupJobSatisfiesRestrictedPodSecurity(t *testing.T) {
 	}
 }
 
-func TestSeedablePointers(t *testing.T) {
+func TestSeedableDatabases(t *testing.T) {
 	pvc := func(dbs []string, typ neo4jv1beta1.BackupType) *neo4jv1beta1.Neo4jBackup {
 		return &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{
 			Databases:   dbs,
@@ -223,16 +232,17 @@ func TestSeedablePointers(t *testing.T) {
 	}{
 		{"pvc explicit full", pvc([]string{"neo4j"}, neo4jv1beta1.BackupTypeFull), true},
 		{"pvc explicit auto", pvc([]string{"a", "b"}, neo4jv1beta1.BackupTypeAuto), true},
+		// Incrementals are seedable now: restore points at this diff and Neo4j replays the chain.
+		{"pvc incremental", pvc([]string{"neo4j"}, neo4jv1beta1.BackupTypeIncremental), true},
 		{"pvc wildcard", pvc([]string{"*"}, neo4jv1beta1.BackupTypeFull), false},
-		{"pvc incremental", pvc([]string{"neo4j"}, neo4jv1beta1.BackupTypeIncremental), false},
 		{"object store", &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{
 			Databases:   []string{"neo4j"},
 			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/"},
 		}}, false},
 	}
 	for _, tc := range cases {
-		if _, ok := SeedablePointers(tc.b); ok != tc.want {
-			t.Errorf("%s: SeedablePointers ok=%v, want %v", tc.name, ok, tc.want)
+		if _, ok := SeedableDatabases(tc.b); ok != tc.want {
+			t.Errorf("%s: SeedableDatabases ok=%v, want %v", tc.name, ok, tc.want)
 		}
 	}
 }

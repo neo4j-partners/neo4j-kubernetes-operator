@@ -279,7 +279,7 @@ func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1be
 }
 
 // backupsMountPath is where the workload mounts the storage.volumes.backups volume. Single-sourced
-// from render/storage so the seed URI restore builds (file:<backupsMountPath>/<pointer>) always
+// from render/storage so the seed URI restore builds (file:<backupsMountPath>/<artifact>) always
 // matches where the servers actually read the claim — a divergence here breaks the round-trip.
 const backupsMountPath = storage.BackupsMountPath
 
@@ -303,7 +303,7 @@ func seedURIFromArtifact(neo4j *neo4jv1beta1.Neo4j, a *neo4jv1beta1.BackupArtifa
 		claim := strings.TrimPrefix(a.URI, "pvc://")
 		if a.Path == "" {
 			reason := oracle.ReasonRestoreSourceUnsupported
-			return "", &reason, "backup has no seedable pointer (wildcard or incremental backup); restore from an explicit Full/Auto backup"
+			return "", &reason, "backup recorded no seedable artifact path (wildcard backup, or the Job could not record the artifact filename); restore from an explicit named-database backup"
 		}
 		if !mountsBackupsClaim(neo4j, claim) {
 			reason := oracle.ReasonRestoreSourceUnsupported
