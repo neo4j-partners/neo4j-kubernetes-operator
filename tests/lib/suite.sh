@@ -185,14 +185,21 @@ apply_suite_case_row() {
   # Split on US (\037); non-whitespace IFS keeps empty fields (tab would collapse them).
   IFS=$'\037' read -r id fixture assert expect expect_contains cr_name neo4j_case operator_case clouds from_reconcile comment <<<"${row}"
 
+  # Ahead of the cloud check, so a caller handling the skip below can still name the case. Left
+  # after it, SUITE_CASE_ID would hold the *previous* case's id and the job summary would attribute
+  # the skip to the wrong row.
+  export SUITE_CASE_ID="${id}"
+  export SUITE_CASE_COMMENT="${comment}"
+
   if ! suite_case_allowed_on_cloud "${clouds}"; then
     log "SKIP case ${id} (cloud ${CLOUD_ID:-unset} not in [${clouds}])"
+    # Not *_REASON: that suffix is reserved for condition reasons pinned from internal/oracle, and
+    # the harness lint checks every one of them against the catalogue. This is prose for a human.
+    export SUITE_CASE_SKIP_NOTE="platform ${CLOUD_ID:-unset} not in [${clouds}]"
     return 2
   fi
 
-  export SUITE_CASE_ID="${id}"
   export SUITE_CASE_ASSERT="${assert}"
-  export SUITE_CASE_COMMENT="${comment}"
   export EXPECT_CONTAINS="${expect_contains}"
 
   if [[ -n "${operator_case}" && -n "${neo4j_case}" ]]; then

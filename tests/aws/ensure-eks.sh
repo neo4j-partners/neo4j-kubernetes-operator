@@ -20,6 +20,15 @@ source "${REPO_ROOT}/tests/lib/common.sh"
 source "${REPO_ROOT}/tests/config/reconcile.sh"
 load_cloud_config aws-eks
 
+# EKS is the one platform that takes a minor and nothing else: `--kubernetes-version 1.36.4` is
+# rejected outright rather than rounded down. The dropdown offers only minors, so a longer value
+# reaches here from a hand-run that borrowed kind's number — round it down and say so, rather than
+# failing fifteen minutes into a cluster creation over a third component.
+EKS_KUBERNETES_VERSION="$(printf '%s' "${KUBERNETES_VERSION}" | cut -d. -f1,2)"
+if [[ "${EKS_KUBERNETES_VERSION}" != "${KUBERNETES_VERSION}" ]]; then
+  log "EKS accepts minor versions only — requesting ${EKS_KUBERNETES_VERSION} for ${KUBERNETES_VERSION}"
+fi
+
 # No separate authenticator: aws-cli v2 provides `aws eks get-token`, which is what
 # update-kubeconfig writes into the kubeconfig.
 require_cmd aws kubectl
@@ -156,6 +165,10 @@ case "${cluster_status}" in
     [[ "${cluster_status}" == "ACTIVE" ]] \
       || _await _cluster_status "cluster ${AWS_EKS_NAME}" ACTIVE CREATING "${AWS_EKS_CLUSTER_TIMEOUT}" \
         "An earlier run left it half-created; delete it and start again"
+    eks_running="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
+      --query 'cluster.version' --output text)"
+    require_cluster_version "EKS cluster ${AWS_EKS_NAME}" "${eks_running}" "${EKS_KUBERNETES_VERSION}" \
+      "delete it first: make teardown-e2e-eks"
     # Reuse the cluster's own subnets: a nodegroup added later must land in the network the cluster
     # was created with, which is not necessarily what default-VPC discovery would return today.
     subnet_ids="$(aws eks describe-cluster --name "${AWS_EKS_NAME}" \
@@ -180,12 +193,13 @@ case "${cluster_status}" in
     [[ "${subnet_ids}" == *,* ]] \
       || die "need subnets in at least two availability zones, got '${subnet_ids}'. Set AWS_EKS_SUBNET_IDS explicitly"
 
-    log "Creating EKS cluster ${AWS_EKS_NAME} in ${subnet_ids} (10-15 minutes)"
+    log "Creating EKS cluster ${AWS_EKS_NAME} on Kubernetes ${EKS_KUBERNETES_VERSION} in ${subnet_ids} (10-15 minutes)"
     # authenticationMode=API with bootstrapClusterCreatorAdminPermissions gives the creating
     # identity an access entry with cluster-admin, which is what makes update-kubeconfig below
     # usable. Anyone else — including the human who owns the account — needs their own entry.
     if ! aws eks create-cluster \
       --name "${AWS_EKS_NAME}" \
+      --kubernetes-version "${EKS_KUBERNETES_VERSION}" \
       --role-arn "${cluster_role_arn}" \
       --resources-vpc-config "subnetIds=${subnet_ids},endpointPublicAccess=true" \
       --access-config "authenticationMode=API,bootstrapClusterCreatorAdminPermissions=true" \

@@ -1,8 +1,13 @@
 # Image URL to use for all controller-related images
 IMG ?= controller:latest
 
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.35.0
+# The Kubernetes version envtest runs its API server on: the floor the chart declares, read from
+# the same file the e2e harness and the workflows read. Deliberately not the version the clusters
+# run: the CRD's CEL rules have to hold on the oldest Kubernetes the operator claims to support.
+ENVTEST_K8S_VERSION := $(shell . tests/config/versions.sh && echo "$$KUBERNETES_VERSION_FLOOR")
+ifeq ($(strip $(ENVTEST_K8S_VERSION)),)
+$(error could not read KUBERNETES_VERSION_FLOOR from tests/config/versions.sh)
+endif
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

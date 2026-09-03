@@ -12,11 +12,29 @@ load_cloud_config local-kind
 
 require_cmd kind docker kubectl
 
+# What Kubernetes version a live cluster actually runs, read back from the node container rather
+# than from kubectl: the point of the check below is to compare against the image that was asked
+# for, and only the container records which one it was built from.
+kind_running_node_image() {
+  local node
+  node="$(kind get nodes --name "${KIND_CLUSTER_NAME}" 2>/dev/null | head -n1)"
+  [[ -n "${node}" ]] || return 1
+  docker inspect --format '{{.Config.Image}}' "${node}" 2>/dev/null
+}
+
 if ! kind get clusters 2>/dev/null | grep -qx "${KIND_CLUSTER_NAME}"; then
-  log "Creating kind cluster ${KIND_CLUSTER_NAME}"
-  kind create cluster --name "${KIND_CLUSTER_NAME}"
+  log "Creating kind cluster ${KIND_CLUSTER_NAME} on ${KIND_NODE_IMAGE}"
+  kind create cluster --name "${KIND_CLUSTER_NAME}" --image "${KIND_NODE_IMAGE}"
 else
-  log "Reusing kind cluster ${KIND_CLUSTER_NAME}"
+  # Reusing a cluster built on another Kubernetes version would quietly test something other than
+  # what was asked for, and the run would still report the requested version. Stop rather than
+  # recreate: on a laptop that cluster may hold work worth keeping, and CI never hits this branch
+  # because each job starts on a runner with no cluster at all.
+  running="$(kind_running_node_image || true)"
+  if [[ -n "${running}" && "${running}" != "${KIND_NODE_IMAGE}" ]]; then
+    die "kind cluster ${KIND_CLUSTER_NAME} runs ${running} but ${KIND_NODE_IMAGE} was requested — delete it first: kind delete cluster --name ${KIND_CLUSTER_NAME}"
+  fi
+  log "Reusing kind cluster ${KIND_CLUSTER_NAME} on ${running:-an unrecognised node image}"
 fi
 
 kubectl cluster-info --context "kind-${KIND_CLUSTER_NAME}"
@@ -40,14 +58,19 @@ if [[ "${REUSE_IMAGES}" == "true" ]] && docker image inspect "${OPERATOR_IMAGE}"
 else
   docker build -t "${OPERATOR_IMAGE}" .
 fi
-kind load docker-image "${OPERATOR_IMAGE}" --name "${KIND_CLUSTER_NAME}"
+# A kind older than the node image fails here with "unknown containerd config version", a message
+# that names neither kind nor the version that was selected. Selecting a newer KUBERNETES_VERSION
+# on a laptop is exactly how one reaches it, so name both.
+if ! kind load docker-image "${OPERATOR_IMAGE}" --name "${KIND_CLUSTER_NAME}"; then
+  die "could not load ${OPERATOR_IMAGE} into ${KIND_CLUSTER_NAME} — kind $(kind version | awk '{print $2}') may be too old for ${KIND_NODE_IMAGE}; upgrade kind, or select a KUBERNETES_VERSION your kind release publishes a node image for"
+fi
 
 # Pre-pull the Neo4j image once and load it into the node, so the FIRST Neo4j pod does not
 # pay a cold Docker Hub pull (often rate-limited on CI runners) that can exceed the Ready
 # wait. The image tag is not "latest", so pods use imagePullPolicy=IfNotPresent and reuse
 # the cached node image. Best-effort: on failure, pods fall back to pulling on demand.
-NEO4J_VERSION="${NEO4J_VERSION:-2026.05.0}"
-NEO4J_EDITION="${NEO4J_EDITION:-enterprise}"
+# Both come from tests/config/neo4j/base.sh, which reconcile.sh sourced above — repeating the
+# defaults here is how this version drifted from the one the fixtures deploy.
 if [[ "${NEO4J_EDITION}" == "enterprise" ]]; then
   NEO4J_IMAGE="neo4j:${NEO4J_VERSION}-enterprise"
 else

@@ -53,9 +53,12 @@ SUITE_FILE="${TESTS_DIR}/suites/${SUITE}.yaml"
 [[ -f "${SUITE_FILE}" ]] || die "e2e suite not found: tests/suites/${SUITE}.yaml"
 
 _run_e2e_suite() {
+  # KUBERNETES_VERSION rides along so the job summary names the same version locally as in CI,
+  # where it arrives through GITHUB_ENV instead of the cloud profile.
   export CLOUD CLOUD_ID OPERATOR_IMAGE STORAGE_CLASS_NAME \
     OPERATOR_IMAGE_PULL_POLICY OPERATOR_LEADER_ELECT KIND_CLUSTER_NAME \
-    E2E_PROFILE E2E_CONFIG_SUMMARY NEO4J_CASE OPERATOR_CASE E2E_EXPAND_MATRIX
+    E2E_PROFILE E2E_CONFIG_SUMMARY NEO4J_CASE OPERATOR_CASE E2E_EXPAND_MATRIX \
+    KUBERNETES_VERSION
 
   bash "${TESTS_DIR}/runner/run-suite.sh" "${SUITE}"
 }

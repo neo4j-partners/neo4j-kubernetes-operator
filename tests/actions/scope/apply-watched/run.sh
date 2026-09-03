@@ -29,7 +29,7 @@ metadata:
   name: ${CR}
 spec:
   edition: enterprise
-  version: "2026.05.0"
+  version: "${NEO4J_VERSION}"
   license:
     accept: "yes"
   topology:

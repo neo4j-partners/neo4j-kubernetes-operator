@@ -9,6 +9,8 @@ TESTS_DIR="$(cd "${RUNNER_DIR}/.." && pwd)"
 source "${TESTS_DIR}/lib/common.sh"
 # shellcheck source=../lib/suite.sh
 source "${TESTS_DIR}/lib/suite.sh"
+# shellcheck source=../lib/summary.sh
+source "${TESTS_DIR}/lib/summary.sh"
 # shellcheck source=../config/load.sh
 source "${TESTS_DIR}/config/load.sh"
 
@@ -32,6 +34,7 @@ suite_clouds="${suite_clouds//[\[\]]/}"
 # caller can ask for every suite on every platform without encoding the matrix.
 if [[ -n "${suite_clouds}" ]] && ! suite_case_allowed_on_cloud "${suite_clouds}"; then
   log "SKIP suite ${SUITE_NAME} (cloud ${CLOUD_ID:-unset} not in [${suite_clouds}])"
+  summary_suite_skipped "${SUITE_NAME}" "restricted to [${suite_clouds}]"
   exit 0
 fi
 
@@ -96,20 +99,34 @@ total_cases="$(wc -l <"${case_rows_file}" | tr -d ' ')"
 [[ "${total_cases}" -gt 0 ]] || die "suite ${SUITE_NAME} has no cases to run"
 
 log "Suite ${SUITE_NAME}: ${total_cases} case(s)"
+summary_suite_header "${SUITE_NAME}" "${total_cases}"
+
+suite_started=$(date -u +%s)
+cases_passed=0
+cases_failed=0
+cases_skipped=0
 
 case_idx=0
 while IFS= read -r case_row; do
   [[ -n "${case_row}" ]] || continue
   case_idx=$((case_idx + 1))
+  case_started=$(date -u +%s)
 
   apply_rc=0
   apply_suite_case_row "${case_row}" || apply_rc=$?
 
   if [[ "${apply_rc}" -eq 2 ]]; then
+    cases_skipped=$((cases_skipped + 1))
+    summary_case_row skip "${SUITE_CASE_ID}" 0 "${SUITE_CASE_SKIP_NOTE:-restricted to other platforms}"
     continue
   fi
   if [[ "${apply_rc}" -ne 0 ]]; then
     suite_failed=1
+    cases_failed=$((cases_failed + 1))
+    # A case whose configuration could not be resolved never reached its asserts, so it has no
+    # comment worth quoting — say what actually happened instead.
+    summary_case_row fail "${SUITE_CASE_ID}" "$(($(date -u +%s) - case_started))" \
+      "could not resolve the case configuration"
     [[ "${ON_CASE_FAILURE}" == "continue" ]] && continue
     break
   fi
@@ -131,12 +148,17 @@ while IFS= read -r case_row; do
     fi
   fi
 
+  case_seconds=$(($(date -u +%s) - case_started))
   if [[ "${case_failed}" -ne 0 ]]; then
     suite_failed=1
+    cases_failed=$((cases_failed + 1))
     log "CASE [${case_idx}/${total_cases}] ${SUITE_CASE_ID}: FAILED"
+    summary_case_row fail "${SUITE_CASE_ID}" "${case_seconds}" "${SUITE_CASE_COMMENT:-}"
     collect_diagnostics "${RUN_ID}-${SUITE_CASE_ID}"
   else
+    cases_passed=$((cases_passed + 1))
     log "CASE [${case_idx}/${total_cases}] ${SUITE_CASE_ID}: PASSED"
+    summary_case_row pass "${SUITE_CASE_ID}" "${case_seconds}" "${SUITE_CASE_COMMENT:-}"
   fi
 
   run_cleanup_phase "case_teardown" "${CASE_TEARDOWN_STEPS[@]}"
@@ -147,6 +169,9 @@ while IFS= read -r case_row; do
   fi
 done <"${case_rows_file}"
 rm -f "${case_rows_file}"
+
+summary_suite_footer "${SUITE_NAME}" "${total_cases}" \
+  "${cases_passed}" "${cases_failed}" "${cases_skipped}" "$(($(date -u +%s) - suite_started))"
 
 run_cleanup_phase "teardown" "${TEARDOWN_STEPS[@]}"
 

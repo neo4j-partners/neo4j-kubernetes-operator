@@ -6,7 +6,9 @@ kind: Neo4j
 defaults:
   namespace: default
   edition: enterprise
-  version: "2026.05.0"
+  # Deliberately not a number: the version a run tests is resolved, not fixed here. See
+  # ../versions.sh for the pins and ../../contribute.md for how a run picks between them.
+  version: "${NEO4J_VERSION}"
   license:
     accept: "yes"
   topology:

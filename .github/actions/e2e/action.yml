@@ -21,6 +21,17 @@ inputs:
     description: "Artifact holding pre-built operator + Neo4j images. Empty builds and pulls in-job."
     required: false
     default: ""
+  kubernetes-version:
+    description: >-
+      Kubernetes version for the cluster this run creates. Empty takes the platform's default from
+      tests/config/versions.sh, which holds one per platform because the four cannot be given the
+      same number — kind needs a published patch, EKS accepts a minor and nothing else.
+    required: false
+    default: ""
+  neo4j-version:
+    description: "Neo4j version the suites deploy. Empty takes the default from tests/config/versions.sh."
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -35,12 +46,31 @@ runs:
       shell: bash
       run: find tests -name '*.sh' -exec chmod +x {} +
 
+    # Ahead of everything that reads a version — the kind node image, the version the three cloud
+    # ensure scripts create their cluster on, the fixtures' spec.version, the image pre-pull —
+    # since each of those defaults to tests/config/versions.sh unless this step overrides them for
+    # the rest of the job.
+    - name: Resolve the versions under test
+      shell: bash
+      env:
+        KUBERNETES_VERSION_INPUT: ${{ inputs.kubernetes-version }}
+        NEO4J_VERSION_INPUT: ${{ inputs.neo4j-version }}
+        # Which default applies when no version was passed, and which platform the job summary
+        # attributes the numbers to.
+        E2E_CLOUD: ${{ inputs.cloud }}
+      run: bash tests/bin/resolve-versions.sh
+
     # ---------------------------------------------------------------- kind
+    # Pinned rather than left to the action's default, because the kind binary and the node image
+    # are a pair: each kind release publishes and tests a handful of kindest/node tags, and the
+    # ones named in tests/config/versions.sh come from this release's notes. Letting the default
+    # drift would move one half of that pair on its own. Raise both together.
     - name: Install kind
       if: inputs.cloud == 'local-kind'
       uses: helm/kind-action@v1
       with:
         install_only: true
+        version: v0.33.0
 
     # One operator build and one Docker Hub pull per RUN, not per suite. Without this the
     # matrix would rebuild the operator and re-pull Neo4j for every suite; the pull is

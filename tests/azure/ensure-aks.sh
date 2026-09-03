@@ -36,17 +36,22 @@ fi
 ACR_LOGIN_SERVER="${AZURE_ACR_NAME}.azurecr.io"
 
 if ! az aks show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_AKS_NAME}" >/dev/null 2>&1; then
-  log "Creating AKS cluster ${AZURE_AKS_NAME}"
+  log "Creating AKS cluster ${AZURE_AKS_NAME} on Kubernetes ${KUBERNETES_VERSION}"
   az aks create \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --name "${AZURE_AKS_NAME}" \
+    --kubernetes-version "${KUBERNETES_VERSION}" \
     --node-count "${AZURE_AKS_NODE_COUNT}" \
     --node-vm-size "${AZURE_AKS_NODE_VM_SIZE}" \
     --attach-acr "${AZURE_ACR_NAME}" \
     --generate-ssh-keys \
     --output none
 else
-  log "AKS cluster ${AZURE_AKS_NAME} exists"
+  aks_running="$(az aks show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_AKS_NAME}" \
+    --query kubernetesVersion -o tsv)"
+  require_cluster_version "AKS cluster ${AZURE_AKS_NAME}" "${aks_running}" "${KUBERNETES_VERSION}" \
+    "delete it first: az aks delete --resource-group ${AZURE_RESOURCE_GROUP} --name ${AZURE_AKS_NAME} --yes"
+  log "AKS cluster ${AZURE_AKS_NAME} exists on Kubernetes ${aks_running}"
   az aks update \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --name "${AZURE_AKS_NAME}" \

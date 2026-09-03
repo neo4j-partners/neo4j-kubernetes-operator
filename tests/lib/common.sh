@@ -27,6 +27,22 @@ require_cmd() {
   done
 }
 
+# Guard for a managed cluster that already exists. The nightly creates one and tears it down
+# again, but a local run — or a teardown that never completed — finds one still standing, and
+# reusing it on another version would report a green run against a version nobody asked for.
+# Upgrading in place is not the alternative: it takes tens of minutes and would leave the suites
+# testing a control plane mid-upgrade.
+#
+# A requested minor matches any patch of it, because AKS and GKE are handed `1.36`, pick a patch
+# themselves and report the full number back — including GKE's `-gke.NNNNNNN` build suffix.
+require_cluster_version() { # <what> <running> <requested> <how to clear it>
+  local what=$1 running=$2 requested=$3 remedy=$4
+  case "${running}" in
+    "${requested}" | "${requested}".*) return 0 ;;
+  esac
+  die "${what} runs Kubernetes ${running} but ${requested} was requested — ${remedy}"
+}
+
 # oracle_require fails the assert immediately when the reason it is about to wait for is not one
 # the operator can emit on that condition — a rename or a typo, which otherwise costs a full
 # timeout and reads like a broken operator. Pass `event` as the condition for Event-only reasons.

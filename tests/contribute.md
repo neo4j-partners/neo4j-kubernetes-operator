@@ -142,18 +142,25 @@ turns it into a unit-test failure before anything runs at all, and a whitelist r
 Declare it in `src/internal/oracle/catalog.go` and run `make errors` — see
 [Adding a condition or Event reason](../docs/developer-guide/02-changing-the-code.md#adding-a-condition-or-event-reason).
 
-### Fixtures must not hard-code a platform
+### Fixtures must not hard-code a platform or a version
 
 Every suite runs on kind, on AKS and on GKE, so a fixture may not name a StorageClass that
-exists on only one of them. Use a placeholder instead:
+exists on only one of them. And every suite has to be runnable against another Neo4j release, so
+it may not name a version either. Use a placeholder instead:
 
 | Placeholder | Rendered as |
 |---|---|
+| `version: "__NEO4J_VERSION__"` | the version the run resolved — see [Which versions a run tests](#which-versions-a-run-tests) |
 | `storageClassName: __STORAGE_CLASS__` | the cloud profile's class when the case sets `NEO4J_USE_STORAGE_CLASS=true`; the line is **dropped** otherwise, leaving the cluster default |
 | `storageClassName: __CLOUD_STORAGE_CLASS__` | always the cloud profile's class — for cases whose subject *is* naming an existing class |
 
 An invalid class the operator is expected to reject (`no-such-storage-class`) is portable and
 stays literal. Add a `clouds:` key only when the case cannot mean anything on another platform.
+
+`deploy/neo4j` fails the case if any `__MARKER__` survives rendering, so a fixture using a
+placeholder nothing substitutes is named here rather than reaching the API server verbatim and
+coming back as a validation error against a field. Comment lines are exempt, so a fixture can
+explain which placeholder it deliberately does not use.
 
 ### Case comments
 
@@ -177,6 +184,9 @@ not a YAML library):
 Rationale that only matters when reading the suite file (undecided behaviour, pointers to a
 decision record) stays a `#` comment above the case.
 
+The comment is also the "Covers" column of the job summary described below, which is the version
+someone reads without opening the log — worth a sentence that stands alone.
+
 ## Which workflow runs what
 
 | Workflow | Trigger | Targets |
@@ -192,6 +202,93 @@ them all in one job per platform. Neither hardcodes the list — it comes from `
 
 The scheduled hour is UTC — GitHub cron has no timezone — so it fires at 07:00 Paris in summer
 and 06:00 in winter.
+
+### The job summary
+
+[`lib/summary.sh`](lib/summary.sh) writes a table per suite to `GITHUB_STEP_SUMMARY`, which GitHub
+renders on the run's own page: one row per case, with its outcome, how long it took and its
+`comment:`. The goal is that a red run says *which case, on which platform, on which versions*
+without anyone opening a log; the log remains the only place that says why.
+
+It is inert outside Actions — the variable is unset on a laptop and every function returns
+immediately — so running a suite locally is unaffected.
+
+The file is per **step**, not per job, which is what lets one implementation serve both shapes:
+`ci.yml` gives each suite its own job and so its own table, while a cloud leg runs all fourteen
+suites in a single step and their tables stack into one summary. That is why each table repeats
+its suite and platform instead of relying on the job title.
+
+Cases that never ran are recorded too, since a missing row and a suite silently dropped from the
+run look identical otherwise: one restricted to other platforms shows as `skip`, and the ones
+abandoned after a failure under `on_case_failure: stop` are counted as "not run" in the footer.
+
+### Which versions a run tests
+
+[`config/versions.sh`](config/versions.sh) holds one concrete version per platform, plus one for
+Neo4j and a floor for envtest:
+
+| Variable | What it fixes | Shape |
+|---|---|---|
+| `KUBERNETES_VERSION_KIND` | the `kindest/node` image kind boots | exact patch |
+| `KUBERNETES_VERSION_AKS` | `az aks create --kubernetes-version` | minor; Azure selects the patch |
+| `KUBERNETES_VERSION_GKE` | `gcloud container clusters create --cluster-version` | minor; Google selects the patch and its `-gke` build |
+| `KUBERNETES_VERSION_EKS` | `aws eks create-cluster --kubernetes-version` | minor only; a patch is rejected |
+| `KUBERNETES_VERSION_FLOOR` | the version envtest runs the unit tests on | exact patch |
+| `NEO4J_VERSION_DEFAULT` | `spec.version` the fixtures deploy | exact version |
+
+Four Kubernetes values rather than one, because the platforms neither offer the same versions nor
+accept the same shape. The ceiling common to all four is 1.36 today: only kind can run 1.37.
+
+Nothing resolves itself at run time. There is no `latest` that asks a registry what is newest, and
+so no second `pinned` value to keep in step with it either: a static list makes the default both
+current *and* reproducible, which is what someone reproducing a nightly failure weeks later needs.
+Moving a version is an edit to that one file, reviewed like any other change.
+
+`KUBERNETES_VERSION_FLOOR` is deliberately not what any cluster runs. It is the minimum the chart
+declares in `kubeVersion`, and envtest runs the unit tests there so the CRD's CEL rules are proved
+against the oldest Kubernetes the operator claims to support — the version where a rule written
+against a newer CEL library would fail, and the one no other job exercises.
+
+Both workflows expose these as dropdowns under **Run workflow**, which is how you reproduce a
+nightly failure on a branch, or try a version before making it the default. `e2e-all-platforms`
+also takes a **platform** — `all`, `local-kind`, `azure`, `gcp` or `aws` — and offers one
+Kubernetes list per platform, since GitHub cannot narrow a list to the platform picked in the same
+form; the lists that do not apply are simply ignored.
+[`bin/resolve-versions.sh`](bin/resolve-versions.sh) turns a dropdown value, or the absence of one,
+into the versions a platform gets. Run outside Actions it prints what it would pick and changes
+nothing, which is how to check a value before dispatching:
+
+```bash
+E2E_CLOUD=aws-eks ./tests/bin/resolve-versions.sh
+```
+
+Two limits worth knowing. GitHub requires `type: choice` options to be literal YAML, so the option
+lists in the two workflow files — and the fallbacks in their `run-name:`, which GitHub evaluates
+before any job could read a file — are hand-maintained copies of `versions.sh`. Move a version
+there and in both workflows in the same change.
+
+And a kind version is only usable if `kindest/node` publishes an image for that exact patch, which
+it does a handful of times per minor rather than once per release — `v1.36.0` never existed. Take
+the patch levels from the release notes of the kind version pinned in
+`.github/actions/e2e/action.yml`: those are the pairing that release was tested against, and the
+binary and the image have to move together. Locally the same applies, so `kind version` needs to be
+at least that one before you can select the newer entries.
+
+A managed cluster that is already there gets checked rather than reused blindly: running a
+different version from the one requested, the `ensure` script refuses and says how to delete it.
+Upgrading in place is not the alternative — it takes tens of minutes and would leave the suites
+testing a control plane mid-upgrade. The nightly tears its clusters down at the end of every run,
+so this only comes up locally, or after a teardown that did not complete.
+
+Locally the same knobs are plain environment variables:
+
+```bash
+# Anything the harness runs picks these up — node image, fixtures, image pre-pull.
+KUBERNETES_VERSION=1.36.4 NEO4J_VERSION=2026.06.0 ./tests/bin/setup-local-kind.sh
+```
+
+`setup-local-kind.sh` refuses to reuse a cluster built on a different node image rather than
+silently testing a version other than the one asked for; delete it first when you switch.
 
 ### Leftover clusters
 
