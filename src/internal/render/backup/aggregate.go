@@ -52,7 +52,7 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, restore *neo4jv1beta1.Neo4jRestore,
 	toPath, volumes, mounts, err := destination(neo4jv1beta1.BackupDestination{
 		Type: neo4jv1beta1.BackupDestinationPVC,
 		PVC:  &neo4jv1beta1.BackupPVC{ClaimName: claim},
-	})
+	}, "")
 	if err != nil {
 		return nil, err
 	}
