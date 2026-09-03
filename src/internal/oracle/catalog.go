@@ -400,6 +400,12 @@ var (
 		on(ConditionScheduleReady, "A cron expression (full / incremental / aggregate) could not be parsed"))
 	ReasonScheduleBackupEmitted = declareNominal("ScheduleBackupEmitted", SurfaceEvent,
 		asEvent("A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain"))
+	ReasonSchedulePruned = declareNominal("SchedulePruned", SurfaceEvent,
+		asEvent("Retention removed a whole expired backup chain; the Event names the chain and how many backups and artifacts were pruned (BDR-014 §10)"))
+	ReasonSchedulePruneFailed = declare("SchedulePruneFailed", SeverityWarn, SurfaceEvent,
+		asEvent("The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail"))
+	ReasonSchedulePruneUnsupported = declare("SchedulePruneUnsupported", SeverityWarn, SurfaceEvent,
+		asEvent("A chain is eligible for retention pruning but its destination is object storage, which the operator cannot prune yet (pending ADR-016 cloud identity); the chain is kept"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

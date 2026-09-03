@@ -111,12 +111,16 @@ func FromAddress(ctx render.Context) string {
 	return fmt.Sprintf("%s.%s.svc:%d", ctx.AdminServiceName(), ctx.Namespace(), ctx.BackupPort())
 }
 
-// BackupJob builds the run-to-completion Job for a Neo4jBackup. It is a pure function; the
-// owner/controller reference is applied by shared.Apply.
-func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*batchv1.Job, error) {
+// BackupJob builds the run-to-completion Job for a Neo4jBackup. chainSubDir, when non-empty,
+// isolates a chain's artifacts under <destination>/<chainSubDir> so an aggregation of one chain can
+// never make a later differential of another chain mis-parent onto it (a schedule sets it to the
+// chain id; ad-hoc backups pass "" and stay flat). It is PVC-only — object-store chain isolation
+// lands with object-store aggregate/prune (ADR-016). It is a pure function; the owner/controller
+// reference is applied by shared.Apply.
+func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chainSubDir string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
-	toPath, volumes, mounts, err := destination(backup.Spec.Destination)
+	toPath, volumes, mounts, err := destination(backup.Spec.Destination, chainSubDir)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +153,7 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*ba
 	// file:/backups/<name> (the chain's last link) without a renamed pointer (ADR-015 round-trip).
 	// This requires a shell, so wrap neo4j-admin in sh -c; object stores keep the bare command.
 	if dbs, ok := SeedableDatabases(backup); ok {
-		container.Command = []string{"sh", "-c", backupScript(args, toPath, dbs)}
+		container.Command = []string{"sh", "-c", backupScript(args, toPath, dbs, chainSubDir)}
 		container.Args = nil
 	}
 	if neo4j.Spec.Image != nil && neo4j.Spec.Image.PullPolicy != "" {
@@ -186,8 +190,9 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup) (*ba
 }
 
 // destination resolves the neo4j-admin --to-path plus any volumes/mounts the store needs.
-// Object stores map straight to the url; a PVC is mounted and the path is the mount.
-func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []corev1.Volume, mounts []corev1.VolumeMount, err error) {
+// Object stores map straight to the url; a PVC is mounted and the path is the mount, with an
+// optional per-chain sub-directory nested under it (subDir) so chains are isolated on disk.
+func destination(d neo4jv1beta1.BackupDestination, subDir string) (toPath string, volumes []corev1.Volume, mounts []corev1.VolumeMount, err error) {
 	if d.Type == neo4jv1beta1.BackupDestinationPVC {
 		if d.PVC == nil || d.PVC.ClaimName == "" {
 			// ponytail: PVC provisioning (size/storageClassName) is a follow-up; require an
@@ -201,17 +206,23 @@ func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []cor
 			},
 		}}
 		mounts = []corev1.VolumeMount{{Name: pvcVolume, MountPath: "/" + pvcMountPath, SubPath: pvcSubPath}}
-		return "/" + pvcMountPath, volumes, mounts, nil
+		toPath = "/" + pvcMountPath
+		if subDir != "" {
+			toPath += "/" + subDir
+		}
+		return toPath, volumes, mounts, nil
 	}
 	if d.URL == "" {
 		return "", nil, nil, fmt.Errorf("object-store destination requires url")
 	}
+	// ponytail: chain sub-directories are PVC-only for now; object-store chain isolation lands with
+	// object-store aggregate/prune (ADR-016). subDir is intentionally not applied to the url.
 	return d.URL, nil, nil, nil
 }
 
-// backupScript runs neo4j-admin then records the real artifact filename neo4j-admin chose for
-// each database (its newest <db>-<timestamp>.backup) so restore can seed file:/backups/<name> —
-// the chain's true last link — without a renamed pointer. A renamed hardlink/copy would leave a
+// backupScript runs neo4j-admin then records the real artifact path neo4j-admin chose for
+// each database (its newest <db>-<timestamp>.backup, prefixed with the chain sub-dir when set) so
+// restore can seed file:/backups/<path> — the chain's true last link — without a renamed pointer. A renamed hardlink/copy would leave a
 // duplicate .backup in the directory that confuses Neo4j's chain resolution (and copies are the
 // only portable pointer on Azure Files SMB, which supports neither hardlinks nor symlinks), so
 // we record the name instead of duplicating the file.
@@ -224,12 +235,20 @@ func destination(d neo4jv1beta1.BackupDestination) (toPath string, volumes []cor
 // missing artifact or an unwritable termination-log never fails an otherwise-good backup —
 // restore then reports the missing path. args are space-joined (neo4j-admin flags carry no
 // spaces — switch to a quoted argv if extraArgs ever needs them).
-func backupScript(args []string, toPath string, dbs []string) string {
-	script := "neo4j-admin " + strings.Join(args, " ")
+func backupScript(args []string, toPath string, dbs []string, chainSubDir string) string {
+	// Create the (possibly nested chain) destination dir before neo4j-admin writes to it — the
+	// mount exists but a per-chain sub-directory does not. mkdir -p is a no-op for the flat path.
+	script := "mkdir -p " + toPath + " && neo4j-admin " + strings.Join(args, " ")
+	// Record the filename relative to the destination *root* so restore's file:/backups/<path>,
+	// prune, and aggregate all resolve it the same way whether or not a chain sub-dir is used.
+	prefix := ""
+	if chainSubDir != "" {
+		prefix = chainSubDir + "/"
+	}
 	for _, db := range dbs {
 		script += fmt.Sprintf(
-			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")|$(stat -c%%s \"$a\" 2>/dev/null)\" >> /dev/termination-log 2>/dev/null; true; }",
-			toPath, db, db)
+			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=%s$(basename \"$a\")|$(stat -c%%s \"$a\" 2>/dev/null)\" >> /dev/termination-log 2>/dev/null; true; }",
+			toPath, db, db, prefix)
 	}
 	return script
 }
