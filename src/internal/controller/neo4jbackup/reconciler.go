@@ -96,7 +96,7 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			"target has no backup listener (set features.backup and connectivity.listeners.backup)")
 	}
 
-	job, err := renderbackup.BackupJob(&neo4j, &backup)
+	job, err := renderbackup.BackupJob(&neo4j, &backup, chainSubDir(&backup))
 	if err != nil {
 		return r.fail(ctx, &backup, oracle.ReasonBackupDestinationUnsupported, err.Error())
 	}
@@ -126,6 +126,17 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	default:
 		return r.setRunning(ctx, &backup)
 	}
+}
+
+// chainSubDir isolates a schedule-managed chain's artifacts under <destination>/<chainId> so an
+// aggregation of one chain can never make a later differential of another chain mis-parent onto it.
+// It applies only to PVC-backed, seedable (named-database) backups that carry a schedule's chain
+// label; ad-hoc backups (no label) and non-seedable/object-store backups stay flat ("").
+func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
+	if _, ok := renderbackup.SeedableDatabases(b); !ok {
+		return ""
+	}
+	return b.Labels[neo4jbackupschedule.LabelChain]
 }
 
 func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) (ctrl.Result, error) {

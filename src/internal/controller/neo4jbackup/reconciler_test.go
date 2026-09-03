@@ -1,6 +1,7 @@
 package neo4jbackup
 
 import (
+	"strings"
 	"testing"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -16,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackupschedule"
 	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
 )
 
@@ -137,7 +139,7 @@ func TestReconcileCommunityFailsTerminally(t *testing.T) {
 func TestReconcileFailedJobSurfacesPodMessage(t *testing.T) {
 	s := scheme(t)
 	backup := backupCR()
-	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup)
+	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +189,7 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 			Type:        neo4jv1beta1.BackupTypeFull,
 		},
 	}
-	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup)
+	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,11 +227,40 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 	}
 }
 
+func TestReconcileScheduleLabelledBackupUsesChainSubDir(t *testing.T) {
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "nb", Namespace: "ns",
+			Labels: map[string]string{neo4jbackupschedule.LabelChain: "sch-20260903-0100"},
+		},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1beta1.BackupTypeFull,
+		},
+	}
+	r, c := newReconciler(t, enterpriseNeo4j(), backup)
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	var job batchv1.Job
+	if err := c.Get(t.Context(), types.NamespacedName{Name: renderbackup.JobName(backup), Namespace: "ns"}, &job); err != nil {
+		t.Fatalf("expected Job: %v", err)
+	}
+	// A chain-labelled (schedule-managed) backup writes into its isolated chain sub-dir, so a later
+	// aggregation of another chain can never make its differentials mis-parent.
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	if !strings.Contains(script, "--to-path=/destination/sch-20260903-0100") {
+		t.Errorf("scheduled backup must write into its chain sub-dir; got: %s", script)
+	}
+}
+
 func TestReconcileMirrorsJobCompletion(t *testing.T) {
 	s := scheme(t)
 	backup := backupCR()
 	// Pre-create the owned Job in a Complete state so the reconciler mirrors Succeeded.
-	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup)
+	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup, "")
 	if err != nil {
 		t.Fatal(err)
 	}

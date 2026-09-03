@@ -43,7 +43,7 @@ func TestBackupJobObjectStore(t *testing.T) {
 			Options:     &neo4jv1beta1.BackupOptions{Compress: &compress, Verbose: &verbose},
 		},
 	}
-	job, err := BackupJob(testNeo4j(), b)
+	job, err := BackupJob(testNeo4j(), b, "")
 	if err != nil {
 		t.Fatalf("BackupJob: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestBackupJobPVCExistingClaim(t *testing.T) {
 			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
 		},
 	}
-	job, err := BackupJob(testNeo4j(), b)
+	job, err := BackupJob(testNeo4j(), b, "")
 	if err != nil {
 		t.Fatalf("BackupJob: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestBackupJobPVCProvisioningUnsupported(t *testing.T) {
 			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{Size: "10Gi"}},
 		},
 	}
-	if _, err := BackupJob(testNeo4j(), b); err == nil {
+	if _, err := BackupJob(testNeo4j(), b, ""); err == nil {
 		t.Fatal("expected error for PVC provisioning (only claimName supported)")
 	}
 }
@@ -151,7 +151,7 @@ func TestBackupJobPVCExplicitDBsRecordsArtifactName(t *testing.T) {
 			Type:        neo4jv1beta1.BackupTypeFull,
 		},
 	}
-	job, err := BackupJob(testNeo4j(), b)
+	job, err := BackupJob(testNeo4j(), b, "")
 	if err != nil {
 		t.Fatalf("BackupJob: %v", err)
 	}
@@ -186,6 +186,43 @@ func TestBackupJobPVCExplicitDBsRecordsArtifactName(t *testing.T) {
 	}
 }
 
+func TestBackupJobChainSubDirIsolatesArtifacts(t *testing.T) {
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "sch-20260903-0100-f", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1beta1.BackupTypeFull,
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b, "sch-20260903-0100")
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	for _, want := range []string{
+		// neo4j-admin writes into the chain sub-dir, which is created first…
+		"mkdir -p /" + pvcMountPath + "/sch-20260903-0100 &&",
+		"--to-path=/" + pvcMountPath + "/sch-20260903-0100",
+		"ls -t /" + pvcMountPath + "/sch-20260903-0100/neo4j-*.backup",
+		// …and the recorded path is relative to the destination root (chain-prefixed), so restore
+		// seeds file:/backups/<chain>/<file> and prune/aggregate resolve the same path.
+		"neo4j=sch-20260903-0100/$(basename",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script missing %q; got: %s", want, script)
+		}
+	}
+	// The claim is still mounted at the same subPath; the chain dir is nested under the mount.
+	c := job.Spec.Template.Spec.Containers[0]
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == pvcVolume && c.VolumeMounts[i].SubPath != pvcSubPath {
+			t.Errorf("pvc mount subPath = %q, want %q", c.VolumeMounts[i].SubPath, pvcSubPath)
+		}
+	}
+}
+
 func TestBackupJobSatisfiesRestrictedPodSecurity(t *testing.T) {
 	b := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
@@ -195,7 +232,7 @@ func TestBackupJobSatisfiesRestrictedPodSecurity(t *testing.T) {
 			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/"},
 		},
 	}
-	job, err := BackupJob(testNeo4j(), b)
+	job, err := BackupJob(testNeo4j(), b, "")
 	if err != nil {
 		t.Fatalf("BackupJob: %v", err)
 	}

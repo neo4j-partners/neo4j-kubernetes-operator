@@ -18,15 +18,19 @@ limitations under the License.
 // on independent full/incremental cron cadences (BDR-014 §10). It is the CronJob→Job mapping,
 // doubled: each full anchors a new chain (status.currentChain), incrementals attach to it. Emitted
 // backups are named by their scheduled minute so a re-reconcile is idempotent (AlreadyExists →
-// skip). Retention pruning and the aggregate cadence are later increments.
+// skip). It also enforces full.retention by pruning whole expired chains (PVC artifacts via an
+// owned Job, then the records — BDR-014 §10). incremental.retention (aggregate compaction) and
+// object-store pruning (ADR-016) are later increments.
 package neo4jbackupschedule
 
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/robfig/cron/v3"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -40,8 +44,10 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
 )
 
 // Labels stamped on emitted Neo4jBackup objects so restore points are discoverable (BDR-014 §13)
@@ -74,6 +80,7 @@ func NewReconciler(mgr ctrl.Manager) *ScheduleReconciler {
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackupschedules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js,verbs=get;list;watch
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4jbackupschedule")
@@ -133,17 +140,36 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		sched.Status.LastBackup = name
 	}
 
-	// INCREMENTAL cadence — attaches to the current chain; skipped until a full has anchored one.
+	// INCREMENTAL cadence — attaches to the current chain. A differential can only be taken once
+	// the chain's full has *succeeded*: emitting one earlier makes neo4j-admin fail ("no full
+	// backup found"), which the Job then burns retries on — leaving Error pods behind that trip
+	// pod-failure alerts. So we (a) skip the tick that coincides with the chain's own full (the
+	// full already covers that instant, and a differential right after it would be empty), and
+	// (b) otherwise hold the differential until the full is Succeeded, retrying on the next tick
+	// or when the owned full's status change re-triggers us. LastIncrementalTime is only advanced
+	// once we actually emit or deliberately skip, so a held tick is re-evaluated, never lost.
 	if incSched != nil && sched.Status.CurrentChain != "" {
 		if fire, scheduled := due(incSched, baseTime(sched.Status.LastIncrementalTime, sched.CreationTimestamp), now); fire {
-			name, err := r.emit(ctx, &sched, &neo4j, neo4jv1beta1.BackupTypeIncremental, sched.Status.CurrentChain, scheduled)
-			if err != nil {
-				return ctrl.Result{}, err
+			switch {
+			case chainID(&sched, scheduled) == sched.Status.CurrentChain:
+				t := metav1.NewTime(scheduled)
+				sched.Status.LastIncrementalTime = &t
+			default:
+				ready, err := r.chainFullReady(ctx, sched.Namespace, sched.Status.CurrentChain)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				if ready {
+					name, err := r.emit(ctx, &sched, &neo4j, neo4jv1beta1.BackupTypeIncremental, sched.Status.CurrentChain, scheduled)
+					if err != nil {
+						return ctrl.Result{}, err
+					}
+					log.Info("emitted incremental backup", "backup", name, "chain", sched.Status.CurrentChain)
+					t := metav1.NewTime(scheduled)
+					sched.Status.LastIncrementalTime = &t
+					sched.Status.LastBackup = name
+				}
 			}
-			log.Info("emitted incremental backup", "backup", name, "chain", sched.Status.CurrentChain)
-			t := metav1.NewTime(scheduled)
-			sched.Status.LastIncrementalTime = &t
-			sched.Status.LastBackup = name
 		}
 	}
 
@@ -152,14 +178,26 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Requeue at the earliest next tick so emission does not depend on the resync period.
+	// Retention: prune whole expired chains (full.retention). Drains one chain per reconcile and
+	// returns a short requeue while a prune Job is in flight.
+	pruneRequeue, err := r.pruneExpiredChains(ctx, &sched, &neo4j)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Requeue at the earliest of the next cron tick or a pending prune step, so neither emission
+	// nor pruning depends on the resync period.
 	next := fullSched.Next(now)
 	if incSched != nil && sched.Status.CurrentChain != "" {
 		if n := incSched.Next(now); n.Before(next) {
 			next = n
 		}
 	}
-	return ctrl.Result{RequeueAfter: requeueDelay(next, now)}, nil
+	requeue := requeueDelay(next, now)
+	if pruneRequeue > 0 && pruneRequeue < requeue {
+		requeue = pruneRequeue
+	}
+	return ctrl.Result{RequeueAfter: requeue}, nil
 }
 
 // emit creates one owned Neo4jBackup for a cadence tick, named by the scheduled minute so a
@@ -195,6 +233,22 @@ func (r *ScheduleReconciler) emit(ctx context.Context, sched *neo4jv1beta1.Neo4j
 			fmt.Sprintf("emitted %s backup %s (chain %s)", typ, name, chain))
 	}
 	return name, nil
+}
+
+// chainFullReady reports whether a chain's anchoring full backup exists and has Succeeded. A
+// differential emitted before that makes neo4j-admin fail ("no full backup found in <dir>"), so
+// the schedule holds incrementals until it is true. The full's object name is deterministic —
+// <chain>-f — so this is a single Get, not a list.
+func (r *ScheduleReconciler) chainFullReady(ctx context.Context, ns, chain string) (bool, error) {
+	var full neo4jv1beta1.Neo4jBackup
+	switch err := r.Get(ctx, types.NamespacedName{Name: chain + "-f", Namespace: ns}, &full); {
+	case apierrors.IsNotFound(err):
+		return false, nil
+	case err != nil:
+		return false, err
+	default:
+		return full.Status.Phase == neo4jv1beta1.RunPhaseSucceeded, nil
+	}
 }
 
 func emitLabels(sched *neo4jv1beta1.Neo4jBackupSchedule, typ neo4jv1beta1.BackupType, chain string, dbs []string) map[string]string {
@@ -259,6 +313,202 @@ func backupName(sched *neo4jv1beta1.Neo4jBackupSchedule, typ neo4jv1beta1.Backup
 	return sched.Name + "-" + scheduled.UTC().Format("20060102-1504") + "-" + suffix
 }
 
+// pruneExpiredChains enforces full.retention by removing whole expired chains (BDR-014 §10): a
+// chain's PVC artifacts (via an owned prune Job) and then its Neo4jBackup records. It drains the
+// oldest expired chain per reconcile (retention is not latency-sensitive) and returns a requeue
+// delay > 0 while a prune Job is in flight or more chains remain. incremental.retention is realized
+// by the aggregate cadence, not here — individual mid-chain links are never deleted.
+func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j) (time.Duration, error) {
+	if sched.Spec.Full.Retention == nil {
+		return 0, nil
+	}
+
+	var backups neo4jv1beta1.Neo4jBackupList
+	if err := r.List(ctx, &backups, client.InNamespace(sched.Namespace), client.MatchingLabels{LabelSchedule: sched.Name}); err != nil {
+		return 0, err
+	}
+
+	chains := groupChains(backups.Items)
+	expired := expiredChains(chains, sched.Spec.Full.Retention, sched.Status.CurrentChain, r.now())
+	if len(expired) == 0 {
+		return 0, nil
+	}
+
+	// Drain the oldest expired chain first; later reconciles take the next.
+	chain := expired[0]
+	items := chains[chain]
+
+	// Never prune a chain that still has a run in flight — wait for it to finish.
+	for _, b := range items {
+		if b.Status.Phase != neo4jv1beta1.RunPhaseSucceeded && b.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+			return 0, nil
+		}
+	}
+
+	claim, files, objectStore := pvcArtifacts(items)
+	if objectStore {
+		// ponytail: object-store pruning needs a provider SDK / bucket lifecycle rules (ADR-016).
+		// Until then keep the chain rather than orphan its objects, and say so once.
+		if r.Recorder != nil {
+			r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneUnsupported.String(),
+				"chain "+chain+" is expired but its destination is object storage; pruning it is not yet supported (ADR-016)")
+		}
+		return 0, nil
+	}
+
+	// PVC chain: delete the artifact files via an owned Job before deleting the records, so a
+	// crash never leaves an orphaned (un-catalogued, un-prunable) file behind.
+	if len(files) > 0 {
+		job, err := renderbackup.PruneJob(neo4j, renderbackup.PruneJobName(chain), claim, files)
+		if err != nil {
+			return 0, err
+		}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, sched, job, func() error { return nil }); err != nil {
+			return 0, err
+		}
+		var owned batchv1.Job
+		if err := r.Get(ctx, types.NamespacedName{Name: renderbackup.PruneJobName(chain), Namespace: sched.Namespace}, &owned); err != nil {
+			if apierrors.IsNotFound(err) {
+				return 15 * time.Second, nil
+			}
+			return 0, err
+		}
+		complete, failed, jmsg := shared.JobTerminal(&owned)
+		switch {
+		case failed:
+			detail := jmsg
+			if podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name); podMsg != "" {
+				detail = podMsg
+			}
+			if r.Recorder != nil {
+				r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneFailed.String(),
+					"prune of chain "+chain+" failed: "+detail)
+			}
+			return 15 * time.Second, nil
+		case !complete:
+			return 15 * time.Second, nil
+		}
+		// complete → the files are gone; delete the records below.
+	}
+
+	deleted := 0
+	for _, b := range items {
+		if err := r.Delete(ctx, b); err != nil && !apierrors.IsNotFound(err) {
+			return 0, err
+		}
+		deleted++
+	}
+	if r.Recorder != nil {
+		r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonSchedulePruned.String(),
+			fmt.Sprintf("pruned expired chain %s (%d backups, %d artifacts)", chain, deleted, len(files)))
+	}
+	// More expired chains may remain — come back promptly to drain them.
+	if len(expired) > 1 {
+		return time.Second, nil
+	}
+	return 0, nil
+}
+
+// groupChains buckets a schedule's backups by their chain label. Backups without one (a hand-made
+// Neo4jBackup that happens to carry the schedule label) are ignored.
+func groupChains(items []neo4jv1beta1.Neo4jBackup) map[string][]*neo4jv1beta1.Neo4jBackup {
+	chains := map[string][]*neo4jv1beta1.Neo4jBackup{}
+	for i := range items {
+		if chain := items[i].Labels[LabelChain]; chain != "" {
+			chains[chain] = append(chains[chain], &items[i])
+		}
+	}
+	return chains
+}
+
+// expiredChains returns the chain ids that fall outside full.retention, oldest-first, never
+// including the active chain. keepLast counts whole chains (the active one included in the budget);
+// keepDays keeps chains whose anchoring full is younger than the window.
+func expiredChains(chains map[string][]*neo4jv1beta1.Neo4jBackup, ret *neo4jv1beta1.BackupRetention, current string, now time.Time) []string {
+	type chainInfo struct {
+		id string
+		at time.Time
+	}
+	infos := make([]chainInfo, 0, len(chains))
+	for id, items := range chains {
+		if id == current {
+			continue // never prune the chain the schedule is still writing to
+		}
+		infos = append(infos, chainInfo{id: id, at: chainTime(items)})
+	}
+	// Newest first, id as a stable tie-break.
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].at.Equal(infos[j].at) {
+			return infos[i].id > infos[j].id
+		}
+		return infos[i].at.After(infos[j].at)
+	})
+
+	prune := map[string]bool{}
+	switch {
+	case ret.KeepLast != nil:
+		// The active chain (excluded above) still counts toward the budget, so we may keep N-1
+		// other chains; the rest expire.
+		keepOthers := int(*ret.KeepLast) - 1
+		if keepOthers < 0 {
+			keepOthers = 0
+		}
+		for i, info := range infos {
+			if i >= keepOthers {
+				prune[info.id] = true
+			}
+		}
+	case ret.KeepDays != nil:
+		cutoff := now.Add(-time.Duration(*ret.KeepDays) * 24 * time.Hour)
+		for _, info := range infos {
+			if info.at.Before(cutoff) {
+				prune[info.id] = true
+			}
+		}
+	}
+
+	// Oldest-first so callers drain the oldest chain first.
+	out := make([]string, 0, len(prune))
+	for i := len(infos) - 1; i >= 0; i-- {
+		if prune[infos[i].id] {
+			out = append(out, infos[i].id)
+		}
+	}
+	return out
+}
+
+// chainTime is the chain's anchoring point: the earliest creation among its backups (the full).
+func chainTime(items []*neo4jv1beta1.Neo4jBackup) time.Time {
+	var t time.Time
+	for _, b := range items {
+		ct := b.CreationTimestamp.Time
+		if t.IsZero() || ct.Before(t) {
+			t = ct
+		}
+	}
+	return t
+}
+
+// pvcArtifacts collects the recorded artifact filenames and the claim for a chain. objectStore is
+// true if any backup targets object storage (which the operator cannot prune yet) — a chain shares
+// one destination, so this is all-or-nothing in practice.
+func pvcArtifacts(items []*neo4jv1beta1.Neo4jBackup) (claim string, files []string, objectStore bool) {
+	for _, b := range items {
+		if b.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
+			return "", nil, true
+		}
+		if b.Spec.Destination.PVC != nil && b.Spec.Destination.PVC.ClaimName != "" {
+			claim = b.Spec.Destination.PVC.ClaimName
+		}
+		for _, a := range b.Status.Artifacts {
+			if a.Path != "" {
+				files = append(files, a.Path)
+			}
+		}
+	}
+	return claim, files, false
+}
+
 func (r *ScheduleReconciler) now() time.Time {
 	if r.Now != nil {
 		return r.Now()
@@ -308,5 +558,6 @@ func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1beta1.Neo4jBackupSchedule{}).
 		Owns(&neo4jv1beta1.Neo4jBackup{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
