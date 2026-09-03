@@ -78,6 +78,9 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [ADR-012](architecture/012-testing-strategy.md) | Testing strategy — `src/` dev tests (Gate 1) vs `tests/` e2e matrix (Gate 2); TDD optional | proposed |
 | [ADR-013](architecture/013-neo4j-conf-directory-fragments.md) | `neo4j.conf` as a directory of ConfigMap fragments — per-key update & reconcile via the CR | proposed |
 | [ADR-014](architecture/014-operator-observability.md) | Operator observability — logs, metrics, Events, and Prometheus exposure | proposed |
+| [ADR-017](architecture/017-rolling-upgrade.md) | Rolling upgrade of `spec.version` — guardrails and observation over the default `RollingUpdate`; partition cursor deferred | proposed |
+
+> ADR-015 (backup and restore) and ADR-016 (cloud identity) are reserved by in-flight branches and are not indexed until they merge.
 
 ---
 
