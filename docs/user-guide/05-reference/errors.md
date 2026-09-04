@@ -87,6 +87,9 @@ Reasons that report a problem, a decision, or an operation in progress.
 | RestoreReady | RestoreSeedFailed | error | condition+event | A CREATE/seed statement failed; the message carries the Neo4j error detail |
 | RestoreReady | RestoreAggregating | info | condition | A pre-seed `neo4j-admin backup aggregate` Job is collapsing the backup chain before seeding |
 | RestoreReady | RestoreAggregateFailed | error | condition+event | The pre-seed aggregate Job failed; the message carries the neo4j-admin failure detail |
+| RestoreReady | RestoreMetadataApplying | info | condition | Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata) |
+| — (Event only) | RestoreMetadataConflict | warn | event | Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail |
+| RestoreReady | RestoreMetadataFailed | error | condition+event | The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail |
 | ScheduleReady | ScheduleSuspended | info | condition | `spec.suspend` is true; no backups are emitted until it is cleared |
 | ScheduleReady | ScheduleTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
 | ScheduleReady | ScheduleEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
