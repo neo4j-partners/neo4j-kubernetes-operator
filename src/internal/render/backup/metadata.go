@@ -136,7 +136,9 @@ func metadataScript(toPath, boltAddr string, dbArtifacts map[string]string) stri
 	var b strings.Builder
 	b.WriteString("set -e; p=\"${NEO4J_AUTH#*/}\"; ")
 	// Connectivity probe: a failure here (system db unreachable / bad creds) is infra → fail the Job.
-	fmt.Fprintf(&b, "cypher-shell -a %s -u neo4j -p \"$p\" -d system 'RETURN 1;' >/dev/null; ", boltAddr)
+	// Must be a system-database-legal statement — Neo4j 2025.x+ rejects data queries (e.g. RETURN 1)
+	// on the system database — so probe with the admin command SHOW DATABASES.
+	fmt.Fprintf(&b, "cypher-shell -a %s -u neo4j -p \"$p\" -d system 'SHOW DATABASES;' >/dev/null; ", boltAddr)
 	// Regenerate each database's restore_metadata.cypher into a throwaway data dir (infra-critical).
 	for _, db := range dbs {
 		fmt.Fprintf(&b,
@@ -146,8 +148,11 @@ func metadataScript(toPath, boltAddr string, dbArtifacts map[string]string) stri
 	// Apply phase: statement errors (already-exists) are warnings, never Job failures.
 	b.WriteString("set +e; warn=0; ")
 	for _, db := range dbs {
+		// restore_metadata.cypher's location under --to-path-data is not precisely documented and
+		// may land in the image's default data dir instead, so search both (the path filter keeps
+		// it to this database's script).
 		fmt.Fprintf(&b,
-			"s=\"$(find %s/%s -path '*/scripts/%s/restore_metadata.cypher' 2>/dev/null | head -1)\"; ",
+			"s=\"$(find %s/%s /var/lib/neo4j/data /data -path '*/scripts/%s/restore_metadata.cypher' 2>/dev/null | head -1)\"; ",
 			metaScratchMountPath, db, db)
 		fmt.Fprintf(&b,
 			"if [ -n \"$s\" ]; then out=\"$(cypher-shell -a %s -u neo4j -p \"$p\" -d system --fail-at-end --param \"database => '%s'\" -f \"$s\" 2>&1)\"; "+
