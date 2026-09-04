@@ -337,7 +337,7 @@ func (r *RestoreReconciler) ensureAggregate(ctx context.Context, restore *neo4jv
 		return nil, false, res, err
 	}
 
-	job, e := renderbackup.AggregateJob(neo4j, restore, claim, dbArtifacts)
+	job, e := renderbackup.AggregateJob(neo4j, renderbackup.AggregateJobName(restore), claim, dbArtifacts)
 	if e != nil {
 		res, err = r.fail(ctx, restore, oracle.ReasonRestoreSourceUnsupported, e.Error())
 		return nil, false, res, err

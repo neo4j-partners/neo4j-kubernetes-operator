@@ -5,17 +5,10 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
 func TestAggregateJob(t *testing.T) {
-	restore := &neo4jv1beta1.Neo4jRestore{
-		ObjectMeta: metav1.ObjectMeta{Name: "nr", Namespace: "ns"},
-		Spec:       neo4jv1beta1.Neo4jRestoreSpec{Databases: []string{"neo4j"}},
-	}
-	job, err := AggregateJob(testNeo4j(), restore, "backups", map[string]string{"neo4j": "neo4j-2026-09-01T15-08-49.backup"})
+	job, err := AggregateJob(testNeo4j(), "nr-aggregate", "backups", map[string]string{"neo4j": "neo4j-2026-09-01T15-08-49.backup"})
 	if err != nil {
 		t.Fatalf("AggregateJob: %v", err)
 	}
@@ -55,5 +48,25 @@ func TestAggregateJob(t *testing.T) {
 	}
 	if c.TerminationMessagePolicy != corev1.TerminationMessageFallbackToLogsOnError {
 		t.Errorf("terminationMessagePolicy = %q, want FallbackToLogsOnError", c.TerminationMessagePolicy)
+	}
+}
+
+func TestAggregateJobChainSubDir(t *testing.T) {
+	// A chain-prefixed artifact path makes the aggregate read/write and record inside that sub-dir.
+	job, err := AggregateJob(testNeo4j(), "agg", "backups",
+		map[string]string{"neo4j": "sch-20260903-0100/neo4j-2026-09-03T01-04-00.backup"})
+	if err != nil {
+		t.Fatalf("AggregateJob: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	for _, want := range []string{
+		"--from-path=/" + pvcMountPath + "/sch-20260903-0100/neo4j-2026-09-03T01-04-00.backup",
+		// recovered full is scanned for — and recorded — inside the same chain sub-dir.
+		"ls -t /" + pvcMountPath + "/sch-20260903-0100/neo4j-*.backup",
+		"neo4j=sch-20260903-0100/$(basename",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script missing %q; got: %s", want, script)
+		}
 	}
 }

@@ -40,17 +40,30 @@ const (
 	RunPhaseFailed    RunPhase = "Failed"
 )
 
-// BackupType selects full, incremental, or auto (BDR-014 §9). Maps to
-// neo4j-admin --type=FULL|DIFF|AUTO. We call it Incremental (not Neo4j's on-disk
-// "differential") because the artifacts form a dependent chain.
-// +kubebuilder:validation:Enum=Full;Incremental;Auto
+// BackupType selects full, incremental, auto, or aggregate (BDR-014 §9). Full/Incremental/Auto map
+// to neo4j-admin --type=FULL|DIFF|AUTO. We call it Incremental (not Neo4j's on-disk "differential")
+// because the artifacts form a dependent chain. Aggregate is not a live backup: it collapses an
+// existing chain (spec.source.backupRef) into a single recovered full via `neo4j-admin backup
+// aggregate`, so a restore can seed one artifact instead of replaying the whole chain.
+// +kubebuilder:validation:Enum=Full;Incremental;Auto;Aggregate
 type BackupType string
 
 const (
 	BackupTypeFull        BackupType = "Full"
 	BackupTypeIncremental BackupType = "Incremental"
 	BackupTypeAuto        BackupType = "Auto"
+	BackupTypeAggregate   BackupType = "Aggregate"
 )
+
+// BackupSource references an existing backup chain to aggregate (type: Aggregate).
+type BackupSource struct {
+	// BackupRef is the name of a Succeeded Neo4jBackup whose chain is collapsed into a single
+	// recovered full. Any link of the chain (its last incremental, or its full) resolves the whole
+	// chain — neo4j-admin walks it from the recorded artifact.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	BackupRef string `json:"backupRef"`
+}
 
 // BackupDestinationType selects the artifact store (BDR-014 §4).
 // +kubebuilder:validation:Enum=s3;gcs;azure;pvc
@@ -137,10 +150,14 @@ type Neo4jBackupSpec struct {
 	// Destination is where artifacts land.
 	// +kubebuilder:validation:Required
 	Destination BackupDestination `json:"destination"`
-	// Type selects Full, Incremental, or Auto (default Auto self-seeds a full when no
-	// chain exists).
+	// Type selects Full, Incremental, Auto, or Aggregate (default Auto self-seeds a full when no
+	// chain exists). Aggregate collapses spec.source's chain into a recovered full.
 	// +kubebuilder:default=Auto
 	Type BackupType `json:"type,omitempty"`
+	// Source references the chain to aggregate. Required when type is Aggregate and forbidden
+	// otherwise. The recovered full is written beside the source chain (in-place) and cataloged as
+	// this record's artifact; destination is not used to relocate it.
+	Source *BackupSource `json:"source,omitempty"`
 	// Options is optional neo4j-admin passthrough (§12).
 	Options *BackupOptions `json:"options,omitempty"`
 }
@@ -195,6 +212,7 @@ type Neo4jBackupStatus struct {
 // +kubebuilder:printcolumn:name="Chain",type=string,JSONPath=`.status.chain`,priority=1
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="self.spec == oldSelf.spec",message="Neo4jBackup spec is immutable (it is a run-to-completion record)"
+// +kubebuilder:validation:XValidation:rule="(self.spec.type == 'Aggregate') == has(self.spec.source)",message="type Aggregate requires spec.source.backupRef; spec.source is only valid for Aggregate"
 // Neo4jBackup is an immutable, one-shot backup record (BDR-014).
 type Neo4jBackup struct {
 	metav1.TypeMeta   `json:",inline"`

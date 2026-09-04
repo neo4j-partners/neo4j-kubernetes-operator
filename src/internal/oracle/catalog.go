@@ -355,6 +355,10 @@ var (
 		on(ConditionBackupReady, "The target has no backup listener; set `features.backup` and `connectivity.listeners.backup`"))
 	ReasonBackupDestinationUnsupported = declare("BackupDestinationUnsupported", SeverityError, SurfaceBoth,
 		on(ConditionBackupReady, "The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName)"))
+	ReasonBackupSourceNotFound = declare("BackupSourceNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionBackupReady, "`spec.source.backupRef` (type Aggregate) does not resolve to a Succeeded Neo4jBackup yet"))
+	ReasonBackupSourceUnsupported = declare("BackupSourceUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "The aggregate source cannot be used (not PVC-backed, missing recorded artifact, or mixed claims)"))
 )
 
 // RestoreReady — a Neo4jRestore run-to-completion record (BDR-014 / ADR-015). Restore runs
