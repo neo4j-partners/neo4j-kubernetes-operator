@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+
+	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 )
 
 func TestMetadataJob(t *testing.T) {
@@ -64,6 +66,33 @@ func TestMetadataJob(t *testing.T) {
 	}
 	if c.TerminationMessagePolicy != corev1.TerminationMessageFallbackToLogsOnError {
 		t.Errorf("terminationMessagePolicy = %q, want FallbackToLogsOnError", c.TerminationMessagePolicy)
+	}
+}
+
+func TestMetadataJobBoltTLSUsesEncryptedScheme(t *testing.T) {
+	// When the target's Bolt listener requires TLS, the metadata Job must dial an encrypted scheme
+	// (neo4j+ssc) so the users/roles/privileges are not sent in cleartext — a plaintext neo4j://
+	// dial would be refused by the listener anyway.
+	neo4j := testNeo4j()
+	neo4j.Spec.Trust = &neo4jv1beta1.TrustSpec{
+		Enabled: true,
+		Certificates: &neo4jv1beta1.TrustCertificatesSpec{
+			Bolt: &neo4jv1beta1.TLSPolicySpec{
+				PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-key"},
+				PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-cert"},
+			},
+		},
+	}
+	job, err := MetadataJob(neo4j, "md", "backups", map[string]string{"neo4j": "neo4j.latest.backup"})
+	if err != nil {
+		t.Fatalf("MetadataJob: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	if !strings.Contains(script, "cypher-shell -a neo4j+ssc://g.ns.svc:") {
+		t.Errorf("script must dial neo4j+ssc:// under bolt TLS; got: %s", script)
+	}
+	if strings.Contains(script, "neo4j://g.ns.svc:") {
+		t.Errorf("script must not dial plaintext neo4j:// under bolt TLS; got: %s", script)
 	}
 }
 
