@@ -60,7 +60,7 @@ func TestContractCELRulesPresent(t *testing.T) {
 			"Neo4jRestore spec is immutable",
 		}},
 		{"neo4j.com_neo4jbackupschedules.yaml", []string{
-			"aggregate.schedule is required",
+			"set keepLast or keepDays, not both",
 		}},
 	}
 	for _, c := range cases {

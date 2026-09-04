@@ -65,12 +65,11 @@ spec:
                 properties:
                   enabled:
                     default: false
-                    description: Enabled turns on periodic aggregation.
+                    description: |-
+                      Enabled compacts each closed chain: once every link has Succeeded, the schedule emits an
+                      aggregate Neo4jBackup for it and, once that recovered full is cataloged, prunes the chain's
+                      original links (keeping the recovered full). Never touches the active chain.
                     type: boolean
-                  schedule:
-                    description: Schedule is a standard cron expression (required
-                      when enabled).
-                    type: string
                 type: object
               backupTemplate:
                 description: BackupTemplate is the inline Neo4jBackup spec each cadence
@@ -253,10 +252,6 @@ spec:
             - full
             - neo4jRef
             type: object
-            x-kubernetes-validations:
-            - message: aggregate.schedule is required when aggregate.enabled is true
-              rule: '!has(self.aggregate) || !self.aggregate.enabled || (has(self.aggregate.schedule)
-                && self.aggregate.schedule != '''')'
           status:
             description: Neo4jBackupScheduleStatus is the observed state of the schedule.
             properties:

@@ -401,7 +401,7 @@ var (
 	ReasonScheduleEditionUnsupported = declare("ScheduleEditionUnsupported", SeverityError, SurfaceBoth,
 		on(ConditionScheduleReady, "Backup requires Enterprise edition; the target is community"))
 	ReasonScheduleInvalidCron = declare("ScheduleInvalidCron", SeverityError, SurfaceBoth,
-		on(ConditionScheduleReady, "A cron expression (full / incremental / aggregate) could not be parsed"))
+		on(ConditionScheduleReady, "A cron expression (full or incremental) could not be parsed"))
 	ReasonScheduleBackupEmitted = declareNominal("ScheduleBackupEmitted", SurfaceEvent,
 		asEvent("A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain"))
 	ReasonSchedulePruned = declareNominal("SchedulePruned", SurfaceEvent,
@@ -410,6 +410,10 @@ var (
 		asEvent("The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail"))
 	ReasonSchedulePruneUnsupported = declare("SchedulePruneUnsupported", SeverityWarn, SurfaceEvent,
 		asEvent("A chain is eligible for retention pruning but its destination is object storage, which the operator cannot prune yet (pending ADR-016 cloud identity); the chain is kept"))
+	ReasonScheduleCompacted = declareNominal("ScheduleCompacted", SurfaceEvent,
+		asEvent("Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10)"))
+	ReasonScheduleAggregateFailed = declare("ScheduleAggregateFailed", SeverityWarn, SurfaceEvent,
+		asEvent("The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the
