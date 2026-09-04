@@ -1,0 +1,61 @@
+# backupRef round-trip target: an Enterprise Standalone Neo4j with the backup listener enabled
+# AND the destination PVC mounted as storage.volumes.backups (Existing). Mounting the same claim
+# the Neo4jBackup writes to is what puts the artifact on the server's filesystem at /backups, so a
+# Neo4jRestore source.backupRef can seed file:/backups/<path> (ADR-015 round-trip, BDR-014 §13).
+#
+# Single-node only (the suite pins clouds: [local-kind]): the RWO claim is shared by the workload
+# pod and the one-shot backup Jobs on the same node. A multi-node cluster would need RWX (shared
+# backups volume) — deferred with object-store retention to ADR-016.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e2e-backupref-dest
+  labels:
+    app.kubernetes.io/managed-by: neo4j-e2e
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+      backups:
+        mode: Existing
+        existing:
+          claimName: e2e-backupref-dest
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true
+  trust:
+    # NEO-004: the restore reconciler seeds over operator admin Bolt (CREATE DATABASE … OPTIONS
+    # {seedURI}). On kind we opt in to plaintext admin Bolt (Warning event); prefer
+    # trust.certificates.bolt for verified TLS in production.
+    enabled: false
+    insecureAdminConnection: true

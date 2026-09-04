@@ -14,6 +14,7 @@ constraints that will bite you if you ignore them.
 | [7. Plugins](07-plugins.md) | APOC, Graph Data Science, Bloom, and where they may run |
 | [8. Monitoring](08-monitoring.md) | Prometheus metrics and ServiceMonitor |
 | [9. Operations](09-operations.md) | Sizing, placement, probes, restarts, maintenance, deletion |
+| [10. Backup and restore](10-backup-restore.md) | `Neo4jBackup`, `Neo4jBackupSchedule`, `Neo4jRestore`: chains, scheduling, retention, seeding |
 
 If you have not deployed anything yet, start with [Your first Neo4j](../01-getting-started/first-neo4j.md);
 these pages assume you have a working instance to modify.

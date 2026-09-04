@@ -68,6 +68,33 @@ Reasons that report a problem, a decision, or an operation in progress.
 | ServersPendingDrain | Draining | info | condition | Server drain / `DEALLOCATE DATABASES` in progress |
 | ServersPendingDrain | AwaitingSTSShrink | info | condition | Waiting for the StatefulSet replica shrink after drain |
 | ServersPendingDrain | DrainTimeout | warn | condition+event | A scale-in has stayed pending past the operator's budget; the message names the member Neo4j has not released, what it still reports it hosting, and how long the scale-in has waited. The StatefulSet stays at its current size — no data is at risk, but the scale-in needs a look |
+| BackupReady | BackupInProgress | info | condition | The backup Job is running |
+| BackupReady | BackupJobFailed | error | condition+event | The backup Job failed; the message carries the failure detail |
+| BackupReady | BackupTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| BackupReady | BackupEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
+| BackupReady | BackupListenerDisabled | warn | condition | The target has no backup listener; set `features.backup` and `connectivity.listeners.backup` |
+| BackupReady | BackupDestinationUnsupported | error | condition+event | The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName) |
+| BackupReady | BackupSourceNotFound | warn | condition | `spec.source.backupRef` (type Aggregate) does not resolve to a Succeeded Neo4jBackup yet |
+| BackupReady | BackupSourceUnsupported | error | condition+event | The aggregate source cannot be used (not PVC-backed, missing recorded artifact, or mixed claims) |
+| RestoreReady | RestoreInProgress | info | condition | Databases are being seeded from the source; waiting for them to come online |
+| RestoreReady | RestoreTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| RestoreReady | RestoreEditionUnsupported | error | condition+event | Restore requires Enterprise edition; the target is community |
+| RestoreReady | RestoreBeforeFormation | warn | condition | The target is not formation-stable (ClusterFormed) yet; restore waits to avoid seeding over an incomplete server set |
+| RestoreReady | RestoreSourceNotFound | error | condition+event | `source.backupRef` does not resolve to a succeeded Neo4jBackup, or the resolved artifact has no usable location |
+| RestoreReady | RestoreSourceUnsupported | error | condition+event | The source cannot be turned into a seedURI the servers can read (e.g. a PVC-backed artifact requires the RWX `backups` volume path — not yet wired) |
+| RestoreReady | RestoreDatabaseExists | error | condition+event | A target database already exists and `overwrite` is false; nothing was dropped or seeded |
+| RestoreReady | RestoreBoltUnavailable | warn | condition | The operator could not reach the target's system database over Bolt; it will retry |
+| RestoreReady | RestoreSeedFailed | error | condition+event | A CREATE/seed statement failed; the message carries the Neo4j error detail |
+| RestoreReady | RestoreMetadataApplying | info | condition | Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata) |
+| — (Event only) | RestoreMetadataConflict | warn | event | Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail |
+| RestoreReady | RestoreMetadataFailed | error | condition+event | The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail |
+| ScheduleReady | ScheduleSuspended | info | condition | `spec.suspend` is true; no backups are emitted until it is cleared |
+| ScheduleReady | ScheduleTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| ScheduleReady | ScheduleEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
+| ScheduleReady | ScheduleInvalidCron | error | condition+event | A cron expression (full or incremental) could not be parsed |
+| — (Event only) | SchedulePruneFailed | warn | event | The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail |
+| — (Event only) | SchedulePruneUnsupported | warn | event | A chain is eligible for retention pruning but its destination is object storage, which the operator cannot prune yet (pending ADR-016 cloud identity); the chain is kept |
+| — (Event only) | ScheduleAggregateFailed | warn | event | The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
@@ -93,6 +120,12 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | TLSReady | SecretsPresent | info | condition | Required TLS secrets and keys are present |
 | ClusterFormed | Formed | info | condition | All desired servers are enabled in the Neo4j cluster |
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
+| BackupReady | BackupSucceeded | info | condition | The backup Job completed and artifacts were written |
+| RestoreReady | RestoreSucceeded | info | condition | Every requested database was seeded and is online |
+| ScheduleReady | ScheduleActive | info | condition | Cadences are parsed and the schedule is emitting Neo4jBackup objects on time |
+| — (Event only) | ScheduleBackupEmitted | info | event | A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain |
+| — (Event only) | SchedulePruned | info | event | Retention removed a whole expired backup chain; the Event names the chain and how many backups and artifacts were pruned (BDR-014 §10) |
+| — (Event only) | ScheduleCompacted | info | event | Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10) |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
 <!-- END GENERATED oracle:steady -->

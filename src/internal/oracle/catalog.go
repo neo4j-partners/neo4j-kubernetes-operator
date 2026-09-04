@@ -224,6 +224,12 @@ var (
 		"Every desired server is enabled in the Neo4j cluster")
 	ConditionServersPendingDrain = declareCondition("ServersPendingDrain", GateClusterTrueBlocks,
 		"A server dropped from the spec is still registered in Neo4j and waiting to be drained")
+	ConditionBackupReady = declareCondition("BackupReady", GateFalseBlocks,
+		"At least one successful backup exists for this Neo4j instance")
+	ConditionRestoreReady = declareCondition("RestoreReady", GateFalseBlocks,
+		"At least one successful restore exists for this Neo4j instance")
+	ConditionScheduleReady = declareCondition("ScheduleReady", GateNone,
+		"The backup schedule's cron cadences are valid and active, or intentionally suspended")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -331,6 +337,85 @@ var (
 		on(ConditionServersPendingDrain, "Waiting for the StatefulSet replica shrink after drain"))
 	ReasonDrainTimeout = declare("DrainTimeout", SeverityWarn, SurfaceBoth,
 		on(ConditionServersPendingDrain, "A scale-in has stayed pending past the operator's budget; the message names the member Neo4j has not released, what it still reports it hosting, and how long the scale-in has waited. The StatefulSet stays at its current size — no data is at risk, but the scale-in needs a look"))
+)
+
+// BackupReady — a Neo4jBackup run-to-completion record (BDR-014 / ADR-015).
+var (
+	ReasonBackupSucceeded = declareNominal("BackupSucceeded", SurfaceCondition,
+		on(ConditionBackupReady, "The backup Job completed and artifacts were written"))
+	ReasonBackupInProgress = declare("BackupInProgress", SeverityInfo, SurfaceCondition,
+		on(ConditionBackupReady, "The backup Job is running"))
+	ReasonBackupJobFailed = declare("BackupJobFailed", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "The backup Job failed; the message carries the failure detail"))
+	ReasonBackupTargetNotFound = declare("BackupTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionBackupReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonBackupEditionUnsupported = declare("BackupEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "Backup requires Enterprise edition; the target is community"))
+	ReasonBackupListenerDisabled = declare("BackupListenerDisabled", SeverityWarn, SurfaceCondition,
+		on(ConditionBackupReady, "The target has no backup listener; set `features.backup` and `connectivity.listeners.backup`"))
+	ReasonBackupDestinationUnsupported = declare("BackupDestinationUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName)"))
+	ReasonBackupSourceNotFound = declare("BackupSourceNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionBackupReady, "`spec.source.backupRef` (type Aggregate) does not resolve to a Succeeded Neo4jBackup yet"))
+	ReasonBackupSourceUnsupported = declare("BackupSourceUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionBackupReady, "The aggregate source cannot be used (not PVC-backed, missing recorded artifact, or mixed claims)"))
+)
+
+// RestoreReady — a Neo4jRestore run-to-completion record (BDR-014 / ADR-015). Restore runs
+// over Bolt (seed-from-URI), so its failure modes are Bolt/formation/database ones, not Job ones.
+var (
+	ReasonRestoreSucceeded = declareNominal("RestoreSucceeded", SurfaceCondition,
+		on(ConditionRestoreReady, "Every requested database was seeded and is online"))
+	ReasonRestoreInProgress = declare("RestoreInProgress", SeverityInfo, SurfaceCondition,
+		on(ConditionRestoreReady, "Databases are being seeded from the source; waiting for them to come online"))
+	ReasonRestoreTargetNotFound = declare("RestoreTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionRestoreReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonRestoreEditionUnsupported = declare("RestoreEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "Restore requires Enterprise edition; the target is community"))
+	ReasonRestoreBeforeFormation = declare("RestoreBeforeFormation", SeverityWarn, SurfaceCondition,
+		on(ConditionRestoreReady, "The target is not formation-stable (ClusterFormed) yet; restore waits to avoid seeding over an incomplete server set"))
+	ReasonRestoreSourceNotFound = declare("RestoreSourceNotFound", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "`source.backupRef` does not resolve to a succeeded Neo4jBackup, or the resolved artifact has no usable location"))
+	ReasonRestoreSourceUnsupported = declare("RestoreSourceUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "The source cannot be turned into a seedURI the servers can read (e.g. a PVC-backed artifact requires the RWX `backups` volume path — not yet wired)"))
+	ReasonRestoreDatabaseExists = declare("RestoreDatabaseExists", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "A target database already exists and `overwrite` is false; nothing was dropped or seeded"))
+	ReasonRestoreBoltUnavailable = declare("RestoreBoltUnavailable", SeverityWarn, SurfaceCondition,
+		on(ConditionRestoreReady, "The operator could not reach the target's system database over Bolt; it will retry"))
+	ReasonRestoreSeedFailed = declare("RestoreSeedFailed", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "A CREATE/seed statement failed; the message carries the Neo4j error detail"))
+	ReasonRestoreMetadataApplying = declare("RestoreMetadataApplying", SeverityInfo, SurfaceCondition,
+		on(ConditionRestoreReady, "Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata)"))
+	ReasonRestoreMetadataConflict = declare("RestoreMetadataConflict", SeverityWarn, SurfaceEvent,
+		asEvent("Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail"))
+	ReasonRestoreMetadataFailed = declare("RestoreMetadataFailed", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail"))
+)
+
+// Neo4jBackupSchedule — cron owner that emits Neo4jBackup objects (BDR-014 §10).
+var (
+	ReasonScheduleActive = declareNominal("ScheduleActive", SurfaceCondition,
+		on(ConditionScheduleReady, "Cadences are parsed and the schedule is emitting Neo4jBackup objects on time"))
+	ReasonScheduleSuspended = declare("ScheduleSuspended", SeverityInfo, SurfaceCondition,
+		on(ConditionScheduleReady, "`spec.suspend` is true; no backups are emitted until it is cleared"))
+	ReasonScheduleTargetNotFound = declare("ScheduleTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionScheduleReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonScheduleEditionUnsupported = declare("ScheduleEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionScheduleReady, "Backup requires Enterprise edition; the target is community"))
+	ReasonScheduleInvalidCron = declare("ScheduleInvalidCron", SeverityError, SurfaceBoth,
+		on(ConditionScheduleReady, "A cron expression (full or incremental) could not be parsed"))
+	ReasonScheduleBackupEmitted = declareNominal("ScheduleBackupEmitted", SurfaceEvent,
+		asEvent("A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain"))
+	ReasonSchedulePruned = declareNominal("SchedulePruned", SurfaceEvent,
+		asEvent("Retention removed a whole expired backup chain; the Event names the chain and how many backups and artifacts were pruned (BDR-014 §10)"))
+	ReasonSchedulePruneFailed = declare("SchedulePruneFailed", SeverityWarn, SurfaceEvent,
+		asEvent("The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail"))
+	ReasonSchedulePruneUnsupported = declare("SchedulePruneUnsupported", SeverityWarn, SurfaceEvent,
+		asEvent("A chain is eligible for retention pruning but its destination is object storage, which the operator cannot prune yet (pending ADR-016 cloud identity); the chain is kept"))
+	ReasonScheduleCompacted = declareNominal("ScheduleCompacted", SurfaceEvent,
+		asEvent("Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10)"))
+	ReasonScheduleAggregateFailed = declare("ScheduleAggregateFailed", SeverityWarn, SurfaceEvent,
+		asEvent("The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

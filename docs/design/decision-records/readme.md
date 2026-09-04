@@ -59,6 +59,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [BDR-011](business/neo4j/011-https-connector-tls-coupling.md) | HTTPS connector ↔ Service exposure ↔ TLS/mTLS coupling rules — **Option A accepted** | accepted |
 | [BDR-012](business/identity-user-roles/012-identity-management.md) | Neo4j identity — **Option C proposed**: `Neo4jUser` + `Neo4jRole` + `Neo4jGrant`; reconcile Role → Grant → User; **post-V1** | proposed |
 | [BDR-013](business/database/013-database.md) | Logical database — **Option A proposed**: no declarative `Neo4jDatabase` CR; databases by name; priority to backup / restore; post-install task CR (`Neo4jDatabaseTask`) still under reflection | proposed |
+| [BDR-014](business/backup-restore/014-backup-restore.md) | Backup / restore — **Option A proposed**: three CRDs `Neo4jBackup` + `Neo4jBackupSchedule` + `Neo4jRestore`; provider-neutral `url` + PVC destinations; full + incremental chains, independent crons, chain-aware full.retention + boundary aggregation; restore by `backupRef` with `overwrite` guard; databases by name (restore = user DBs only, `system` rejected); Enterprise only; V2 | proposed |
 
 ### Architecture (`architecture/`)
 
@@ -78,6 +79,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [ADR-012](architecture/012-testing-strategy.md) | Testing strategy — `src/` dev tests (Gate 1) vs `tests/` e2e matrix (Gate 2); TDD optional | proposed |
 | [ADR-013](architecture/013-neo4j-conf-directory-fragments.md) | `neo4j.conf` as a directory of ConfigMap fragments — per-key update & reconcile via the CR | proposed |
 | [ADR-014](architecture/014-operator-observability.md) | Operator observability — logs, metrics, Events, and Prometheus exposure | proposed |
+| [ADR-015](architecture/015-backup-and-restore.md) | Backup / restore execution — backup via Kubernetes `Job` (neo4j image) with chain-aware pruning + `aggregate`; per-database artifact layout; restore via online seed-from-URI over Bolt, gated on formation; failure-mode conditions; system/DR → [design note](../backup-restore/disaster-recovery.md) | proposed |
 
 ---
 

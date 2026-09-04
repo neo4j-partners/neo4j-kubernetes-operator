@@ -39,7 +39,13 @@ func Connect(ctx context.Context, uri, user, password string, opts ConnectOpts) 
 	if err != nil {
 		return nil, err
 	}
-	if err := d.VerifyConnectivity(ctx); err != nil {
+	// Verify against the system database, not the DBMS default: every admin op we issue targets
+	// system, and the default database (e.g. neo4j) may legitimately be STOPPED — a prior
+	// forceOffline restore, a maintenance stop, etc. VerifyConnectivity routes to the default db
+	// and would fail spuriously ("no routing table for database 'neo4j'") while system is healthy.
+	// system rejects arbitrary Cypher (e.g. RETURN 1), so probe with an admin command.
+	if _, err := neo4j.ExecuteQuery(ctx, d, "SHOW DATABASES YIELD name", nil, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system")); err != nil {
 		_ = d.Close(ctx)
 		return nil, fmt.Errorf("bolt connect: %w", err)
 	}
@@ -234,6 +240,85 @@ func (a *driverAdmin) DeallocateDatabases(ctx context.Context, name string) erro
 func (a *driverAdmin) DropServer(ctx context.Context, name string) error {
 	_, err := neo4j.ExecuteQuery(ctx, a.driver,
 		"DROP SERVER $name",
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+func (a *driverAdmin) ShowDatabases(ctx context.Context) ([]DatabaseState, error) {
+	result, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"SHOW DATABASES YIELD name, currentStatus",
+		nil, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	if err != nil {
+		return nil, err
+	}
+	// One row per allocation; a database is Online only when every row is online.
+	online := map[string]bool{}
+	seen := map[string]bool{}
+	for _, rec := range result.Records {
+		name, _ := rec.Get("name")
+		n, _ := name.(string)
+		if n == "" {
+			continue
+		}
+		status, _ := rec.Get("currentStatus")
+		s, _ := status.(string)
+		isOnline := strings.EqualFold(strings.TrimSpace(s), "online")
+		if !seen[n] {
+			seen[n] = true
+			online[n] = isOnline
+		} else {
+			online[n] = online[n] && isOnline
+		}
+	}
+	out := make([]DatabaseState, 0, len(seen))
+	for n := range seen {
+		out = append(out, DatabaseState{Name: n, Online: online[n]})
+	}
+	return out, nil
+}
+
+func (a *driverAdmin) CreateDatabaseWithSeed(ctx context.Context, name, seedURI string, primaries, secondaries int64) error {
+	return a.createSeeded(ctx, "CREATE DATABASE", name, seedURI, primaries, secondaries)
+}
+
+func (a *driverAdmin) CreateOrReplaceDatabaseWithSeed(ctx context.Context, name, seedURI string, primaries, secondaries int64) error {
+	return a.createSeeded(ctx, "CREATE OR REPLACE DATABASE", name, seedURI, primaries, secondaries)
+}
+
+// createSeeded issues a seed-from-URI create. seedURI is a literal (params are rejected in
+// OPTIONS), so the caller must have run ValidateSeedURI. TOPOLOGY is added only for a cluster
+// (primaries>0); standalone omits it and lets the DBMS use its single allocation.
+func (a *driverAdmin) createSeeded(ctx context.Context, verb, name, seedURI string, primaries, secondaries int64) error {
+	if err := ValidateSeedURI(seedURI); err != nil {
+		return err
+	}
+	topology := ""
+	if primaries > 0 {
+		topology = fmt.Sprintf(" TOPOLOGY %d PRIMARIES %d SECONDARIES", primaries, secondaries)
+	}
+	// existingData:'use' is mandatory with seedURI under Cypher 5 (the server rejects the seed
+	// without it) and merely deprecated/no-op under Cypher 25, so including it always is the
+	// version-safe form across Neo4j releases.
+	q := fmt.Sprintf("%s $name%s OPTIONS { existingData: 'use', seedURI: '%s' }", verb, topology, seedURI)
+	_, err := neo4j.ExecuteQuery(ctx, a.driver, q,
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+func (a *driverAdmin) StopDatabase(ctx context.Context, name string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"STOP DATABASE $name",
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+func (a *driverAdmin) StartDatabase(ctx context.Context, name string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"START DATABASE $name",
 		map[string]any{"name": name}, neo4j.EagerResultTransformer,
 		neo4j.ExecuteQueryWithDatabase("system"))
 	return err

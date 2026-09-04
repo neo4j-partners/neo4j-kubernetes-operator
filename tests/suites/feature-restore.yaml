@@ -1,0 +1,28 @@
+name: feature-restore
+description: >
+  Neo4jRestore end to end (ADR-015 / BDR-014). Deploys an Enterprise Standalone Neo4j with the
+  backup listener enabled, waits Ready, writes a probe row into `neo4j`, produces a backup
+  artifact in the pod's own /tmp, then applies a Neo4jRestore that seeds a fresh database
+  `restored` from a credential-free file: URI. Asserts the record reaches Succeeded
+  (RestoreReady=True/RestoreSucceeded), `restored` comes online, and the probe row is present —
+  proving the seed carried real data over Bolt (CREATE DATABASE … OPTIONS {seedURI}).
+brief_ref: neo4j-restore-run
+use_pipeline: neo4j-suite
+on_case_failure: stop
+# deploy/neo4j (case_run) applies the target; restore/seed runs only after the workload is Ready,
+# so neither the in-pod backup nor the seed races the target's boot.
+pipeline:
+  case_assert:
+    - assert/standalone-ready
+    - restore/seed
+    - assert/restore-succeeded
+  case_teardown:
+    - restore/cleanup
+
+cases:
+  - id: file-seed-standalone
+    comment: ADR-015 — a credential-free file: seed creates and onlines a fresh database carrying the source data.
+    fixture: tests/fixtures/neo4j-restore.yaml
+    assert: restore-succeeded
+    expect: success
+    cr_name: e2e-restore

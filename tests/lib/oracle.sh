@@ -12,7 +12,7 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady
 }
 
 oracle_reasons_for() {  # <condition>
@@ -25,7 +25,10 @@ oracle_reasons_for() {  # <condition>
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
-    event) printf '%s\n' DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
+    BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported BackupSourceNotFound BackupSourceUnsupported ;;
+    RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreMetadataApplying RestoreMetadataFailed ;;
+    ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
+    event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed SchedulePruneUnsupported ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
     *) return 1 ;;
   esac
 }
@@ -79,6 +82,39 @@ oracle_severity() {  # <reason>
     Draining) echo info ;;
     AwaitingSTSShrink) echo info ;;
     DrainTimeout) echo warn ;;
+    BackupSucceeded) echo info ;;
+    BackupInProgress) echo info ;;
+    BackupJobFailed) echo error ;;
+    BackupTargetNotFound) echo warn ;;
+    BackupEditionUnsupported) echo error ;;
+    BackupListenerDisabled) echo warn ;;
+    BackupDestinationUnsupported) echo error ;;
+    BackupSourceNotFound) echo warn ;;
+    BackupSourceUnsupported) echo error ;;
+    RestoreSucceeded) echo info ;;
+    RestoreInProgress) echo info ;;
+    RestoreTargetNotFound) echo warn ;;
+    RestoreEditionUnsupported) echo error ;;
+    RestoreBeforeFormation) echo warn ;;
+    RestoreSourceNotFound) echo error ;;
+    RestoreSourceUnsupported) echo error ;;
+    RestoreDatabaseExists) echo error ;;
+    RestoreBoltUnavailable) echo warn ;;
+    RestoreSeedFailed) echo error ;;
+    RestoreMetadataApplying) echo info ;;
+    RestoreMetadataConflict) echo warn ;;
+    RestoreMetadataFailed) echo error ;;
+    ScheduleActive) echo info ;;
+    ScheduleSuspended) echo info ;;
+    ScheduleTargetNotFound) echo warn ;;
+    ScheduleEditionUnsupported) echo error ;;
+    ScheduleInvalidCron) echo error ;;
+    ScheduleBackupEmitted) echo info ;;
+    SchedulePruned) echo info ;;
+    SchedulePruneFailed) echo warn ;;
+    SchedulePruneUnsupported) echo warn ;;
+    ScheduleCompacted) echo info ;;
+    ScheduleAggregateFailed) echo warn ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;
@@ -91,7 +127,7 @@ oracle_severity() {  # <reason>
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|SecretMounted|StorageResizeCompleted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|SecretMounted|StorageResizeCompleted) return 0 ;;
     *) return 1 ;;
   esac
 }
