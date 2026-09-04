@@ -48,7 +48,7 @@ type RestoreSource struct {
 // Neo4jRestoreSpec is the desired state of a one-shot, immutable restore record.
 // Restore covers user databases only; system is rejected (BDR-014 §8).
 // +kubebuilder:validation:XValidation:rule="!self.databases.exists(d, d == 'system')",message="system cannot be restored via Neo4jRestore; whole-cluster DR is a manual runbook (BDR-014 §8)"
-// +kubebuilder:validation:XValidation:rule="!self.forceOffline || self.overwrite",message="forceOffline requires overwrite: true"
+// +kubebuilder:validation:XValidation:rule="!has(self.forceOffline) || !self.forceOffline || (has(self.overwrite) && self.overwrite)",message="forceOffline requires overwrite: true"
 type Neo4jRestoreSpec struct {
 	// Neo4jRef is the target cluster (must exist and be formation-stable).
 	// +kubebuilder:validation:Required
