@@ -1,0 +1,35 @@
+name: feature-restore-backupref
+description: >
+  Record-based restore over a backup CHAIN (ADR-015 / BDR-014 §13). Deploys an Enterprise
+  Standalone Neo4j with the backup listener enabled AND the destination PVC mounted as
+  storage.volumes.backups, so a PVC-backed artifact is readable by the server at /backups. Writes
+  probe #1, takes a Full Neo4jBackup; writes probe #2, takes an Incremental Neo4jBackup to the same
+  PVC; then applies a Neo4jRestore with source.backupRef pointing at the INCREMENTAL. The operator
+  resolves the recorded pvc:// artifact to file:/backups/<path> and Neo4j's FileSeedProvider walks
+  the full → incremental chain. Asserts the record reaches Succeeded, `restored` comes online, and
+  BOTH probes are present — proving the incremental's data is carried, not just the full snapshot.
+  This exercises the real operator restore path (backupRef resolution + PVC seed mount + chain
+  walk), which the file:-seed suite (feature-restore) deliberately sidesteps.
+brief_ref: neo4j-restore-backupref
+use_pipeline: neo4j-suite
+on_case_failure: stop
+# Single-node only: the RWO backups claim is shared by the workload pod and the one-shot backup
+# Jobs on the same kind node. A multi-node cluster needs RWX (shared backups volume), deferred to
+# ADR-016 with object-store retention.
+clouds: [local-kind]
+pipeline:
+  case_assert:
+    - assert/standalone-ready
+    - restore/backupref-chain
+    - assert/restore-chain
+  case_teardown:
+    - restore/cleanup
+    - restore/backupref-cleanup
+
+cases:
+  - id: chain-pvc-seed
+    comment: BDR-014 §13 — a Neo4jRestore(source.backupRef=<incremental>) seeds `restored` from file:/backups and Neo4j replays the full→incremental chain; both probe rows land, proving incremental data is carried.
+    fixture: tests/fixtures/neo4j-backup-mounted-pvc.yaml
+    assert: restore-chain
+    expect: success
+    cr_name: e2e-backupref
