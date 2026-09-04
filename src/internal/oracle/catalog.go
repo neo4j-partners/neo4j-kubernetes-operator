@@ -388,6 +388,12 @@ var (
 		on(ConditionRestoreReady, "A pre-seed `neo4j-admin backup aggregate` Job is collapsing the backup chain before seeding"))
 	ReasonRestoreAggregateFailed = declare("RestoreAggregateFailed", SeverityError, SurfaceBoth,
 		on(ConditionRestoreReady, "The pre-seed aggregate Job failed; the message carries the neo4j-admin failure detail"))
+	ReasonRestoreMetadataApplying = declare("RestoreMetadataApplying", SeverityInfo, SurfaceCondition,
+		on(ConditionRestoreReady, "Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata)"))
+	ReasonRestoreMetadataConflict = declare("RestoreMetadataConflict", SeverityWarn, SurfaceEvent,
+		asEvent("Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail"))
+	ReasonRestoreMetadataFailed = declare("RestoreMetadataFailed", SeverityError, SurfaceBoth,
+		on(ConditionRestoreReady, "The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail"))
 )
 
 // Neo4jBackupSchedule — cron owner that emits Neo4jBackup objects (BDR-014 §10).
