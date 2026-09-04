@@ -35,3 +35,16 @@ spec:
       expose: [bolt, http]
   auth:
     generatePassword: true
+  trust:
+    # NEO-004: the restore reconciler seeds over operator admin Bolt (CREATE DATABASE … OPTIONS
+    # {seedURI}). On kind we opt in to plaintext admin Bolt (Warning event); prefer
+    # trust.certificates.bolt for verified TLS in production.
+    enabled: false
+    insecureAdminConnection: true
+  config:
+    neo4j:
+      # Since Neo4j 2025.01 file: has no default seed provider. This suite seeds from an in-pod
+      # /tmp artifact (no backups volume), so the operator's backups-volume auto-enable does not
+      # apply — enable FileSeedProvider explicitly (CloudSeedProvider kept for parity with the
+      # operator default). feature-restore-backupref mounts a backups volume and needs no override.
+      dbms.databases.seed_from_uri_providers: "FileSeedProvider,CloudSeedProvider"
