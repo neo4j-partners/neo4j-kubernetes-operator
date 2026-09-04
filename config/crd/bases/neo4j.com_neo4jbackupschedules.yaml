@@ -181,16 +181,18 @@ spec:
                 description: Full is the cron that anchors a new backup chain (--type=FULL).
                 properties:
                   retention:
-                    description: Retention for artifacts produced by this cadence.
+                    description: Retention bounds how many whole chains are kept;
+                      older chains are pruned entirely.
                     properties:
                       keepDays:
-                        description: KeepDays keeps units younger than N days.
+                        description: KeepDays keeps chains whose anchoring full is
+                          younger than N days.
                         format: int32
                         minimum: 1
                         type: integer
                       keepLast:
-                        description: KeepLast keeps the last N units (whole chains
-                          for full, links for incremental).
+                        description: KeepLast keeps the last N whole chains; older
+                          chains are pruned entirely.
                         format: int32
                         minimum: 1
                         type: integer
@@ -209,24 +211,6 @@ spec:
                 description: Incremental attaches to the current chain (--type=AUTO).
                   Omit for full-only.
                 properties:
-                  retention:
-                    description: Retention for artifacts produced by this cadence.
-                    properties:
-                      keepDays:
-                        description: KeepDays keeps units younger than N days.
-                        format: int32
-                        minimum: 1
-                        type: integer
-                      keepLast:
-                        description: KeepLast keeps the last N units (whole chains
-                          for full, links for incremental).
-                        format: int32
-                        minimum: 1
-                        type: integer
-                    type: object
-                    x-kubernetes-validations:
-                    - message: set keepLast or keepDays, not both
-                      rule: '!(has(self.keepLast) && has(self.keepDays))'
                   schedule:
                     description: Schedule is a standard cron expression.
                     minLength: 1

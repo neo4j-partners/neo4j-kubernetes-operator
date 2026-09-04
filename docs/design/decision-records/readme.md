@@ -59,7 +59,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [BDR-011](business/neo4j/011-https-connector-tls-coupling.md) | HTTPS connector ↔ Service exposure ↔ TLS/mTLS coupling rules — **Option A accepted** | accepted |
 | [BDR-012](business/identity-user-roles/012-identity-management.md) | Neo4j identity — **Option C proposed**: `Neo4jUser` + `Neo4jRole` + `Neo4jGrant`; reconcile Role → Grant → User; **post-V1** | proposed |
 | [BDR-013](business/database/013-database.md) | Logical database — **Option A proposed**: no declarative `Neo4jDatabase` CR; databases by name; priority to backup / restore; post-install task CR (`Neo4jDatabaseTask`) still under reflection | proposed |
-| [BDR-014](business/backup-restore/014-backup-restore.md) | Backup / restore — **Option A proposed**: three CRDs `Neo4jBackup` + `Neo4jBackupSchedule` + `Neo4jRestore`; provider-neutral `url` + PVC destinations; full + incremental chains, independent crons, two-tier chain-aware retention; restore by `backupRef` with `overwrite` guard; databases by name (restore = user DBs only, `system` rejected); Enterprise only; V2 | proposed |
+| [BDR-014](business/backup-restore/014-backup-restore.md) | Backup / restore — **Option A proposed**: three CRDs `Neo4jBackup` + `Neo4jBackupSchedule` + `Neo4jRestore`; provider-neutral `url` + PVC destinations; full + incremental chains, independent crons, chain-aware full.retention + boundary aggregation; restore by `backupRef` with `overwrite` guard; databases by name (restore = user DBs only, `system` rejected); Enterprise only; V2 | proposed |
 
 ### Architecture (`architecture/`)
 

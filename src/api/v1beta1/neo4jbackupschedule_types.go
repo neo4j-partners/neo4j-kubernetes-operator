@@ -20,26 +20,37 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// BackupRetention bounds how much of a cadence is kept (BDR-014 §10). Set at most
-// one of keepLast / keepDays; the schedule prunes chain-aware, never mid-chain links.
+// BackupRetention bounds how many whole backup chains full.retention keeps (BDR-014 §10). Set at
+// most one of keepLast / keepDays; the schedule prunes whole chains, never mid-chain links.
 // +kubebuilder:validation:XValidation:rule="!(has(self.keepLast) && has(self.keepDays))",message="set keepLast or keepDays, not both"
 type BackupRetention struct {
-	// KeepLast keeps the last N units (whole chains for full, links for incremental).
+	// KeepLast keeps the last N whole chains; older chains are pruned entirely.
 	// +kubebuilder:validation:Minimum=1
 	KeepLast *int32 `json:"keepLast,omitempty"`
-	// KeepDays keeps units younger than N days.
+	// KeepDays keeps chains whose anchoring full is younger than N days.
 	// +kubebuilder:validation:Minimum=1
 	KeepDays *int32 `json:"keepDays,omitempty"`
 }
 
-// BackupCadence is one cron schedule plus its retention (BDR-014 §10).
-type BackupCadence struct {
+// FullCadence anchors a new backup chain each tick (--type=FULL) and owns whole-chain retention
+// (BDR-014 §10).
+type FullCadence struct {
 	// Schedule is a standard cron expression.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Schedule string `json:"schedule"`
-	// Retention for artifacts produced by this cadence.
+	// Retention bounds how many whole chains are kept; older chains are pruned entirely.
 	Retention *BackupRetention `json:"retention,omitempty"`
+}
+
+// IncrementalCadence attaches differentials to the current chain (--type=AUTO). It has no retention:
+// a mid-chain link cannot be deleted without breaking every later link's restore, so within-chain
+// bounding is done by full.retention (whole chains) and aggregate compaction, not per link.
+type IncrementalCadence struct {
+	// Schedule is a standard cron expression.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Schedule string `json:"schedule"`
 }
 
 // AggregateCadence optionally collapses each closed chain into one recovered full (BDR-014 §10),
@@ -77,9 +88,9 @@ type Neo4jBackupScheduleSpec struct {
 	Suspend bool `json:"suspend,omitempty"`
 	// Full is the cron that anchors a new backup chain (--type=FULL).
 	// +kubebuilder:validation:Required
-	Full BackupCadence `json:"full"`
+	Full FullCadence `json:"full"`
 	// Incremental attaches to the current chain (--type=AUTO). Omit for full-only.
-	Incremental *BackupCadence `json:"incremental,omitempty"`
+	Incremental *IncrementalCadence `json:"incremental,omitempty"`
 	// Aggregate optionally compacts a chain into one recovered full.
 	Aggregate *AggregateCadence `json:"aggregate,omitempty"`
 	// BackupTemplate is the inline Neo4jBackup spec each cadence emits.

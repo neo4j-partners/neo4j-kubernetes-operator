@@ -67,7 +67,7 @@ A **backup chain** is one full followed by *n* **contiguous** differentials. Res
 2. **Links cannot be pruned individually** — you may drop a **whole chain**, or compact from the front with **`neo4j-admin backup aggregate`** (collapses a chain into a single recovered full), but never delete a middle differential.
 3. **Full and incremental cadences are independent** — Neo4j supports scheduling them separately (the first differential may overlap its parent full), so each can target a different recovery objective.
 
-These are the reasons a single `schedule` + single `retention` is insufficient: the schedule needs a **full cron** and an **incremental cron**, and retention must be **two-tier and chain-aware**.
+These are the reasons a single `schedule` + single `retention` is insufficient: the schedule needs a **full cron** and an **incremental cron**, and retention must be **chain-aware** — whole-chain expiry (`full.retention`) plus optional boundary **aggregation** to bound within-chain growth (§10).
 
 ### Forces
 
