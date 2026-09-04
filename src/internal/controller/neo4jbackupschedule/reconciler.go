@@ -19,8 +19,9 @@ limitations under the License.
 // doubled: each full anchors a new chain (status.currentChain), incrementals attach to it. Emitted
 // backups are named by their scheduled minute so a re-reconcile is idempotent (AlreadyExists →
 // skip). It also enforces full.retention by pruning whole expired chains (PVC artifacts via an
-// owned Job, then the records — BDR-014 §10). incremental.retention (aggregate compaction) and
-// object-store pruning (ADR-016) are later increments.
+// owned Job, then the records — BDR-014 §10) and, when aggregate.enabled, realizes
+// incremental.retention by compacting each closed chain into its recovered full (aggregate, then
+// prune the original links). Object-store pruning (ADR-016) is a later increment.
 package neo4jbackupschedule
 
 import (
@@ -178,15 +179,24 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// Aggregate compaction (aggregate.enabled): collapse each closed chain into its recovered full
+	// and prune the original links (kept the recovered full). Runs before expiry so a chain that is
+	// both closed and expired is dropped wholesale by expiry, not needlessly aggregated first.
+	compactRequeue, err := r.reconcileCompaction(ctx, &sched, &neo4j)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// Retention: prune whole expired chains (full.retention). Drains one chain per reconcile and
-	// returns a short requeue while a prune Job is in flight.
+	// returns a short requeue while a prune Job is in flight. A compacted chain (only its recovered
+	// full remains) is dropped wholesale here too — the recovered full carries the chain label.
 	pruneRequeue, err := r.pruneExpiredChains(ctx, &sched, &neo4j)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Requeue at the earliest of the next cron tick or a pending prune step, so neither emission
-	// nor pruning depends on the resync period.
+	// Requeue at the earliest of the next cron tick or a pending compaction/prune step, so neither
+	// emission nor retention depends on the resync period.
 	next := fullSched.Next(now)
 	if incSched != nil && sched.Status.CurrentChain != "" {
 		if n := incSched.Next(now); n.Before(next) {
@@ -194,8 +204,10 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 	requeue := requeueDelay(next, now)
-	if pruneRequeue > 0 && pruneRequeue < requeue {
-		requeue = pruneRequeue
+	for _, d := range []time.Duration{compactRequeue, pruneRequeue} {
+		if d > 0 && d < requeue {
+			requeue = d
+		}
 	}
 	return ctrl.Result{RequeueAfter: requeue}, nil
 }
@@ -234,6 +246,47 @@ func (r *ScheduleReconciler) emit(ctx context.Context, sched *neo4jv1beta1.Neo4j
 	}
 	return name, nil
 }
+
+// emitAggregate creates the owned aggregate Neo4jBackup that collapses a closed chain into one
+// recovered full. It is named <chain>-agg (idempotent: a re-reconcile is AlreadyExists → skip) and
+// points at tip — the chain's last link — which neo4j-admin walks back to the full. The backup
+// reconciler runs the Job and catalogs the recovered full; compaction then prunes the links.
+func (r *ScheduleReconciler) emitAggregate(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, chain, tip string) (string, error) {
+	tmpl := sched.Spec.BackupTemplate
+	name := aggregateName(chain)
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: sched.Namespace,
+			Labels:    emitLabels(sched, neo4jv1beta1.BackupTypeAggregate, chain, tmpl.Databases),
+		},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    sched.Spec.Neo4jRef,
+			Databases:   tmpl.Databases,
+			Destination: tmpl.Destination,
+			Type:        neo4jv1beta1.BackupTypeAggregate,
+			Source:      &neo4jv1beta1.BackupSource{BackupRef: tip},
+			Options:     tmpl.Options,
+		},
+	}
+	if err := controllerutil.SetControllerReference(sched, b, r.Scheme); err != nil {
+		return "", err
+	}
+	if err := r.Create(ctx, b); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return name, nil
+		}
+		return "", err
+	}
+	if r.Recorder != nil {
+		r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonScheduleBackupEmitted.String(),
+			fmt.Sprintf("emitted aggregate backup %s (chain %s, source %s)", name, chain, tip))
+	}
+	return name, nil
+}
+
+// aggregateName is the deterministic aggregate-backup name for a chain (idempotency key).
+func aggregateName(chain string) string { return chain + "-agg" }
 
 // chainFullReady reports whether a chain's anchoring full backup exists and has Succeeded. A
 // differential emitted before that makes neo4j-admin fail ("no full backup found in <dir>"), so
@@ -311,6 +364,216 @@ func backupName(sched *neo4jv1beta1.Neo4jBackupSchedule, typ neo4jv1beta1.Backup
 		suffix = "i"
 	}
 	return sched.Name + "-" + scheduled.UTC().Format("20060102-1504") + "-" + suffix
+}
+
+// reconcileCompaction realizes the aggregate cadence (BDR-014 §10): for each closed chain it emits
+// an aggregate Neo4jBackup once the chain has quiesced, and once that recovered full is cataloged it
+// prunes the chain's original links (keeping the recovered full — "preserve-then-clean"). It drains
+// one chain's action per reconcile and returns a short requeue while work is in flight. The active
+// chain is never touched, and a chain full.retention is about to drop is left to that wholesale path.
+func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j) (time.Duration, error) {
+	if sched.Spec.Aggregate == nil || !sched.Spec.Aggregate.Enabled {
+		return 0, nil
+	}
+
+	// ponytail: a second List per reconcile (pruneExpiredChains lists too). Cheap against the
+	// cached client; fold into one pass if it ever shows up hot.
+	var backups neo4jv1beta1.Neo4jBackupList
+	if err := r.List(ctx, &backups, client.InNamespace(sched.Namespace), client.MatchingLabels{LabelSchedule: sched.Name}); err != nil {
+		return 0, err
+	}
+	chains := groupChains(backups.Items)
+	expired := map[string]bool{}
+	if sched.Spec.Full.Retention != nil {
+		for _, id := range expiredChains(chains, sched.Spec.Full.Retention, sched.Status.CurrentChain, r.now()) {
+			expired[id] = true
+		}
+	}
+
+	for _, chain := range closedChainsOldestFirst(chains, sched.Status.CurrentChain) {
+		if expired[chain] {
+			continue // full.retention will drop this whole chain; no point compacting it first
+		}
+		links, agg := splitChain(chains[chain])
+		if !hasIncremental(links) {
+			continue // a lone full (or an already-compacted chain) has nothing to collapse
+		}
+
+		if agg == nil {
+			if !allSucceeded(links) {
+				continue // wait for the chain to fully quiesce before aggregating it
+			}
+			if _, err := r.emitAggregate(ctx, sched, chain, chainTipName(links)); err != nil {
+				return 0, err
+			}
+			// The backup reconciler runs the aggregate Job; its status change re-triggers us.
+			return 15 * time.Second, nil
+		}
+
+		switch agg.Status.Phase {
+		case neo4jv1beta1.RunPhaseFailed:
+			// Keep the links (the chain is still fully restorable); surface it and move on. Deleting
+			// the failed aggregate record lets a later reconcile retry.
+			if r.Recorder != nil {
+				r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonScheduleAggregateFailed.String(),
+					"aggregate of chain "+chain+" failed: "+agg.Status.Message)
+			}
+			continue
+		case neo4jv1beta1.RunPhaseSucceeded:
+			if len(links) == 0 {
+				continue // already compacted
+			}
+			return r.compactChain(ctx, sched, neo4j, chain, links, agg)
+		default:
+			return 15 * time.Second, nil // aggregate still running
+		}
+	}
+	return 0, nil
+}
+
+// compactChain deletes a chain's original link artifacts (files then records) once its recovered
+// full is cataloged, keeping the recovered full. Files-before-records is the same crash-safe order
+// as expiry pruning; the recovered full (a different record) is never in this set.
+func (r *ScheduleReconciler) compactChain(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j, chain string, links []*neo4jv1beta1.Neo4jBackup, agg *neo4jv1beta1.Neo4jBackup) (time.Duration, error) {
+	claim, files, objectStore := pvcArtifacts(links)
+	if objectStore {
+		// ponytail: object-store link deletion needs a provider SDK (ADR-016). Keep the links.
+		if r.Recorder != nil {
+			r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneUnsupported.String(),
+				"chain "+chain+" aggregated but its destination is object storage; pruning its links is not yet supported (ADR-016)")
+		}
+		return 0, nil
+	}
+
+	if len(files) > 0 {
+		job, err := renderbackup.PruneJob(neo4j, compactJobName(chain), claim, files)
+		if err != nil {
+			return 0, err
+		}
+		if err := shared.Apply(ctx, r.Client, r.Scheme, sched, job, func() error { return nil }); err != nil {
+			return 0, err
+		}
+		var owned batchv1.Job
+		if err := r.Get(ctx, types.NamespacedName{Name: compactJobName(chain), Namespace: sched.Namespace}, &owned); err != nil {
+			if apierrors.IsNotFound(err) {
+				return 15 * time.Second, nil
+			}
+			return 0, err
+		}
+		complete, failed, jmsg := shared.JobTerminal(&owned)
+		switch {
+		case failed:
+			detail := jmsg
+			if podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name); podMsg != "" {
+				detail = podMsg
+			}
+			if r.Recorder != nil {
+				r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneFailed.String(),
+					"compaction prune of chain "+chain+" failed: "+detail)
+			}
+			return 15 * time.Second, nil
+		case !complete:
+			return 15 * time.Second, nil
+		}
+		// complete → the link files are gone; delete the link records below.
+	}
+
+	deleted := 0
+	for _, b := range links {
+		if err := r.Delete(ctx, b); err != nil && !apierrors.IsNotFound(err) {
+			return 0, err
+		}
+		deleted++
+	}
+	if r.Recorder != nil {
+		r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonScheduleCompacted.String(),
+			fmt.Sprintf("compacted chain %s: pruned %d links, kept recovered full %s", chain, deleted, agg.Name))
+	}
+	return time.Second, nil // come back promptly to compact the next closed chain
+}
+
+// compactJobName is the deterministic Job name for compaction pruning of a chain's links (distinct
+// from expiry's prune-<chain> so the two never collide).
+func compactJobName(chain string) string { return "compact-" + chain }
+
+// splitChain separates a chain's backups into ordinary links (Full/Incremental) and its aggregate
+// recovered-full record, if one has been emitted.
+func splitChain(items []*neo4jv1beta1.Neo4jBackup) (links []*neo4jv1beta1.Neo4jBackup, aggregate *neo4jv1beta1.Neo4jBackup) {
+	for _, b := range items {
+		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+			aggregate = b
+			continue
+		}
+		links = append(links, b)
+	}
+	return links, aggregate
+}
+
+func hasIncremental(links []*neo4jv1beta1.Neo4jBackup) bool {
+	for _, b := range links {
+		if b.Spec.Type == neo4jv1beta1.BackupTypeIncremental {
+			return true
+		}
+	}
+	return false
+}
+
+// allSucceeded is true only when every link is terminal-Succeeded (and there is at least one) — an
+// aggregate must never run over a chain with a still-running or failed link.
+func allSucceeded(links []*neo4jv1beta1.Neo4jBackup) bool {
+	for _, b := range links {
+		if b.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+			return false
+		}
+	}
+	return len(links) > 0
+}
+
+// chainTipName is the chain's last link — newest by creation time (ties broken by name) — which
+// neo4j-admin walks back to the full when aggregating.
+func chainTipName(links []*neo4jv1beta1.Neo4jBackup) string {
+	var tip *neo4jv1beta1.Neo4jBackup
+	for _, b := range links {
+		switch {
+		case tip == nil:
+			tip = b
+		case b.CreationTimestamp.Time.After(tip.CreationTimestamp.Time):
+			tip = b
+		case b.CreationTimestamp.Time.Equal(tip.CreationTimestamp.Time) && b.Name > tip.Name:
+			tip = b
+		}
+	}
+	if tip == nil {
+		return ""
+	}
+	return tip.Name
+}
+
+// closedChainsOldestFirst lists every chain except the active one, oldest anchor first, so
+// compaction drains the oldest closed chain first.
+func closedChainsOldestFirst(chains map[string][]*neo4jv1beta1.Neo4jBackup, current string) []string {
+	type ci struct {
+		id string
+		at time.Time
+	}
+	infos := make([]ci, 0, len(chains))
+	for id, items := range chains {
+		if id == current {
+			continue
+		}
+		infos = append(infos, ci{id: id, at: chainTime(items)})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].at.Equal(infos[j].at) {
+			return infos[i].id < infos[j].id
+		}
+		return infos[i].at.Before(infos[j].at)
+	})
+	out := make([]string, len(infos))
+	for i, info := range infos {
+		out[i] = info.id
+	}
+	return out
 }
 
 // pruneExpiredChains enforces full.retention by removing whole expired chains (BDR-014 §10): a

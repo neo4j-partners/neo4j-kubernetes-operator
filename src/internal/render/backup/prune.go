@@ -92,15 +92,36 @@ func PruneJob(neo4j *neo4jv1beta1.Neo4j, name, claim string, files []string) (*b
 // re-run after a partial delete. Filenames are single-quoted because artifacts carry timestamps
 // with colons. Deleting a whole chain's files is safe: they are contiguous on disk and nothing
 // outside the chain depends on them (BDR-014 §10). A chain with no recorded files yields a no-op.
+//
+// After the files are gone it removes each per-chain sub-directory the files lived in. `rmdir` only
+// deletes an empty directory, so a compaction prune that keeps the chain's recovered full leaves the
+// directory intact; a full-chain expiry empties it and reclaims the folder. Failures (directory not
+// empty, or already gone) are swallowed with `|| true` so retention stays idempotent and never
+// touches the destination root (only paths that carry a sub-directory component are considered).
 func pruneScript(toPath string, files []string) string {
 	var b strings.Builder
 	b.WriteString("set -e")
+	seen := map[string]bool{}
+	var subDirs []string
 	for _, f := range files {
 		b.WriteString(" && rm -f '")
 		b.WriteString(toPath)
 		b.WriteString("/")
 		b.WriteString(f)
 		b.WriteString("'")
+		if i := strings.LastIndex(f, "/"); i > 0 {
+			if d := f[:i]; !seen[d] {
+				seen[d] = true
+				subDirs = append(subDirs, d)
+			}
+		}
+	}
+	for _, d := range subDirs {
+		b.WriteString(" ; rmdir '")
+		b.WriteString(toPath)
+		b.WriteString("/")
+		b.WriteString(d)
+		b.WriteString("' 2>/dev/null || true")
 	}
 	return b.String()
 }

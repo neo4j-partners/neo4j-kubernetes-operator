@@ -42,14 +42,16 @@ type BackupCadence struct {
 	Retention *BackupRetention `json:"retention,omitempty"`
 }
 
-// AggregateCadence optionally collapses a chain into one recovered full (BDR-014 §10),
-// bounding restore replay time and chain-loss risk.
+// AggregateCadence optionally collapses each closed chain into one recovered full (BDR-014 §10),
+// bounding restore replay time and chain-loss risk. Aggregation is triggered at the chain boundary
+// (when the next full anchors a new chain, the one that just closed is compacted) — not on its own
+// cron — so it is always relative to the full cadence.
 type AggregateCadence struct {
-	// Enabled turns on periodic aggregation.
+	// Enabled compacts each closed chain: once every link has Succeeded, the schedule emits an
+	// aggregate Neo4jBackup for it and, once that recovered full is cataloged, prunes the chain's
+	// original links (keeping the recovered full). Never touches the active chain.
 	// +kubebuilder:default=false
 	Enabled bool `json:"enabled,omitempty"`
-	// Schedule is a standard cron expression (required when enabled).
-	Schedule string `json:"schedule,omitempty"`
 }
 
 // BackupTemplate is the inline Neo4jBackup spec the schedule emits, minus neo4jRef
@@ -67,7 +69,6 @@ type BackupTemplate struct {
 }
 
 // Neo4jBackupScheduleSpec owns cron cadences, retention, and the chain (BDR-014 §10).
-// +kubebuilder:validation:XValidation:rule="!has(self.aggregate) || !self.aggregate.enabled || (has(self.aggregate.schedule) && self.aggregate.schedule != '')",message="aggregate.schedule is required when aggregate.enabled is true"
 type Neo4jBackupScheduleSpec struct {
 	// Neo4jRef is the target workload (same namespace).
 	// +kubebuilder:validation:Required
