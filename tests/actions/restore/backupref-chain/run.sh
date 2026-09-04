@@ -4,12 +4,15 @@
 #   1. write probe #1 into `neo4j`, take a Full  Neo4jBackup to the shared PVC   (<cr>-full)
 #   2. write probe #2 into `neo4j`, take an Incremental Neo4jBackup to that PVC  (<cr>-inc)
 #   3. write probe #3 into `neo4j` — this lands AFTER the last backup, so it is NOT in the chain
-#   4. apply a Neo4jRestore(source.backupRef=<cr>-inc, overwrite+forceOffline) over `neo4j`
+#   4. DROP the role so the target no longer has it, then apply a
+#      Neo4jRestore(source.backupRef=<cr>-inc, overwrite+forceOffline, restoreMetadata) over `neo4j`
 # backupRef resolves the artifact by database name, so we restore the same database (`neo4j`),
 # overwriting the live store. The operator resolves the incremental's pvc:// artifact to
-# file:/backups/<path> and Neo4j's FileSeedProvider walks the full → incremental chain. The assert
-# checks probes #1 and #2 land AND probe #3 is gone — proving both the chain (incremental data is
-# carried) and the overwrite (the live store was replaced by the backup, not merged).
+# file:/backups/<path> and Neo4j's FileSeedProvider walks the full → incremental chain. It also runs
+# the post-seed metadata Job (spec.restoreMetadata) to reapply users/roles/privileges. The assert
+# checks probes #1 and #2 land AND probe #3 is gone (chain + overwrite), AND the dropped role is
+# back (metadata apply). A role granted on `neo4j` before the backup exercises this: it is captured
+# in the backup, dropped before restore, and recreated by the metadata script.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,6 +25,7 @@ FULL_BACKUP="${NEO4J_CR_NAME}-full"
 INC_BACKUP="${NEO4J_CR_NAME}-inc"
 RESTORE_NAME="${NEO4J_CR_NAME}-run"
 TARGET_DB="neo4j"
+META_ROLE="e2ebrefrole"
 CLAIM="e2e-backupref-dest"
 POD="${NEO4J_STS_NAME}-0"
 READY_TIMEOUT="${RESTORE_READY_TIMEOUT:-600s}"
@@ -44,6 +48,13 @@ probe() {
     "cypher-shell -a bolt://localhost:7687 -d ${TARGET_DB} -u neo4j -p '${password}' --format plain \
      \"CREATE (:RestoreProbe {id:'${id}'});\"" \
     || die "failed to write probe ${id} into ${TARGET_DB}"
+}
+
+# sys runs a statement against the system database (roles/users live there).
+sys() {
+  kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
+    "cypher-shell -a bolt://localhost:7687 -d system -u neo4j -p '${password}' --format plain \"$1\"" \
+    || die "system statement failed: $1"
 }
 
 # apply a Neo4jBackup of the given type and wait for it to reach Succeeded.
@@ -78,6 +89,12 @@ EOF
   die "Neo4jBackup ${name} did not reach Succeeded (last phase '${phase:-<none>}')"
 }
 
+# A role granted on `neo4j` is captured in the backup's metadata; it is dropped before the restore
+# so the metadata Job has to recreate it (a clean CREATE, no conflict).
+log "Creating role ${META_ROLE} (granted ACCESS on ${TARGET_DB}) before the backup"
+sys "CREATE ROLE ${META_ROLE};"
+sys "GRANT ACCESS ON DATABASE ${TARGET_DB} TO ${META_ROLE};"
+
 probe "e2e-bref-1"
 run_backup "${FULL_BACKUP}" Full
 
@@ -87,7 +104,11 @@ run_backup "${INC_BACKUP}" Incremental
 # probe #3 lands after the last backup — the overwrite restore must drop it.
 probe "e2e-bref-post"
 
-log "Applying Neo4jRestore ${RESTORE_NAME} (backupRef=${INC_BACKUP}, overwrite ${TARGET_DB})"
+# Drop the role so the target no longer has it; a successful restore must bring it back.
+log "Dropping role ${META_ROLE} so the metadata apply has to recreate it"
+sys "DROP ROLE ${META_ROLE};"
+
+log "Applying Neo4jRestore ${RESTORE_NAME} (backupRef=${INC_BACKUP}, overwrite+metadata ${TARGET_DB})"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
 apiVersion: neo4j.com/v1beta1
 kind: Neo4jRestore
@@ -99,6 +120,7 @@ spec:
   databases: ["${TARGET_DB}"]
   overwrite: true
   forceOffline: true
+  restoreMetadata: true
   source:
     backupRef: ${INC_BACKUP}
 EOF

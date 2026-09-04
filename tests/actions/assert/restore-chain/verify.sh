@@ -19,6 +19,7 @@ source "${SCRIPT_DIR}/../../../lib/connectivity.sh"
 
 RESTORE_NAME="${NEO4J_CR_NAME}-run"
 TARGET_DB="neo4j"
+META_ROLE="e2ebrefrole"
 POD="${NEO4J_STS_NAME}-0"
 RES="neo4jrestore/${RESTORE_NAME}"
 TIMEOUT="${RESTORE_ASSERT_TIMEOUT:-600}"
@@ -81,4 +82,12 @@ post="$(probe_count "n.id = 'e2e-bref-post'")"
 [[ "${post}" == "0" ]] \
   || die "expected 0 post-backup RestoreProbe in ${TARGET_DB} (overwrite should drop it), got '${post:-?}'"
 
-log "Neo4jRestore ${RESTORE_NAME} Succeeded; ${TARGET_DB} online with both chain probes and no post-backup probe"
+# The role was dropped before the restore; spec.restoreMetadata must have recreated it.
+log "Asserting role ${META_ROLE} was recreated by the metadata apply (SHOW ROLES)"
+roles="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
+  "cypher-shell -a bolt://localhost:7687 -d system -u neo4j -p '${password}' --format plain \
+   \"SHOW ROLES YIELD role WHERE role = '${META_ROLE}' RETURN role;\"" 2>&1 || true)"
+grep -q "${META_ROLE}" <<<"${roles}" \
+  || die "role ${META_ROLE} missing after restore; spec.restoreMetadata did not reapply it. SHOW ROLES: ${roles:-<none>}"
+
+log "Neo4jRestore ${RESTORE_NAME} Succeeded; ${TARGET_DB} online with both chain probes, no post-backup probe, and role ${META_ROLE} restored"
