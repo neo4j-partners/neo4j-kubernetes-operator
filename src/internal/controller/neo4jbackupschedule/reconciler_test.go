@@ -8,6 +8,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -435,5 +436,218 @@ func TestReconcilePruneObjectStoreUnsupported(t *testing.T) {
 	// …and the operator says so.
 	if !hasEvent(r, "SchedulePruneUnsupported") {
 		t.Error("expected a SchedulePruneUnsupported event for the object-store chain")
+	}
+}
+
+// --- aggregate compaction (aggregate.enabled, BDR-014 §10) ---
+
+func chainInc(name, chain string, created time.Time, dest neo4jv1beta1.BackupDestination, paths ...string) neo4jv1beta1.Neo4jBackup {
+	b := chainBackup(name, chain, created, dest, paths...)
+	b.Spec.Type = neo4jv1beta1.BackupTypeIncremental
+	b.Labels[LabelBackupType] = "Incremental"
+	return b
+}
+
+func chainAgg(name, chain, source string, created time.Time, dest neo4jv1beta1.BackupDestination, phase neo4jv1beta1.RunPhase, paths ...string) neo4jv1beta1.Neo4jBackup {
+	b := chainBackup(name, chain, created, dest, paths...)
+	b.Spec.Type = neo4jv1beta1.BackupTypeAggregate
+	b.Spec.Source = &neo4jv1beta1.BackupSource{BackupRef: source}
+	b.Labels[LabelBackupType] = "Aggregate"
+	b.Status.Phase = phase
+	return b
+}
+
+func completeJob(name string) *batchv1.Job {
+	controlled := true
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "ns",
+			// Controlled by the schedule (UID "" matches the fixture) so Apply adopts it (NEO-002).
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "neo4j.com/v1beta1", Kind: "Neo4jBackupSchedule", Name: "sch", Controller: &controlled,
+			}},
+		},
+		Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
+			{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+		}},
+	}
+}
+
+// aggregateSchedule is a schedule with the yearly full/incremental crons (nothing emits during the
+// test) and aggregate compaction enabled, pinned to an active chain so closed chains can compact.
+func aggregateSchedule() *neo4jv1beta1.Neo4jBackupSchedule {
+	return scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+		s.Spec.Full.Schedule = "0 0 1 1 *"
+		s.Spec.Aggregate = &neo4jv1beta1.AggregateCadence{Enabled: true}
+		s.Status.CurrentChain = "cur"
+	})
+}
+
+func TestReconcileCompactionEmitsAggregateForQuiescedChain(t *testing.T) {
+	t0 := creation.Add(-10 * time.Minute)
+	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
+	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc)
+
+	res, err := r.Reconcile(context.Background(), req())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	var agg *neo4jv1beta1.Neo4jBackup
+	for _, b := range listBackups(t, c) {
+		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+			bb := b
+			agg = &bb
+		}
+	}
+	if agg == nil {
+		t.Fatalf("no aggregate emitted for the closed chain")
+	}
+	if agg.Name != "old-agg" {
+		t.Errorf("name = %q, want old-agg", agg.Name)
+	}
+	if agg.Spec.Source == nil || agg.Spec.Source.BackupRef != "old-1-i" {
+		t.Errorf("source = %+v, want backupRef=old-1-i (the tip)", agg.Spec.Source)
+	}
+	if agg.Labels[LabelChain] != "old" {
+		t.Errorf("chain label = %q, want old", agg.Labels[LabelChain])
+	}
+	if res.RequeueAfter <= 0 || res.RequeueAfter > 15*time.Second {
+		t.Errorf("requeue = %v, want a short poll while the aggregate Job runs", res.RequeueAfter)
+	}
+}
+
+func TestReconcileCompactionSkipsLoneFull(t *testing.T) {
+	// A chain with no incremental has nothing to collapse — no aggregate should be emitted.
+	full := chainBackup("old-f", "old", creation.Add(-10*time.Minute), pvcDest(), "old/neo4j-f.backup")
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full)
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	for _, b := range listBackups(t, c) {
+		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+			t.Fatalf("aggregate emitted for a lone full: %s", b.Name)
+		}
+	}
+}
+
+func TestReconcileCompactionHeldUntilChainQuiesces(t *testing.T) {
+	// A still-running link means the chain hasn't quiesced; aggregating now would race it.
+	t0 := creation.Add(-10 * time.Minute)
+	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
+	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
+	inc.Status.Phase = neo4jv1beta1.RunPhaseRunning
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc)
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	for _, b := range listBackups(t, c) {
+		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+			t.Fatalf("aggregate emitted before the chain quiesced: %s", b.Name)
+		}
+	}
+}
+
+func TestReconcileCompactionPrunesLinksAfterAggregateSucceeds(t *testing.T) {
+	t0 := creation.Add(-10 * time.Minute)
+	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
+	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
+	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), pvcDest(), neo4jv1beta1.RunPhaseSucceeded, "old/neo4j-agg.backup")
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc, &agg)
+
+	res, err := r.Reconcile(context.Background(), req())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	// A compaction prune Job (distinct from expiry's prune-<chain>) targets the link files…
+	var job batchv1.Job
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "compact-old", Namespace: "ns"}, &job); err != nil {
+		t.Fatalf("expected compaction Job compact-old: %v", err)
+	}
+	// …the recovered full is never in the delete set.
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	if strings.Contains(script, "neo4j-agg.backup") {
+		t.Errorf("compaction must not delete the recovered full; script = %q", script)
+	}
+	if !strings.Contains(script, "neo4j-f.backup") || !strings.Contains(script, "neo4j-i.backup") {
+		t.Errorf("compaction must delete the original links; script = %q", script)
+	}
+	// Records survive until the Job completes (files-before-records), and the aggregate is kept.
+	for _, name := range []string{"old-f", "old-1-i", "old-agg"} {
+		if err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+			t.Fatalf("%s must survive until the compaction Job completes: %v", name, err)
+		}
+	}
+	if res.RequeueAfter <= 0 || res.RequeueAfter > 15*time.Second {
+		t.Errorf("requeue = %v, want a short poll while the compaction Job runs", res.RequeueAfter)
+	}
+}
+
+func TestReconcileCompactionCompletesKeepingRecoveredFull(t *testing.T) {
+	t0 := creation.Add(-10 * time.Minute)
+	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
+	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
+	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), pvcDest(), neo4jv1beta1.RunPhaseSucceeded, "old/neo4j-agg.backup")
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc, &agg, completeJob("compact-old"))
+
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	// Links are gone…
+	for _, name := range []string{"old-f", "old-1-i"} {
+		err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{})
+		if err == nil {
+			t.Errorf("link %s must be deleted once the compaction Job completed", name)
+		}
+	}
+	// …the recovered full is kept.
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+		t.Fatalf("recovered full old-agg must be kept: %v", err)
+	}
+	if !hasEvent(r, "ScheduleCompacted") {
+		t.Error("expected a ScheduleCompacted event")
+	}
+}
+
+func TestReconcileCompactionDisabledIsNoop(t *testing.T) {
+	// aggregate is nil (default) — a closed chain with an incremental is left untouched.
+	t0 := creation.Add(-10 * time.Minute)
+	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
+	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
+	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+		s.Spec.Full.Schedule = "0 0 1 1 *"
+		s.Status.CurrentChain = "cur"
+	})
+	r, c := newReconciler(t, enterpriseNeo4j(), sched, &full, &inc)
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if n := len(listBackups(t, c)); n != 2 {
+		t.Errorf("backups = %d, want 2 (no aggregate when compaction disabled)", n)
+	}
+}
+
+func TestExpiryDropsCompactedChainWholesale(t *testing.T) {
+	// A compacted chain is just its recovered full; when it expires, expiry must delete that
+	// aggregate record and its file (aggregate-aware retention, for free via grouping).
+	keep := int32(1)
+	agg := chainAgg("old-agg", "old", "old-1-i", creation.Add(-time.Hour), pvcDest(), neo4jv1beta1.RunPhaseSucceeded, "old/neo4j-agg.backup")
+	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
+	})
+	r, c := newReconciler(t, enterpriseNeo4j(), sched, &agg)
+
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	// Expiry prunes the compacted chain via a Job over its recovered-full file.
+	var job batchv1.Job
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "prune-old", Namespace: "ns"}, &job); err != nil {
+		t.Fatalf("expected expiry Job prune-old for the compacted chain: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	if !strings.Contains(script, "neo4j-agg.backup") {
+		t.Errorf("expiry must delete the recovered full of a compacted chain; script = %q", script)
 	}
 }
