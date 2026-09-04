@@ -30,10 +30,6 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
-// AggregateJobName is the deterministic Job name for a Neo4jRestore's pre-seed aggregate step
-// (owner-referenced by the restore).
-func AggregateJobName(restore *neo4jv1beta1.Neo4jRestore) string { return restore.Name + "-aggregate" }
-
 // AggregateJob builds the run-to-completion Job (named jobName, owner-referenced by the caller) that
 // collapses each database's backup chain into a single recovered full artifact (`neo4j-admin backup
 // aggregate`). It mounts the backups claim at the sub-path the backup Job wrote to and runs one

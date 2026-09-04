@@ -97,14 +97,6 @@ spec:
               source:
                 description: Source is what to restore from.
                 properties:
-                  aggregate:
-                    description: |-
-                      Aggregate collapses a full+differential chain into one recovered full artifact (via a
-                      pre-seed `neo4j-admin backup aggregate` Job) and seeds from that, trading a longer restore
-                      for a lower steady-state RTO. Only valid with backupRef on a PVC-backed backup mounted as
-                      the target's backups volume (the Job needs filesystem access); the operator rejects other
-                      sources. Omit to chain-seed the differential directly (Neo4j replays the chain at seed time).
-                    type: boolean
                   backupRef:
                     description: BackupRef is the name of a Neo4jBackup in the same
                       namespace (recommended).

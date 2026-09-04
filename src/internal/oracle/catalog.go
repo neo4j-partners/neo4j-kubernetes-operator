@@ -384,10 +384,6 @@ var (
 		on(ConditionRestoreReady, "The operator could not reach the target's system database over Bolt; it will retry"))
 	ReasonRestoreSeedFailed = declare("RestoreSeedFailed", SeverityError, SurfaceBoth,
 		on(ConditionRestoreReady, "A CREATE/seed statement failed; the message carries the Neo4j error detail"))
-	ReasonRestoreAggregating = declare("RestoreAggregating", SeverityInfo, SurfaceCondition,
-		on(ConditionRestoreReady, "A pre-seed `neo4j-admin backup aggregate` Job is collapsing the backup chain before seeding"))
-	ReasonRestoreAggregateFailed = declare("RestoreAggregateFailed", SeverityError, SurfaceBoth,
-		on(ConditionRestoreReady, "The pre-seed aggregate Job failed; the message carries the neo4j-admin failure detail"))
 	ReasonRestoreMetadataApplying = declare("RestoreMetadataApplying", SeverityInfo, SurfaceCondition,
 		on(ConditionRestoreReady, "Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata)"))
 	ReasonRestoreMetadataConflict = declare("RestoreMetadataConflict", SeverityWarn, SurfaceEvent,
