@@ -227,6 +227,118 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 	}
 }
 
+func aggregateSource(name, chain, uri, path string) *neo4jv1beta1.Neo4jBackup {
+	return &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1beta1.BackupTypeIncremental,
+		},
+		Status: neo4jv1beta1.Neo4jBackupStatus{
+			Phase: neo4jv1beta1.RunPhaseSucceeded, Chain: chain,
+			Artifacts: []neo4jv1beta1.BackupArtifact{{Database: "neo4j", Type: neo4jv1beta1.BackupTypeIncremental, URI: uri, Path: path}},
+		},
+	}
+}
+
+func aggregateCR(ref string) *neo4jv1beta1.Neo4jBackup {
+	return &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1beta1.BackupTypeAggregate,
+			Source:      &neo4jv1beta1.BackupSource{BackupRef: ref},
+		},
+	}
+}
+
+func TestReconcileAggregateProducesRecoveredFull(t *testing.T) {
+	s := scheme(t)
+	srcPath := "sch-0100/neo4j-2026-09-03T01-05-00.backup"
+	src := aggregateSource("chain-last", "sch-0100", "pvc://backups", srcPath)
+	agg := aggregateCR("chain-last")
+
+	// Pre-create the owned aggregate Job (Complete) plus a pod recording the recovered full, so
+	// the reconciler mirrors success and catalogs it — the same harness the backup path uses.
+	job, err := renderbackup.AggregateJob(enterpriseNeo4j(), renderbackup.JobName(agg), "backups", map[string]string{"neo4j": srcPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controllerutil.SetControllerReference(agg, job, s); err != nil {
+		t.Fatal(err)
+	}
+	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	recovered := "sch-0100/neo4j-2026-09-03T01-10-00.backup"
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: job.Name + "-agg", Namespace: "ns", Labels: map[string]string{"job-name": job.Name}},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+			Name:  "neo4j-admin",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: "neo4j=" + recovered + "|8192\n", FinishedAt: metav1.Now()}},
+		}}},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(s).
+		WithObjects(enterpriseNeo4j(), src, agg, job, pod).
+		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
+
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getBackup(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+		t.Fatalf("phase = %q, want Succeeded", got.Status.Phase)
+	}
+	if len(got.Status.Artifacts) != 1 {
+		t.Fatalf("artifacts = %+v, want 1 recovered full", got.Status.Artifacts)
+	}
+	a := got.Status.Artifacts[0]
+	if a.Type != neo4jv1beta1.BackupTypeFull {
+		t.Errorf("recovered artifact Type = %q, want Full (it seeds like a standalone full)", a.Type)
+	}
+	if a.Path != recovered || a.URI != "pvc://backups" || a.SizeBytes != 8192 {
+		t.Errorf("artifact = %+v, want path=%q uri=pvc://backups size=8192", a, recovered)
+	}
+	if got.Status.Chain != "sch-0100" {
+		t.Errorf("chain = %q, want the source chain sch-0100", got.Status.Chain)
+	}
+}
+
+func TestReconcileAggregateSourceNotFoundIsRetryable(t *testing.T) {
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateCR("missing")) // no source object
+	res, err := r.Reconcile(t.Context(), req())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if res.RequeueAfter == 0 {
+		t.Error("expected requeue while the aggregate source is not yet present")
+	}
+	got := getBackup(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhasePending || got.Status.Reason != "BackupSourceNotFound" {
+		t.Errorf("status = phase %q reason %q, want Pending/BackupSourceNotFound", got.Status.Phase, got.Status.Reason)
+	}
+	var job batchv1.Job
+	if err := c.Get(t.Context(), types.NamespacedName{Name: renderbackup.JobName(aggregateCR("missing")), Namespace: "ns"}, &job); err == nil {
+		t.Error("no Job should be created before the source exists")
+	}
+}
+
+func TestReconcileAggregateNonPVCSourceUnsupported(t *testing.T) {
+	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
+	r, c := newReconciler(t, enterpriseNeo4j(), src, aggregateCR("chain-last"))
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got := getBackup(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "BackupSourceUnsupported" {
+		t.Errorf("status = phase %q reason %q, want Failed/BackupSourceUnsupported", got.Status.Phase, got.Status.Reason)
+	}
+}
+
 func TestReconcileScheduleLabelledBackupUsesChainSubDir(t *testing.T) {
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{

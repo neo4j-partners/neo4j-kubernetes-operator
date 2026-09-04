@@ -25,7 +25,7 @@ oracle_reasons_for() {  # <condition>
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
-    BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported ;;
+    BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported BackupSourceNotFound BackupSourceUnsupported ;;
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreAggregating RestoreAggregateFailed ;;
     ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
     event) printf '%s\n' ScheduleBackupEmitted SchedulePruned SchedulePruneFailed SchedulePruneUnsupported DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
@@ -89,6 +89,8 @@ oracle_severity() {  # <reason>
     BackupEditionUnsupported) echo error ;;
     BackupListenerDisabled) echo warn ;;
     BackupDestinationUnsupported) echo error ;;
+    BackupSourceNotFound) echo warn ;;
+    BackupSourceUnsupported) echo error ;;
     RestoreSucceeded) echo info ;;
     RestoreInProgress) echo info ;;
     RestoreTargetNotFound) echo warn ;;

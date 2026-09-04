@@ -74,6 +74,8 @@ Reasons that report a problem, a decision, or an operation in progress.
 | BackupReady | BackupEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
 | BackupReady | BackupListenerDisabled | warn | condition | The target has no backup listener; set `features.backup` and `connectivity.listeners.backup` |
 | BackupReady | BackupDestinationUnsupported | error | condition+event | The `destination` cannot be realized (e.g. PVC provisioning is not yet supported; use an existing claimName) |
+| BackupReady | BackupSourceNotFound | warn | condition | `spec.source.backupRef` (type Aggregate) does not resolve to a Succeeded Neo4jBackup yet |
+| BackupReady | BackupSourceUnsupported | error | condition+event | The aggregate source cannot be used (not PVC-backed, missing recorded artifact, or mixed claims) |
 | RestoreReady | RestoreInProgress | info | condition | Databases are being seeded from the source; waiting for them to come online |
 | RestoreReady | RestoreTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
 | RestoreReady | RestoreEditionUnsupported | error | condition+event | Restore requires Enterprise edition; the target is community |

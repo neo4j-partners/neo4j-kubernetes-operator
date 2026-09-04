@@ -167,15 +167,32 @@ spec:
                     description: Verbose → --verbose.
                     type: boolean
                 type: object
+              source:
+                description: |-
+                  Source references the chain to aggregate. Required when type is Aggregate and forbidden
+                  otherwise. The recovered full is written beside the source chain (in-place) and cataloged as
+                  this record's artifact; destination is not used to relocate it.
+                properties:
+                  backupRef:
+                    description: |-
+                      BackupRef is the name of a Succeeded Neo4jBackup whose chain is collapsed into a single
+                      recovered full. Any link of the chain (its last incremental, or its full) resolves the whole
+                      chain — neo4j-admin walks it from the recorded artifact.
+                    minLength: 1
+                    type: string
+                required:
+                - backupRef
+                type: object
               type:
                 default: Auto
                 description: |-
-                  Type selects Full, Incremental, or Auto (default Auto self-seeds a full when no
-                  chain exists).
+                  Type selects Full, Incremental, Auto, or Aggregate (default Auto self-seeds a full when no
+                  chain exists). Aggregate collapses spec.source's chain into a recovered full.
                 enum:
                 - Full
                 - Incremental
                 - Auto
+                - Aggregate
                 type: string
             required:
             - destination
@@ -220,6 +237,7 @@ spec:
                       - Full
                       - Incremental
                       - Auto
+                      - Aggregate
                       type: string
                     uri:
                       description: URI is the exact object written (recorded so restore
@@ -315,6 +333,9 @@ spec:
         x-kubernetes-validations:
         - message: Neo4jBackup spec is immutable (it is a run-to-completion record)
           rule: self.spec == oldSelf.spec
+        - message: type Aggregate requires spec.source.backupRef; spec.source is only
+            valid for Aggregate
+          rule: (self.spec.type == 'Aggregate') == has(self.spec.source)
     served: true
     storage: true
     subresources:

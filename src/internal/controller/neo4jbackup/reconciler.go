@@ -19,6 +19,7 @@ package neo4jbackup
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -91,6 +92,13 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return r.fail(ctx, &backup, oracle.ReasonBackupEditionUnsupported,
 			"backup requires Enterprise edition; target is "+string(neo4j.Spec.Edition))
 	}
+
+	// Aggregate is a file-only operation on the backup PVC (no live server, no backup listener):
+	// it collapses source's chain into a recovered full. Diverge here before the listener gate.
+	if backup.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+		return r.reconcileAggregate(ctx, &backup, &neo4j)
+	}
+
 	if !render.ClientServiceContext(&neo4j).BackupListenerEnabled() {
 		return r.retryable(ctx, &backup, oracle.ReasonBackupListenerDisabled,
 			"target has no backup listener (set features.backup and connectivity.listeners.backup)")
@@ -163,6 +171,147 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 		}
 	}
 	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionTrue, oracle.ReasonBackupSucceeded, "backup completed")
+	return ctrl.Result{}, r.writeStatus(ctx, b)
+}
+
+// reconcileAggregate drives a type: Aggregate backup: it collapses spec.source's chain into a
+// single recovered full via an owned Job and catalogs that recovered artifact as this record's
+// output (a Full the restore path can seed directly, no chain replay). It reuses the same owned
+// Job name/lifecycle as a normal backup, only the inputs (from the source chain) and the recorded
+// artifact (Type Full, path = the recovered file) differ.
+func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
+	log := ctrllog.FromContext(ctx).WithName("neo4jbackup")
+
+	if b.Spec.Source == nil || b.Spec.Source.BackupRef == "" {
+		return r.fail(ctx, b, oracle.ReasonBackupSourceUnsupported, "type Aggregate requires spec.source.backupRef (the chain to aggregate)")
+	}
+	for _, db := range b.Spec.Databases {
+		if db == "*" {
+			return r.fail(ctx, b, oracle.ReasonBackupSourceUnsupported, "type Aggregate does not support wildcard '*'; list databases explicitly")
+		}
+	}
+
+	// The source chain must exist and have Succeeded before we can aggregate it — wait otherwise.
+	var src neo4jv1beta1.Neo4jBackup
+	if err := r.Get(ctx, types.NamespacedName{Name: b.Spec.Source.BackupRef, Namespace: b.Namespace}, &src); err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.retryable(ctx, b, oracle.ReasonBackupSourceNotFound, "source.backupRef "+b.Spec.Source.BackupRef+" not found")
+		}
+		return ctrl.Result{}, err
+	}
+	if src.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+		return r.retryable(ctx, b, oracle.ReasonBackupSourceNotFound,
+			"source.backupRef "+b.Spec.Source.BackupRef+" has not Succeeded (phase "+string(src.Status.Phase)+")")
+	}
+
+	claim, dbArtifacts, reason, msg := aggregateInputs(b, &src)
+	if reason != nil {
+		return r.fail(ctx, b, *reason, msg)
+	}
+
+	job, err := renderbackup.AggregateJob(neo4j, renderbackup.JobName(b), claim, dbArtifacts)
+	if err != nil {
+		return r.fail(ctx, b, oracle.ReasonBackupSourceUnsupported, err.Error())
+	}
+	if err := shared.Apply(ctx, r.Client, r.Scheme, b, job, func() error { return nil }); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var owned batchv1.Job
+	if err := r.Get(ctx, types.NamespacedName{Name: renderbackup.JobName(b), Namespace: b.Namespace}, &owned); err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.setRunning(ctx, b)
+		}
+		return ctrl.Result{}, err
+	}
+	switch complete, failed, jmsg := shared.JobTerminal(&owned); {
+	case complete:
+		return r.succeedAggregate(ctx, b, &src, claim, &owned)
+	case failed:
+		if podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name); podMsg != "" {
+			jmsg = podMsg
+		}
+		log.Info("aggregate job failed", "job", owned.Name, "detail", jmsg)
+		return r.fail(ctx, b, oracle.ReasonBackupJobFailed, jmsg)
+	default:
+		return r.setRunning(ctx, b)
+	}
+}
+
+// aggregateInputs validates the source is PVC-backed with recorded artifacts and returns the claim
+// plus each database's latest artifact path (the chain's last link, chain-sub-dir included) for the
+// aggregate Job. All databases must live on the one claim. Unlike restore's aggregate, it does not
+// require the target to mount the claim — the Job mounts it directly.
+func aggregateInputs(b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup) (claim string, dbArtifacts map[string]string, reason *oracle.Reason, msg string) {
+	unsupported := oracle.ReasonBackupSourceUnsupported
+	notFound := oracle.ReasonBackupSourceNotFound
+	dbArtifacts = map[string]string{}
+	for _, db := range b.Spec.Databases {
+		a, ok := artifactFor(src, db)
+		if !ok {
+			return "", nil, &notFound, "source.backupRef " + src.Name + " has no artifact for database " + db
+		}
+		if !strings.HasPrefix(a.URI, "pvc://") {
+			return "", nil, &unsupported, "aggregate supports only PVC-backed backups; artifact for " + db + " is " + a.URI
+		}
+		if a.Path == "" {
+			return "", nil, &unsupported, "source recorded no artifact filename for " + db + "; cannot aggregate"
+		}
+		c := strings.TrimPrefix(a.URI, "pvc://")
+		if claim == "" {
+			claim = c
+		} else if claim != c {
+			return "", nil, &unsupported, "aggregate requires all databases on the same backup claim"
+		}
+		dbArtifacts[db] = a.Path
+	}
+	return claim, dbArtifacts, nil, ""
+}
+
+// artifactFor finds the recorded artifact for a database (exact match, or a "*" artifact standing
+// for all databases).
+func artifactFor(src *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.BackupArtifact, bool) {
+	for i := range src.Status.Artifacts {
+		if a := &src.Status.Artifacts[i]; a.Database == db || a.Database == "*" {
+			return a, true
+		}
+	}
+	return nil, false
+}
+
+// succeedAggregate catalogs the recovered full(s) the aggregate Job produced (chain-prefixed path,
+// Type Full, pvc://<source claim> URI) so a restore can seed them directly. It belongs to the same
+// chain as its source. An empty recorded path means the aggregate produced nothing usable → fail.
+func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup, claim string, job *batchv1.Job) (ctrl.Result, error) {
+	arts := r.artifactPaths(ctx, job)
+	now := metav1.Now()
+	out := make([]neo4jv1beta1.BackupArtifact, 0, len(b.Spec.Databases))
+	for _, db := range b.Spec.Databases {
+		art, ok := arts[db]
+		if !ok || art.Name == "" {
+			return r.fail(ctx, b, oracle.ReasonBackupJobFailed, "aggregate produced no recovered artifact for database "+db)
+		}
+		out = append(out, neo4jv1beta1.BackupArtifact{
+			Database:    db,
+			Type:        neo4jv1beta1.BackupTypeFull, // the recovered artifact is a standalone full
+			URI:         "pvc://" + claim,
+			Path:        art.Name,
+			SizeBytes:   art.SizeBytes,
+			CompletedAt: &now,
+		})
+	}
+	b.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
+	b.Status.Reason = ""
+	b.Status.Message = ""
+	b.Status.Artifacts = out
+	if b.Status.Chain == "" {
+		if chain := b.Labels[neo4jbackupschedule.LabelChain]; chain != "" {
+			b.Status.Chain = chain
+		} else {
+			b.Status.Chain = src.Status.Chain
+		}
+	}
+	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionTrue, oracle.ReasonBackupSucceeded, "aggregate completed")
 	return ctrl.Result{}, r.writeStatus(ctx, b)
 }
 
