@@ -37,12 +37,6 @@ type RestoreSource struct {
 	PVC *BackupPVC `json:"pvc,omitempty"`
 	// Credentials for a raw source; omit for workload identity.
 	Credentials *BackupCredentials `json:"credentials,omitempty"`
-	// Aggregate collapses a full+differential chain into one recovered full artifact (via a
-	// pre-seed `neo4j-admin backup aggregate` Job) and seeds from that, trading a longer restore
-	// for a lower steady-state RTO. Only valid with backupRef on a PVC-backed backup mounted as
-	// the target's backups volume (the Job needs filesystem access); the operator rejects other
-	// sources. Omit to chain-seed the differential directly (Neo4j replays the chain at seed time).
-	Aggregate bool `json:"aggregate,omitempty"`
 }
 
 // Neo4jRestoreSpec is the desired state of a one-shot, immutable restore record.

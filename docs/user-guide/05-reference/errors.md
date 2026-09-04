@@ -85,8 +85,6 @@ Reasons that report a problem, a decision, or an operation in progress.
 | RestoreReady | RestoreDatabaseExists | error | condition+event | A target database already exists and `overwrite` is false; nothing was dropped or seeded |
 | RestoreReady | RestoreBoltUnavailable | warn | condition | The operator could not reach the target's system database over Bolt; it will retry |
 | RestoreReady | RestoreSeedFailed | error | condition+event | A CREATE/seed statement failed; the message carries the Neo4j error detail |
-| RestoreReady | RestoreAggregating | info | condition | A pre-seed `neo4j-admin backup aggregate` Job is collapsing the backup chain before seeding |
-| RestoreReady | RestoreAggregateFailed | error | condition+event | The pre-seed aggregate Job failed; the message carries the neo4j-admin failure detail |
 | RestoreReady | RestoreMetadataApplying | info | condition | Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata) |
 | — (Event only) | RestoreMetadataConflict | warn | event | Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail |
 | RestoreReady | RestoreMetadataFailed | error | condition+event | The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail |

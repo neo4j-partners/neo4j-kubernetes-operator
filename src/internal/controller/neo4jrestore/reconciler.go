@@ -130,22 +130,12 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.poll(ctx, &restore, &neo4j, admin)
 	}
 
-	// Resolve the per-database seed URIs. With source.aggregate, a pre-seed Job first collapses
-	// the chain into a recovered full and we seed from that; otherwise we seed the recorded
-	// artifacts directly (chain-seed). Aggregate is a Job, so it runs before we need Bolt.
-	var seedFor map[string]string
-	if restore.Spec.Source.Aggregate {
-		seeds, ready, res, err := r.ensureAggregate(ctx, &restore, &neo4j)
-		if !ready {
-			return res, err
-		}
-		seedFor = seeds
-	} else {
-		seeds, reason, msg := r.resolveSeeds(ctx, &restore, &neo4j)
-		if reason != nil {
-			return r.fail(ctx, &restore, *reason, msg)
-		}
-		seedFor = seeds
+	// Resolve the per-database seed URIs from the recorded artifacts (chain-seed): Neo4j replays
+	// the full→incremental chain at seed time. To seed a single recovered full instead, aggregate
+	// at backup time (Neo4jBackup type: Aggregate) and backupRef that.
+	seedFor, reason, msg := r.resolveSeeds(ctx, &restore, &neo4j)
+	if reason != nil {
+		return r.fail(ctx, &restore, *reason, msg)
 	}
 
 	admin, err := connect(ctx, &neo4j)
@@ -424,122 +414,6 @@ func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1be
 		seedFor[db] = seedURI
 	}
 	return seedFor, nil, ""
-}
-
-// ensureAggregate drives the pre-seed aggregate Job (source.aggregate) to completion and returns
-// the seed URIs for the recovered full artifacts. ready=false means the caller should return res
-// (and err) as-is: the Job is still running (requeued) or the record was failed terminally. When
-// ready=true, seedFor maps each database to file:<backupsMountPath>/<recovered> for issueSeeds.
-func (r *RestoreReconciler) ensureAggregate(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j) (seedFor map[string]string, ready bool, res ctrl.Result, err error) {
-	src := restore.Spec.Source
-	if src.BackupRef == "" {
-		res, err = r.fail(ctx, restore, oracle.ReasonRestoreSourceUnsupported, "source.aggregate requires source.backupRef (the Job needs the recorded PVC artifacts)")
-		return nil, false, res, err
-	}
-	for _, db := range restore.Spec.Databases {
-		if db == "*" {
-			res, err = r.fail(ctx, restore, oracle.ReasonRestoreSourceUnsupported, "source.aggregate does not support wildcard '*'; list databases explicitly")
-			return nil, false, res, err
-		}
-	}
-
-	var backup neo4jv1beta1.Neo4jBackup
-	if e := r.Get(ctx, types.NamespacedName{Name: src.BackupRef, Namespace: restore.Namespace}, &backup); e != nil {
-		if apierrors.IsNotFound(e) {
-			res, err = r.fail(ctx, restore, oracle.ReasonRestoreSourceNotFound, "source.backupRef "+src.BackupRef+" not found")
-			return nil, false, res, err
-		}
-		return nil, false, ctrl.Result{}, e
-	}
-	if backup.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
-		res, err = r.fail(ctx, restore, oracle.ReasonRestoreSourceNotFound, "backupRef "+src.BackupRef+" has not Succeeded (phase "+string(backup.Status.Phase)+")")
-		return nil, false, res, err
-	}
-
-	claim, dbArtifacts, reason, msg := aggregateInputs(restore, &backup, neo4j)
-	if reason != nil {
-		res, err = r.fail(ctx, restore, *reason, msg)
-		return nil, false, res, err
-	}
-
-	job, e := renderbackup.AggregateJob(neo4j, renderbackup.AggregateJobName(restore), claim, dbArtifacts)
-	if e != nil {
-		res, err = r.fail(ctx, restore, oracle.ReasonRestoreSourceUnsupported, e.Error())
-		return nil, false, res, err
-	}
-	if e := shared.Apply(ctx, r.Client, r.Scheme, restore, job, func() error { return nil }); e != nil {
-		return nil, false, ctrl.Result{}, e
-	}
-
-	var owned batchv1.Job
-	if e := r.Get(ctx, types.NamespacedName{Name: renderbackup.AggregateJobName(restore), Namespace: restore.Namespace}, &owned); e != nil {
-		if apierrors.IsNotFound(e) {
-			res, err = r.retryable(ctx, restore, oracle.ReasonRestoreAggregating, "aggregate Job starting")
-			return nil, false, res, err
-		}
-		return nil, false, ctrl.Result{}, e
-	}
-	switch complete, failed, jmsg := shared.JobTerminal(&owned); {
-	case failed:
-		detail := jmsg
-		if podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name); podMsg != "" {
-			detail = podMsg
-		}
-		res, err = r.fail(ctx, restore, oracle.ReasonRestoreAggregateFailed, detail)
-		return nil, false, res, err
-	case complete:
-		names := shared.ParseNamedArtifacts(shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name))
-		seedFor = map[string]string{}
-		for _, db := range restore.Spec.Databases {
-			n := names[db].Name
-			if n == "" {
-				res, err = r.fail(ctx, restore, oracle.ReasonRestoreAggregateFailed, "aggregate produced no recovered artifact for database "+db)
-				return nil, false, res, err
-			}
-			seed := "file:" + backupsMountPath + "/" + n
-			if rsn, m := validateSeedURI(seed); rsn != nil {
-				res, err = r.fail(ctx, restore, *rsn, m)
-				return nil, false, res, err
-			}
-			seedFor[db] = seed
-		}
-		return seedFor, true, ctrl.Result{}, nil
-	default:
-		res, err = r.retryable(ctx, restore, oracle.ReasonRestoreAggregating, "aggregate Job running")
-		return nil, false, res, err
-	}
-}
-
-// aggregateInputs validates the referenced backup is PVC-backed and mounted on the target, and
-// returns the claim plus each database's latest recorded artifact (the chain's last link) for the
-// aggregate Job. All databases must live on the one backups claim the target mounts.
-func aggregateInputs(restore *neo4jv1beta1.Neo4jRestore, backup *neo4jv1beta1.Neo4jBackup, neo4j *neo4jv1beta1.Neo4j) (claim string, dbArtifacts map[string]string, reason *oracle.Reason, msg string) {
-	unsupported := oracle.ReasonRestoreSourceUnsupported
-	notFound := oracle.ReasonRestoreSourceNotFound
-	dbArtifacts = map[string]string{}
-	for _, db := range restore.Spec.Databases {
-		a, ok := artifactFor(backup, db)
-		if !ok {
-			return "", nil, &notFound, "backupRef " + restore.Spec.Source.BackupRef + " has no artifact for database " + db
-		}
-		if !strings.HasPrefix(a.URI, "pvc://") {
-			return "", nil, &unsupported, "source.aggregate supports only PVC-backed backups; artifact for " + db + " is " + a.URI
-		}
-		c := strings.TrimPrefix(a.URI, "pvc://")
-		if a.Path == "" {
-			return "", nil, &unsupported, "backup recorded no artifact filename for " + db + "; cannot aggregate"
-		}
-		if !mountsBackupsClaim(neo4j, c) {
-			return "", nil, &unsupported, "target does not mount backup PVC " + c + " as storage.volumes.backups (Existing); aggregate needs filesystem access at " + backupsMountPath
-		}
-		if claim == "" {
-			claim = c
-		} else if claim != c {
-			return "", nil, &unsupported, "source.aggregate requires all databases on the same backup claim"
-		}
-		dbArtifacts[db] = a.Path
-	}
-	return claim, dbArtifacts, nil, ""
 }
 
 // backupsMountPath is where the workload mounts the storage.volumes.backups volume. Single-sourced
