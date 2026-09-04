@@ -27,6 +27,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
@@ -76,7 +77,17 @@ func MetadataJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts m
 	ttl := backupTTLSeconds
 	backoff := backupBackoff
 
-	boltAddr := fmt.Sprintf("neo4j://%s.%s.svc:%d", ctx.ClientServiceName(), ctx.Namespace(), ctx.BoltPort())
+	// Match the target's Bolt listener: plaintext by default, but when bolt TLS is enabled the
+	// listener is REQUIRED-TLS so a neo4j:// dial is refused. cypher-shell has no flag to trust the
+	// operator's custom CA file, so use +ssc — encrypted, skipping server-cert verification — which
+	// still protects the metadata (users, roles, privileges) in transit.
+	// ponytail: +ssc skips server-identity verification (in-cluster dial to the derived client
+	// Service); the upgrade path is importing the bolt CA into a JVM truststore and using neo4j+s.
+	scheme := "neo4j"
+	if rendertrust.BoltTLSEnabled(neo4j) {
+		scheme = "neo4j+ssc"
+	}
+	boltAddr := fmt.Sprintf("%s://%s.%s.svc:%d", scheme, ctx.ClientServiceName(), ctx.Namespace(), ctx.BoltPort())
 	container := corev1.Container{
 		Name:                     containerName,
 		Image:                    ctx.ImageRef(),
