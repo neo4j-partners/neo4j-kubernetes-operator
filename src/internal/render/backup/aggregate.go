@@ -34,17 +34,18 @@ import (
 // (owner-referenced by the restore).
 func AggregateJobName(restore *neo4jv1beta1.Neo4jRestore) string { return restore.Name + "-aggregate" }
 
-// AggregateJob builds the run-to-completion Job that collapses each database's backup chain into a
-// single recovered full artifact (`neo4j-admin backup aggregate`) before restore seeds from it
-// (ADR-015, source.aggregate). It mounts the same backups claim the target uses — at the same
-// sub-path the backup Job wrote to — runs one aggregate per database over that database's latest
-// artifact (dbArtifacts[db], the chain's last link recorded by the backup), and records the new
-// recovered artifact's filename back to /dev/termination-log so the restore controller can seed
-// file:/backups/<new>. It is a pure function; the owner reference is applied by shared.Apply.
+// AggregateJob builds the run-to-completion Job (named jobName, owner-referenced by the caller) that
+// collapses each database's backup chain into a single recovered full artifact (`neo4j-admin backup
+// aggregate`). It mounts the backups claim at the sub-path the backup Job wrote to and runs one
+// aggregate per database over that database's latest artifact (dbArtifacts[db], the chain's last
+// link recorded by the backup). dbArtifacts[db] is relative to the destination root, so it may
+// carry a chain sub-directory (e.g. "<chain>/<file>"): the recovered full lands beside its inputs
+// in that sub-dir, and the Job records the new artifact's path — chain-prefixed the same way — back
+// to /dev/termination-log so the caller can catalog/seed file:/backups/<path>.
 //
 // --keep-old-backup=true is mandatory: aggregation must never delete the user's existing chain
-// (restore is a read of the backups, not a rewrite of them).
-func AggregateJob(neo4j *neo4jv1beta1.Neo4j, restore *neo4jv1beta1.Neo4jRestore, claim string, dbArtifacts map[string]string) (*batchv1.Job, error) {
+// (it is a read of the backups plus a new artifact, not a rewrite of them).
+func AggregateJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts map[string]string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
 	// Reuse the backup Job's PVC wiring so the aggregate reads/writes at the same sub-path the
@@ -62,7 +63,7 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, restore *neo4jv1beta1.Neo4jRestore,
 	})
 	mounts = append(mounts, corev1.VolumeMount{Name: scratchVolume, MountPath: scratchMountPath})
 
-	labels := ctx.CommonLabels("restore-aggregate")
+	labels := ctx.CommonLabels("backup-aggregate")
 	ttl := backupTTLSeconds
 	backoff := backupBackoff
 
@@ -80,7 +81,7 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, restore *neo4jv1beta1.Neo4jRestore,
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      AggregateJobName(restore),
+			Name:      jobName,
 			Namespace: ctx.Namespace(),
 			Labels:    labels,
 		},
@@ -101,9 +102,12 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, restore *neo4jv1beta1.Neo4jRestore,
 }
 
 // aggregateScript runs `neo4j-admin backup aggregate` per database over its latest artifact, then
-// records the new recovered artifact's filename to /dev/termination-log (same channel as backup,
-// read back by the reconciler). Databases are sorted for a deterministic script. The recording is
-// best-effort (trailing `true`) so it never fails an otherwise-good aggregation.
+// records the new recovered artifact's path to /dev/termination-log (same channel as backup, read
+// back by the reconciler). The artifact path may carry a chain sub-directory, in which case the
+// recovered full lands in that sub-dir: the ls scans there and the recorded path is chain-prefixed
+// the same way, so restore/catalog resolve file:/backups/<path> identically to a plain backup.
+// Databases are sorted for a deterministic script. The recording is best-effort (trailing `true`)
+// so it never fails an otherwise-good aggregation.
 func aggregateScript(toPath string, dbArtifacts map[string]string) string {
 	dbs := make([]string, 0, len(dbArtifacts))
 	for db := range dbArtifacts {
@@ -116,12 +120,20 @@ func aggregateScript(toPath string, dbArtifacts map[string]string) string {
 		if i > 0 {
 			b.WriteString(" && ")
 		}
+		// The recovered full lands in the same directory as its inputs. When the artifact path is
+		// chain-prefixed ("<chain>/<file>") that directory — and the recorded path — is the sub-dir.
+		outDir, prefix := toPath, ""
+		if idx := strings.LastIndex(dbArtifacts[db], "/"); idx >= 0 {
+			sub := dbArtifacts[db][:idx]
+			outDir = toPath + "/" + sub
+			prefix = sub + "/"
+		}
 		fmt.Fprintf(&b,
 			"neo4j-admin backup aggregate --from-path=%s/%s --keep-old-backup=true --temp-path=%s",
 			toPath, dbArtifacts[db], scratchMountPath)
 		fmt.Fprintf(&b,
-			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=$(basename \"$a\")|$(stat -c%%s \"$a\" 2>/dev/null)\" >> /dev/termination-log 2>/dev/null; true; }",
-			toPath, db, db)
+			" && { a=\"$(ls -t %s/%s-*.backup 2>/dev/null | head -1)\"; [ -n \"$a\" ] && echo \"%s=%s$(basename \"$a\")|$(stat -c%%s \"$a\" 2>/dev/null)\" >> /dev/termination-log 2>/dev/null; true; }",
+			outDir, db, db, prefix)
 	}
 	return b.String()
 }
