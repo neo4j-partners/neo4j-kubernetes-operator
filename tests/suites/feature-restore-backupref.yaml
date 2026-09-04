@@ -1,15 +1,18 @@
 name: feature-restore-backupref
 description: >
-  Record-based restore over a backup CHAIN (ADR-015 / BDR-014 §13). Deploys an Enterprise
-  Standalone Neo4j with the backup listener enabled AND the destination PVC mounted as
+  Record-based, overwrite restore over a backup CHAIN (ADR-015 / BDR-014 §13). Deploys an
+  Enterprise Standalone Neo4j with the backup listener enabled AND the destination PVC mounted as
   storage.volumes.backups, so a PVC-backed artifact is readable by the server at /backups. Writes
   probe #1, takes a Full Neo4jBackup; writes probe #2, takes an Incremental Neo4jBackup to the same
-  PVC; then applies a Neo4jRestore with source.backupRef pointing at the INCREMENTAL. The operator
-  resolves the recorded pvc:// artifact to file:/backups/<path> and Neo4j's FileSeedProvider walks
-  the full → incremental chain. Asserts the record reaches Succeeded, `restored` comes online, and
-  BOTH probes are present — proving the incremental's data is carried, not just the full snapshot.
-  This exercises the real operator restore path (backupRef resolution + PVC seed mount + chain
-  walk), which the file:-seed suite (feature-restore) deliberately sidesteps.
+  PVC; writes probe #3 (after the last backup, so NOT in the chain); then applies a Neo4jRestore
+  with source.backupRef=<incremental>, overwrite+forceOffline, over `neo4j` (backupRef resolves the
+  artifact by database name, so it restores the same database). The operator resolves the recorded
+  pvc:// artifact to file:/backups/<path> and Neo4j's FileSeedProvider walks the full → incremental
+  chain. Asserts the record reaches Succeeded, `neo4j` comes online, probes #1 and #2 are present
+  and probe #3 is gone — proving both the chain (incremental data carried) and the overwrite (live
+  store replaced, not merged). This exercises the real operator restore path (backupRef resolution
+  + PVC seed mount + chain walk + overwrite/forceOffline), which the file:-seed suite
+  (feature-restore) deliberately sidesteps.
 brief_ref: neo4j-restore-backupref
 use_pipeline: neo4j-suite
 on_case_failure: stop
@@ -28,7 +31,7 @@ pipeline:
 
 cases:
   - id: chain-pvc-seed
-    comment: BDR-014 §13 — a Neo4jRestore(source.backupRef=<incremental>) seeds `restored` from file:/backups and Neo4j replays the full→incremental chain; both probe rows land, proving incremental data is carried.
+    comment: BDR-014 §13 — a Neo4jRestore(source.backupRef=<incremental>, overwrite) restores `neo4j` from file:/backups; Neo4j replays the full→incremental chain (both probes land) and the overwrite drops the post-backup probe.
     fixture: tests/fixtures/neo4j-backup-mounted-pvc.yaml
     assert: restore-chain
     expect: success

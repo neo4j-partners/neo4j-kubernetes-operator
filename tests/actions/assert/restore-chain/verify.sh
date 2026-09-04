@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# assert/restore-chain — the record-based, chain restore completes end to end:
+# assert/restore-chain — the record-based, overwrite chain restore completes end to end:
 #   - Neo4jRestore reaches status.phase=Succeeded with RestoreReady=True/RestoreSucceeded
-#   - the seeded database `restored` is online (SHOW DATABASES)
-#   - BOTH probe rows (written before the full and before the incremental) are present in
-#     `restored` — proving the seed carried the WHOLE chain, incremental included, not just the
-#     full's snapshot.
+#   - the restored database `neo4j` is online (SHOW DATABASES)
+#   - probes #1 and #2 (in the full → incremental chain) are present, proving the incremental's
+#     data was carried, not just the full snapshot
+#   - probe #3 (written AFTER the last backup) is ABSENT, proving the overwrite replaced the live
+#     store with the backup chain rather than merging into it.
 # Contract sources: src/internal/controller/neo4jrestore/reconciler.go (seedURIFromArtifact →
-# file:/backups/<path>), reasons via tests/lib/oracle.sh (RestoreReady/RestoreSucceeded).
+# file:/backups/<path>; overwrite → CreateOrReplaceDatabaseWithSeed), reasons via
+# tests/lib/oracle.sh (RestoreReady/RestoreSucceeded).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +18,7 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 source "${SCRIPT_DIR}/../../../lib/connectivity.sh"
 
 RESTORE_NAME="${NEO4J_CR_NAME}-run"
-RESTORED_DB="restored"
+TARGET_DB="neo4j"
 POD="${NEO4J_STS_NAME}-0"
 RES="neo4jrestore/${RESTORE_NAME}"
 TIMEOUT="${RESTORE_ASSERT_TIMEOUT:-600}"
@@ -40,31 +42,43 @@ done
 
 if [[ "${phase}" != "Succeeded" || "${status}" != "True" || "${reason}" != "${EXPECT_REASON}" ]]; then
   kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" -o yaml >&2 || true
-  kubectl logs -n "${OPERATOR_NAMESPACE}" -l "${OPERATOR_LABEL_SELECTOR}" --tail=-1 >&2 || true
+  kubectl logs -n "${OPERATOR_NAMESPACE:-neo4j-operator-system}" \
+    -l "${OPERATOR_LABEL_SELECTOR:-app.kubernetes.io/name=neo4j-operator}" --tail=-1 >&2 || true
   die "expected ${RES} phase=Succeeded RestoreReady=True/${EXPECT_REASON}, got phase='${phase:-<none>}' status='${status:-<none>}' reason='${reason:-<none>}'"
 fi
 
 password="$(neo4j_password)"
 
-log "Asserting database ${RESTORED_DB} is online"
+log "Asserting database ${TARGET_DB} is online"
 online=""
 deadline=$((SECONDS + 120))
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
   online="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
     "cypher-shell -a bolt://localhost:7687 -d system -u neo4j -p '${password}' --format plain \
-     \"SHOW DATABASES YIELD name, currentStatus WHERE name = '${RESTORED_DB}' RETURN DISTINCT currentStatus;\"" 2>&1 || true)"
+     \"SHOW DATABASES YIELD name, currentStatus WHERE name = '${TARGET_DB}' RETURN DISTINCT currentStatus;\"" 2>&1 || true)"
   grep -qi 'online' <<<"${online}" && break
   sleep 5
 done
 grep -qi 'online' <<<"${online}" \
-  || die "database ${RESTORED_DB} not online after restore; last SHOW DATABASES: ${online:-<none>}"
+  || die "database ${TARGET_DB} not online after restore; last SHOW DATABASES: ${online:-<none>}"
 
-log "Asserting BOTH chain probes seeded into ${RESTORED_DB} (full + incremental)"
-count="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
-  "cypher-shell -a bolt://localhost:7687 -d ${RESTORED_DB} -u neo4j -p '${password}' --format plain \
-   \"MATCH (n:RestoreProbe) WHERE n.id IN ['e2e-bref-1','e2e-bref-2'] RETURN count(n);\"" 2>&1 || true)"
-probe="$(grep -Eo '[0-9]+' <<<"${count}" | tail -n 1 || true)"
-[[ "${probe}" == "2" ]] \
-  || die "expected 2 RestoreProbe rows in ${RESTORED_DB} (chain carried full + incremental), got '${probe:-0}'; output: ${count:-<none>}"
+# count RestoreProbe rows in ${TARGET_DB} matching the given id predicate.
+probe_count() {
+  local pred="$1" out
+  out="$(kubectl exec -n "${NEO4J_NAMESPACE}" "${POD}" -c neo4j -- bash -c \
+    "cypher-shell -a bolt://localhost:7687 -d ${TARGET_DB} -u neo4j -p '${password}' --format plain \
+     \"MATCH (n:RestoreProbe) WHERE ${pred} RETURN count(n);\"" 2>&1 || true)"
+  grep -Eo '[0-9]+' <<<"${out}" | tail -n 1
+}
 
-log "Neo4jRestore ${RESTORE_NAME} Succeeded; ${RESTORED_DB} online with BOTH chain probes (backupRef chain seed)"
+log "Asserting BOTH chain probes present in ${TARGET_DB} (full + incremental)"
+chain="$(probe_count "n.id IN ['e2e-bref-1','e2e-bref-2']")"
+[[ "${chain}" == "2" ]] \
+  || die "expected 2 chain RestoreProbe rows in ${TARGET_DB} (full + incremental), got '${chain:-0}'"
+
+log "Asserting the post-backup probe is ABSENT (overwrite replaced the live store)"
+post="$(probe_count "n.id = 'e2e-bref-post'")"
+[[ "${post}" == "0" ]] \
+  || die "expected 0 post-backup RestoreProbe in ${TARGET_DB} (overwrite should drop it), got '${post:-?}'"
+
+log "Neo4jRestore ${RESTORE_NAME} Succeeded; ${TARGET_DB} online with both chain probes and no post-backup probe"
