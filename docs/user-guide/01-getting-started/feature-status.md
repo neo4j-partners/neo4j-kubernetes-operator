@@ -105,7 +105,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Init containers, sidecars and extra environment variables | Implemented | [Operations](../03-neo4j/09-operations.md#escape-hatches) |
 | Status conditions and Kubernetes Events | Verified | [Errors](../05-reference/errors.md) |
 | Prometheus metrics and ServiceMonitor | Implemented | [Monitoring](../03-neo4j/08-monitoring.md) |
-| Backup and restore | Planned | Dedicated resources; the backup listener and `backups` volume already exist |
+| Backup and restore | Implemented | [Backup and restore](../03-neo4j/10-backup-restore.md) — `Neo4jBackup`, `Neo4jBackupSchedule`, `Neo4jRestore` |
 | Neo4j version upgrades | Planned | `spec.version` is honoured at install; changing it is not orchestrated |
 | CSV, JMX and Graphite metrics | Not decided | Fields exist under `spec.features.monitoring`; only Prometheus is wired |
 
@@ -123,7 +123,6 @@ There is usually a manual path meanwhile:
 
 - **Users and roles** — run the Cypher yourself, or point Neo4j at your identity provider through
   `spec.config`.
-- **Backups** — call `neo4j-admin` from a Job of your own against the backup listener.
 - **Version changes** — deploy a new resource at the target version and migrate the data, rather than
   editing `spec.version` in place.
 - **Ingress** — write the Ingress object yourself against the client Service.
