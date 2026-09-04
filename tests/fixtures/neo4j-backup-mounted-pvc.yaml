@@ -53,3 +53,9 @@ spec:
       expose: [bolt, http]
   auth:
     generatePassword: true
+  trust:
+    # NEO-004: the restore reconciler seeds over operator admin Bolt (CREATE DATABASE … OPTIONS
+    # {seedURI}). On kind we opt in to plaintext admin Bolt (Warning event); prefer
+    # trust.certificates.bolt for verified TLS in production.
+    enabled: false
+    insecureAdminConnection: true
