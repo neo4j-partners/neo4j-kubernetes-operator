@@ -164,7 +164,8 @@ spec:
                 is a manual runbook (BDR-014 §8)
               rule: '!self.databases.exists(d, d == ''system'')'
             - message: 'forceOffline requires overwrite: true'
-              rule: '!self.forceOffline || self.overwrite'
+              rule: '!has(self.forceOffline) || !self.forceOffline || (has(self.overwrite)
+                && self.overwrite)'
           status:
             description: Neo4jRestoreStatus is the observed state of a restore run.
             properties:
