@@ -2,6 +2,7 @@ package neo4jrestore
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -74,8 +75,11 @@ func (f *fakeAdmin) StopDatabase(_ context.Context, name string) error {
 	return nil
 }
 
-func (f *fakeAdmin) StartDatabase(_ context.Context, name string) error { f.online[name] = true; return nil }
-func (f *fakeAdmin) Close(context.Context) error                        { return nil }
+func (f *fakeAdmin) StartDatabase(_ context.Context, name string) error {
+	f.online[name] = true
+	return nil
+}
+func (f *fakeAdmin) Close(context.Context) error { return nil }
 
 // Formation surface — unused here; present to satisfy intneo4j.Admin.
 func (f *fakeAdmin) ShowServers(context.Context) ([]intneo4j.Server, error) { return nil, nil }
@@ -480,5 +484,159 @@ func TestRestoreAggregateRequiresBackupRef(t *testing.T) {
 	got := getRestore(t, c)
 	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreSourceUnsupported" {
 		t.Errorf("want Failed/RestoreSourceUnsupported, got %q/%q", got.Status.Phase, got.Status.Reason)
+	}
+}
+
+// metadataJob builds the post-seed metadata Job controlled by restore, in the given terminal state
+// (neither flag → still running).
+func metadataJob(t *testing.T, restore *neo4jv1beta1.Neo4jRestore, complete, failed bool) *batchv1.Job {
+	t.Helper()
+	j := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: renderbackup.MetadataJobName(restore), Namespace: "ns"}}
+	if err := controllerutil.SetControllerReference(restore, j, scheme(t)); err != nil {
+		t.Fatal(err)
+	}
+	switch {
+	case complete:
+		j.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	case failed:
+		j.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded", Message: "backoff"}}
+	}
+	return j
+}
+
+func metadataPod(restore *neo4jv1beta1.Neo4jRestore, message string) *corev1.Pod {
+	name := renderbackup.MetadataJobName(restore)
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: name + "-x", Namespace: "ns", Labels: map[string]string{"job-name": name}},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
+			Name:  "neo4j-admin",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: message, FinishedAt: metav1.Now()}},
+		}}},
+	}
+}
+
+func metadataRestore() *neo4jv1beta1.Neo4jRestore {
+	return restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+		r.Spec.RestoreMetadata = true
+	})
+}
+
+// sawEvent reports whether a Warning with the given reason substring was recorded.
+func sawEvent(t *testing.T, r *RestoreReconciler, reason string) bool {
+	t.Helper()
+	fr, ok := r.Recorder.(*record.FakeRecorder)
+	if !ok {
+		t.Fatal("recorder is not a FakeRecorder")
+	}
+	for {
+		select {
+		case e := <-fr.Events:
+			if strings.Contains(e, reason) {
+				return true
+			}
+		default:
+			return false
+		}
+	}
+}
+
+// drive runs Reconcile until the record is terminal or a step budget is exhausted (seed pass then
+// poll/metadata passes). Returns the final record.
+func drive(t *testing.T, r *RestoreReconciler, c client.Client) *neo4jv1beta1.Neo4jRestore {
+	t.Helper()
+	for i := 0; i < 5; i++ {
+		if _, err := r.Reconcile(context.Background(), req()); err != nil {
+			t.Fatalf("reconcile %d: %v", i, err)
+		}
+		got := getRestore(t, c)
+		if got.Status.Phase == neo4jv1beta1.RunPhaseSucceeded || got.Status.Phase == neo4jv1beta1.RunPhaseFailed {
+			return got
+		}
+	}
+	return getRestore(t, c)
+}
+
+func TestRestoreMetadataAppliesThenSucceeds(t *testing.T) {
+	admin := newFakeAdmin(nil) // fresh db -> seed pass creates it online
+	restore := metadataRestore()
+	job := metadataJob(t, restore, true, false)
+	pod := metadataPod(restore, "metadata-applied\n")
+	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job, pod)
+
+	got := drive(t, r, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+		t.Fatalf("phase = %q/%q, want Succeeded", got.Status.Phase, got.Status.Reason)
+	}
+	if sawEvent(t, r, "RestoreMetadataConflict") {
+		t.Error("a clean metadata apply must not emit a conflict Warning")
+	}
+}
+
+func TestRestoreMetadataConflictWarnsButSucceeds(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	restore := metadataRestore()
+	job := metadataJob(t, restore, true, false)
+	pod := metadataPod(restore, "neo4j: role `reader` already exists\nmetadata-applied-with-warnings")
+	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job, pod)
+
+	got := drive(t, r, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+		t.Fatalf("phase = %q/%q, want Succeeded (conflicts warn, not fail)", got.Status.Phase, got.Status.Reason)
+	}
+	if !sawEvent(t, r, "RestoreMetadataConflict") {
+		t.Error("expected a RestoreMetadataConflict Warning when statements were skipped")
+	}
+}
+
+func TestRestoreMetadataJobFailedFails(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	restore := metadataRestore()
+	job := metadataJob(t, restore, false, true)
+	pod := metadataPod(restore, "could not connect to system database")
+	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job, pod)
+
+	got := drive(t, r, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreMetadataFailed" {
+		t.Fatalf("want Failed/RestoreMetadataFailed, got %q/%q", got.Status.Phase, got.Status.Reason)
+	}
+	if got.Status.Message != "could not connect to system database" {
+		t.Errorf("message = %q, want the pod's failure cause", got.Status.Message)
+	}
+}
+
+func TestRestoreMetadataJobRunningRequeues(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	restore := metadataRestore()
+	job := metadataJob(t, restore, false, false) // still running
+	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job)
+
+	// seed pass, then poll reaches the metadata gate and waits on the Job.
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile 1: %v", err)
+	}
+	res, err := r.Reconcile(context.Background(), req())
+	if err != nil {
+		t.Fatalf("reconcile 2: %v", err)
+	}
+	if res.RequeueAfter == 0 {
+		t.Error("expected requeue while the metadata Job runs")
+	}
+	got := getRestore(t, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseRunning || got.Status.Reason != "RestoreMetadataApplying" {
+		t.Errorf("want Running/RestoreMetadataApplying, got %q/%q", got.Status.Phase, got.Status.Reason)
+	}
+}
+
+func TestRestoreMetadataRawURLUnsupported(t *testing.T) {
+	admin := newFakeAdmin(nil)
+	// A raw url source carries no metadata script; restoreMetadata is unsupported there.
+	r, c := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/p/neo4j"}
+		r.Spec.RestoreMetadata = true
+	}))
+	got := drive(t, r, c)
+	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreMetadataFailed" {
+		t.Errorf("want Failed/RestoreMetadataFailed, got %q/%q", got.Status.Phase, got.Status.Reason)
 	}
 }

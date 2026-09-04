@@ -62,6 +62,14 @@ type Neo4jRestoreSpec struct {
 	// ForceOffline stops the database before replacing it to fence in-flight writes,
 	// then restarts it. Requires overwrite (§11).
 	ForceOffline bool `json:"forceOffline,omitempty"`
+	// RestoreMetadata, when true, reapplies the backed-up users, roles, and privileges after the
+	// database comes online. Seed-from-URI restores store data only (it never emits Neo4j's
+	// restore_metadata.cypher), so the operator runs a post-seed Job that regenerates that script
+	// from the artifact and executes it against the system database. Supported only for a
+	// PVC-backed source.backupRef the target mounts as its backups volume (the Job needs
+	// filesystem access to the artifact); other sources are rejected. Statements that clash with
+	// an existing role/user are skipped with a Warning event, and the restore still Succeeds.
+	RestoreMetadata bool `json:"restoreMetadata,omitempty"`
 	// Source is what to restore from.
 	// +kubebuilder:validation:Required
 	Source RestoreSource `json:"source"`

@@ -127,7 +127,7 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return r.retryable(ctx, &restore, oracle.ReasonRestoreBoltUnavailable, err.Error())
 		}
 		defer func() { _ = admin.Close(ctx) }()
-		return r.poll(ctx, &restore, admin)
+		return r.poll(ctx, &restore, &neo4j, admin)
 	}
 
 	// Resolve the per-database seed URIs. With source.aggregate, a pre-seed Job first collapses
@@ -210,8 +210,10 @@ func (r *RestoreReconciler) issueSeeds(ctx context.Context, restore *neo4jv1beta
 	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 }
 
-// poll reads SHOW DATABASES and declares Succeeded once every requested database is online.
-func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, admin intneo4j.Admin) (ctrl.Result, error) {
+// poll reads SHOW DATABASES and declares Succeeded once every requested database is online. When
+// spec.restoreMetadata is set it first drives a post-seed metadata Job to a terminal state (the
+// databases are already online; only users/roles/privileges remain to reapply).
+func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j, admin intneo4j.Admin) (ctrl.Result, error) {
 	states, err := admin.ShowDatabases(ctx)
 	if err != nil {
 		return r.retryable(ctx, restore, oracle.ReasonRestoreBoltUnavailable, "SHOW DATABASES: "+err.Error())
@@ -242,11 +244,134 @@ func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4
 		}
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
+
+	// Databases are online. Reapply users/roles/privileges before declaring success if asked —
+	// the metadata Job runs to a terminal state (done=false means it is still running or failed
+	// the record terminally, and res/err are authoritative).
+	if restore.Spec.RestoreMetadata {
+		if done, res, err := r.ensureMetadata(ctx, restore, neo4j); !done {
+			return res, err
+		}
+	}
+
 	restore.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
 	restore.Status.Reason = ""
 	restore.Status.Message = ""
 	setCondition(restore, oracle.ConditionRestoreReady, metav1.ConditionTrue, oracle.ReasonRestoreSucceeded, "all databases online")
 	return ctrl.Result{}, r.writeStatus(ctx, restore)
+}
+
+// ensureMetadata drives the post-seed metadata Job (spec.restoreMetadata) to a terminal state.
+// done=true means metadata was applied (possibly with skipped conflicts, surfaced as a Warning) and
+// the caller may declare success. done=false means the caller must return res/err as-is: the Job is
+// still running (requeued) or the record was failed terminally. Supported only for a PVC-backed
+// source.backupRef; other sources fail with RestoreMetadataFailed.
+func (r *RestoreReconciler) ensureMetadata(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j) (done bool, res ctrl.Result, err error) {
+	if restore.Spec.Source.BackupRef == "" {
+		res, err = r.fail(ctx, restore, oracle.ReasonRestoreMetadataFailed,
+			"spec.restoreMetadata requires source.backupRef (a PVC-backed backup); a raw source.url carries no metadata script")
+		return false, res, err
+	}
+	var backup neo4jv1beta1.Neo4jBackup
+	if e := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, &backup); e != nil {
+		if apierrors.IsNotFound(e) {
+			res, err = r.fail(ctx, restore, oracle.ReasonRestoreMetadataFailed, "source.backupRef "+restore.Spec.Source.BackupRef+" not found")
+			return false, res, err
+		}
+		return false, ctrl.Result{}, e
+	}
+
+	claim, dbArtifacts, reason, msg := metadataInputs(restore, &backup)
+	if reason != nil {
+		res, err = r.fail(ctx, restore, *reason, msg)
+		return false, res, err
+	}
+
+	job, e := renderbackup.MetadataJob(neo4j, renderbackup.MetadataJobName(restore), claim, dbArtifacts)
+	if e != nil {
+		res, err = r.fail(ctx, restore, oracle.ReasonRestoreMetadataFailed, e.Error())
+		return false, res, err
+	}
+	if e := shared.Apply(ctx, r.Client, r.Scheme, restore, job, func() error { return nil }); e != nil {
+		return false, ctrl.Result{}, e
+	}
+
+	var owned batchv1.Job
+	if e := r.Get(ctx, types.NamespacedName{Name: renderbackup.MetadataJobName(restore), Namespace: restore.Namespace}, &owned); e != nil {
+		if apierrors.IsNotFound(e) {
+			res, err = r.metaProgress(ctx, restore, "metadata Job starting")
+			return false, res, err
+		}
+		return false, ctrl.Result{}, e
+	}
+	switch complete, failed, jmsg := shared.JobTerminal(&owned); {
+	case failed:
+		detail := jmsg
+		if podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name); podMsg != "" {
+			detail = podMsg
+		}
+		res, err = r.fail(ctx, restore, oracle.ReasonRestoreMetadataFailed, detail)
+		return false, res, err
+	case complete:
+		podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name)
+		if strings.Contains(podMsg, "with-warnings") && r.Recorder != nil {
+			r.Recorder.Event(restore, corev1.EventTypeWarning, oracle.ReasonRestoreMetadataConflict.String(), metaDetail(podMsg))
+		}
+		return true, ctrl.Result{}, nil
+	default:
+		res, err = r.metaProgress(ctx, restore, "metadata Job running")
+		return false, res, err
+	}
+}
+
+// metadataInputs resolves the backups claim and each database's recorded artifact path (the chain's
+// last link) for the metadata Job. Supported only for PVC-backed backups on one claim.
+func metadataInputs(restore *neo4jv1beta1.Neo4jRestore, backup *neo4jv1beta1.Neo4jBackup) (claim string, dbArtifacts map[string]string, reason *oracle.Reason, msg string) {
+	failR := oracle.ReasonRestoreMetadataFailed
+	dbArtifacts = map[string]string{}
+	for _, db := range restore.Spec.Databases {
+		a, ok := artifactFor(backup, db)
+		if !ok {
+			return "", nil, &failR, "backupRef " + restore.Spec.Source.BackupRef + " has no artifact for database " + db
+		}
+		if !strings.HasPrefix(a.URI, "pvc://") {
+			return "", nil, &failR, "metadata restore supports only PVC-backed backups; artifact for " + db + " is " + a.URI
+		}
+		if a.Path == "" {
+			return "", nil, &failR, "backup recorded no artifact filename for " + db + "; cannot restore metadata"
+		}
+		c := strings.TrimPrefix(a.URI, "pvc://")
+		if claim == "" {
+			claim = c
+		} else if claim != c {
+			return "", nil, &failR, "metadata restore requires all databases on the same backup claim"
+		}
+		dbArtifacts[db] = a.Path
+	}
+	return claim, dbArtifacts, nil, ""
+}
+
+// metaProgress records the in-progress metadata condition and requeues without changing phase.
+func (r *RestoreReconciler) metaProgress(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, msg string) (ctrl.Result, error) {
+	restore.Status.Reason = oracle.ReasonRestoreMetadataApplying.String()
+	restore.Status.Message = msg
+	setCondition(restore, oracle.ConditionRestoreReady, metav1.ConditionFalse, oracle.ReasonRestoreMetadataApplying, msg)
+	if err := r.writeStatus(ctx, restore); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+}
+
+// metaDetail trims the Job's termination message for an Event (keep it readable).
+func metaDetail(msg string) string {
+	msg = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(msg), "metadata-applied-with-warnings"))
+	if len(msg) > 500 {
+		msg = msg[:500]
+	}
+	if msg == "" {
+		return "metadata apply skipped one or more statements (already exists)"
+	}
+	return msg
 }
 
 // resolveSeeds maps each requested database to a seedURI (ADR-015 §2 / BDR-014 §13). On a

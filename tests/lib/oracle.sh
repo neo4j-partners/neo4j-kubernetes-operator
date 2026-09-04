@@ -26,9 +26,9 @@ oracle_reasons_for() {  # <condition>
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported BackupSourceNotFound BackupSourceUnsupported ;;
-    RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreAggregating RestoreAggregateFailed ;;
+    RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreAggregating RestoreAggregateFailed RestoreMetadataApplying RestoreMetadataFailed ;;
     ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
-    event) printf '%s\n' ScheduleBackupEmitted SchedulePruned SchedulePruneFailed SchedulePruneUnsupported ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
+    event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed SchedulePruneUnsupported ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
     *) return 1 ;;
   esac
 }
@@ -103,6 +103,9 @@ oracle_severity() {  # <reason>
     RestoreSeedFailed) echo error ;;
     RestoreAggregating) echo info ;;
     RestoreAggregateFailed) echo error ;;
+    RestoreMetadataApplying) echo info ;;
+    RestoreMetadataConflict) echo warn ;;
+    RestoreMetadataFailed) echo error ;;
     ScheduleActive) echo info ;;
     ScheduleSuspended) echo info ;;
     ScheduleTargetNotFound) echo warn ;;
