@@ -50,7 +50,7 @@ func scheduleCR(mut func(*neo4jv1beta1.Neo4jBackupSchedule)) *neo4jv1beta1.Neo4j
 		ObjectMeta: metav1.ObjectMeta{Name: "sch", Namespace: "ns", CreationTimestamp: metav1.NewTime(creation)},
 		Spec: neo4jv1beta1.Neo4jBackupScheduleSpec{
 			Neo4jRef: neo4jv1beta1.Neo4jRef{Name: "g"},
-			Full:     neo4jv1beta1.BackupCadence{Schedule: "* * * * *"},
+			Full:     neo4jv1beta1.FullCadence{Schedule: "* * * * *"},
 			BackupTemplate: neo4jv1beta1.BackupTemplate{
 				Databases: []string{"neo4j"},
 				Destination: neo4jv1beta1.BackupDestination{
@@ -167,7 +167,7 @@ func TestReconcileIncrementalAttachesToCurrentChain(t *testing.T) {
 	// The chain's full has already Succeeded, so the differential is allowed to attach.
 	full := succeededFull("sch-existing-f", "sch-existing")
 	r, c := newReconciler(t, enterpriseNeo4j(), full, scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
-		s.Spec.Incremental = &neo4jv1beta1.BackupCadence{Schedule: "* * * * *"}
+		s.Spec.Incremental = &neo4jv1beta1.IncrementalCadence{Schedule: "* * * * *"}
 		// A full already anchored a chain and just ran, so only the incremental is due now.
 		fullTime := metav1.NewTime(time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC))
 		s.Spec.Full.Schedule = "0 0 1 1 *" // yearly — not due now
@@ -199,7 +199,7 @@ func TestReconcileIncrementalHeldUntilFullSucceeds(t *testing.T) {
 	full := succeededFull("sch-existing-f", "sch-existing")
 	full.Status.Phase = neo4jv1beta1.RunPhaseRunning
 	r, c := newReconciler(t, enterpriseNeo4j(), full, scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
-		s.Spec.Incremental = &neo4jv1beta1.BackupCadence{Schedule: "* * * * *"}
+		s.Spec.Incremental = &neo4jv1beta1.IncrementalCadence{Schedule: "* * * * *"}
 		fullTime := metav1.NewTime(time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC))
 		s.Spec.Full.Schedule = "0 0 1 1 *"
 		s.Status.CurrentChain = "sch-existing"
@@ -218,7 +218,7 @@ func TestReconcileIncrementalHeldUntilFullSucceeds(t *testing.T) {
 func TestReconcileIncrementalSkippedWithoutChain(t *testing.T) {
 	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
 		s.Spec.Full.Schedule = "0 0 1 1 *" // yearly — no full yet, so no chain
-		s.Spec.Incremental = &neo4jv1beta1.BackupCadence{Schedule: "* * * * *"}
+		s.Spec.Incremental = &neo4jv1beta1.IncrementalCadence{Schedule: "* * * * *"}
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)

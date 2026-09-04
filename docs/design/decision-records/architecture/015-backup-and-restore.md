@@ -120,26 +120,28 @@ A `Neo4jBackupSchedule` runs two cadences that write to the same `destination.pa
 
 - **full cron** → `--type=FULL`, anchors a new chain (new `status.chain` id).
 - **incremental cron** → `--type=AUTO` (safe cold-start: self-seeds a full if no chain exists yet), otherwise produces a differential link.
-- **aggregate cron** (optional) → a Job running `neo4j-admin backup aggregate` collapses a chain into one recovered full, bounding restore replay time and chain-loss risk.
+- **aggregate (optional, `aggregate.enabled`)** → **boundary-triggered**, not its own cron: when a full closes the previous chain, the schedule emits a `Neo4jBackup{type: Aggregate}` that runs `neo4j-admin backup aggregate` (`--keep-old-backup=true`) to collapse that closed chain into one recovered full, then prunes the chain's original links (**preserve-then-clean**). This bounds restore replay time and chain-loss risk.
 
 **Chain-aware pruning** — the invariant is *never orphan a link*:
 
 | Retention lever | Prunes | Never touches |
 |-----------------|--------|---------------|
-| `full.retention` (keep last *N* / age of chains) | **whole superseded chains** (full + all its links) | the active chain, or any chain still within age |
-| `incremental.retention` (age of links) | triggers `aggregate` to compact old links from the **front** of a chain | a middle link individually; a link the newest restore point still needs |
+| `full.retention` (keep last *N* / age of chains) | **whole superseded chains** (full + all its links, or a compacted chain's recovered full) | the active chain, or any chain still within age |
+| `aggregate.enabled` (boundary compaction) | a closed chain's **original links**, once its recovered full is cataloged | the recovered full; any link before the chain has quiesced |
 
 ```go
 // sketch — chain-aware prune, not "keep last N objects"
-chains := groupByChain(listBackups(schedule))        // full + its contiguous diffs
+chains := groupByChain(listBackups(schedule))        // full + its contiguous diffs (+ any aggregate)
 for _, c := range olderThan(chains, full.Retention) {
     if c == currentChain { continue }                // active chain is sacred
-    deleteWholeChain(c)                              // objects + object-store artifacts together
+    deleteWholeChain(c)                              // records + PVC artifacts + empty chain dir together
 }
-compactExpiredLinks(currentChain, incremental.Retention) // via aggregate, front-only
+// boundary compaction (aggregate.enabled): for each quiesced closed chain, emit its Aggregate
+// recovered full, then once cataloged prune the chain's original links (recovered full kept).
+compactClosedChains(chains, currentChain)
 ```
 
-A pruning bug that deletes a mid-chain differential silently breaks every restore point after it — so pruning operates on **whole chains** (or `aggregate`), never on individual `Neo4jBackup` objects by age.
+A pruning bug that deletes a mid-chain differential silently breaks every restore point after it — so pruning operates on **whole chains** (expiry) or a chain's **original links after its recovered full exists** (compaction), never on individual mid-chain `Neo4jBackup` objects by age. Note: there is **no `incremental.retention`** — a single differential cannot be deleted safely, so within-chain bounding is done only by boundary compaction.
 
 ### Backup Job command ([BDR-014](../business/backup-restore/014-backup-restore.md) §12)
 
