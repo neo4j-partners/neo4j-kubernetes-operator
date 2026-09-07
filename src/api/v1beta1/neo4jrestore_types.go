@@ -23,9 +23,13 @@ import (
 // RestoreSource points at what to restore from (BDR-014 §13): either a Neo4jBackup
 // record (backupRef, recommended — the operator resolves the url and walks the chain)
 // or a raw artifact url for external/manual artifacts. Exactly one form.
+//
+// Cloud object-store sources (s3://, gs://, azb://) are read by the seed providers on the target's
+// own server pods, so the target authenticates via its spec.security.cloudIdentity (ADR-016) — not
+// via this source. A credential-free file:/server:/PVC source needs nothing.
 // +kubebuilder:validation:XValidation:rule="has(self.backupRef) != has(self.url)",message="set source.backupRef (a Neo4jBackup) or source.url (raw), not both"
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || has(self.type) || self.url.startsWith('file:') || self.url.startsWith('server:')",message="source.type is required with source.url, except credential-free file:/server: seeds (ADR-015)"
-// +kubebuilder:validation:XValidation:rule="!has(self.backupRef) || (!has(self.type) && !has(self.pvc) && !has(self.credentials))",message="source.type/pvc/credentials are only valid with source.url, not source.backupRef"
+// +kubebuilder:validation:XValidation:rule="!has(self.backupRef) || (!has(self.type) && !has(self.pvc))",message="source.type/pvc are only valid with source.url, not source.backupRef"
 type RestoreSource struct {
 	// BackupRef is the name of a Neo4jBackup in the same namespace (recommended).
 	BackupRef string `json:"backupRef,omitempty"`
@@ -35,8 +39,6 @@ type RestoreSource struct {
 	URL string `json:"url,omitempty"`
 	// PVC targets an in-cluster volume as a raw source.
 	PVC *BackupPVC `json:"pvc,omitempty"`
-	// Credentials for a raw source; omit for workload identity.
-	Credentials *BackupCredentials `json:"credentials,omitempty"`
 }
 
 // Neo4jRestoreSpec is the desired state of a one-shot, immutable restore record.

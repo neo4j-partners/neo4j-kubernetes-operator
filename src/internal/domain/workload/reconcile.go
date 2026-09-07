@@ -65,6 +65,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Failed(err)
 	}
 
+	// Dedicated backup ServiceAccount: a stable, per-instance identity the backup/aggregate/prune/
+	// metadata Job pods run as instead of the namespace default SA (ADR-016). It carries cloud
+	// workload-identity annotations when spec.security.cloudIdentity opts in, so a user pre-binds
+	// this name to a cloud IAM role once for the instance.
+	backupSADesired := renderwl.BackupServiceAccount(baseCtx)
+	backupSA := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: backupSADesired.Name, Namespace: backupSADesired.Namespace}}
+	if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, backupSA, func() error {
+		backupSA.Labels = backupSADesired.Labels
+		backupSA.Annotations = backupSADesired.Annotations
+		return nil
+	}); err != nil {
+		return shared.Failed(err)
+	}
+
 	if render.IsClusterMode(neo4j) {
 		roleDesired := renderwl.ServiceReaderRole(baseCtx)
 		role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: roleDesired.Name, Namespace: roleDesired.Namespace}}

@@ -80,6 +80,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [ADR-013](architecture/013-neo4j-conf-directory-fragments.md) | `neo4j.conf` as a directory of ConfigMap fragments — per-key update & reconcile via the CR | proposed |
 | [ADR-014](architecture/014-operator-observability.md) | Operator observability — logs, metrics, Events, and Prometheus exposure | proposed |
 | [ADR-015](architecture/015-backup-and-restore.md) | Backup / restore execution — backup via Kubernetes `Job` (neo4j image) with chain-aware pruning + `aggregate`; per-database artifact layout; restore via online seed-from-URI over Bolt, gated on formation; failure-mode conditions; system/DR → [design note](../backup-restore/disaster-recovery.md) | proposed |
+| [ADR-016](architecture/016-cloud-identity.md) | Cloud identity for backup/restore — **Option C proposed**: static-key Secret (portable, MinIO-testable) + opt-in workload identity (IRSA / EKS Pod Identity / GKE WI / Azure WI); dedicated backup-Job SA; relax NEO-002 behind explicit opt-in; no cloud SDK in operator; PVC/`file:`/`server:` path needs none of this | proposed |
 
 ---
 

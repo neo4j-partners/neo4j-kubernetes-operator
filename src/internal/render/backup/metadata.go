@@ -109,7 +109,7 @@ func MetadataJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts m
 		container.ImagePullPolicy = corev1.PullPolicy(neo4j.Spec.Image.PullPolicy)
 	}
 
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: ctx.Namespace(),
@@ -128,7 +128,9 @@ func MetadataJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts m
 				},
 			},
 		},
-	}, nil
+	}
+	workload.ApplyBackupPodIdentity(neo4j, &job.Spec.Template)
+	return job, nil
 }
 
 // metadataScript regenerates and applies restore_metadata.cypher per database. Databases are sorted

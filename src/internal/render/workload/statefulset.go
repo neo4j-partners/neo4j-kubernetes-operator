@@ -72,7 +72,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	// After scheduling so offline can force terminationGracePeriodSeconds=0.
 	applyOfflineMaintenance(ctx, &podSpec.Containers[0], &podSpec)
 
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.STSName(),
 			Namespace: ctx.Namespace(),
@@ -87,7 +87,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 			ServiceName:         ctx.HeadlessServiceName(),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels: maps.Clone(labels),
 					Annotations: map[string]string{
 						rendercfg.ConfigChecksumAnnotation: rendercfg.ConfigChecksum(ctx),
 					},
@@ -98,6 +98,10 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 			PersistentVolumeClaimRetentionPolicy: renderstorage.RetentionPolicy(ctx.Neo4j),
 		},
 	}
+	// Object-store cloud identity for restore seed-from-URI reads (ADR-016): static-key env and/or
+	// the Azure WI pod label. maps.Clone above keeps this pod-only, off the STS selector/metadata.
+	ApplyWorkloadPodIdentity(ctx.Neo4j, &sts.Spec.Template)
+	return sts
 }
 
 func neo4jConfVolume(ctx render.Context, mode int32) corev1.Volume {
@@ -339,9 +343,19 @@ func OperandServiceAccount(ctx render.Context) *corev1.ServiceAccount {
 			Labels:    ctx.CommonLabels("workload"),
 		},
 	}
-	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.ServiceAccount != nil &&
-		len(ctx.Neo4j.Spec.Security.ServiceAccount.Annotations) > 0 {
-		sa.Annotations = maps.Clone(ctx.Neo4j.Spec.Security.ServiceAccount.Annotations)
+	anns := map[string]string{}
+	if ctx.Neo4j.Spec.Security != nil && ctx.Neo4j.Spec.Security.ServiceAccount != nil {
+		maps.Copy(anns, ctx.Neo4j.Spec.Security.ServiceAccount.Annotations)
+	}
+	// Cloud workload-identity annotations bind the server pods' SA to a cloud IAM role so restore
+	// seed providers can read the object store (ADR-016). These come from the validated
+	// spec.security.cloudIdentity opt-in, not from the plain serviceAccount.annotations (which
+	// NEO-002 still rejects for IAM keys).
+	if wi := clusterWorkloadIdentity(ctx.Neo4j); wi != nil {
+		maps.Copy(anns, wi.Annotations)
+	}
+	if len(anns) > 0 {
+		sa.Annotations = anns
 	}
 	return sa
 }

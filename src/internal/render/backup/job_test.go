@@ -82,6 +82,27 @@ func TestBackupJobObjectStore(t *testing.T) {
 	}
 }
 
+func TestBackupJobObjectStoreAddsTrailingSlash(t *testing.T) {
+	// neo4j-admin treats a slash-less object-store url as a file and fails; the destination is a
+	// directory, so the operator normalizes it (azb example from the Azure test runbook).
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationAzure, URL: "azb://acct/backups/neo4j"},
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b, "")
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	if !hasArg(c.Args, "--to-path=azb://acct/backups/neo4j/") {
+		t.Errorf("expected normalized to-path with trailing slash; got %v", c.Args)
+	}
+}
+
 func TestBackupJobPVCExistingClaim(t *testing.T) {
 	b := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},

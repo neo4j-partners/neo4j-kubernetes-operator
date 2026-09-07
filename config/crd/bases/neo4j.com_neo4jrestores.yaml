@@ -101,17 +101,6 @@ spec:
                     description: BackupRef is the name of a Neo4jBackup in the same
                       namespace (recommended).
                     type: string
-                  credentials:
-                    description: Credentials for a raw source; omit for workload identity.
-                    properties:
-                      secretName:
-                        description: SecretName is a Secret in the same namespace
-                          with the provider credentials.
-                        minLength: 1
-                        type: string
-                    required:
-                    - secretName
-                    type: object
                   pvc:
                     description: PVC targets an in-cluster volume as a raw source.
                     properties:
@@ -152,10 +141,8 @@ spec:
                     file:/server: seeds (ADR-015)'
                   rule: '!has(self.url) || has(self.type) || self.url.startsWith(''file:'')
                     || self.url.startsWith(''server:'')'
-                - message: source.type/pvc/credentials are only valid with source.url,
-                    not source.backupRef
-                  rule: '!has(self.backupRef) || (!has(self.type) && !has(self.pvc)
-                    && !has(self.credentials))'
+                - message: source.type/pvc are only valid with source.url, not source.backupRef
+                  rule: '!has(self.backupRef) || (!has(self.type) && !has(self.pvc))'
             required:
             - databases
             - neo4jRef
