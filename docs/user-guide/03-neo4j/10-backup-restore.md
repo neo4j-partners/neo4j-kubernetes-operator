@@ -56,7 +56,8 @@ spec:
     type: s3
     url: s3://my-bucket/neo4j/prod/
     credentials:
-      secretName: aws-backup-creds   # omit to use workload identity
+      secretName: aws-backup-creds   # per-backup static keys; omit to use the instance's
+                                      # spec.security.cloudIdentity (see Credentials for object stores)
   options:                    # all optional neo4j-admin passthrough
     compress: true
     keepFailed: false
@@ -214,11 +215,12 @@ For an external or hand-made artifact, use a raw `source.url` with a `source.typ
   source:
     type: s3
     url: s3://my-bucket/neo4j/prod/neo4j-2026-09-05T01-00-00.backup
-    credentials: { secretName: aws-backup-creds }
 ```
 
-`file:` and `server:` URLs are credential-free and need no `type`. Exactly one of `backupRef` /
-`url` is allowed.
+Object-store reads use the **target's** `spec.security.cloudIdentity` — a restore has no credentials
+field of its own, because the seed is pulled by the server pods, not a Job (see Credentials for
+object stores). `file:` and `server:` URLs are credential-free and need no `type`. Exactly one of
+`backupRef` / `url` is allowed.
 
 **`overwrite` and `forceOffline` are the safety gates.** A restore onto an existing database fails
 (`reason=DatabaseExists`) unless `overwrite: true`, because recreating a database destroys the
@@ -285,12 +287,36 @@ With that in place the operator seeds `file:/backups/<artifact>` and auto-enable
 
 ## Credentials for object stores
 
-Object-store destinations (`s3`, `gcs`, `azure`) authenticate one of two ways:
+Object-store access (`s3`, `gcs`, `azure`) has a **write** side (the backup Job) and a **read** side
+(the server pods that seed a restore). Both draw on the instance's identity, declared once on the
+`Neo4j` as `spec.security.cloudIdentity` ([ADR-016](../../design/decision-records/architecture/016-cloud-identity.md)):
 
-- **Workload identity** (recommended) — omit `credentials` entirely and let the pod assume a cloud
-  identity (IRSA / GKE WI / Azure WI). Full support across providers is tracked under ADR-016.
-- **A Secret** — `credentials.secretName` names a Secret in the same namespace whose keys
-  (`AWS_ACCESS_KEY_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, …) are projected verbatim into the Job.
+```yaml
+kind: Neo4j
+spec:
+  security:
+    cloudIdentity:                          # exactly one of the two below
+      # Keyless — recommended. The operator stamps these annotations onto the operand and
+      # <neo4j>-backup ServiceAccounts; the cloud platform binds them to an IAM role.
+      workloadIdentity:
+        provider: aws                       # aws | gcp | azure
+        annotations:
+          eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backups
+      # Portable / MinIO-testable alternative — a Secret projected as env into both sides.
+      # staticKeySecret: cloud-creds
+```
+
+- **Workload identity is instance-level, not per-backup** — cloud IAM trust binds to a fixed
+  ServiceAccount, so it can't vary between `Neo4jBackup` objects. `provider: azure` also adds the
+  `azure.workload.identity/use` pod label and takes the client id from
+  `annotations["azure.workload.identity/client-id"]`.
+- **Per-backup static keys** — set `Neo4jBackup.destination.credentials.secretName` to a Secret whose
+  keys (`AWS_ACCESS_KEY_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, …) are projected verbatim into that
+  Job. This overrides the instance identity for the write side of a single backup.
+- **Restore reads have no credentials field** — they always use the target's `cloudIdentity`.
+
+See [`examples/standalone/25-cloud-identity.yaml`](../../../examples/standalone/25-cloud-identity.yaml)
+and the [Azure Workload Identity backup runbook](../../../examples/standalone/25-cloud-identity-azure-backup.md).
 
 ## What is not covered
 

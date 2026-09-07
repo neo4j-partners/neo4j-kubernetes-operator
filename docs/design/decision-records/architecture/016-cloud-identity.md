@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | proposed |
-| **Date** | 2026-08-28 |
+| **Status** | accepted |
+| **Date** | 2026-08-28 (accepted 2026-09-07) |
 | **Depends on** | [ADR-015](015-backup-and-restore.md) — backup/restore execution (delegates "credentials / cloud identity" here) · [BDR-014](../business/backup-restore/014-backup-restore.md) — CRD contract (`credentials` fields) · [ADR-013](013-neo4j-conf-directory-fragments.md) — neo4j.conf fragments (connector config) · [ADR-001](001-crd-validation-process.md) — CEL vs webhook · [BDR-005](../business/neo4j/005-storage-volume-mode.md) — storage volumes |
 | **Constraints** | No cloud SDK in the operator image (ADR-015) · Enterprise only · workload-identity paths are **not** locally testable (need cloud CI) · V2 |
 
@@ -108,9 +108,9 @@ We will support **both** credential models (Option C): a portable **static-key S
 - Add the missing surface for WI: a **pod label** channel (Azure requires `azure.workload.identity/use: "true"`) and a **projected service-account token** volume/mount on the workload pods (and Job pods) for providers that consume it directly.
 - Add a **static-key surface** for the portable path: allow a referenced `Secret` to be projected as env into the workload container (mirrors the Job's `envFrom`), so cloud restore works without WI (and is MinIO-testable).
 
-### CRD surface (proposed — needs a [BDR-014](../business/backup-restore/014-backup-restore.md) amendment)
+### CRD surface (ratified — [BDR-014](../business/backup-restore/014-backup-restore.md) amendment)
 
-The user-facing field shapes are a business concern; this ADR proposes them and defers ratification to a BDR-014 amendment:
+The user-facing field shapes were proposed here and ratified in the [BDR-014](../business/backup-restore/014-backup-restore.md) cloud-identity amendment:
 
 - `spec.security.cloudIdentity` (typed): exactly one of `staticKeySecret` or `workloadIdentity` (provider + allowlisted annotations). Typed was chosen over an `allowCloudIdentityAnnotations` gate for validation and portability (M-01).
 - The backup family selects only its **static-key** Secret per backup (`destination.credentials`); WI is inherited from the target instance's `spec.security.cloudIdentity` because IAM trust binds to a fixed SA name (see Backup Job identity).
