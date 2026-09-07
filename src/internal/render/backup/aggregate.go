@@ -75,7 +75,7 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts 
 		container.ImagePullPolicy = corev1.PullPolicy(neo4j.Spec.Image.PullPolicy)
 	}
 
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: ctx.Namespace(),
@@ -94,7 +94,9 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts 
 				},
 			},
 		},
-	}, nil
+	}
+	workload.ApplyBackupPodIdentity(neo4j, &job.Spec.Template)
+	return job, nil
 }
 
 // aggregateScript runs `neo4j-admin backup aggregate` per database over its latest artifact, then

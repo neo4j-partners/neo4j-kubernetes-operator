@@ -2477,6 +2477,52 @@ spec:
                 description: Security sets pod and container security contexts and
                   ServiceAccount.
                 properties:
+                  cloudIdentity:
+                    description: |-
+                      CloudIdentity gives the Neo4j server pods a way to authenticate to cloud object storage
+                      (ADR-016), which restore's seed providers need to read an s3://, gs:// or azb:// backup. The
+                      PVC / file: / server: restore path needs none of this. Omit unless you restore from a cloud
+                      object store.
+                    properties:
+                      staticKeySecret:
+                        description: |-
+                          StaticKeySecret names a Secret in the same namespace whose keys (AWS_ACCESS_KEY_ID,
+                          GOOGLE_APPLICATION_CREDENTIALS, AZURE_STORAGE_KEY, …) are projected verbatim as env.
+                        type: string
+                      workloadIdentity:
+                        description: WorkloadIdentity opts into keyless cloud IAM
+                          instead.
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              Annotations bind the executor's ServiceAccount to the cloud principal — the single key each
+                              provider documents: eks.amazonaws.com/role-arn (AWS IRSA), iam.gke.io/gcp-service-account
+                              (GKE WI), or azure.workload.identity/client-id (Azure WI). EKS Pod Identity needs none. Only
+                              keys the operator recognises as cloud workload-identity bindings are accepted; anything else
+                              is rejected (NEO-002).
+                            type: object
+                          provider:
+                            description: |-
+                              Provider selects the cloud IAM mechanism. It is the single switch the operator keys
+                              provider-specific pod plumbing off: Azure additionally needs the azure.workload.identity/use
+                              pod label and a projected service-account token, which provider=azure triggers. AWS (IRSA and
+                              EKS Pod Identity) and GCP need only the ServiceAccount annotations below — and Pod Identity
+                              needs none — which is why the provider cannot be inferred from the annotations alone.
+                            enum:
+                            - aws
+                            - gcp
+                            - azure
+                            type: string
+                        required:
+                        - provider
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: set cloudIdentity.staticKeySecret or cloudIdentity.workloadIdentity,
+                        not both
+                      rule: has(self.staticKeySecret) != has(self.workloadIdentity)
                   containerSecurityContext:
                     description: |-
                       SecurityContext holds security configuration that will be applied to a container.

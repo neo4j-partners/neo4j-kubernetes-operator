@@ -72,8 +72,11 @@ spec:
                 description: Destination is where artifacts land.
                 properties:
                   credentials:
-                    description: Credentials references cloud credentials; omit for
-                      workload identity.
+                    description: |-
+                      Credentials references a per-backup static-key Secret projected as env into the backup Job
+                      (ADR-016). Omit for a credential-free (PVC) destination, or to use keyless workload identity —
+                      which is an instance-level concern set on the target's spec.security.cloudIdentity, because
+                      cloud IAM trust binds to a fixed ServiceAccount name and so cannot vary per backup.
                     properties:
                       secretName:
                         description: SecretName is a Secret in the same namespace

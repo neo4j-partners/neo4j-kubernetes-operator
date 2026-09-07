@@ -167,7 +167,7 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chai
 		}}
 	}
 
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      JobName(backup),
 			Namespace: ctx.Namespace(),
@@ -186,7 +186,9 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chai
 				},
 			},
 		},
-	}, nil
+	}
+	workload.ApplyBackupPodIdentity(neo4j, &job.Spec.Template)
+	return job, nil
 }
 
 // destination resolves the neo4j-admin --to-path plus any volumes/mounts the store needs.
@@ -215,9 +217,16 @@ func destination(d neo4jv1beta1.BackupDestination, subDir string) (toPath string
 	if d.URL == "" {
 		return "", nil, nil, fmt.Errorf("object-store destination requires url")
 	}
+	// neo4j-admin --to-path treats an object-store url without a trailing '/' as a file, not a
+	// directory, and fails ("not a directory - please add a terminal '/'"). A backup destination is
+	// always a directory, so normalize it here rather than making every user remember the slash.
 	// ponytail: chain sub-directories are PVC-only for now; object-store chain isolation lands with
 	// object-store aggregate/prune (ADR-016). subDir is intentionally not applied to the url.
-	return d.URL, nil, nil, nil
+	url := d.URL
+	if !strings.HasSuffix(url, "/") {
+		url += "/"
+	}
+	return url, nil, nil, nil
 }
 
 // backupScript runs neo4j-admin then records the real artifact path neo4j-admin chose for

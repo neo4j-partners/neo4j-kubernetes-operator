@@ -734,6 +734,55 @@ type SecuritySpec struct {
 	ContainerSecurityContext *corev1.SecurityContext          `json:"containerSecurityContext,omitempty"`
 	ServiceAccount           *ServiceAccountSpec              `json:"serviceAccount,omitempty"`
 	NetworkPolicy            *NetworkPolicySpec               `json:"networkPolicy,omitempty"`
+	// CloudIdentity gives the Neo4j server pods a way to authenticate to cloud object storage
+	// (ADR-016), which restore's seed providers need to read an s3://, gs:// or azb:// backup. The
+	// PVC / file: / server: restore path needs none of this. Omit unless you restore from a cloud
+	// object store.
+	CloudIdentity *CloudIdentity `json:"cloudIdentity,omitempty"`
+}
+
+// CloudWorkloadIdentityProvider selects the cloud whose keyless workload-identity mechanism binds
+// the executor's ServiceAccount to an IAM principal (ADR-016).
+// +kubebuilder:validation:Enum=aws;gcp;azure
+type CloudWorkloadIdentityProvider string
+
+const (
+	CloudProviderAWS   CloudWorkloadIdentityProvider = "aws"
+	CloudProviderGCP   CloudWorkloadIdentityProvider = "gcp"
+	CloudProviderAzure CloudWorkloadIdentityProvider = "azure"
+)
+
+// WorkloadIdentity opts a ServiceAccount into keyless cloud IAM (IRSA / EKS Pod Identity / GKE WI /
+// Azure WI): the platform injects short-lived credentials via a projected OIDC token, so there is no
+// static key to rotate or leak (ADR-016). Choosing it is what relaxes NEO-002 for the annotations
+// below — binding a workload to a cloud role is a deliberate, auditable opt-in. The operator carries
+// no cloud SDK; it only wires the SA, its annotations, the Azure pod label, and the projected token.
+type WorkloadIdentity struct {
+	// Provider selects the cloud IAM mechanism. It is the single switch the operator keys
+	// provider-specific pod plumbing off: Azure additionally needs the azure.workload.identity/use
+	// pod label and a projected service-account token, which provider=azure triggers. AWS (IRSA and
+	// EKS Pod Identity) and GCP need only the ServiceAccount annotations below — and Pod Identity
+	// needs none — which is why the provider cannot be inferred from the annotations alone.
+	// +kubebuilder:validation:Required
+	Provider CloudWorkloadIdentityProvider `json:"provider"`
+	// Annotations bind the executor's ServiceAccount to the cloud principal — the single key each
+	// provider documents: eks.amazonaws.com/role-arn (AWS IRSA), iam.gke.io/gcp-service-account
+	// (GKE WI), or azure.workload.identity/client-id (Azure WI). EKS Pod Identity needs none. Only
+	// keys the operator recognises as cloud workload-identity bindings are accepted; anything else
+	// is rejected (NEO-002).
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// CloudIdentity is how an executor authenticates to cloud object storage (ADR-016): exactly one of a
+// portable static-key Secret (projected as env — works anywhere, incl. MinIO) or keyless
+// workloadIdentity (cloud best practice, opt-in).
+// +kubebuilder:validation:XValidation:rule="has(self.staticKeySecret) != has(self.workloadIdentity)",message="set cloudIdentity.staticKeySecret or cloudIdentity.workloadIdentity, not both"
+type CloudIdentity struct {
+	// StaticKeySecret names a Secret in the same namespace whose keys (AWS_ACCESS_KEY_ID,
+	// GOOGLE_APPLICATION_CREDENTIALS, AZURE_STORAGE_KEY, …) are projected verbatim as env.
+	StaticKeySecret string `json:"staticKeySecret,omitempty"`
+	// WorkloadIdentity opts into keyless cloud IAM instead.
+	WorkloadIdentity *WorkloadIdentity `json:"workloadIdentity,omitempty"`
 }
 
 // NetworkPolicySpec opt-in NetworkPolicy creation (NEO-010).

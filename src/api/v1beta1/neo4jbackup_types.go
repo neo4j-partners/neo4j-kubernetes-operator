@@ -111,7 +111,10 @@ type BackupDestination struct {
 	URL string `json:"url,omitempty"`
 	// PVC targets an in-cluster volume. Required when type is pvc.
 	PVC *BackupPVC `json:"pvc,omitempty"`
-	// Credentials references cloud credentials; omit for workload identity.
+	// Credentials references a per-backup static-key Secret projected as env into the backup Job
+	// (ADR-016). Omit for a credential-free (PVC) destination, or to use keyless workload identity —
+	// which is an instance-level concern set on the target's spec.security.cloudIdentity, because
+	// cloud IAM trust binds to a fixed ServiceAccount name and so cannot vary per backup.
 	Credentials *BackupCredentials `json:"credentials,omitempty"`
 }
 
