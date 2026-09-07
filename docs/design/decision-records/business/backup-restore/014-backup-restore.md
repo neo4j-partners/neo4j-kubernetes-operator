@@ -154,7 +154,8 @@ spec:
     # --- raw form, for external/manual artifacts (mutually exclusive with backupRef): ---
     # type: s3
     # url: "s3://my-neo4j-backups/prod/neo4j/"
-    # credentials: { secretName: backup-cloud-creds }   # read by the workload pods, not a Job (ADR-015)
+    # Object-store reads use the target's spec.security.cloudIdentity (ADR-016 amendment); there is
+    # no per-restore credentials field — the server pods carry the instance identity.
 status:
   phase: Succeeded                        # Failed + reason=DatabaseExists if a target exists and overwrite=false
 ```
@@ -248,6 +249,14 @@ Backup destination + schedule become fields of the workload CR; no satellite `ki
 13. **Backups are discoverable as objects; restore references them.** A user does **not** inspect the object-store folder to find restore points. Every `Neo4jBackup` is a queryable record labelled `neo4j.com/database`, `neo4j.com/chain`, `neo4j.com/type`, so `kubectl get neo4jbackup -l neo4j.com/database=orders` lists what is restorable, and `Neo4jBackupSchedule.status` summarizes the latest restorable point per chain. `Neo4jRestore.source` therefore accepts **either** `backupRef: <Neo4jBackup name>` (operator resolves the artifact `url` and walks the chain — **recommended**) **or** a raw `{ type, url, credentials }` for external/manual artifacts (mutually exclusive). Restore-by-record is the ergonomic default; folder-spelunking is never required.
 
 **Rejected:** Option B (union spec, breaks Job/CronJob analogy), Option C (workload bloat, no restore home, contradicts BDR-013). Also rejected: single-cadence schedule / single-tier retention (§10), vendor "differential" naming (§9), **implicit overwrite** on restore (§11), **modelling every `neo4j-admin` flag as a first-class field** (§12 — churny and version-coupled; use `extraArgs`), a cloud-specific **`bucket`** field (§4 — use provider-neutral `url`), and **folder-path-only restore discovery** (§13 — records are the catalog).
+
+### Amendment — cloud identity ([ADR-016](../../architecture/016-cloud-identity.md), 2026-09-07)
+
+ADR-016 ratified how the executors authenticate to object storage. This amends the credential contract sketched above (§4, §13):
+
+14. **`spec.security.cloudIdentity` (typed, on the `Neo4j`)** is the instance-level object-store identity, exactly one of: `staticKeySecret` (a Secret projected as env — portable, MinIO-testable) **or** `workloadIdentity` (`provider: aws|gcp|azure` + allowlisted SA annotations — keyless). It serves both the backup **write** (via a dedicated `<neo4j>-backup` ServiceAccount) and the restore-seed **read** (via the operand ServiceAccount + server-pod env). Cloud IAM annotations remain rejected on the plain `serviceAccount.annotations` (NEO-002); `cloudIdentity` is the explicit, audited opt-in.
+15. **Workload identity is instance-level, never per-backup.** Cloud IAM trust binds to a fixed ServiceAccount name+namespace, so it cannot be chosen per `Neo4jBackup`. Accordingly **`Neo4jBackup.destination.workloadIdentity` is dropped**; per-backup credential variation is served only by static keys (`destination.credentials`, a Secret as env — see §4). **`Neo4jRestore.source.credentials` is likewise dropped** — object-store reads use the target's `cloudIdentity`.
+16. **The Azure client-id is not a dedicated field** — it rides in `workloadIdentity.annotations` (`azure.workload.identity/client-id`) like every provider's binding; `provider: azure` alone drives the extra pod label + projected token. A per-provider typed field was rejected as churny (breaks on any second annotation, and EKS Pod Identity has none).
 
 ---
 
