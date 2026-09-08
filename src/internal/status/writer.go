@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ import (
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
+	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
 // Writer updates Neo4j status from observed cluster state (ADR-004).
@@ -77,6 +79,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	log := ctrllog.FromContext(ctx).WithName("status").WithValues("domain", "status", "reconciler", "status")
 	var ready, desired int32
 	var anySTSFound, rolling bool
+	poolStates := make([]upgrade.PoolState, 0, 3)
 	storageReady := true
 	storageReason, storageMsg := oracle.ReasonPVCBound, ""
 
@@ -97,6 +100,15 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			if stsRolling(sts) {
 				rolling = true
 			}
+			// OnTarget distinguishes "this pool has the new image and is moving onto it" from
+			// "this pool has not been given it yet", which a replica count alone cannot say.
+			poolStates = append(poolStates, upgrade.PoolState{
+				Desired:  poolDesired,
+				Updated:  sts.Status.UpdatedReplicas,
+				Ready:    sts.Status.ReadyReplicas,
+				Rolling:  stsRolling(sts),
+				OnTarget: poolImage(sts) == ctxRender.ImageRef(),
+			})
 			log.V(1).Info("observed statefulset",
 				"pool", string(pool),
 				"name", sts.Name,
@@ -148,9 +160,21 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			"spec.maintenance.offlineMode is true; Neo4j process is not running")
 	} else {
 		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady, storageReady), readyMessage(ready, desired))
-		if allReady {
+		// Not while rolling: every pod can be ready in the moment before Kubernetes takes the first
+		// one down, and advancing here would report a version nothing is running yet (ADR-017).
+		if allReady && !rolling {
 			neo4j.Status.Version = neo4j.Spec.Version
 		}
+	}
+
+	// status.upgrade narrates a version change; it never gates Ready, and status.phase stays Running
+	// throughout (ADR-017, status.md). A nil result means nothing is in flight — the finished record
+	// of an upgrade is status.version plus lastUpgradeTime, not a Completed block left behind.
+	wasUpgrading := neo4j.Status.Upgrade != nil
+	neo4j.Status.Upgrade = upgrade.Observe(neo4j, poolStates, time.Now())
+	if wasUpgrading && neo4j.Status.Upgrade == nil {
+		done := metav1.Now()
+		neo4j.Status.LastUpgradeTime = &done
 	}
 	changing := changeInFlight(neo4j, rolling, drainPending)
 	// Status is passed whole and read before the assignment: the previously published phase and
@@ -498,6 +522,17 @@ func changeInFlight(neo4j *neo4jv1beta1.Neo4j, rolling, drainPending bool) bool 
 // pipeline error leaves behind — so a CR that has served is never called Bootstrapping again.
 func established(prior neo4jv1beta1.Neo4jStatus) bool {
 	return prior.Version != ""
+}
+
+// poolImage is the Neo4j image the live StatefulSet's pod template carries, which is what the pool
+// is moving onto — not necessarily what the spec now renders.
+func poolImage(sts appsv1.StatefulSet) string {
+	for _, c := range sts.Spec.Template.Spec.Containers {
+		if c.Name == renderwl.Neo4jContainerName {
+			return c.Image
+		}
+	}
+	return ""
 }
 
 // stsRolling reports whether a StatefulSet is still moving pods onto a new revision. Both revisions

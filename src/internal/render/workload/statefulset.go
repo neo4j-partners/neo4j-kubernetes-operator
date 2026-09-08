@@ -25,6 +25,10 @@ const (
 )
 
 // PoolStatefulSet builds a StatefulSet for one workload pool (Standalone or Cluster).
+// Neo4jContainerName is the Neo4j container in every pool pod. Exported because status
+// reads the live pod template back to tell which image a pool is running.
+const Neo4jContainerName = "neo4j"
+
 func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 	replicas := ctx.PoolReplicas()
 	labels := ctx.WorkloadLabels()
@@ -35,7 +39,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 
 	configMode := configVolumeDefaultMode
 	container := corev1.Container{
-		Name:            "neo4j",
+		Name:            Neo4jContainerName,
 		Image:           ctx.ImageRef(),
 		ImagePullPolicy: pullPolicy,
 		Ports:           neo4jContainerPorts(ctx),
