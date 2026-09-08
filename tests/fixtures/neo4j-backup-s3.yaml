@@ -1,0 +1,55 @@
+# Object-store (S3/MinIO) backup + restore round-trip target (ADR-016): an Enterprise Standalone
+# Neo4j with the backup listener enabled and spec.security.cloudIdentity.staticKeySecret pointing at
+# the MinIO credentials Secret (created by the minio/install action). The static keys are projected
+# as env into BOTH the backup Job (via Neo4jBackup.destination.credentials) and the Neo4j server
+# pods (via cloudIdentity.staticKeySecret), so the server can seed-from-URI on restore. cloudIdentity
+# being set also auto-enables CloudSeedProvider (serverconfig defaults), which reads the s3://
+# artifact — this is the object-store analogue of feature-restore-backupref's FileSeedProvider path.
+#
+# Single-node only (the suite pins clouds: [local-kind]) and NO backups volume — the artifact lives
+# in MinIO, not on the server filesystem. MinIO runs in the same namespace so its ClusterIP DNS
+# (minio.<ns>.svc:9000) is reachable by both the backup Job and the server pods.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true
+  security:
+    # ADR-016 static-key path (portable, MinIO-testable): the Secret's AWS_* keys are projected as
+    # env into the server pods for restore seed reads, and referenced per-backup by
+    # Neo4jBackup.destination.credentials for the write side. Setting cloudIdentity also flips on
+    # CloudSeedProvider in the server config defaults (src/internal/render/serverconfig).
+    cloudIdentity:
+      staticKeySecret: e2e-s3-creds
+  trust:
+    # NEO-004: the restore reconciler seeds over operator admin Bolt (CREATE DATABASE … OPTIONS
+    # {seedURI}). On kind we opt in to plaintext admin Bolt (Warning event); prefer
+    # trust.certificates.bolt for verified TLS in production.
+    enabled: false
+    insecureAdminConnection: true
