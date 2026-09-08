@@ -26,6 +26,12 @@ type fakeAdmin struct {
 	// defaultAlloc records the last dbms.setDefaultAllocationNumbers call, nil until called.
 	defaultAlloc *[2]int64
 	alters       int
+	// unstable, when set, is the reason ClusterStable reports for still waiting (ADR-017 R2).
+	unstable string
+}
+
+func (f *fakeAdmin) ClusterStable(context.Context) (bool, string, error) {
+	return f.unstable == "", f.unstable, nil
 }
 
 func (f *fakeAdmin) ShowServers(context.Context) ([]intneo4j.Server, error) {
@@ -652,5 +658,64 @@ func TestReconcileBlocksMultiPrimaryToOne(t *testing.T) {
 	}
 	if admin.dbs[0].RequestedPrimaries != 3 {
 		t.Fatal("must not ALTER topology to 1 primary")
+	}
+}
+
+// During a version change "formed" has to mean what Neo4j asks between members of a rolling
+// upgrade — every server hosting the databases asked of it, every database on its requested status.
+// Enabled alone is a weaker bar, and a member answering Bolt while still recovering would otherwise
+// let the upgrade be declared finished (ADR-017 R2).
+func TestClusterFormedWaitsForStabilityDuringAnUpgrade(t *testing.T) {
+	cases := []struct {
+		name       string
+		running    string
+		unstable   string
+		wantFormed metav1.ConditionStatus
+	}{
+		{"steady state does not run the check", "", "database neo4j is starting, not online", metav1.ConditionTrue},
+		{"version matches, so no upgrade is in flight", "2026.05.0", "database neo4j is starting, not online", metav1.ConditionTrue},
+		{"upgrade in flight and the cluster has settled", "2026.04.0", "", metav1.ConditionTrue},
+		{"upgrade in flight and the cluster has not settled", "2026.04.0", "database neo4j is starting, not online", metav1.ConditionFalse},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			neo4j := testClusterCR(3)
+			neo4j.Spec.Version = "2026.05.0"
+			neo4j.Status.Version = tc.running
+
+			scheme := runtime.NewScheme()
+			_ = neo4jv1beta1.AddToScheme(scheme)
+			_ = appsv1.AddToScheme(scheme)
+			replicas := int32(3)
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
+				Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
+			}
+			c := fake.NewClientBuilder().WithScheme(scheme).
+				WithStatusSubresource(&neo4jv1beta1.Neo4j{}).
+				WithObjects(neo4j.DeepCopy(), sts).Build()
+			admin := &fakeAdmin{
+				unstable: tc.unstable,
+				servers: []intneo4j.Server{
+					{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+					{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+					{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+				},
+			}
+			r := &Reconciler{
+				Client:  c,
+				Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) { return admin, nil },
+			}
+
+			_ = r.Reconcile(t.Context(), neo4j)
+			cond := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionClusterFormed.String())
+			if cond == nil {
+				t.Fatal("ClusterFormed was never written")
+			}
+			if cond.Status != tc.wantFormed {
+				t.Fatalf("ClusterFormed = %s/%s (%s), want %s", cond.Status, cond.Reason, cond.Message, tc.wantFormed)
+			}
+		})
 	}
 }

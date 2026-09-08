@@ -38,6 +38,11 @@ type Admin interface {
 	EnableServer(ctx context.Context, name, modeConstraint string) error
 	DeallocateDatabases(ctx context.Context, name string) error
 	DropServer(ctx context.Context, name string) error
+	// ClusterStable runs the two checks Neo4j prescribes between members of a rolling upgrade:
+	// every server hosting the databases asked of it, and every database on its requested status.
+	// Deliberately its own call rather than extra YIELD columns on ShowServers — a column an older
+	// Neo4j does not publish would fail the whole query, and formation depends on that one.
+	ClusterStable(ctx context.Context) (bool, string, error)
 	Close(ctx context.Context) error
 }
 
