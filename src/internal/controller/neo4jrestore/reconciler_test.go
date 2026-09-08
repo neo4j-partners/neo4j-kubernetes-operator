@@ -91,6 +91,7 @@ func (f *fakeAdmin) SetDefaultAllocationNumbers(context.Context, int64, int64) e
 func (f *fakeAdmin) EnableServer(context.Context, string, string) error              { return nil }
 func (f *fakeAdmin) DeallocateDatabases(context.Context, string) error               { return nil }
 func (f *fakeAdmin) DropServer(context.Context, string) error                        { return nil }
+func (f *fakeAdmin) ClusterStable(context.Context) (bool, string, error)             { return true, "", nil }
 
 func scheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
