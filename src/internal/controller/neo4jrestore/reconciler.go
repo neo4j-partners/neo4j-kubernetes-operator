@@ -435,7 +435,11 @@ func artifactFor(backup *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.Bac
 // seedURIFromArtifact turns a recorded backup artifact into a seedURI the servers can read.
 // A PVC-backed artifact becomes file:/backups/<path>, valid only when the target mounts that
 // exact claim as its storage.volumes.backups (Existing) volume — that is what puts the artifact
-// on the servers' filesystem (ADR-015 round-trip). Object-store URIs pass through unchanged.
+// on the servers' filesystem (ADR-015 round-trip). For an object-store artifact the recorded URI is
+// the destination *directory* (e.g. azb://acct/container/neo4j/); the seed must point at the actual
+// artifact, so the recorded filename (Path, chain sub-dir included) is appended — otherwise Neo4j's
+// cloud seed provider rejects the directory with "provided uri does not point to a valid location".
+// When no filename was recorded (wildcard backup) the directory is passed through as a best effort.
 func seedURIFromArtifact(neo4j *neo4jv1beta1.Neo4j, a *neo4jv1beta1.BackupArtifact) (string, *oracle.Reason, string) {
 	if strings.HasPrefix(a.URI, "pvc://") {
 		claim := strings.TrimPrefix(a.URI, "pvc://")
@@ -453,10 +457,14 @@ func seedURIFromArtifact(neo4j *neo4jv1beta1.Neo4j, a *neo4jv1beta1.BackupArtifa
 		}
 		return seed, nil, ""
 	}
-	if reason, msg := validateSeedURI(a.URI); reason != nil {
+	seed := a.URI
+	if a.Path != "" {
+		seed = strings.TrimSuffix(a.URI, "/") + "/" + strings.TrimPrefix(a.Path, "/")
+	}
+	if reason, msg := validateSeedURI(seed); reason != nil {
 		return "", reason, msg
 	}
-	return a.URI, nil, ""
+	return seed, nil, ""
 }
 
 // mountsBackupsClaim is true when the target mounts claim as its storage.volumes.backups volume.

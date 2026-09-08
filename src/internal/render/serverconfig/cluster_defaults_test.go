@@ -462,6 +462,26 @@ func TestSeedProviderDefaultFollowsBackupsVolume(t *testing.T) {
 	}
 }
 
+// A cloud identity (no backups volume) enables CloudSeedProvider so an object-store restore
+// (azb:/s3:/gs:) can seed — otherwise Neo4j rejects the URI as "not a valid location" (ADR-016).
+func TestSeedProviderCloudEnabledByCloudIdentity(t *testing.T) {
+	const key = "dbms.databases.seed_from_uri_providers"
+	n := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Security: &neo4jv1beta1.SecuritySpec{
+				CloudIdentity: &neo4jv1beta1.CloudIdentity{
+					WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{Provider: neo4jv1beta1.CloudProviderAzure},
+				},
+			},
+		},
+	}
+	if got := ConfigMap(render.StandaloneContext(n)).Data[key]; got != "CloudSeedProvider" {
+		t.Fatalf("%s = %q, want CloudSeedProvider when cloudIdentity is set", key, got)
+	}
+}
+
 func TestNeo4jConfDataHasNoNeo4jConfBlobKey(t *testing.T) {
 	neo4j := &neo4jv1beta1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
