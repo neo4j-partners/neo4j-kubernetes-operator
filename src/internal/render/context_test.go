@@ -166,3 +166,27 @@ func TestStoragePVCSelectorMatchesUninstallDocs(t *testing.T) {
 		t.Fatal("must not match app.kubernetes.io/component in place of neo4j.com/component")
 	}
 }
+
+// Preflight refuses a version bump on a digest-pinned CR because the bump would change nothing —
+// this is the behaviour that makes that refusal correct. If ImageRef ever preferred the version
+// over the digest, the refusal would become wrong for a reason no other test would catch.
+func TestImageRefIgnoresVersionWhenDigestIsPinned(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("ab", 32)
+	build := func(version string) string {
+		return StandaloneContext(&neo4jv1beta1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jSpec{
+				Edition: neo4jv1beta1.EditionEnterprise,
+				Version: version,
+				Image:   &neo4jv1beta1.ImageSpec{Repository: "neo4j", Digest: digest},
+			},
+		}).ImageRef()
+	}
+	before, after := build("2026.05.0"), build("2026.07.1")
+	if before != after {
+		t.Fatalf("a version bump changed the digest-pinned image: %q -> %q", before, after)
+	}
+	if before != "neo4j@"+digest {
+		t.Fatalf("ImageRef() = %q, want the digest reference", before)
+	}
+}
