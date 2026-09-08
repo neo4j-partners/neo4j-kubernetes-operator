@@ -1,6 +1,8 @@
 package serverconfig
 
 import (
+	"strings"
+
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
@@ -79,18 +81,30 @@ func operatorDefaultNeo4jConfKeys(ctx render.Context) map[string]string {
 	return keys
 }
 
-// seedProviderConfKeys enables FileSeedProvider (alongside the cloud providers) when a backups
-// volume is mounted, so restore-by-backupRef can seed file:/backups/<artifact> from that claim
-// (ADR-015 round-trip). Since Neo4j 2025.01 file: has no seed provider by default, so the round
-// trip is dead without this. It lives in the defaults layer so a user can override the provider
-// list via spec.config.neo4j; no backups volume → no file: seed path → nothing to enable.
+// seedProviderConfKeys enables the seed providers a restore can use, matched to what the instance
+// can actually reach. Since Neo4j 2025.01 neither file: nor the cloud schemes have a provider by
+// default, so restore-by-backupRef / seed-from-URI is dead without this. It lives in the defaults
+// layer so a user can override the list via spec.config.neo4j.
+//
+//   - FileSeedProvider  — when a backups volume is mounted, so a PVC round-trip can seed
+//     file:/backups/<artifact> from that claim (ADR-015).
+//   - CloudSeedProvider — when the instance has a cloud identity (spec.security.cloudIdentity), the
+//     ADR-016 signal that it reads/writes object storage; the server pods then seed azb:/s3:/gs:
+//     backups. Without it the seed fails with "provided uri does not point to a valid location".
+//
+// Nothing to reach → nil (leave Neo4j's default untouched).
 func seedProviderConfKeys(ctx render.Context) map[string]string {
-	s := ctx.Neo4j.Spec.Storage
-	if s == nil || s.Volumes == nil || s.Volumes.Backups == nil {
+	var providers []string
+	if s := ctx.Neo4j.Spec.Storage; s != nil && s.Volumes != nil && s.Volumes.Backups != nil {
+		providers = append(providers, "FileSeedProvider", "CloudSeedProvider")
+	} else if sec := ctx.Neo4j.Spec.Security; sec != nil && sec.CloudIdentity != nil {
+		providers = append(providers, "CloudSeedProvider")
+	}
+	if len(providers) == 0 {
 		return nil
 	}
 	return map[string]string{
-		"dbms.databases.seed_from_uri_providers": "FileSeedProvider,CloudSeedProvider",
+		"dbms.databases.seed_from_uri_providers": strings.Join(providers, ","),
 	}
 }
 

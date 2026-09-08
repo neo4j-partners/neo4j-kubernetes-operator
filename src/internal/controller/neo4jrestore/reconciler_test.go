@@ -299,6 +299,32 @@ func TestRestoreBackupRefResolvesArtifactURI(t *testing.T) {
 	}
 }
 
+// An object-store artifact records the destination directory as URI plus the real artifact filename
+// as Path; the seed must point at the artifact (dir + filename), not the directory, or Neo4j's cloud
+// seed provider rejects it as "not a valid location" (the Azure Workload Identity restore bug).
+func TestRestoreBackupRefObjectStoreAppendsArtifactFilename(t *testing.T) {
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Status: neo4jv1beta1.Neo4jBackupStatus{
+			Phase: neo4jv1beta1.RunPhaseSucceeded,
+			Artifacts: []neo4jv1beta1.BackupArtifact{
+				{Database: "neo4j", URI: "azb://acct/container/neo4j/", Path: "neo4j-2026-09-07.backup"},
+			},
+		},
+	}
+	admin := newFakeAdmin(nil)
+	r, _ := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+	}))
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	want := "azb://acct/container/neo4j/neo4j-2026-09-07.backup"
+	if got := admin.seededWith["neo4j"]; got != want {
+		t.Errorf("seedURI = %q, want %q (dir + artifact filename)", got, want)
+	}
+}
+
 func backupsVolumeNeo4j(claim string) *neo4jv1beta1.Neo4j {
 	n := readyNeo4j()
 	n.Spec.Storage = &neo4jv1beta1.StorageSpec{
