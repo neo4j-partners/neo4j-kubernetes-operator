@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 )
@@ -16,25 +16,25 @@ import (
 // clusterWithReadPool is the topology the ordering rule applies to: the read pool is rendered with
 // server.cluster.system_database_mode=SECONDARY, which is what Neo4j's "secondaries before the
 // system primary" rule names.
-func clusterWithReadPool(running, desired string) *neo4jv1beta1.Neo4j {
-	n := &neo4jv1beta1.Neo4j{
+func clusterWithReadPool(running, desired string) *neo4jv1.Neo4j {
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: desired,
-			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
-				Secondaries: &neo4jv1beta1.SecondariesSpec{
-					Read: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
+				Secondaries: &neo4jv1.SecondariesSpec{
+					Read: &neo4jv1.SecondaryPoolSpec{Members: 1},
 				},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -44,7 +44,7 @@ func clusterWithReadPool(running, desired string) *neo4jv1beta1.Neo4j {
 	return n
 }
 
-func stsFor(t *testing.T, c client.Client, n *neo4jv1beta1.Neo4j, pool render.PoolID) *appsv1.StatefulSet {
+func stsFor(t *testing.T, c client.Client, n *neo4jv1.Neo4j, pool render.PoolID) *appsv1.StatefulSet {
 	t.Helper()
 	ctx := render.ContextForPool(n, pool)
 	sts := &appsv1.StatefulSet{}
@@ -52,21 +52,6 @@ func stsFor(t *testing.T, c client.Client, n *neo4jv1beta1.Neo4j, pool render.Po
 		t.Fatalf("get %s statefulset: %v", pool, err)
 	}
 	return sts
-}
-
-// stampCreated gives the pool StatefulSets a creationTimestamp, which the fake client does not set
-// but a real API server always does. Without it the reconciler takes its create path on every pass
-// — `sts.Spec = stsDesired.Spec` — and the update whitelist, which is where the hold lives, never
-// runs. Any test about update behaviour has to do this first or it silently proves nothing.
-func stampCreated(t *testing.T, c client.Client, n *neo4jv1beta1.Neo4j) {
-	t.Helper()
-	for _, pool := range render.ActivePools(n) {
-		sts := stsFor(t, c, n, pool)
-		sts.CreationTimestamp = metav1.Now()
-		if err := c.Update(t.Context(), sts); err != nil {
-			t.Fatalf("stamp creationTimestamp on %s: %v", pool, err)
-		}
-	}
 }
 
 // HoldPrimaries is unit-tested as a pure function elsewhere. What this covers is that the pool loop
@@ -82,7 +67,6 @@ func TestPrimaryPoolKeepsItsImageWhileSecondariesLag(t *testing.T) {
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {
 		t.Fatalf("initial reconcile: %v", out.Err)
 	}
-	stampCreated(t, c, n)
 	oldImage := poolImage(*stsFor(t, c, n, render.PoolPrimary))
 	if oldImage == "" {
 		t.Fatal("primary pool has no neo4j container")
@@ -116,7 +100,6 @@ func TestPrimaryPoolIsReleasedOnceSecondariesConverge(t *testing.T) {
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {
 		t.Fatalf("initial reconcile: %v", out.Err)
 	}
-	stampCreated(t, c, n)
 	oldImage := poolImage(*stsFor(t, c, n, render.PoolPrimary))
 
 	n.Spec.Version = "2026.07.1"
@@ -130,6 +113,7 @@ func TestPrimaryPoolIsReleasedOnceSecondariesConverge(t *testing.T) {
 	readPool.Status = appsv1.StatefulSetStatus{
 		Replicas: 1, ReadyReplicas: 1, UpdatedReplicas: 1,
 		CurrentRevision: "rev-new", UpdateRevision: "rev-new",
+		ObservedGeneration: readPool.Generation,
 	}
 	if err := c.Status().Update(t.Context(), readPool); err != nil {
 		t.Fatalf("set read pool status: %v", err)
@@ -156,11 +140,10 @@ func TestConfigChangeIsNotHeld(t *testing.T) {
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {
 		t.Fatalf("initial reconcile: %v", out.Err)
 	}
-	stampCreated(t, c, n)
 	before := stsFor(t, c, n, render.PoolPrimary).Spec.Template.Annotations
 
 	// Same version, different config — the roll every other suite relies on.
-	n.Spec.Config = &neo4jv1beta1.ConfigSpec{
+	n.Spec.Config = &neo4jv1.ConfigSpec{
 		Neo4j: map[string]string{"db.transaction.timeout": "37s"},
 	}
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {

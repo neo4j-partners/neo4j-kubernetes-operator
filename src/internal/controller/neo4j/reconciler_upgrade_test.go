@@ -13,7 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/connectivity"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
@@ -44,7 +44,7 @@ func pipelineFor(c client.Client, s *runtime.Scheme) *Neo4jReconciler {
 
 // stsExists reports whether the Standalone pool's StatefulSet was created — the observable proof
 // that the workload step ran.
-func stsExists(t *testing.T, c client.Client, n *neo4jv1beta1.Neo4j) bool {
+func stsExists(t *testing.T, c client.Client, n *neo4jv1.Neo4j) bool {
 	t.Helper()
 	sts := &appsv1.StatefulSet{}
 	err := c.Get(t.Context(), client.ObjectKey{Name: n.Name + "-server", Namespace: n.Namespace}, sts)
@@ -60,7 +60,7 @@ func upgradeScheme(t *testing.T) *runtime.Scheme {
 	if err := scheme.AddToScheme(s); err != nil {
 		t.Fatalf("core scheme: %v", err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatalf("neo4j scheme: %v", err)
 	}
 	if err := appsv1.AddToScheme(s); err != nil {
@@ -69,21 +69,21 @@ func upgradeScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-func refusedCR() *neo4jv1beta1.Neo4j {
-	n := &neo4jv1beta1.Neo4j{
+func refusedCR() *neo4jv1.Neo4j {
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: "2025.01.0", // older than what is running
-			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeStandalone,
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeStandalone,
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},

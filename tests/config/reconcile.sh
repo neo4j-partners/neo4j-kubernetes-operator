@@ -113,6 +113,12 @@ _config_reset_case_vars() {
   # asserts the wrong thing (the same holds for the expected Secret name and reason).
   unset AUTH_SECRET_CREATE AUTH_SECRET_NAME AUTH_KNOWN_PASSWORD AUTH_SECRET_LABELS
   unset CRED_EXPECT_GENERATED CRED_EXPECT_SECRET EXPECT_REASON
+  # Upgrade knobs. NEO4J_VERSION is case-scoped for the first time here: feature-upgrade deploys one
+  # version back and rolls forward, so without the restore below every later case would deploy the
+  # old version too. The target and the timeout leak the same way — a stalled-upgrade case
+  # inheriting a reachable target silently becomes a happy-path case that proves nothing.
+  unset NEO4J_UPGRADE_TO E2E_UPGRADE_TIMEOUT CLUSTER_READ_MEMBERS
+  export NEO4J_VERSION="${NEO4J_VERSION_RUN}"
 }
 
 load_cloud_config() {

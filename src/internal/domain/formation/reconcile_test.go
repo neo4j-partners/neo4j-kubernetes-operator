@@ -698,7 +698,7 @@ func TestClusterFormedWaitsForStabilityDuringAnUpgrade(t *testing.T) {
 			neo4j.Status.Version = tc.running
 
 			scheme := runtime.NewScheme()
-			_ = neo4jv1beta1.AddToScheme(scheme)
+			_ = neo4jv1.AddToScheme(scheme)
 			_ = appsv1.AddToScheme(scheme)
 			replicas := int32(3)
 			sts := &appsv1.StatefulSet{
@@ -706,7 +706,7 @@ func TestClusterFormedWaitsForStabilityDuringAnUpgrade(t *testing.T) {
 				Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 			}
 			c := fake.NewClientBuilder().WithScheme(scheme).
-				WithStatusSubresource(&neo4jv1beta1.Neo4j{}).
+				WithStatusSubresource(&neo4jv1.Neo4j{}).
 				WithObjects(neo4j.DeepCopy(), sts).Build()
 			admin := &fakeAdmin{
 				unstable: tc.unstable,
@@ -718,7 +718,7 @@ func TestClusterFormedWaitsForStabilityDuringAnUpgrade(t *testing.T) {
 			}
 			r := &Reconciler{
 				Client:  c,
-				Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) { return admin, nil },
+				Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) { return admin, nil },
 			}
 
 			_ = r.Reconcile(t.Context(), neo4j)

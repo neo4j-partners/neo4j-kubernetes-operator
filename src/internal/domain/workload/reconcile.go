@@ -164,7 +164,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 			// StatefulSet forbids changing serviceName, selector, volumeClaimTemplates,
 			// podManagementPolicy after create — only patch mutable fields on update.
 			preserveRolloutRestart(&sts.Spec.Template, &stsDesired.Spec.Template)
-			if sts.CreationTimestamp.IsZero() {
+			// resourceVersion, not creationTimestamp: both are set by a real API server, but only
+			// resourceVersion is set by the fake client the unit tests use. Branching on the
+			// timestamp made every test take this create path and assign the whole spec, so the
+			// update rules below — the replica gate, the upgrade hold — went unexercised.
+			if sts.ResourceVersion == "" {
 				sts.Spec = stsDesired.Spec
 				return nil
 			}
