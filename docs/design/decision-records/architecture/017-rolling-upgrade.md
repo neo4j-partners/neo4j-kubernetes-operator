@@ -4,8 +4,8 @@
 |---|---|
 | **Status** | proposed |
 | **Date** | 2026-09-01 |
-| **Depends on** | [BDR-009](../business/neo4j/009-scale-pool-ordinal-semantics.md) — one StatefulSet per pool · [ADR-001](001-crd-validation-process.md) · [ADR-003](003-neo4j-reconcile-pipeline.md) · [ADR-006](006-apply-and-idempotency.md) |
-| **Constraints** | Backlog D-08 · FR `NEO-3-012-UPG-01`, `NEO-3-012-UPG-02` · VER-001..003 ([validation.md](../../crd-spec/neo4j/validation.md)) · `status.upgrade` contract ([status.md](../../crd-spec/neo4j/status.md)) |
+| **Depends on** | [BDR-009](../business/neo4j/009-scale-pool-ordinal-semantics.md) — one StatefulSet per pool · [ADR-001](001-crd-validation-process.md) · [ADR-003](003-neo4j-reconcile-pipeline.md) · [ADR-006](006-apply-and-idempotency.md) · [ADR-007](007-formation-and-bolt.md) |
+| **Constraints** | Backlog D-08 · FR `NEO-3-012-UPG-01`, `NEO-3-012-UPG-02` · VER-001..003 ([validation.md](../../crd-spec/neo4j/validation.md)) · `status.upgrade` contract ([status.md](../../crd-spec/neo4j/status.md)) · [Neo4j Upgrade and Migration Guide](https://neo4j.com/docs/upgrade-migration-guide/current/) |
 
 ---
 
@@ -20,177 +20,184 @@ spec:
   version: "2026.05.0"
 ```
 
-Sooner or later the owner of that resource needs a newer Neo4j. The capability this record is about is letting them edit that one field and have the operator move the running deployment onto the new version safely:
+This record is about letting the owner edit that field and have the operator move the running deployment onto the new version safely:
 
 ```bash
 kubectl patch neo4j prod -n prod --type merge -p '{"spec":{"version":"<newer>"}}'
 kubectl get neo4j prod -n prod -w
 ```
 
-What "safely" has to mean for a database:
-
-- **The cluster keeps serving.** A Neo4j cluster elects a leader by Raft, so a majority of primaries must stay up. Restarting two of three primaries at once stops writes across the whole cluster. Members must go down one at a time, and the next one may only start after the previous is back and has rejoined.
-- **Clients are not stranded.** Clients connected over `neo4j://` follow the routing table around whichever member is currently down, so a correctly paced upgrade is not an outage for a cluster. It *is* an outage for Standalone — one pod, one restart — and that is inherent, not a defect.
-- **A restart is not quick, and how long it takes is not something we know.** The probe defaults are deliberately generous *ceilings*, not expected times: the startup probe allows 1000 failures at 5s (about 83 minutes) before the kubelet gives up, and the shutdown grace period defaults to 3600s because Neo4j checkpoints on the way down. What a member actually takes is store-dependent and is measured nowhere in this repository. The design consequence is what matters: the operator must not assume a member comes back quickly, and any step deadline has to be derived from the *effective* probe configuration rather than a constant — an override replaces a probe wholesale, and the repo's own example ships a 90-second startup budget.
-- **Bad changes are refused, not attempted.** Some version edits cannot be performed safely at all — a downgrade, or a change on a resource whose image is pinned by digest so the new version would never actually be pulled. Those must fail at admission rather than half-roll a production cluster.
-- **Progress is visible.** The resource must report that an upgrade is in flight, how far it has got, and when it is done, so a human can watch it and automation can wait on it.
-
-Some terms this record uses throughout:
+Terms used throughout:
 
 | Term | Meaning |
 |------|---------|
 | **pool** | A group of members with the same role — `primary`, `analytics`, `read`. Each pool is its own StatefulSet ([BDR-009](../business/neo4j/009-scale-pool-ordinal-semantics.md)). |
 | **ordinal** | A pod's index inside its StatefulSet: `prod-primary-0`, `prod-primary-1`, … |
-| **partition** | A StatefulSet setting. Set it to `N` and Kubernetes updates only pods whose ordinal is `>= N`, leaving lower ones on the old template. Lowering `N` step by step is how a controller paces a rollout by hand. |
-| **reconcile pass** | One run of the operator's loop over one resource. The operator also watches the objects it owns, so writing to a StatefulSet triggers another pass. |
+| **partition** | A StatefulSet setting. Set it to `N` and Kubernetes updates only pods whose ordinal is `>= N`. Lowering `N` step by step is how a controller paces a rollout by hand. |
+| **reconcile pass** | One run of the operator's loop over one resource. The operator watches the objects it owns, so writing to a StatefulSet triggers another pass. |
 
-Out of scope: upgrading the **operator** itself, backup and restore, and any data migration that is not performed by Neo4j on start.
+Out of scope: upgrading the **operator** itself, and the 4.4 → 5.26 move, which Neo4j documents as a migration requiring downtime rather than an upgrade.
 
 ### Who actually performs an upgrade
-
-Four actors, and the operator is the smallest of them. Being precise about this is what sizes the work:
 
 | Actor | Owns |
 |-------|------|
 | The person editing the resource | The trigger — one field |
-| **The operator** | Turning that into a new container image per pool; refusing changes it cannot perform; ordering the pools; reporting progress. **It never touches data.** |
-| Kubernetes | The restarts themselves — one pod at a time per pool, highest ordinal first, waiting for readiness |
-| **Neo4j, in the container, on start** | Everything that happens to the *data*: store format, system database. The operator invokes no `neo4j-admin`, sets no container `Command` on the normal path, and sets no migration configuration. |
+| **The operator** | Turning that into a new container image per pool; refusing changes Neo4j does not permit; ordering the pools; gating between members; reporting progress. **It never touches data.** |
+| Kubernetes | The restarts — one pod at a time per pool, highest ordinal first |
+| **Neo4j, in the container, on start** | The data. The operator invokes no `neo4j-admin` and sets no migration configuration. |
 
-So the operator manages upgrading the *deployment*. The database half is delegated wholesale to the Neo4j image — unconfigured by us and unverified afterwards. The only lever we hold over it is accidental: if a store migration outlasts the startup probe budget, the kubelet kills the container mid-migration.
+### What Neo4j requires
 
-This is also why Option A below collapses. Its advantage was pausing to verify each member — but we cannot verify a migration we neither control nor configure.
+These are the rules the design has to satisfy. All are from the official [Upgrade and Migration Guide](https://neo4j.com/docs/upgrade-migration-guide/current/) and apply to both the 5.x and 2025–2026 series unless noted.
+
+| # | Rule | Consequence for the operator |
+|---|------|------------------------------|
+| **R1** | A rolling upgrade is the supported zero-downtime path for a cluster. Standalone always requires downtime. | The approach is sanctioned. Standalone's outage is inherent, not a defect. |
+| **R2** | **A health gate between members, and it is specified.** Before touching the next server, two queries must each return zero rows: `SHOW SERVERS YIELD name, hosting, requestedHosting, serverId WHERE requestedHosting <> hosting` and `SHOW DATABASES YIELD name, currentStatus, requestedStatus WHERE currentStatus <> requestedStatus`. After restart, `SHOW SERVERS` must report that server `Enabled` and `Available`. ([in-place rolling](https://neo4j.com/docs/upgrade-migration-guide/current/version-2025-2026/upgrade/in-place-rolling/)) | **Kubernetes readiness does not satisfy this.** Our readiness probe is a TCP check on the Bolt port: it proves the socket is open, not that the server is hosting its databases. A correct roll needs Bolt, not just pod readiness. |
+| **R3** | **Ordering is mandatory for analytics clusters**: system-database secondaries must be upgraded *before* the system primary, or the primary upgrades the system database and the secondaries can no longer join. | This applies to us. `render/serverconfig/operator_defaults.go:71` sets `server.cluster.system_database_mode: SECONDARY` on the read and analytics pools — the exact setting Neo4j's rule names. Any cluster we render with a secondary pool is subject to it. |
+| **R4** | **Downgrade is not supported, in any form.** The documented recovery from a failed upgrade is a full rollback restoring a backup taken *before* the upgrade. | VER-002 is a blanket refusal with no carve-out. Recovery is a restore, not a version revert. |
+| **R5** | **Upgrade paths are constrained.** LTS releases are mandatory checkpoints and cannot be skipped; anything older than 5.26 must reach 5.26 LTS first. Within 2025–2026, any release may go to any later release in one hop. In 5.x, 5.0–5.6 → 5.10–5.15 requires a stop at 5.9. | A forward jump is not automatically legal. Preflight has to know the path rules, not just "newer than current". |
+| **R6** | **Discovery v1 is removed in 2025.01.** A cluster on v1 must complete the v1 → v2 transition before any member reaches 2025.01. | A hard gate on any roll crossing into the CalVer series. |
+| **R7** | **Database administration must be frozen during the roll** — Neo4j prescribes DENY grants so databases cannot be stopped, created or dropped for the duration. | The operator must not itself issue topology or database changes mid-roll, and should say what it does about third parties doing so. |
+| **R8** | **Store format changes are opt-in.** A *minor* store-format bump is automatic and silent at startup; a *major* bump or a format change requires the offline `neo4j-admin database migrate`, per database, and is not reversible. There is no format change between 4.4 and any 2025–2026 version. | For the in-series bumps in scope here, **no store migration happens**. The long-migration fear does not apply to our scope; it applies to format changes, which cannot ride a rolling upgrade at all. |
+| **R9** | `SHOW SERVERS` exposes a per-server **`version`** column. | Per-member version is observable today over the existing routed connection. It does not need a per-pod dial or a `status.members[]` writer. |
+| **R10** | On Kubernetes, automated worker-node upgrades can evict every Neo4j pod at once. Neo4j documents a **cluster-wide PodDisruptionBudget** as the mitigation, notes the per-release chart PDB is unsuitable, and states it sits outside the Helm lifecycle. | Nobody owns this today. It is a natural operator job and is tracked here as a separate opportunity. |
+| **R11** | Plugin version skew is a hard startup gate — an incompatible GDS or APOC prevents Neo4j from starting at all. | Preflight's plugin check is not a nicety. |
 
 ### Where we are today
 
-Editing `spec.version` today does something, but nothing that resembles the above. The new version reaches `render.Context.ImageRef()`, which builds the container image reference, and the operator replaces the pod template of **every** pool in the same pass. Kubernetes then restarts all three pools simultaneously.
+Editing `spec.version` reaches `render.Context.ImageRef()`, and the operator replaces the pod template of **every** pool in the same pass. Kubernetes then restarts all pools simultaneously.
 
-Within a single pool that restart is already correct: Kubernetes takes one pod at a time, highest ordinal first, and waits for each to become ready. The end-to-end test at `tests/actions/assert/cluster-config-restart` changes configuration on a running 3-primary cluster and asserts that never more than one member is un-ready, that the cluster re-forms afterwards, and that the change reached every member. A version change rides that same machinery.
+Within one pool the restart is already correct: one pod at a time, highest ordinal first, waiting for readiness. `tests/actions/assert/cluster-config-restart` proves quorum holds on a 3-primary pool through exactly this. What is missing:
 
-So the intra-pool restart is not the problem. What is missing is everything around it:
-
-- **Nothing refuses a bad edit.** `spec.version` has no validation beyond "not empty". Downgrades are accepted. VER-002 and VER-003 exist only on paper.
-- **All pools move at once.** Note carefully what this does *not* break: each pool's StatefulSet still rolls one pod at a time, so Raft quorum among the primaries is never at risk from the rollout itself. What is lost is the chance to move the members that *cannot* affect quorum first — the read and analytics pools — and so discover that the new image does not come up before any Raft voter has been touched. Cross-pool ordering is a **canary, not a quorum fix**.
-- **Nothing reports or bounds the rollout.** `status.upgrade` is published in the CRD and no code reads or writes it. `UpgradePhase` has no Go constants at all. `status.version` is copied from `spec.version` the moment every pod is ready, so it reports intent, not what is running.
+- **Nothing refuses an illegal edit.** `spec.version` has no validation beyond "not empty". Downgrades are accepted (R4). Illegal paths are accepted (R5, R6).
+- **Pools move together, in the wrong order.** Raft quorum is not at risk — each StatefulSet still rolls one pod at a time — but R3 makes secondaries-before-primary a *requirement*, not a preference, and today the primary pool may finish first.
+- **The gate between members is the wrong gate.** Kubernetes readiness releases the next pod; R2 says the release must wait on two Cypher checks that we never run.
+- **Nothing reports or bounds the rollout.** `status.upgrade` is published in the CRD and no code reads or writes it. `UpgradePhase` has no Go constants. `status.version` is copied from `spec.version` once every pod is ready, so it reports intent, not reality.
 
 ### What the docs already promise, and why it cannot be built as written
 
-[status.md](../../crd-spec/neo4j/status.md) specifies a staged upgrader: the operator sets the StatefulSet **partition** and walks it down one ordinal per pass, verifying each member before releasing the next, and resumes from `status.upgrade.currentPartition` if the operator restarts mid-upgrade. Two defects block that design, and this record must settle both before any code is written.
+[status.md](../../crd-spec/neo4j/status.md) specifies a staged upgrader driven by the StatefulSet **partition**, resuming from `status.upgrade.currentPartition`. Two defects block it, and this record settles both.
 
-**1 — the partition erases itself.** `domain/workload/reconcile.go` assigns the rendered `updateStrategy` onto the live StatefulSet on every update pass, and `render/workload/statefulset.go` never sets that field, so what gets assigned is an empty value that the API server defaults back to `partition: 0`. Because the reconciler watches StatefulSets, writing a partition is itself the event that wakes the operator up to overwrite it. The mechanism is undone within seconds of being used, not on operator restart.
+**1 — the partition erases itself.** `domain/workload/reconcile.go` assigns the rendered `updateStrategy` onto the live StatefulSet on every update pass, and `render/workload/statefulset.go` never sets that field — so an empty value is written and the API server defaults it back to `partition: 0`. Because the reconciler watches StatefulSets, writing a partition is itself the event that wakes the operator to overwrite it.
 
-**2 — the resume field cannot express the last step.** `UpgradeStatus.CurrentPartition` is an `int32` with `omitempty`, so `0` and *unset* serialise identically — and `0` is precisely the final step of a descending walk, the pass that updates ordinal 0. An operator restarting at that point cannot tell "finished" from "never started". Sibling fields in the same status struct already use `*int32` to avoid exactly this.
+**2 — the resume field cannot express the last step.** `UpgradeStatus.CurrentPartition` is `int32` with `omitempty`, so `0` and *unset* serialise identically — and `0` is the final step of a descending walk. Siblings in the same struct already use `*int32`.
 
-Separately, [ADR-006](006-apply-and-idempotency.md) does not authorise writing `spec.updateStrategy` at all — its per-kind apply table names only `spec.template`, `spec.replicas` and `spec.volumeClaimTemplates` for StatefulSet. Any partition-based option needs that table amended.
+[ADR-006](006-apply-and-idempotency.md) also does not authorise writing `spec.updateStrategy` — its per-kind apply table names only `spec.template`, `spec.replicas` and `spec.volumeClaimTemplates`.
 
-### What we cannot know yet
+### What is still open
 
-Nothing in this repository states Neo4j's own upgrade rules: whether a cluster running mixed versions is supported at all and for which jumps, how much version skew is allowed, when a store-format migration is triggered and whether it can be undone, or whether the system-database leader must be restarted last. The operator cannot currently identify the leader in any case — it reads `SHOW SERVERS` with name, address and state only.
+The docs answer far more than this record originally assumed, but not everything:
 
-This matters for the choice below, because the main thing a paced rollout buys is the chance to *check something* between members, and we cannot yet write down what that check is.
-
-Finally, the blast radius: the operand is a production database. A wrong choice restarts every member of a cluster with no way to stop part-way.
+- **Maximum version skew between simultaneous members.** No N-1 bound is stated. Path rules constrain source → target for one *server*; they do not bound how far apart two live members may be.
+- **How long a cluster may run mixed-version.** No deadline is given.
+- **Whether writes are safe during the mixed-version window.** The 4.x docs advised disabling writes; the 5.x and CalVer pages say nothing.
+- **Abort and resume.** Nothing covers a roll interrupted half-way — which members to revert, what to do with those already upgraded.
+- **Whether an older binary can open a store a newer one has already bumped to a higher minor format.** This is what would make any in-place reversion viable, and it is unaddressed.
 
 ### Interaction with backup and restore (ADR-015 / BDR-014, in review)
 
-Backup and restore is being designed in parallel. Four points of contact, settled here so neither record has to guess:
-
-- **Restore is forward-only, and that bounds recovery.** `docs/design/backup-restore/disaster-recovery.md` (on the in-review branch) states that the target's Neo4j version must be **≥** the backup's. It is the only version-compatibility rule written down anywhere in this repository. Two consequences: it *confirms* backup-and-reload as the path for major versions, since that restores into a newer target; and it *limits* recovery from a failed upgrade, because a backup taken during or after the roll can never be restored into the version we came from. In-place reversion to `status.upgrade.previousVersion` is therefore the only recovery for a partial upgrade — and whether the store is still readable by the old version is one of the unknowns above.
-- **ADR-015 does not constrain this record.** Its line about "the upgrade path is a future guarded maintenance-mode flow" concerns `system`/whole-cluster DR restore, not a Neo4j version change; "upgrade path" there is this repo's `ponytail:` idiom for how a deliberate shortcut gets replaced later. Read in context with BDR-014 it carries no requirement that version upgrades run through offline maintenance.
-- **Both need the same "formation-stable" signal.** ADR-015 waits for every member enabled, quorum present and `ClusterFormed` before touching a database; this record's `Verifying` step wants exactly that. One shared helper, not two.
-- **Concurrency is nobody's decision yet, so it is made here.** `Preflight` refuses a version change while a `Neo4jRestore` is active. The converse belongs in ADR-015: a restore that arrives mid-roll should wait rather than fail, since its formation-stable gate is legitimately false while a member is restarting and would otherwise time out into `RestoreBeforeFormation`.
+- **Restore is the recovery path, and it must predate the upgrade.** R4 makes a pre-upgrade backup the only documented rollback. `disaster-recovery.md` on that branch adds that a restore target's version must be **≥** the backup's — consistent, and it means a backup taken *during* the roll is useless for going back.
+- **ADR-015 does not constrain this record.** Its "the upgrade path is a future guarded maintenance-mode flow" line concerns `system`/whole-cluster DR restore, not a version change.
+- **Both need the same health signal.** ADR-015 waits for formation stability before restoring; R2 is the same family of check. One shared helper.
+- **Concurrency.** `Preflight` refuses a version change while a `Neo4jRestore` is active. The converse belongs in ADR-015: a restore arriving mid-roll should wait, not fail.
 
 ---
 
 ## Analysis
 
-### Option A — Walk a partition down (the design in `status.md`)
+### Option A — Pace the roll ourselves and gate on R2
 
-Render emits the partition from `status.upgrade.currentPartition`; the operator lowers it one ordinal per pass and verifies the member that just restarted before releasing the next.
-
-| Advantages | Disadvantages |
-|------------|---------------|
-| Kubernetes still performs the restart — the operator only sets a stopping point | Both defects above must be fixed, plus an ADR-006 amendment, before a single line does anything |
-| Gives a real pause and per-member check between ordinals | That check is the whole point, and it cannot be specified from what we know |
-| The cursor is a natural resume point across operator restarts | One `int32` cursor cannot describe three pools rolling |
-
-### Option B — Switch to `OnDelete` and delete pods ourselves
-
-Kubernetes stops rolling pods on template change; the operator deletes each pod explicitly, in whatever order it likes.
+Hold each member until the two Cypher checks pass, then release the next. Mechanically this is either a StatefulSet partition walked down per ordinal, or `OnDelete` with explicit pod deletion.
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| Total control over order, including leader-last if that turns out to be required | The operator inherits **every** restart, including the configuration and TLS-rotation paths that work correctly today |
-| No partition semantics to reason about | Adds a second routine pod deletion beside `RecycleMemberStore`, widening a destructive surface on the hot path |
+| Implements R2, the gate Neo4j actually prescribes | Requires both defects fixed and an ADR-006 amendment before anything works |
+| Implements R3 ordering precisely, per member rather than per pool | One `int32` cursor cannot describe three pools |
+| Stops a bad member from releasing the next one | Largest new surface, on the highest-blast-radius path |
 
-### Option C — Guard the edit and report the rollout (chosen)
-
-Leave the restart exactly as Kubernetes performs it. Refuse version changes that cannot be carried out safely, hold the primary pool until the secondary pools have converged, and derive `status.upgrade` from what the StatefulSets report.
+### Option B — `OnDelete` and delete pods ourselves
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| The rollout under test is the one `cluster-config-restart` already proves keeps quorum | No pause inside a pool — an unhealthy member is noticed only after the next one has begun restarting |
-| The part that prevents damage today — the refusal — ships without touching the rollout at all | Deviates from the published design, so `status.md` must be corrected rather than left standing |
-| Requires neither the ADR-006 amendment nor a per-pod Bolt connection | Per-member version reporting waits until `status.members[]` has a writer |
+| Total control over order and pacing | The operator inherits **every** restart, including the configuration and TLS paths that work today |
+| No partition semantics | Adds a second routine pod deletion beside `RecycleMemberStore` |
+
+### Option C — Guard the edit, order the pools, report the rollout (chosen for the first release)
+
+Refuse what Neo4j forbids (R4, R5, R6, R11). Hold the primary pool until the secondary pools have converged (R3). Report progress from the StatefulSets and from `SHOW SERVERS.version` (R9). Leave the intra-pool pacing to Kubernetes.
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| The refusals and the ordering are the two rules that are *mandatory*; they ship first | **Does not implement R2.** Between members inside a pool, Kubernetes readiness is the gate, and it is weaker than what Neo4j prescribes |
+| The rollout under test is the one `cluster-config-restart` already proves | An unhealthy member is discovered only after the next has begun restarting |
+| Needs neither the ADR-006 amendment nor a partition cursor | Per-pool ordering satisfies R3 at pool granularity, not per member |
 
 ---
 
 ## Comparison
 
-| Criterion | A Partition | B OnDelete | C Guard and report |
-|-----------|-------------|------------|--------------------|
-| Testability | Medium — a new pacing path to assert | Poor — every restart in the operator becomes ours to prove | **Best** — reuses the existing restart assertion |
+| Criterion | A Paced + R2 gate | B OnDelete | C Guard, order, report |
+|-----------|-------------------|------------|------------------------|
+| Testability | Medium — a new pacing path to assert | Poor — every restart becomes ours to prove | **Best** — reuses the existing restart assertion |
 | Complexity | Medium — cursor, per-pool resume, apply-contract change | High | **Low** |
 | controller-runtime fit | Fights the current apply until field ownership is settled | Replaces a controller behaviour with our own | **Best** — no apply-contract change |
-| Can be specified today | **No** — its verification step needs rules we do not have | No | **Yes** |
-| V1 fit | Deferred | No | **Yes** |
+| Satisfies R2 (health gate) | **Yes** | Yes | No — Kubernetes readiness only |
+| Satisfies R3, R4, R5, R6, R11 | Yes | Yes | **Yes** |
+| First-release fit | Its prerequisites are C | No | **Yes** |
 
 ---
 
 ## Decision
 
-We will implement **Option C**, and keep **Option A** as a later amendment to this record rather than a rejected alternative.
+We will implement **Option C first, and Option A as the completion of this record** — not as a deferred alternative.
 
-The reasoning is that Kubernetes already performs a correct one-at-a-time restart within a pool, and we have a passing end-to-end test that says so. What is genuinely missing today is a refusal in front of an unsafe edit and a truthful report of what is happening. Option A's advantage over that is the ability to pause and check each member — and the check cannot be written down until Neo4j's own upgrade rules are documented somewhere. Building the pacing before the check exists buys machinery with nothing to put in it.
+The honest framing: C does not satisfy R2. Kubernetes readiness is a weaker gate than the two Cypher checks Neo4j prescribes. C is chosen first because its parts — the refusals, the ordering, the status writer, a Bolt-side health read — are exactly the prerequisites A needs, and because the refusals and the ordering are the rules that are *mandatory* where the pacing gate is a matter of degree. Shipping C leaves an operator that refuses what Neo4j forbids and orders pools correctly; shipping nothing leaves one that does neither.
 
-**VER-002 (downgrade refused) is enforced in the webhook *and* in the reconciler**, extending the [ADR-001](001-crd-validation-process.md) ownership table rather than duplicating it. The validating webhook ships disabled by default in the chart, so a webhook-only rule would protect almost nobody; `imagepolicy` already sets the precedent of checking on both paths. It is deliberately **not** a CEL rule: root-level CEL rules keep evaluating on the update that removes a finalizer, so a rule that is false for an already-persisted object would make the resource impossible to delete.
+**VER-002 is a blanket downgrade refusal with no carve-out** (R4). Recovery from a failed upgrade is restoring a pre-upgrade backup, not reverting the version. It is enforced in the webhook *and* the reconciler, extending the [ADR-001](001-crd-validation-process.md) table: the validating webhook ships disabled by default, so a webhook-only rule protects almost nobody. It is deliberately not CEL — a root-level rule keeps evaluating on the finalizer-removal update, so a rule false for an already-persisted object would make the resource impossible to delete.
 
-**VER-002 must permit reverting to `status.upgrade.previousVersion`.** A blanket downgrade refusal would make a half-rolled upgrade unrecoverable, because putting the old version back is the only way out of a `Failed` upgrade. The refusal applies to downgrades *other than* the version the in-flight upgrade started from.
-
-Scope is patch and minor version changes. Major versions stay on the documented backup-and-reload path until the questions in *What we cannot know yet* are answered; that answer also gates cross-pool ordering and any later move to Option A.
+**Preflight enforces the path rules** (R5, R6), not merely "newer than current". `spec.version` is CalVer with an optional fourth `LTS` component, so the comparison parses CalVer, not SemVer — VER-001's "semver-compatible tag" wording in `validation.md` needs correcting with it.
 
 ### Implementation notes
 
-- **Package `internal/domain/upgrade`** — not the `domain/maintenance` name reserved by [ADR-003](003-neo4j-reconcile-pipeline.md), because `maintenance` already means `spec.maintenance.offlineMode` in the user-facing spec and reusing it would collide in both code and docs.
-- **The three parts run in three different places**, because a refusal that runs after the `workload` step is useless — by then the pod template has already been replaced:
-  - **Refusal** runs at the top of `runPipeline`, in the block that already re-runs the stateless admission checks (`validation.ValidateNeo4j`) before any domain step. It is a pure function of the resource and needs no cluster access.
-  - **The pool hold** is consulted inside the `workload` pool loop, mid-pipeline.
-  - **The status writer** runs after `formation`, which is where the cluster view exists.
-- **Condition `Upgrading`**, declared in the oracle catalog with a gate of `GateNone` — meaning it narrates progress without blocking `Ready`. [status.md](../../crd-spec/neo4j/status.md) requires `status.phase` to stay `Running` during an upgrade, so the condition must not gate readiness.
-- **Order of work.** Fix both defects and correct `status.md` first, while the fields are still dead and changing them is free. Then the refusals. Then the `status.upgrade` writer, which also stops `status.version` echoing the spec. Cross-pool ordering last, since it depends on the open Neo4j questions.
+- **Package `internal/domain/upgrade`** — not the `domain/maintenance` name reserved by [ADR-003](003-neo4j-reconcile-pipeline.md); `maintenance` already means `spec.maintenance.offlineMode` in the user-facing spec.
+- **Three placements**, because a refusal running after the `workload` step is useless — by then the pod template has already been replaced:
+  - **Refusal** at the top of `runPipeline`, beside the existing `validation.ValidateNeo4j` call.
+  - **The pool hold** inside the `workload` pool loop.
+  - **The status writer** after `formation`, where the cluster view exists.
+- **Condition `Upgrading`**, gate `GateNone` — [status.md](../../crd-spec/neo4j/status.md) requires `status.phase` to stay `Running` during an upgrade, so it narrates without blocking `Ready`.
+- **Widen `SHOW SERVERS`** to yield `version`, `health` and `hosting`/`requestedHosting` (R2, R9). One change on the existing routed connection in [ADR-007](007-formation-and-bolt.md)'s client, and it unlocks both the health gate and per-member version reporting.
+- **Order of work:** (0) fix both defects and correct `status.md`; (1) the refusals; (2) the status writer, and stop `status.version` echoing the spec; (3) pool ordering per R3; (4) the R2 health gate, which completes Option A.
 
 ```go
-// internal/domain/upgrade — pipeline step after formation.
+// internal/domain/upgrade — refusal at pipeline entry, hold in workload, writer after formation.
 
-// Preflight refuses a version change the operator cannot carry out safely (VER-002, VER-003):
-// a downgrade, a digest-pinned image where the new version would never be pulled, offline mode,
-// or a plugins volume whose JARs can never be refreshed for the new version.
-// It compares spec.version against status.version. No separately pinned field is needed: once
-// status.version reports what is running rather than echoing the spec, it IS the anchor, and an
-// empty status.version means "first install", not "downgrade".
+// Preflight refuses what Neo4j does not permit: a downgrade (R4), a path that skips an LTS or a
+// required intermediate (R5), a roll into 2025.01+ from discovery v1 (R6), an incompatible plugin
+// (R11), a digest-pinned image where the version would never be pulled, offline mode, an active
+// Neo4jRestore, or a cluster already mid-roll.
+// It compares spec.version against status.version, parsed as CalVer. No separately pinned field is
+// needed: once status.version reports what is running, it IS the anchor, and an empty value means
+// "first install", not "downgrade".
 // Returns a sentinel error so status.PipelineErrorReason maps it to a catalogued reason.
 func Preflight(n *v1beta1.Neo4j) error
 
-// Observe builds status.upgrade from the pool StatefulSets alone — no Bolt connection needed.
-// It reads updatedReplicas, currentRevision and updateRevision, none of which the operator
-// reads anywhere today.
-func Observe(n *v1beta1.Neo4j, pools map[render.PoolID]*appsv1.StatefulSet, now time.Time) *v1beta1.UpgradeStatus
+// Observe builds status.upgrade from the pool StatefulSets and SHOW SERVERS.version.
+func Observe(n *v1beta1.Neo4j, pools map[render.PoolID]*appsv1.StatefulSet, servers []neo4j.Server, now time.Time) *v1beta1.UpgradeStatus
 
-// HoldPoolTemplate answers "should this pool keep its current pods for now?", and is consulted
-// by the workload step's pool loop so the primaries wait for the secondary pools to converge.
-// A held pool keeps its live pod template untouched.
+// HoldPoolTemplate keeps the primary pool on its current template until every secondary pool has
+// converged (R3). Consulted by the workload pool loop.
 func HoldPoolTemplate(n *v1beta1.Neo4j, pool render.PoolID) bool
+
+// ClusterStable is the R2 gate: both documented queries return zero rows. Shared with ADR-015,
+// which needs the same signal before a restore.
+func ClusterStable(ctx context.Context, admin neo4j.Admin) (bool, string, error)
 ```
+
+### Separate opportunity — the cluster-wide PodDisruptionBudget
+
+R10 describes a real gap that nobody owns: node auto-upgrades can evict every Neo4j pod at once, the per-release chart PDB does not help, and the mitigation sits outside the Helm lifecycle. Our PDB is opt-in and spans all pools with one `minAvailable`. Reconciling a correct cluster-wide budget — Neo4j suggests `maxUnavailable: 1`, which adapts as the cluster scales — is a natural operator job. It is **not** part of this record: a PDB constrains evictions, not our own rollout, so it protects a different failure. Tracked separately.
 
 ---
 
@@ -198,28 +205,34 @@ func HoldPoolTemplate(n *v1beta1.Neo4j, pool render.PoolID) bool
 
 ### Positive
 
-- The refusal — the only part that prevents damage today — ships without touching the rollout.
-- No new pacing path to prove: the rollout under test is the one already shown to keep quorum.
-- `status.upgrade` and `status.version` become truthful ahead of the state machine, which is what `kubectl wait` and support runbooks need first.
-- Both schema corrections are free while nothing writes those fields, and stop being free the moment something does.
+- The operator refuses what Neo4j forbids, instead of attempting it.
+- Pool ordering satisfies a mandatory Neo4j rule (R3) that we were previously treating as a preference.
+- `status.upgrade` and `status.version` become truthful, and per-member versions are readable from `SHOW SERVERS` without new plumbing.
+- Both schema corrections are free while nothing writes those fields.
+- Stage 4 completes R2 rather than being an optional refinement, so the record has a defined end state.
 
 ### Negative
 
-- Deviates from the partition design published in `status.md`, which must be corrected rather than left standing as aspirational.
-- No pause inside a pool: a member that comes up unhealthy is discovered only after the next one has started restarting.
-- Holding a pool freezes its configuration changes too, not only its image. That is the intended reading of "this pool is frozen", but it is a real restriction.
+- Until stage 4, the gate between members inside a pool is weaker than Neo4j prescribes. This is a known, stated shortfall, not an oversight.
+- Deviates from the partition design published in `status.md`, which must be corrected.
+- Holding a pool freezes its configuration changes too, not only its image.
 - VER-002 is checked in two layers, which ADR-001 discourages in general.
+- Preflight has to carry Neo4j's version-path rules, which change as new LTS releases land — a maintenance cost with no obvious source of truth in-repo.
 
 ### Neutral
 
-- Option A is deferred, not rejected — amend this record once the upgrade reporting gives evidence that a pause is needed.
+- R7 (freezing database administration) is honoured only for the operator's own actions. Whether to issue Neo4j's prescribed DENY grants on the user's behalf is left open.
 - Numbered 017 because `015` and `016` are claimed by in-flight branches.
-- Stage 0 changes the CRD schema, and the CRD is deliberately **not** bundled in the operator Helm chart. A release carrying this feature needs the separate `kubectl apply --server-side` step; without it the operator writes status fields the API server silently strips.
+- Stage 0 changes the CRD schema, and the CRD is deliberately not bundled in the operator Helm chart. A release carrying this feature needs the separate `kubectl apply --server-side` step, or the operator writes status fields the API server silently strips.
+- Neo4j's own Kubernetes model differs from ours: one Helm release and one single-replica StatefulSet per member, upgraded one release at a time. We use one StatefulSet per pool with N replicas and let Kubernetes pace within it. R2 and R3 apply either way.
 
 ---
 
 ## References
 
+- [Neo4j Upgrade and Migration Guide](https://neo4j.com/docs/upgrade-migration-guide/current/) — R1, R4, R5
+- [In-place rolling upgrade (2025–2026)](https://neo4j.com/docs/upgrade-migration-guide/current/version-2025-2026/upgrade/in-place-rolling/) — R2, R3, R7
+- [Upgrade 2025–2026](https://neo4j.com/docs/upgrade-migration-guide/current/version-2025-2026/) — R5, R6
 - Contract: [status.md](../../crd-spec/neo4j/status.md) §`status.upgrade` · [validation.md](../../crd-spec/neo4j/validation.md) VER-001..003
 - ADRs: [ADR-001](001-crd-validation-process.md) · [ADR-003](003-neo4j-reconcile-pipeline.md) · [ADR-004](004-status-and-conditions.md) · [ADR-006](006-apply-and-idempotency.md) · [ADR-007](007-formation-and-bolt.md)
 - Backlog D-08 "Version upgrade: image bump strategy" · I-07 "Upgrade / migration test fixtures"
