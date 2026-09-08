@@ -107,9 +107,12 @@ conn_exec_member() { kubectl exec -n "${NEO4J_NAMESPACE}" "${LEAD_POD}" -c neo4j
 # Writes must go through neo4j:// routing to reach the leader — bolt:// to a specific member
 # fails with NotALeader, which is the pitfall tests/lib/connectivity.sh documents.
 CLIENT_HOST="${NEO4J_CR_NAME}.${NEO4J_NAMESPACE}.svc.cluster.local"
+# The statement is passed double-quoted, so the single quotes around Cypher string literals inside
+# it survive the trip through `bash -c` — single-quoting it here would end the quoting at the first
+# literal and Neo4j would see an unquoted value. Same shape as conn_show_setting in the lib.
 cypher() {  # cypher <statement>
   conn_exec_member "cypher-shell -a 'neo4j://${CLIENT_HOST}:${CONN_BOLT_PORT}' \
-    -u neo4j -p '${password}' --format plain '$1'"
+    -u neo4j -p '${password}' --format plain \"$1\""
 }
 log "[survived] writing a marker row before the upgrade"
 cypher "CREATE (:E2EUpgrade {marker: '${MARKER}'});" >/dev/null \
