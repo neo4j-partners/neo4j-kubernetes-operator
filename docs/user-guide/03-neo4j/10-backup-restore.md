@@ -315,8 +315,51 @@ spec:
   Job. This overrides the instance identity for the write side of a single backup.
 - **Restore reads have no credentials field** — they always use the target's `cloudIdentity`.
 
+### How workload identity works (the 60-second version)
+
+Workload identity means **no keys stored anywhere**. Think of it as a passport and a visa:
+
+1. **Passport** — Kubernetes gives each pod a short-lived, signed token that says *"I am
+   ServiceAccount `<namespace>:<name>`."* The cloud webhook only injects it when the pod carries the
+   right marker (for Azure, the `azure.workload.identity/use` label — the operator adds it for you).
+2. **Visa** — in the cloud, you tell the identity provider *once*: "trust passports whose name
+   (**subject**) is exactly `system:serviceaccount:<namespace>:<sa-name>`, and let them become this
+   cloud identity." (AWS: IRSA trust policy; GCP: IAM binding; Azure: a *federated credential*.)
+3. **Keycard** — you grant that cloud identity real permission on the bucket (e.g. `Storage Blob
+   Data Contributor`).
+
+At runtime the pod shows its passport, the cloud checks the visa (**the subject must match to the
+character**), hands back a real cloud token, and the token opens the bucket. Nothing to rotate.
+
+**What the operator wires for you** (from `spec.security.cloudIdentity`): a dedicated
+`<neo4j>-backup` ServiceAccount for backup Jobs and the operand ServiceAccount for the server pods,
+both stamped with your `workloadIdentity.annotations`, plus the Azure pod label. **What you do once
+in the cloud**: create the identity, grant it bucket access, and add the visa (trust) for each SA
+subject.
+
+### Setup checklist (do this once per instance)
+
+Two pods touch the bucket, so there are **two subjects to trust** — this is the #1 gotcha:
+
+| Pod | ServiceAccount (subject) | Needed for |
+|-----|--------------------------|-----------|
+| Backup Job | `<namespace>:<neo4j>-backup` | backup **writes** |
+| Neo4j server | `<namespace>:<neo4j>` | restore **reads** (seed-from-URI) |
+
+1. Create the cloud identity and grant it read/write on the bucket.
+2. Add the trust/visa for **both** subjects above (a restore that only federates the backup SA fails
+   with "not a valid location" — the server pod's passport matches no visa).
+3. Put `spec.security.cloudIdentity.workloadIdentity` on the `Neo4j` with the provider and its
+   annotation (e.g. the cloud identity's client id / role ARN). The operator does the rest.
+
+> Common gotchas: **subject typos** (must match exactly, including the `-backup` suffix), and running
+> an **older operator** that doesn't stamp the server-pod label yet (restore reads then get no token).
+> Verify with `kubectl get pod <pod> -o jsonpath='{.metadata.labels}'` (Azure: expect
+> `azure.workload.identity/use=true`).
+
 See [`examples/standalone/25-cloud-identity.yaml`](../../../examples/standalone/25-cloud-identity.yaml)
-and the [Azure Workload Identity backup runbook](../../../examples/standalone/25-cloud-identity-azure-backup.md).
+and the [Azure Workload Identity backup + restore runbook](../../../examples/standalone/25-cloud-identity-azure-backup.md)
+for a full, copy-pasteable walkthrough.
 
 ## What is not covered
 

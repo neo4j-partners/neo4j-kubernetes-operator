@@ -1,17 +1,34 @@
-# Test: backup to Azure Blob with Workload Identity (AKS)
+# Test: backup + restore on Azure Blob with Workload Identity (AKS)
 
-End-to-end steps to verify the cloud-identity backup path this operator wires (ADR-016): a
-`Neo4jBackup` to `azb://…` authenticated by **Azure Workload Identity** — no static keys. It
-exercises exactly the plumbing the operator adds: the dedicated `<name>-backup` ServiceAccount, its
-`azure.workload.identity/client-id` annotation, and the `azure.workload.identity/use` pod label that
-makes the AKS webhook inject a federated token into the backup Job pod.
+End-to-end steps to verify the cloud-identity path this operator wires (ADR-016): a `Neo4jBackup`
+that **writes** to `azb://…` and a `Neo4jRestore` that **reads** it back — both authenticated by
+**Azure Workload Identity**, no static keys. It exercises exactly the plumbing the operator adds: a
+dedicated `<name>-backup` ServiceAccount for the backup Job and the operand ServiceAccount for the
+server pods, each stamped with the `azure.workload.identity/client-id` annotation, plus the
+`azure.workload.identity/use` pod label that makes the AKS webhook inject a federated token.
 
-> Scope: this runbook covers **backup**. Restore *from* Azure is also wired (the server pods carry
-> the instance identity too) — to use it, federate the **operand** ServiceAccount `${NEO4J}` in
-> addition to the backup SA (repeat step 4 with subject `system:serviceaccount:${NS}:${NEO4J}`), then
-> restore with a `seedURI: azb://…` source. Restore from a PVC / `file:` seed needs no cloud identity
-> at all. The static-key alternative (a Secret via `destination.credentials`) is noted at the end —
-> the portable path if you don't want to set up Workload Identity.
+## How it works (the short version)
+
+Workload Identity means **no keys in the cluster**. It's a passport + visa:
+
+- **Passport** — AKS gives each pod a short-lived signed token saying *"I am ServiceAccount
+  `<namespace>:<name>`"* — but only if the pod has the `azure.workload.identity/use` label (the
+  operator adds it). The name in the token is the **subject**.
+- **Visa (federated credential)** — you tell Azure once: "trust tokens whose subject is exactly
+  `system:serviceaccount:<ns>:<sa>` and let them become this managed identity." **The subject must
+  match to the character.**
+- **Keycard (role)** — the managed identity has `Storage Blob Data Contributor` on the account.
+
+**Two pods touch the blob, so you federate two subjects** (this is the #1 mistake):
+
+| Pod | ServiceAccount (subject) | For |
+|-----|--------------------------|-----|
+| Backup Job | `${NS}:${NEO4J}-backup` | backup **writes** (steps 4, 6) |
+| Neo4j server | `${NS}:${NEO4J}` | restore **reads** (steps 8–9) |
+
+> Two gotchas that produce "provided uri does not point to a valid location" on restore: a **subject
+> typo** (the server pod's token then matches no visa), and running an **operator too old** to stamp
+> the server-pod label (the pod then gets no token). Step 9 verifies both.
 
 ## Prerequisites
 
@@ -160,12 +177,65 @@ If PHASE=Failed, `kubectl -n "$NS" describe neo4jbackup bk-azure` shows the neo4
 usual suspects are a mismatched federated-credential subject (step 4) or a missing role assignment
 (step 3).
 
+## 8. Federate the **operand** ServiceAccount (for restore reads)
+
+The restore reads the blob from the **Neo4j server pods**, which run as the operand SA `${NEO4J}` —
+a *different* subject from the backup SA. Add its visa (same identity, same bucket keycard):
+
+```bash
+az identity federated-credential create \
+  --name neo4j-operand-fic \
+  --identity-name "$UAMI" \
+  --resource-group "$RG" \
+  --issuer "$OIDC_ISSUER" \
+  --subject "system:serviceaccount:${NS}:${NEO4J}" \
+  --audience api://AzureADTokenExchange
+```
+
+The `Neo4j` from step 5 already carries `spec.security.cloudIdentity.workloadIdentity`, so the
+operator has already stamped the operand SA annotation and the server-pod label — no manifest change.
+
+## 9. Restore from Azure and verify
+
+First confirm the identity is live on the server pod (the check that catches an old operator image):
+
+```bash
+kubectl -n "$NS" get pod ${NEO4J}-server-0 -o jsonpath='{.metadata.labels.azure\.workload\.identity/use}{"\n"}'  # true
+kubectl -n "$NS" exec ${NEO4J}-server-0 -c neo4j -- env | grep AZURE
+#   expect AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_FEDERATED_TOKEN_FILE, AZURE_AUTHORITY_HOST
+kubectl -n "$NS" get sa ${NEO4J} -o jsonpath='{.metadata.annotations}'; echo   # azure.workload.identity/client-id
+```
+
+Then restore the backup you took in step 6 (the operator resolves the `azb://` location from the
+`Neo4jBackup` record and seeds via `CloudSeedProvider`):
+
+```bash
+cat <<YAML | kubectl apply -n "$NS" -f -
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata: { name: rst-azure }
+spec:
+  neo4jRef: { name: ${NEO4J} }
+  databases: ["neo4j"]
+  overwrite: true            # replace the existing database with the restored store
+  source: { backupRef: bk-azure }
+YAML
+
+kubectl -n "$NS" get neo4jrestore rst-azure -o jsonpath='{.status.phase} {.status.conditions}{"\n"}' -w
+```
+
+If it fails with `RestoreSeedFailed … does not point to a valid location`, it is almost always the
+operand visa: re-check the step-8 subject is **exactly** `system:serviceaccount:${NS}:${NEO4J}` and
+that step 9's pod check shows the label + `AZURE_*` env.
+
 ## Cleanup
 
 ```bash
+kubectl -n "$NS" delete neo4jrestore rst-azure --ignore-not-found
 kubectl -n "$NS" delete neo4jbackup bk-azure
 kubectl -n "$NS" delete neo4j ${NEO4J}
 az identity federated-credential delete --name neo4j-backup-fic --identity-name "$UAMI" -g "$RG" --yes
+az identity federated-credential delete --name neo4j-operand-fic --identity-name "$UAMI" -g "$RG" --yes
 az identity delete -g "$RG" -n "$UAMI"
 az storage account delete -g "$RG" -n "$STORAGE" --yes
 ```
