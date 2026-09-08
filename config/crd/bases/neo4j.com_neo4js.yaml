@@ -21630,12 +21630,17 @@ spec:
                 description: Upgrade tracks the rolling version-change state machine.
                 properties:
                   currentPartition:
+                    description: |-
+                      CurrentPartition is the StatefulSet rolling-update partition cursor. A pointer because 0 is the
+                      last step of a descending walk — the pass that updates ordinal 0 — and an int32 with omitempty
+                      serialises 0 and unset identically, which would make the resume point ambiguous at exactly the
+                      step where it matters (ADR-017).
                     format: int32
                     type: integer
                   lastError:
                     type: string
                   phase:
-                    description: UpgradePhase tracks rolling upgrade state.
+                    description: UpgradePhase tracks rolling upgrade state (ADR-017).
                     enum:
                     - Staging
                     - Rolling

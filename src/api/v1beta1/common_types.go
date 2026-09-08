@@ -111,9 +111,26 @@ const (
 	Neo4jPhaseMaintenance   Neo4jPhase = "Maintenance"
 )
 
-// UpgradePhase tracks rolling upgrade state.
+// UpgradePhase tracks rolling upgrade state (ADR-017).
 // +kubebuilder:validation:Enum=Staging;Rolling;Stabilizing;Verifying;Completed;Failed
 type UpgradePhase string
+
+const (
+	// UpgradePhaseStaging is the preflight: the version change was accepted and nothing has moved yet.
+	UpgradePhaseStaging UpgradePhase = "Staging"
+	// UpgradePhaseRolling means pods are being replaced pool by pool.
+	UpgradePhaseRolling UpgradePhase = "Rolling"
+	// UpgradePhaseStabilizing waits for the last restarted member to rejoin the cluster.
+	UpgradePhaseStabilizing UpgradePhase = "Stabilizing"
+	// UpgradePhaseVerifying runs the post-upgrade checks Neo4j prescribes: every server hosting the
+	// databases asked of it, every database on its requested status.
+	UpgradePhaseVerifying UpgradePhase = "Verifying"
+	// UpgradePhaseCompleted means every member reports targetVersion; lastUpgradeTime is stamped.
+	UpgradePhaseCompleted UpgradePhase = "Completed"
+	// UpgradePhaseFailed is terminal for this attempt. Neo4j does not support downgrade, so recovery
+	// is restoring a backup taken before the upgrade — not reverting spec.version (ADR-017 R4).
+	UpgradePhaseFailed UpgradePhase = "Failed"
+)
 
 // MemberPool identifies a server pool in cluster mode.
 // +kubebuilder:validation:Enum=primary;analytics;read;server
@@ -769,12 +786,16 @@ type UpgradeProgress struct {
 	Pending   int32 `json:"pending,omitempty"`
 }
 
-// UpgradeStatus tracks rolling upgrade state machine.
+// UpgradeStatus tracks rolling upgrade state machine (ADR-017).
 type UpgradeStatus struct {
 	Phase            UpgradePhase       `json:"phase,omitempty"`
 	TargetVersion    string             `json:"targetVersion,omitempty"`
 	PreviousVersion  string             `json:"previousVersion,omitempty"`
-	CurrentPartition int32              `json:"currentPartition,omitempty"`
+	// CurrentPartition is the StatefulSet rolling-update partition cursor. A pointer because 0 is the
+	// last step of a descending walk — the pass that updates ordinal 0 — and an int32 with omitempty
+	// serialises 0 and unset identically, which would make the resume point ambiguous at exactly the
+	// step where it matters (ADR-017).
+	CurrentPartition *int32             `json:"currentPartition,omitempty"`
 	StepStartTime    *metav1.Time       `json:"stepStartTime,omitempty"`
 	Progress         *UpgradeProgress   `json:"progress,omitempty"`
 	LastError        string             `json:"lastError,omitempty"`

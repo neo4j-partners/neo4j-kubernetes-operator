@@ -24,6 +24,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/upgrade"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
@@ -167,6 +168,14 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
 	if err := validation.ValidateNeo4j(neo4j); err != nil {
+		return ctrl.Result{}, err
+	}
+	// Before any domain step: domain/workload replaces the pod template, so a version refusal that
+	// ran later would arrive with the roll already started (ADR-017).
+	if err := upgrade.Preflight(neo4j); err != nil {
+		if r.Recorder != nil {
+			r.Recorder.Event(neo4j, corev1.EventTypeWarning, status.PipelineErrorReason(err).String(), err.Error())
+		}
 		return ctrl.Result{}, err
 	}
 	if err := rendersecrets.EnsureMountable(ctx, r.Client, neo4j); err != nil {
