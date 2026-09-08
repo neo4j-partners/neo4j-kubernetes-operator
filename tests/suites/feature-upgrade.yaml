@@ -1,0 +1,20 @@
+name: feature-upgrade
+description: >
+  Rolling upgrade of spec.version on a running cluster (ADR-017) — a downgrade is refused, the
+  system-database secondaries are upgraded before the system primary, quorum holds while the
+  primaries roll, the operator reports the change, and the data is still there afterwards.
+brief_ref: neo4j-rolling-upgrade
+use_pipeline: neo4j-suite
+on_case_failure: continue
+pipeline:
+  case_assert:
+    - assert/{{assert}}
+
+cases:
+  - id: cluster-upgrade
+    comment: ADR-017 — changing spec.version on a running 3-primary cluster with a read pool refuses a downgrade, rolls the read pool before the primary pool, holds quorum, reports status.upgrade and status.version, and preserves data written before the upgrade.
+    fixture: tests/fixtures/neo4j-cluster-upgrade.yaml
+    neo4j_case: cluster-upgrade
+    assert: cluster-upgrade
+    expect: success
+    cr_name: e2e-upgrade-cl
