@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 var t0 = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
@@ -23,7 +23,7 @@ func TestObserve(t *testing.T) {
 		running      string
 		pools        []PoolState
 		wantNil      bool
-		wantPhase    neo4jv1beta1.UpgradePhase
+		wantPhase    neo4jv1.UpgradePhase
 		wantUpgraded int32
 		wantPending  int32
 	}{
@@ -42,7 +42,7 @@ func TestObserve(t *testing.T) {
 		{
 			name: "pods still moving", running: "2026.05.0",
 			pools:     []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true}},
-			wantPhase: neo4jv1beta1.UpgradePhaseRolling, wantUpgraded: 1, wantPending: 2,
+			wantPhase: neo4jv1.UpgradePhaseRolling, wantUpgraded: 1, wantPending: 2,
 		},
 		{
 			name: "a held pool counts as pending however ready it is", running: "2026.05.0",
@@ -50,17 +50,17 @@ func TestObserve(t *testing.T) {
 				converged(2), // secondaries done
 				{Desired: 3, Updated: 3, Ready: 3, OnTarget: false}, // primaries held back
 			},
-			wantPhase: neo4jv1beta1.UpgradePhaseRolling, wantUpgraded: 2, wantPending: 3,
+			wantPhase: neo4jv1.UpgradePhaseRolling, wantUpgraded: 2, wantPending: 3,
 		},
 		{
 			name: "all on the new image but not all ready yet", running: "2026.05.0",
 			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 2, OnTarget: true}},
-			wantPhase: neo4jv1beta1.UpgradePhaseStabilizing, wantUpgraded: 3, wantPending: 0,
+			wantPhase: neo4jv1.UpgradePhaseStabilizing, wantUpgraded: 3, wantPending: 0,
 		},
 		{
 			name: "updated and ready, waiting on the cluster", running: "2026.05.0",
 			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 3, Rolling: true, OnTarget: true}},
-			wantPhase: neo4jv1beta1.UpgradePhaseVerifying, wantUpgraded: 3, wantPending: 0,
+			wantPhase: neo4jv1.UpgradePhaseVerifying, wantUpgraded: 3, wantPending: 0,
 		},
 	}
 
@@ -127,12 +127,12 @@ func TestObserveFailsWhenTheStepOutlastsItsBudget(t *testing.T) {
 	n.Status.Upgrade = first
 
 	within := Observe(n, rolling, t0.Add(MemberBudget(n)-time.Minute))
-	if within.Phase == neo4jv1beta1.UpgradePhaseFailed {
+	if within.Phase == neo4jv1.UpgradePhaseFailed {
 		t.Error("a step inside its budget must not be reported as failed")
 	}
 
 	over := Observe(n, rolling, t0.Add(MemberBudget(n)+time.Minute))
-	if over.Phase != neo4jv1beta1.UpgradePhaseFailed {
+	if over.Phase != neo4jv1.UpgradePhaseFailed {
 		t.Fatalf("phase = %q, want Failed once the step outlasts its budget", over.Phase)
 	}
 	if over.LastError == "" {
@@ -149,11 +149,11 @@ func TestMemberBudgetFollowsTheEffectiveProbe(t *testing.T) {
 		t.Errorf("default budget = %s, want %s", def, want)
 	}
 
-	n.Spec.Probes = &neo4jv1beta1.ProbesSpec{
+	n.Spec.Probes = &neo4jv1.ProbesSpec{
 		Startup: &corev1.Probe{FailureThreshold: 9, PeriodSeconds: 10},
 	}
 	grace := int64(30)
-	n.Spec.Scheduling = &neo4jv1beta1.SchedulingSpec{TerminationGracePeriodSeconds: &grace}
+	n.Spec.Scheduling = &neo4jv1.SchedulingSpec{TerminationGracePeriodSeconds: &grace}
 	if got, want := MemberBudget(n), (9*10+30)*time.Second; got != want {
 		t.Errorf("overridden budget = %s, want %s", got, want)
 	}
