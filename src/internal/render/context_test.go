@@ -37,11 +37,11 @@ func TestStandaloneContextNaming(t *testing.T) {
 
 func TestImageRef(t *testing.T) {
 	tests := []struct {
-		name     string
-		edition  neo4jv1.Edition
-		version  string
-		repo     string
-		wantRef  string
+		name    string
+		edition neo4jv1.Edition
+		version string
+		repo    string
+		wantRef string
 	}{
 		{
 			name:    "enterprise appends suffix",
@@ -157,9 +157,9 @@ func TestStoragePVCSelectorMatchesUninstallDocs(t *testing.T) {
 		t.Fatalf("StoragePVCSelector must match %v; got %s", want, sel)
 	}
 	wrong := labels.Set{
-		LabelName:                 AppNameValue,
-		LabelInstance:             "dev",
-		LabelManagedBy:            ManagedByValue,
+		LabelName:                     AppNameValue,
+		LabelInstance:                 "dev",
+		LabelManagedBy:                ManagedByValue,
 		"app.kubernetes.io/component": "storage",
 	}
 	if sel.Matches(wrong) {
@@ -173,12 +173,12 @@ func TestStoragePVCSelectorMatchesUninstallDocs(t *testing.T) {
 func TestImageRefIgnoresVersionWhenDigestIsPinned(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("ab", 32)
 	build := func(version string) string {
-		return StandaloneContext(&neo4jv1beta1.Neo4j{
+		return StandaloneContext(&neo4jv1.Neo4j{
 			ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-			Spec: neo4jv1beta1.Neo4jSpec{
-				Edition: neo4jv1beta1.EditionEnterprise,
+			Spec: neo4jv1.Neo4jSpec{
+				Edition: neo4jv1.EditionEnterprise,
 				Version: version,
-				Image:   &neo4jv1beta1.ImageSpec{Repository: "neo4j", Digest: digest},
+				Image:   &neo4jv1.ImageSpec{Repository: "neo4j", Digest: digest},
 			},
 		}).ImageRef()
 	}
