@@ -54,21 +54,6 @@ func stsFor(t *testing.T, c client.Client, n *neo4jv1beta1.Neo4j, pool render.Po
 	return sts
 }
 
-// stampCreated gives the pool StatefulSets a creationTimestamp, which the fake client does not set
-// but a real API server always does. Without it the reconciler takes its create path on every pass
-// — `sts.Spec = stsDesired.Spec` — and the update whitelist, which is where the hold lives, never
-// runs. Any test about update behaviour has to do this first or it silently proves nothing.
-func stampCreated(t *testing.T, c client.Client, n *neo4jv1beta1.Neo4j) {
-	t.Helper()
-	for _, pool := range render.ActivePools(n) {
-		sts := stsFor(t, c, n, pool)
-		sts.CreationTimestamp = metav1.Now()
-		if err := c.Update(t.Context(), sts); err != nil {
-			t.Fatalf("stamp creationTimestamp on %s: %v", pool, err)
-		}
-	}
-}
-
 // HoldPrimaries is unit-tested as a pure function elsewhere. What this covers is that the pool loop
 // actually consults it — delete the branch in Reconcile and every one of those tests still passes
 // while the operator upgrades primaries and secondaries together.
@@ -82,7 +67,6 @@ func TestPrimaryPoolKeepsItsImageWhileSecondariesLag(t *testing.T) {
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {
 		t.Fatalf("initial reconcile: %v", out.Err)
 	}
-	stampCreated(t, c, n)
 	oldImage := poolImage(*stsFor(t, c, n, render.PoolPrimary))
 	if oldImage == "" {
 		t.Fatal("primary pool has no neo4j container")
@@ -116,7 +100,6 @@ func TestPrimaryPoolIsReleasedOnceSecondariesConverge(t *testing.T) {
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {
 		t.Fatalf("initial reconcile: %v", out.Err)
 	}
-	stampCreated(t, c, n)
 	oldImage := poolImage(*stsFor(t, c, n, render.PoolPrimary))
 
 	n.Spec.Version = "2026.07.1"
@@ -130,6 +113,7 @@ func TestPrimaryPoolIsReleasedOnceSecondariesConverge(t *testing.T) {
 	readPool.Status = appsv1.StatefulSetStatus{
 		Replicas: 1, ReadyReplicas: 1, UpdatedReplicas: 1,
 		CurrentRevision: "rev-new", UpdateRevision: "rev-new",
+		ObservedGeneration: readPool.Generation,
 	}
 	if err := c.Status().Update(t.Context(), readPool); err != nil {
 		t.Fatalf("set read pool status: %v", err)
@@ -156,7 +140,6 @@ func TestConfigChangeIsNotHeld(t *testing.T) {
 	if out := r.Reconcile(t.Context(), n); out.Err != nil {
 		t.Fatalf("initial reconcile: %v", out.Err)
 	}
-	stampCreated(t, c, n)
 	before := stsFor(t, c, n, render.PoolPrimary).Spec.Template.Annotations
 
 	// Same version, different config — the roll every other suite relies on.

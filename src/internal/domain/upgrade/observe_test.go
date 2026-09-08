@@ -14,7 +14,7 @@ var t0 = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 
 // converged is a pool that has finished: on the target image, every pod updated and ready.
 func converged(n int32) PoolState {
-	return PoolState{Desired: n, Updated: n, Ready: n, OnTarget: true}
+	return PoolState{Desired: n, Updated: n, Ready: n, OnTarget: true, Settled: true}
 }
 
 func TestObserve(t *testing.T) {
@@ -41,25 +41,34 @@ func TestObserve(t *testing.T) {
 		},
 		{
 			name: "pods still moving", running: "2026.05.0",
-			pools:     []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true}},
+			pools:     []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true, Settled: true}},
 			wantPhase: neo4jv1beta1.UpgradePhaseRolling, wantUpgraded: 1, wantPending: 2,
 		},
 		{
 			name: "a held pool counts as pending however ready it is", running: "2026.05.0",
 			pools: []PoolState{
 				converged(2), // secondaries done
-				{Desired: 3, Updated: 3, Ready: 3, OnTarget: false}, // primaries held back
+				{Desired: 3, Updated: 3, Ready: 3, OnTarget: false, Settled: true}, // primaries held back
 			},
 			wantPhase: neo4jv1beta1.UpgradePhaseRolling, wantUpgraded: 2, wantPending: 3,
 		},
 		{
-			name: "all on the new image but not all ready yet", running: "2026.05.0",
-			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 2, OnTarget: true}},
-			wantPhase: neo4jv1beta1.UpgradePhaseStabilizing, wantUpgraded: 3, wantPending: 0,
+			name: "on the new image but a member has not come back", running: "2026.05.0",
+			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 2, OnTarget: true, Settled: true}},
+			wantPhase: neo4jv1beta1.UpgradePhaseRolling, wantUpgraded: 2, wantPending: 1,
+		},
+		{
+			// The window the Settled flag closes: the template has changed but the StatefulSet
+			// controller has not caught up, so its revisions still describe the old spec and every
+			// replica still counts as updated and ready. Without this the operator would call an
+			// upgrade finished before a single pod had restarted.
+			name: "template changed but the StatefulSet has not caught up", running: "2026.05.0",
+			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 3, OnTarget: true, Settled: false}},
+			wantPhase: neo4jv1beta1.UpgradePhaseVerifying, wantUpgraded: 3, wantPending: 0,
 		},
 		{
 			name: "updated and ready, waiting on the cluster", running: "2026.05.0",
-			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 3, Rolling: true, OnTarget: true}},
+			pools:     []PoolState{{Desired: 3, Updated: 3, Ready: 3, Rolling: true, OnTarget: true, Settled: true}},
 			wantPhase: neo4jv1beta1.UpgradePhaseVerifying, wantUpgraded: 3, wantPending: 0,
 		},
 	}
@@ -97,7 +106,7 @@ func TestObserve(t *testing.T) {
 // The clock measures the current step, so progress restarts it and a stalled step does not.
 func TestObserveStepStartTime(t *testing.T) {
 	n := cr("2026.05.0", "2026.07.0")
-	rolling := []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true}}
+	rolling := []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true, Settled: true}}
 
 	first := Observe(n, rolling, t0)
 	if first.StepStartTime == nil {
@@ -111,17 +120,47 @@ func TestObserveStepStartTime(t *testing.T) {
 		t.Errorf("stepStartTime moved while the step was unchanged: %s -> %s", first.StepStartTime, same.StepStartTime)
 	}
 
-	// A member finishes: progress restarts the clock, because a slow upgrade is not a stuck one.
+	// A member finishes: forward progress restarts the clock, because a slow upgrade is not a stuck one.
 	n.Status.Upgrade = same
-	moved := Observe(n, []PoolState{{Desired: 3, Updated: 2, Ready: 2, Rolling: true, OnTarget: true}}, t0.Add(2*time.Minute))
+	moved := Observe(n, []PoolState{{Desired: 3, Updated: 2, Ready: 2, Rolling: true, OnTarget: true, Settled: true}}, t0.Add(2*time.Minute))
 	if moved.StepStartTime.Time.Equal(first.StepStartTime.Time) {
 		t.Error("stepStartTime must restart when a member is upgraded")
+	}
+
+	// Going backwards is not progress, so it must not restart the clock.
+	n.Status.Upgrade = moved
+	back := Observe(n, []PoolState{{Desired: 3, Updated: 1, Ready: 1, Rolling: true, OnTarget: true, Settled: true}}, t0.Add(3*time.Minute))
+	if !back.StepStartTime.Time.Equal(moved.StepStartTime.Time) {
+		t.Error("a member count that fell back must not restart the clock — that is churn, not progress")
+	}
+}
+
+// A pod that cannot start is never counted as upgraded, so the clock runs and the upgrade reaches
+// its deadline. Counting pods created at the new revision instead would let a kubelet recreating a
+// failing pod on a backoff look like progress forever.
+func TestAPodThatNeverStartsIsNotProgress(t *testing.T) {
+	n := cr("2026.05.0", "2026.99.0")
+	stuck := []PoolState{{Desired: 1, Updated: 1, Ready: 0, OnTarget: true, Settled: true}}
+
+	first := Observe(n, stuck, t0)
+	if got := first.Progress.Upgraded; got != 0 {
+		t.Fatalf("progress.upgraded = %d for a pod that never became ready, want 0", got)
+	}
+	n.Status.Upgrade = first
+	later := Observe(n, stuck, t0.Add(time.Minute))
+	if !later.StepStartTime.Time.Equal(first.StepStartTime.Time) {
+		t.Fatal("the clock restarted while nothing got better")
+	}
+	n.Status.Upgrade = later
+	expired := Observe(n, stuck, t0.Add(MemberBudget(n)+time.Minute))
+	if expired.Phase != neo4jv1beta1.UpgradePhaseFailed {
+		t.Errorf("phase = %q after the budget expired on a pod that never started, want Failed", expired.Phase)
 	}
 }
 
 func TestObserveFailsWhenTheStepOutlastsItsBudget(t *testing.T) {
 	n := cr("2026.05.0", "2026.07.0")
-	rolling := []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true}}
+	rolling := []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true, Settled: true}}
 
 	first := Observe(n, rolling, t0)
 	n.Status.Upgrade = first
@@ -169,7 +208,7 @@ func TestObserveHandlesAnEmptyPoolList(t *testing.T) {
 // Progress counts must survive a round trip through the API types the CRD publishes.
 func TestObserveProgressIsDeepCopyable(t *testing.T) {
 	n := cr("2026.05.0", "2026.07.0")
-	got := Observe(n, []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true}}, t0)
+	got := Observe(n, []PoolState{{Desired: 3, Updated: 1, Ready: 2, Rolling: true, OnTarget: true, Settled: true}}, t0)
 	clone := got.DeepCopy()
 	if clone.Progress.Upgraded != got.Progress.Upgraded || !clone.StepStartTime.Equal(got.StepStartTime) {
 		t.Errorf("deep copy lost fields: %+v vs %+v", clone, got)

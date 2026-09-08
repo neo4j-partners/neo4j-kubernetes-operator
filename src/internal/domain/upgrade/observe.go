@@ -40,6 +40,12 @@ type PoolState struct {
 	// pool held back for ordering has not been given it yet, so its pods count as pending however
 	// ready they are.
 	OnTarget bool
+	// Settled reports observedGeneration == generation on the StatefulSet: whether its controller
+	// has caught up with the pod template it was last given. Without it there is a window, right
+	// after the template changes, where the revisions still describe the old spec and every replica
+	// still counts as updated and ready — long enough for a caller to conclude an upgrade had
+	// finished before a single pod had restarted.
+	Settled bool
 }
 
 // Observe derives status.upgrade from the pool StatefulSets. It needs no Bolt connection: what it
@@ -61,11 +67,15 @@ func Observe(n *neo4jv1beta1.Neo4j, pools []PoolState, now time.Time) *neo4jv1be
 		total += p.Desired
 		ready += p.Ready
 		if p.OnTarget {
-			upgraded += p.Updated
+			// Back AND ready, not merely created. updatedReplicas counts pods at the new revision
+			// whatever state they are in, so a pod that cannot pull its image counts as upgraded and
+			// then stops counting when the kubelet recreates it — a number that rises and falls
+			// forever, which is neither true progress nor a useful thing to report.
+			upgraded += min(p.Updated, p.Ready)
 		} else {
 			converged = false // this pool has not even been given the new template yet
 		}
-		if p.Rolling {
+		if p.Rolling || !p.Settled {
 			converged = false
 		}
 	}
@@ -108,13 +118,18 @@ func Observe(n *neo4jv1beta1.Neo4j, pools []PoolState, now time.Time) *neo4jv1be
 	return out
 }
 
-// stepStart keeps the previous timestamp while the step is unchanged, and takes now whenever the
-// phase or the upgraded count moves.
+// stepStart keeps the previous timestamp until something actually gets better.
+//
+// Only FORWARD progress restarts the clock. A member count that drops and climbs back is not
+// progress: a pod that cannot pull its image is deleted and recreated on a backoff, which moves the
+// updated count up and down forever. Resetting on any change — or on a phase that oscillates
+// between Stabilizing and Verifying as those counters move — let a permanently stuck upgrade run
+// indefinitely without ever reaching its deadline.
 func stepStart(prev, next *neo4jv1beta1.UpgradeStatus, now time.Time) *metav1.Time {
-	if prev == nil || prev.StepStartTime == nil ||
-		prev.Phase != next.Phase ||
+	restart := prev == nil || prev.StepStartTime == nil ||
 		prev.TargetVersion != next.TargetVersion ||
-		progressOf(prev) != progressOf(next) {
+		progressOf(next) > progressOf(prev)
+	if restart {
 		t := metav1.NewTime(now)
 		return &t
 	}

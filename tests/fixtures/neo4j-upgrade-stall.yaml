@@ -1,0 +1,48 @@
+# Standalone deployed with a probe budget short enough for the upgrade deadline to be observable.
+#
+# The Failed path is about the deadline, not about ordering, so this is Standalone: one pod, no
+# pools to sequence, no quorum to hold. The upgrade target is a tag that does not exist, so the pod
+# cannot start and no progress is ever made.
+#
+# The startup probe is what sizes the budget the operator gives a member to stop and start
+# (failureThreshold x periodSeconds, plus the termination grace period). The defaults come to about
+# 143 minutes, which is right for a real store and useless for a test — so this fixture asks for a
+# small one and gets a correspondingly small deadline. That coupling is the point: the budget
+# follows the probe configuration the CR actually has.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "__NEO4J_VERSION__"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  scheduling:
+    # Nothing to flush on a pod that never started; keeps the budget dominated by the probe.
+    terminationGracePeriodSeconds: 30
+  probes:
+    # 24 x 5s = 120s. Generous enough for Neo4j to start on the first deploy, short enough that the
+    # stalled upgrade reaches its deadline inside the suite's timeout.
+    startup:
+      tcpSocket:
+        port: 7687
+      failureThreshold: 24
+      periodSeconds: 5
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
+  trust:
+    enabled: false
+    insecureAdminConnection: true
