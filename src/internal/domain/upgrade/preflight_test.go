@@ -5,31 +5,31 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // cr builds a minimal Neo4j whose only interesting fields are the running and desired versions.
-func cr(running, desired string) *neo4jv1beta1.Neo4j {
-	n := &neo4jv1beta1.Neo4j{}
+func cr(running, desired string) *neo4jv1.Neo4j {
+	n := &neo4jv1.Neo4j{}
 	n.Spec.Version = desired
 	n.Status.Version = running
 	return n
 }
 
 func TestPreflight(t *testing.T) {
-	digest := func(n *neo4jv1beta1.Neo4j) *neo4jv1beta1.Neo4j {
-		n.Spec.Image = &neo4jv1beta1.ImageSpec{Digest: "sha256:" + strings.Repeat("a", 64)}
+	digest := func(n *neo4jv1.Neo4j) *neo4jv1.Neo4j {
+		n.Spec.Image = &neo4jv1.ImageSpec{Digest: "sha256:" + strings.Repeat("a", 64)}
 		return n
 	}
-	offline := func(n *neo4jv1beta1.Neo4j) *neo4jv1beta1.Neo4j {
-		n.Spec.Maintenance = &neo4jv1beta1.MaintenanceSpec{OfflineMode: true}
+	offline := func(n *neo4jv1.Neo4j) *neo4jv1.Neo4j {
+		n.Spec.Maintenance = &neo4jv1.MaintenanceSpec{OfflineMode: true}
 		return n
 	}
-	plugins := func(mode neo4jv1beta1.VolumeMode) func(*neo4jv1beta1.Neo4j) *neo4jv1beta1.Neo4j {
-		return func(n *neo4jv1beta1.Neo4j) *neo4jv1beta1.Neo4j {
-			n.Spec.Storage = &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: mode},
+	plugins := func(mode neo4jv1.VolumeMode) func(*neo4jv1.Neo4j) *neo4jv1.Neo4j {
+		return func(n *neo4jv1.Neo4j) *neo4jv1.Neo4j {
+			n.Spec.Storage = &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{Mode: mode},
 				},
 			}
 			return n
@@ -38,7 +38,7 @@ func TestPreflight(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		neo4j   *neo4jv1beta1.Neo4j
+		neo4j   *neo4jv1.Neo4j
 		wantErr error // nil means accepted
 	}{
 		// Accepted.
@@ -64,8 +64,8 @@ func TestPreflight(t *testing.T) {
 		// Refusals a user can act on.
 		{"digest pin makes the bump a no-op", digest(cr("2026.05.0", "2026.07.0")), ErrVersionUpgrade},
 		{"offline mode", offline(cr("2026.05.0", "2026.07.0")), ErrVersionUpgrade},
-		{"existing plugins volume cannot be refreshed", plugins(neo4jv1beta1.VolumeModeExisting)(cr("2026.05.0", "2026.07.0")), ErrVersionUpgrade},
-		{"share plugins volume is fine", plugins(neo4jv1beta1.VolumeModeShare)(cr("2026.05.0", "2026.07.0")), nil},
+		{"existing plugins volume cannot be refreshed", plugins(neo4jv1.VolumeModeExisting)(cr("2026.05.0", "2026.07.0")), ErrVersionUpgrade},
+		{"share plugins volume is fine", plugins(neo4jv1.VolumeModeShare)(cr("2026.05.0", "2026.07.0")), nil},
 	}
 
 	for _, tc := range cases {

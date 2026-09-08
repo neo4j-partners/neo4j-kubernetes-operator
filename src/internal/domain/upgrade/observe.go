@@ -22,7 +22,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // PoolState is one pool's rollout as the status writer observes it. The writer already reads every
@@ -49,7 +49,7 @@ type PoolState struct {
 // record of an upgrade is status.version plus status.lastUpgradeTime, not a Completed block left
 // lying around, which is the same choice formation makes when it removes conditions that no longer
 // apply.
-func Observe(n *neo4jv1beta1.Neo4j, pools []PoolState, now time.Time) *neo4jv1beta1.UpgradeStatus {
+func Observe(n *neo4jv1.Neo4j, pools []PoolState, now time.Time) *neo4jv1.UpgradeStatus {
 	target, running := n.Spec.Version, n.Status.Version
 	if running == "" || running == target || len(pools) == 0 {
 		return nil // first install, or nothing to do
@@ -76,21 +76,21 @@ func Observe(n *neo4jv1beta1.Neo4j, pools []PoolState, now time.Time) *neo4jv1be
 		return nil // the caller advances status.version and stamps lastUpgradeTime
 	}
 
-	out := &neo4jv1beta1.UpgradeStatus{
+	out := &neo4jv1.UpgradeStatus{
 		TargetVersion:   target,
 		PreviousVersion: running,
-		Progress:        &neo4jv1beta1.UpgradeProgress{Total: total, Upgraded: upgraded, Pending: total - upgraded},
+		Progress:        &neo4jv1.UpgradeProgress{Total: total, Upgraded: upgraded, Pending: total - upgraded},
 	}
 
 	switch {
 	case upgraded < total:
-		out.Phase = neo4jv1beta1.UpgradePhaseRolling
+		out.Phase = neo4jv1.UpgradePhaseRolling
 	case ready < total:
-		out.Phase = neo4jv1beta1.UpgradePhaseStabilizing
+		out.Phase = neo4jv1.UpgradePhaseStabilizing
 	default:
 		// Every member is on the new image and ready. Whether the cluster re-formed is the caller's
 		// to judge — it holds the ClusterFormed condition formation wrote in this same pass.
-		out.Phase = neo4jv1beta1.UpgradePhaseVerifying
+		out.Phase = neo4jv1.UpgradePhaseVerifying
 	}
 
 	// stepStartTime measures the current step, so it survives only while the step does. Progress of
@@ -98,7 +98,7 @@ func Observe(n *neo4jv1beta1.Neo4j, pools []PoolState, now time.Time) *neo4jv1be
 	out.StepStartTime = stepStart(n.Status.Upgrade, out, now)
 
 	if budget := MemberBudget(n); now.Sub(out.StepStartTime.Time) > budget {
-		out.Phase = neo4jv1beta1.UpgradePhaseFailed
+		out.Phase = neo4jv1.UpgradePhaseFailed
 		out.LastError = fmt.Sprintf(
 			"no progress for %s while upgrading %s to %s (%d of %d members upgraded, %d ready). "+
 				"That is longer than a member may take to stop and start with this probe configuration, "+
@@ -110,7 +110,7 @@ func Observe(n *neo4jv1beta1.Neo4j, pools []PoolState, now time.Time) *neo4jv1be
 
 // stepStart keeps the previous timestamp while the step is unchanged, and takes now whenever the
 // phase or the upgraded count moves.
-func stepStart(prev, next *neo4jv1beta1.UpgradeStatus, now time.Time) *metav1.Time {
+func stepStart(prev, next *neo4jv1.UpgradeStatus, now time.Time) *metav1.Time {
 	if prev == nil || prev.StepStartTime == nil ||
 		prev.Phase != next.Phase ||
 		prev.TargetVersion != next.TargetVersion ||
@@ -121,7 +121,7 @@ func stepStart(prev, next *neo4jv1beta1.UpgradeStatus, now time.Time) *metav1.Ti
 	return prev.StepStartTime.DeepCopy()
 }
 
-func progressOf(s *neo4jv1beta1.UpgradeStatus) int32 {
+func progressOf(s *neo4jv1.UpgradeStatus) int32 {
 	if s == nil || s.Progress == nil {
 		return -1
 	}
@@ -135,7 +135,7 @@ func progressOf(s *neo4jv1beta1.UpgradeStatus) int32 {
 //
 // ponytail: the defaults are duplicated from render/workload/probes.go and
 // render/workload/scheduling.go. Export them from render if a third caller appears.
-func MemberBudget(n *neo4jv1beta1.Neo4j) time.Duration {
+func MemberBudget(n *neo4jv1.Neo4j) time.Duration {
 	failureThreshold, periodSeconds := int64(1000), int64(5)
 	if n.Spec.Probes != nil && n.Spec.Probes.Startup != nil {
 		if v := n.Spec.Probes.Startup.FailureThreshold; v > 0 {

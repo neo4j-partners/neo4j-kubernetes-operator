@@ -12,30 +12,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
 // upgradeCR is a Standalone whose status already reports a running version, so a spec change reads
 // as an upgrade rather than a first install.
-func upgradeCR(running, desired string) *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func upgradeCR(running, desired string) *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: desired,
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeStandalone,
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeStandalone,
 			},
 		},
-		Status: neo4jv1beta1.Neo4jStatus{Version: running},
+		Status: neo4jv1.Neo4jStatus{Version: running},
 	}
 }
 
 // sts builds the pool StatefulSet the writer reads back, with the revisions that decide whether
 // Kubernetes considers it still rolling.
-func sts(n *neo4jv1beta1.Neo4j, image string, replicas, ready, updated int32, current, update string) *appsv1.StatefulSet {
+func sts(n *neo4jv1.Neo4j, image string, replicas, ready, updated int32, current, update string) *appsv1.StatefulSet {
 	ctx := render.ContextForPool(n, render.PoolServer)
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: ctx.STSName(), Namespace: n.Namespace},
@@ -56,17 +56,17 @@ func sts(n *neo4jv1beta1.Neo4j, image string, replicas, ready, updated int32, cu
 
 // writerFor seeds a fake API server and hands back the CR as the server holds it, so the status
 // update the writer issues carries a resourceVersion the tracker agrees with.
-func writerFor(n *neo4jv1beta1.Neo4j, objs ...client.Object) (*Writer, *neo4jv1beta1.Neo4j) {
+func writerFor(n *neo4jv1.Neo4j, objs ...client.Object) (*Writer, *neo4jv1.Neo4j) {
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(append([]client.Object{n}, objs...)...).
-		WithStatusSubresource(&neo4jv1beta1.Neo4j{}).
+		WithStatusSubresource(&neo4jv1.Neo4j{}).
 		Build()
 
-	var live neo4jv1beta1.Neo4j
+	var live neo4jv1.Neo4j
 	if err := c.Get(context.Background(), types.NamespacedName{Name: n.Name, Namespace: n.Namespace}, &live); err != nil {
 		panic(err)
 	}
@@ -102,8 +102,8 @@ func TestVersionDoesNotAdvanceWhileRolling(t *testing.T) {
 // Once the roll converges the version advances, the block clears, and the completion is recorded.
 func TestVersionAdvancesAndUpgradeClearsOnceConverged(t *testing.T) {
 	n := upgradeCR("2026.05.0", "2026.07.0")
-	n.Status.Upgrade = &neo4jv1beta1.UpgradeStatus{
-		Phase:         neo4jv1beta1.UpgradePhaseRolling,
+	n.Status.Upgrade = &neo4jv1.UpgradeStatus{
+		Phase:         neo4jv1.UpgradePhaseRolling,
 		TargetVersion: "2026.07.0",
 	}
 	pool := render.ContextForPool(n, render.PoolServer)
