@@ -71,18 +71,29 @@ fi
 # the cached node image. Best-effort: on failure, pods fall back to pulling on demand.
 # Both come from tests/config/neo4j/base.sh, which reconcile.sh sourced above — repeating the
 # defaults here is how this version drifted from the one the fixtures deploy.
-if [[ "${NEO4J_EDITION}" == "enterprise" ]]; then
-  NEO4J_IMAGE="neo4j:${NEO4J_VERSION}-enterprise"
-else
-  NEO4J_IMAGE="neo4j:${NEO4J_VERSION}"
+neo4j_image_for() {  # neo4j_image_for <version>
+  if [[ "${NEO4J_EDITION}" == "enterprise" ]]; then
+    echo "neo4j:$1-enterprise"
+  else
+    echo "neo4j:$1"
+  fi
+}
+NEO4J_IMAGE="$(neo4j_image_for "${NEO4J_VERSION}")"
+# feature-upgrade deploys the from-version and rolls onto the pin, so both have to be on the node:
+# a cold pull for the second one happens inside the upgrade's own Ready wait, where it looks like
+# the roll hanging rather than a registry being slow.
+NEO4J_IMAGES=("${NEO4J_IMAGE}")
+if [[ -n "${NEO4J_VERSION_UPGRADE_FROM:-}" && "${NEO4J_VERSION_UPGRADE_FROM}" != "${NEO4J_VERSION}" ]]; then
+  NEO4J_IMAGES+=("$(neo4j_image_for "${NEO4J_VERSION_UPGRADE_FROM}")")
 fi
-log "Pre-loading Neo4j image ${NEO4J_IMAGE} into kind (avoids per-pod Docker Hub pulls)"
+log "Pre-loading Neo4j images ${NEO4J_IMAGES[*]} into kind (avoids per-pod Docker Hub pulls)"
 # Every step stays inside a condition so this cannot abort the run under `set -e`. Two things go
 # wrong in practice. The pull is rate-limited on CI runners, which is why the caller may pre-seed the
 # image (E2E_REUSE_LOCAL_IMAGES). The load is what breaks on Docker Desktop for Apple silicon, where
 # containerd refuses the multi-arch manifest with "content digest ... not found" — a single-platform
 # archive gets around it.
-load_neo4j_image() {
+load_neo4j_image() {  # load_neo4j_image <image>
+  local NEO4J_IMAGE=$1
   if [[ "${REUSE_IMAGES}" == "true" ]] && docker image inspect "${NEO4J_IMAGE}" >/dev/null 2>&1; then
     log "Reusing Neo4j image ${NEO4J_IMAGE} already in the local daemon (no Docker Hub pull)"
   elif ! docker pull "${NEO4J_IMAGE}"; then
@@ -106,8 +117,10 @@ load_neo4j_image() {
   return 1
 }
 
-if ! load_neo4j_image; then
-  log "WARN: could not pre-load ${NEO4J_IMAGE}; Neo4j pods will pull it on demand"
-fi
+for image in "${NEO4J_IMAGES[@]}"; do
+  if ! load_neo4j_image "${image}"; then
+    log "WARN: could not pre-load ${image}; Neo4j pods will pull it on demand"
+  fi
+done
 
 log "kind cluster ready"

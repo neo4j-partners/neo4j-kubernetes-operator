@@ -12,6 +12,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `workload-cluster` | [suites/workload-cluster.yaml](suites/workload-cluster.yaml) | Cluster mode — members created, cluster forms, default database allocated on the declared primaries, routing works (1-primary lab + 3-primary HA) |
 | `feature-connectivity` | [suites/feature-connectivity.yaml](suites/feature-connectivity.yaml) | Boots Neo4j (no TLS) and probes connectors from the pod and a client pod |
 | `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart, Standalone (RSTR-01) and 3-primary cluster rolled one-by-one with quorum held (RSTR-02) (NEO-2-010) |
+| `feature-upgrade` | [suites/feature-upgrade.yaml](suites/feature-upgrade.yaml) | Rolling upgrade of `spec.version` on a 3-primary cluster with a read pool — downgrade refused, read pool upgraded before the primaries, quorum held, `status.upgrade`/`status.version` reported, data preserved (ADR-017) |
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo` | [suites/feature-tls-byo.yaml](suites/feature-tls-byo.yaml) | TLS from Bring-Your-Own Secrets — Standalone bolt leaf supplied via labelled Secrets, operator mounts and verifies it (Ready is the SAN gate), Neo4j serves Bolt over TLS, plaintext Bolt refused |
@@ -80,6 +81,27 @@ Legend: `[x]` implemented & asserted · `[ ]` not covered yet.
 - [x] Bolt only — `connectivity.service.expose: [bolt]` publishes only `tcp-bolt` on the client Service; HTTP/HTTPS are not exposed and Neo4j still reaches Ready over Bolt (exposure-only; Neo4j keeps listening on HTTP internally). `expose` must include `bolt` (CEL) since the operator manages Neo4j over the client-Service Bolt path — covered in `feature-ports` case `bolt-only` — NEO-3-007-PCMB-01 · AC-NEO-NETWORKING-PORTS-BOLT
 - [x] Reachable via client ClusterIP Service from an external pod — NEO-3-007-SVC-01 · AC-NEO-NETWORKING-CLUSTERIP
 - [x] Single-cluster only — `multiCluster.enabled` refused at admission, see `operator-admission` — NEO-3-007-MULTI-01
+
+### `feature-upgrade` — ADR-017
+
+Deploys at `NEO4J_VERSION_UPGRADE_FROM` and rolls onto the version under test, so the pin every
+other suite runs stays the target rather than the starting point.
+
+- [x] A downgrade is refused: patching `spec.version` backwards puts `VersionDowngradeRefused` on
+  `Error`, the primary pool's image does not change, and `status.version` does not move. Proved on a
+  running CR because the refusal compares `spec.version` against `status.version`, which only exists
+  once something is up — the admission suite cannot reach it
+- [x] Secondaries before primaries: the `<cr>-read` pool reaches the new image and finishes rolling
+  before the `<cr>-primary` pool's pod template changes. Neo4j requires system-database secondaries
+  to be upgraded first, and the operator renders the read pool with
+  `server.cluster.system_database_mode=SECONDARY`
+- [x] Quorum held while the primaries roll (`readyReplicas` never below `members-1`) and no
+  error-severity `ClusterFormed` reason appears — same property as RSTR-02, same machinery
+- [x] Reported: `status.upgrade.targetVersion` names the new version while the roll is in flight;
+  afterwards `status.version` reports it, `lastUpgradeTime` is stamped and the upgrade block clears
+- [x] Every primary pod actually runs an image carrying the new version — the operator's own status
+  is not evidence of that
+- [x] Data survives: a row written before the upgrade reads back after it
 
 ### `feature-config` — NEO-2-003 / NEO-2-010
 - [x] Valid `spec.config.neo4j` effective at runtime (bolt `SHOW SETTINGS`) — NEO-3-003-CFG-01 · AC-NEO-CONFIG-001

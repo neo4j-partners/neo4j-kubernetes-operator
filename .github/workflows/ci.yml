@@ -89,6 +89,16 @@ jobs:
           fi
           echo "image=${image}" >> "${GITHUB_OUTPUT}"
           echo "Neo4j image: ${image}"
+          # feature-upgrade deploys this one and rolls onto the image above, so the runner needs
+          # both. A cold pull for it would land inside the upgrade's Ready wait and read as the
+          # roll hanging.
+          if [ "${NEO4J_EDITION}" = "enterprise" ]; then
+            from="neo4j:${NEO4J_VERSION_UPGRADE_FROM}-enterprise"
+          else
+            from="neo4j:${NEO4J_VERSION_UPGRADE_FROM}"
+          fi
+          echo "from-image=${from}" >> "${GITHUB_OUTPUT}"
+          echo "Neo4j upgrade-from image: ${from}"
 
       # Keyed on the pinned tag, so it survives across runs and only re-pulls when the
       # version moves.
@@ -105,6 +115,22 @@ jobs:
           mkdir -p /tmp/e2e-images
           docker pull "${{ steps.neo4j.outputs.image }}"
           docker save -o /tmp/e2e-images/neo4j.tar "${{ steps.neo4j.outputs.image }}"
+
+      # Cached separately so moving one version does not re-pull the other. The e2e action loads
+      # every tar in the directory, so nothing downstream needs to know there are two.
+      - name: Cache the Neo4j upgrade-from image
+        id: neo4j-from-cache
+        uses: actions/cache@v6
+        with:
+          path: /tmp/e2e-images/neo4j-from.tar
+          key: neo4j-image-${{ steps.neo4j.outputs.from-image }}
+
+      - name: Pull the Neo4j upgrade-from image
+        if: steps.neo4j-from-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/e2e-images
+          docker pull "${{ steps.neo4j.outputs.from-image }}"
+          docker save -o /tmp/e2e-images/neo4j-from.tar "${{ steps.neo4j.outputs.from-image }}"
 
       # Never cached: it is this commit's code.
       - name: Build the operator
