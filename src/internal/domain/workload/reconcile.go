@@ -23,8 +23,8 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/upgrade"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
-	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
+	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 	renderwl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
 
@@ -150,7 +150,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 			// StatefulSet forbids changing serviceName, selector, volumeClaimTemplates,
 			// podManagementPolicy after create — only patch mutable fields on update.
 			preserveRolloutRestart(&sts.Spec.Template, &stsDesired.Spec.Template)
-			if sts.CreationTimestamp.IsZero() {
+			// resourceVersion, not creationTimestamp: both are set by a real API server, but only
+			// resourceVersion is set by the fake client the unit tests use. Branching on the
+			// timestamp made every test take this create path and assign the whole spec, so the
+			// update rules below — the replica gate, the upgrade hold — went unexercised.
+			if sts.ResourceVersion == "" {
 				sts.Spec = stsDesired.Spec
 				return nil
 			}

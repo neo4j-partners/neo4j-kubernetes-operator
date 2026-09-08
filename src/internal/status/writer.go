@@ -108,6 +108,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 				Ready:    sts.Status.ReadyReplicas,
 				Rolling:  stsRolling(sts),
 				OnTarget: poolImage(sts) == ctxRender.ImageRef(),
+				Settled:  sts.Status.ObservedGeneration == sts.Generation,
 			})
 			log.V(1).Info("observed statefulset",
 				"pool", string(pool),
@@ -160,21 +161,25 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 			"spec.maintenance.offlineMode is true; Neo4j process is not running")
 	} else {
 		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady, storageReady), readyMessage(ready, desired))
-		// Not while rolling: every pod can be ready in the moment before Kubernetes takes the first
-		// one down, and advancing here would report a version nothing is running yet (ADR-017).
-		if allReady && !rolling {
-			neo4j.Status.Version = neo4j.Spec.Version
-		}
 	}
 
 	// status.upgrade narrates a version change; it never gates Ready, and status.phase stays Running
 	// throughout (ADR-017, status.md). A nil result means nothing is in flight — the finished record
 	// of an upgrade is status.version plus lastUpgradeTime, not a Completed block left behind.
 	wasUpgrading := neo4j.Status.Upgrade != nil
-	neo4j.Status.Upgrade = upgrade.Observe(neo4j, poolStates, time.Now())
-	if wasUpgrading && neo4j.Status.Upgrade == nil {
+	inFlight := upgrade.Observe(neo4j, poolStates, time.Now())
+	neo4j.Status.Upgrade = inFlight
+	if wasUpgrading && inFlight == nil {
 		done := metav1.Now()
 		neo4j.Status.LastUpgradeTime = &done
+	}
+
+	// The version is what is RUNNING, so it may only advance once nothing is in flight. Readiness
+	// alone is not enough: for a moment after the pod template changes the old pods are still ready
+	// and the StatefulSet still reports the old revision, which is long enough to publish a version
+	// no pod has started (ADR-017).
+	if allReady && !rolling && inFlight == nil && !offline {
+		neo4j.Status.Version = neo4j.Spec.Version
 	}
 	changing := changeInFlight(neo4j, rolling, drainPending)
 	// Status is passed whole and read before the assignment: the previously published phase and
