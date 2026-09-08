@@ -278,6 +278,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		return shared.Requeue(requeueAfter)
 	}
 
+	// While a version change is in flight, "formed" has to mean what Neo4j asks between members of a
+	// rolling upgrade, not merely that every server is enabled: each one hosting the databases asked
+	// of it, and each database on its requested status (ADR-017 R2). Enabled is a weaker bar, and a
+	// member that answers Bolt while still recovering its databases would otherwise let the upgrade
+	// be declared finished. Checked only during an upgrade, so steady-state behaviour is unchanged.
+	if neo4j.Status.Version != "" && neo4j.Status.Version != neo4j.Spec.Version {
+		stable, detail, err := admin.ClusterStable(ctx)
+		if err != nil {
+			log.Info("upgrade stability check failed, requeue", "err", err.Error())
+			setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonShowServersFailed, err.Error())
+			return shared.Requeue(requeueAfter)
+		}
+		if !stable {
+			log.Info("cluster not settled after upgrade restart", "detail", detail)
+			setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionFalse, oracle.ReasonWaitingQuorum,
+				fmt.Sprintf("waiting for the cluster to settle after a version change: %s", detail))
+			return shared.Requeue(requeueAfter)
+		}
+	}
+
 	log.Info("cluster formed", "enabledPrimaries", enabledPrimaries, "bootstrapGate", min)
 	setCondition(neo4j, oracle.ConditionClusterFormed, metav1.ConditionTrue, oracle.ReasonFormed, "All desired servers enabled")
 
