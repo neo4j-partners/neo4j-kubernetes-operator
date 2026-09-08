@@ -17,6 +17,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/upgrade"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/podlog"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -54,6 +55,10 @@ func PipelineErrorReason(err error) oracle.Reason {
 		return oracle.ReasonSecretNotDelegated
 	case errors.Is(err, rendersecrets.ErrAuthValueRejected):
 		return oracle.ReasonAuthSecretInvalid
+	case errors.Is(err, upgrade.ErrVersionDowngrade):
+		return oracle.ReasonVersionDowngradeRefused
+	case errors.Is(err, upgrade.ErrVersionUpgrade):
+		return oracle.ReasonVersionUpgradeRefused
 	case errors.Is(err, renderstorage.ErrTemplateDrift):
 		return oracle.ReasonStorageTemplateDrift
 	default:
