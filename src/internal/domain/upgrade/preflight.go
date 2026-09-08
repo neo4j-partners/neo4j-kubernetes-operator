@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"strings"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // Sentinel errors, mapped to catalogued reasons by internal/status.PipelineErrorReason.
@@ -46,7 +46,7 @@ var (
 // status.version is the anchor rather than a separately pinned field: once it reports the running
 // version instead of echoing the spec, it already is the record of where we are. An empty value
 // means the resource has never been ready, so this is a first install and not an upgrade.
-func Preflight(n *neo4jv1beta1.Neo4j) error {
+func Preflight(n *neo4jv1.Neo4j) error {
 	running := n.Status.Version
 	if running == "" || running == n.Spec.Version {
 		return nil // first install, or nothing changed
@@ -87,7 +87,7 @@ func Preflight(n *neo4jv1beta1.Neo4j) error {
 
 	// R11: an incompatible plugin JAR stops Neo4j starting at all. In Existing mode the operator
 	// never emits NEO4J_PLUGINS, so nothing re-fetches and the new image boots against the old JARs.
-	if v := pluginsVolume(n); v != nil && v.Mode == neo4jv1beta1.VolumeModeExisting {
+	if v := pluginsVolume(n); v != nil && v.Mode == neo4jv1.VolumeModeExisting {
 		return fmt.Errorf("%w: storage.volumes.plugins is Existing, so the operator never refreshes "+
 			"the plugin JARs and %s would start against the ones already on that claim. Update the "+
 			"claim's plugins, or use Share or Dynamic mode", ErrVersionUpgrade, n.Spec.Version)
@@ -96,7 +96,7 @@ func Preflight(n *neo4jv1beta1.Neo4j) error {
 	return nil
 }
 
-func pluginsVolume(n *neo4jv1beta1.Neo4j) *neo4jv1beta1.AuxiliaryVolumeSpec {
+func pluginsVolume(n *neo4jv1.Neo4j) *neo4jv1.AuxiliaryVolumeSpec {
 	if n.Spec.Storage == nil || n.Spec.Storage.Volumes == nil {
 		return nil
 	}
