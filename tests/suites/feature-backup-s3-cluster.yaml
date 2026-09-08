@@ -1,0 +1,38 @@
+name: feature-backup-s3-cluster
+description: >
+  Object-store (S3/MinIO) backup + restore round-trip on a 3-primary CLUSTER with static-key
+  credentials (ADR-016, cluster path). Stands up single-node MinIO + a static-key Secret and a
+  3-primary Enterprise cluster whose spec.security.cloudIdentity.staticKeySecret points at that
+  Secret (auto-enabling CloudSeedProvider on every member) and whose topology.defaultPrimariesCount
+  is 3. Writes probe #1 to `neo4j` over a routed session, takes a Full Neo4jBackup to
+  s3://<bucket>/<cr>/ (a cluster member streams it to object storage), writes probe #post, then
+  restores via source.backupRef with overwrite. The operator issues CREATE OR REPLACE DATABASE neo4j
+  OPTIONS {seedURI} TOPOLOGY 3 PRIMARIES, so each primary seeds from s3:// independently. Asserts the
+  backup Succeeds with an s3:// artifact, the restore Succeeds, `neo4j` is online on all three
+  primaries (per-member seed — the cluster restore contract), probe #1 is present and probe #post is
+  gone. This is the cluster twin of feature-backup-s3 (standalone) and the only e2e that exercises
+  the multi-member object-store restore path; PVC file: seeds need an RWX backups volume and are out
+  of scope here.
+brief_ref: neo4j-backup-s3-cluster
+use_pipeline: neo4j-suite
+on_case_failure: stop
+# Single kind node: object-store restore is node-count-agnostic (all members read MinIO over the
+# in-cluster endpoint), so three primary pods on one node exercise the per-member seed without a
+# multi-node cluster. Pinned to kind so it self-skips on the managed clouds.
+clouds: [local-kind]
+pipeline:
+  case_assert:
+    - minio/install
+    - backup/s3-roundtrip-cluster
+    - assert/restore-s3-cluster
+  case_teardown:
+    - backup/s3-cleanup
+    - minio/cleanup
+
+cases:
+  - id: s3-cluster-full
+    comment: ADR-016 (cluster) — a Neo4jBackup(Full, s3, credentials) writes to MinIO from a cluster member and a Neo4jRestore(source.backupRef=<full>, overwrite) reseeds `neo4j` on all three primaries from s3:// via CloudSeedProvider (TOPOLOGY 3 PRIMARIES); the backed-up probe lands on every member and the post-backup probe is dropped by the overwrite.
+    fixture: tests/fixtures/neo4j-cluster-s3.yaml
+    assert: restore-s3-cluster
+    expect: success
+    cr_name: e2e-s3c

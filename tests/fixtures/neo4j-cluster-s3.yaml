@@ -1,0 +1,53 @@
+# Cluster object-store (S3/MinIO) backup + restore round-trip target (ADR-016, cluster path). A
+# 3-primary Enterprise cluster with the backup listener and spec.security.cloudIdentity.
+# staticKeySecret pointing at the MinIO creds Secret (created by minio/install), which auto-enables
+# CloudSeedProvider on EVERY member. topology.defaultPrimariesCount: 3 makes a CREATE/REPLACE
+# DATABASE with no explicit TOPOLOGY — exactly what the restore issues — land `neo4j` on all three
+# primaries, so the restore proves each member independently seeds from s3:// (the cluster restore
+# contract). No backups volume: the artifact lives in MinIO, reachable by every pod over the
+# in-cluster endpoint — which is why object storage (not a PVC) is the node-count-agnostic cluster
+# restore path (a file: seed would need an RWX backups volume on all members).
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "__NEO4J_VERSION__"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    # The restore's TOPOLOGY clause reads DefaultPrimariesCount (default 1); set 3 so the restored
+    # database spans all three primaries and the assert can prove a per-member seed.
+    defaultPrimariesCount: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true
+  security:
+    cloudIdentity:
+      staticKeySecret: e2e-s3-creds
+  trust:
+    # NEO-004: cluster formation and the restore seed both run over operator admin Bolt. On kind we
+    # opt in to plaintext admin Bolt; prefer trust.certificates.bolt for verified TLS in production.
+    enabled: false
+    insecureAdminConnection: true
