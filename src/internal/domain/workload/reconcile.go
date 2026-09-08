@@ -20,6 +20,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/upgrade"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
@@ -108,6 +109,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	}
 
 	tlsSum := r.tlsChecksum(ctx, neo4j)
+	// Neo4j upgrades system-database secondaries before the system primary (ADR-017 R3). Decided
+	// once per pass so every pool in the loop below sees the same answer.
+	holdPrimaries := upgrade.HoldPrimaries(neo4j, r.secondaryPoolStates(ctx, neo4j))
+	if holdPrimaries {
+		log.Info("holding the primary pool until the secondary pools finish upgrading",
+			"targetVersion", neo4j.Spec.Version, "runningVersion", neo4j.Status.Version)
+	}
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		stsDesired := renderwl.PoolStatefulSet(ctxRender)
@@ -165,7 +173,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 				)
 			}
 			sts.Spec.Replicas = &effective
-			sts.Spec.Template = stsDesired.Spec.Template
+			// A held pool keeps the pods it has. Everything else about it is still reconciled — only
+			// the pod template waits, because replacing it is what starts the roll.
+			if !(holdPrimaries && pool == render.PoolPrimary) {
+				sts.Spec.Template = stsDesired.Spec.Template
+			}
 			sts.Spec.UpdateStrategy = stsDesired.Spec.UpdateStrategy
 			sts.Spec.PersistentVolumeClaimRetentionPolicy = stsDesired.Spec.PersistentVolumeClaimRetentionPolicy
 			return nil
@@ -183,6 +195,40 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 
 	r.recordCredentials(neo4j, baseCtx.AuthSecretName(), generated)
 	return shared.Done()
+}
+
+// secondaryPoolStates reports how far the analytics and read pools have moved onto the rendered
+// image. A pool whose StatefulSet is missing counts as not converged: it cannot have finished.
+func (r *Reconciler) secondaryPoolStates(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) []upgrade.PoolState {
+	var out []upgrade.PoolState
+	for _, pool := range render.ActivePools(neo4j) {
+		if pool == render.PoolPrimary || pool == render.PoolServer {
+			continue
+		}
+		ctxPool := render.ContextForPool(neo4j, pool)
+		state := upgrade.PoolState{Desired: ctxPool.PoolReplicas()}
+		var sts appsv1.StatefulSet
+		key := types.NamespacedName{Name: ctxPool.STSName(), Namespace: ctxPool.Namespace()}
+		if err := r.Client.Get(ctx, key, &sts); err == nil {
+			state.Updated = sts.Status.UpdatedReplicas
+			state.Ready = sts.Status.ReadyReplicas
+			state.Rolling = sts.Status.CurrentRevision != "" && sts.Status.UpdateRevision != "" &&
+				sts.Status.CurrentRevision != sts.Status.UpdateRevision
+			state.OnTarget = poolImage(sts) == ctxPool.ImageRef()
+		}
+		out = append(out, state)
+	}
+	return out
+}
+
+// poolImage is the Neo4j image the live pod template carries.
+func poolImage(sts appsv1.StatefulSet) string {
+	for _, c := range sts.Spec.Template.Spec.Containers {
+		if c.Name == renderwl.Neo4jContainerName {
+			return c.Image
+		}
+	}
+	return ""
 }
 
 func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
