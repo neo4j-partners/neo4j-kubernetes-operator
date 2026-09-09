@@ -233,6 +233,7 @@ func (r *Reconciler) secondaryPoolStates(ctx context.Context, neo4j *neo4jv1.Neo
 			state.Rolling = sts.Status.CurrentRevision != "" && sts.Status.UpdateRevision != "" &&
 				sts.Status.CurrentRevision != sts.Status.UpdateRevision
 			state.OnTarget = poolImage(sts) == ctxPool.ImageRef()
+			state.Settled = sts.Status.ObservedGeneration == sts.Generation
 		}
 		out = append(out, state)
 	}

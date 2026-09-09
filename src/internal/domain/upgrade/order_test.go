@@ -18,6 +18,18 @@ func TestHoldPrimaries(t *testing.T) {
 		{"secondary not yet on the new image", "2026.05.0", []PoolState{lagging}, true},
 		{"secondary still rolling", "2026.05.0", []PoolState{moving}, true},
 		{"secondary converged", "2026.05.0", []PoolState{done}, false},
+		{
+			// The window this feature is most likely to get wrong: the operator has just written the
+			// new image to the pool's template, so OnTarget is already true, but the StatefulSet
+			// controller has not yet acted and its status still describes the pods it has — all of
+			// them updated, ready, and on one revision. Every field but Settled says "finished".
+			// Releasing the primaries here upgrades the system primary before the secondary has
+			// restarted at all, which is the one order Neo4j does not allow.
+			"secondary whose status has not caught up with its new template",
+			"2026.05.0",
+			[]PoolState{{Desired: 2, Updated: 2, Ready: 2, OnTarget: true, Settled: false}},
+			true,
+		},
 		{"one of two secondaries lagging", "2026.05.0", []PoolState{done, lagging}, true},
 		{"both secondaries converged", "2026.05.0", []PoolState{done, done}, false},
 		{"cluster with no secondary pools has nothing to wait for", "2026.05.0", nil, false},
