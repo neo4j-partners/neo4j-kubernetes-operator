@@ -128,6 +128,31 @@ Aggregation always keeps the original chain (`--keep-old-backup=true`); the reco
 first-class, restorable `Neo4jBackup` in its own right. The [schedule](#scheduling-backups) can do
 this automatically at chain boundaries.
 
+The `destination` can also be an **object store** — the aggregate runs in the bucket directly
+(`neo4j-admin backup aggregate --from-path=s3://…`, no volume), authenticating with
+`destination.credentials` or the target's `spec.security.cloudIdentity` workload identity:
+
+```yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata: { name: prod-monday-agg }
+spec:
+  neo4jRef: { name: prod }
+  databases: ["neo4j"]
+  type: Aggregate
+  destination:
+    type: s3                       # or gcs / azure
+    url: s3://my-bucket/neo4j/prod/
+    credentials: { secretName: s3-creds }   # omit to use workload identity
+  source:
+    backupRef: prod-monday-tip
+```
+
+Object-store aggregate records the **folder url** (not a recovered filename) on the resulting
+`Neo4jBackup`, so a restore that references it seeds that folder — which now recovers to the
+aggregated full. All requested databases must live under the same url (mixing stores or urls is
+rejected). Requires S3 ≥ 5.19, GCS ≥ 5.21, or Azure ≥ 5.24 (MinIO via `AWS_ENDPOINT_URL_S3`).
+
 ## Scheduling backups
 
 `Neo4jBackupSchedule` owns two independent cron cadences and the chain they build. It emits ordinary
