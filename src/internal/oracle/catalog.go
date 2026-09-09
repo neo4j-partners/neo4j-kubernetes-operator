@@ -358,7 +358,7 @@ var (
 	ReasonBackupSourceNotFound = declare("BackupSourceNotFound", SeverityWarn, SurfaceCondition,
 		on(ConditionBackupReady, "`spec.source.backupRef` (type Aggregate) does not resolve to a Succeeded Neo4jBackup yet"))
 	ReasonBackupSourceUnsupported = declare("BackupSourceUnsupported", SeverityError, SurfaceBoth,
-		on(ConditionBackupReady, "The aggregate source cannot be used (not PVC-backed, missing recorded artifact, or mixed claims)"))
+		on(ConditionBackupReady, "The aggregate source cannot be used (missing recorded artifact, or databases spread across mixed stores/claims/urls)"))
 )
 
 // RestoreReady — a Neo4jRestore run-to-completion record (BDR-014 / ADR-015). Restore runs

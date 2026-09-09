@@ -204,12 +204,12 @@ func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1bet
 			"source.backupRef "+b.Spec.Source.BackupRef+" has not Succeeded (phase "+string(src.Status.Phase)+")")
 	}
 
-	claim, dbArtifacts, reason, msg := aggregateInputs(b, &src)
+	in, reason, msg := aggregateInputs(b, &src)
 	if reason != nil {
 		return r.fail(ctx, b, *reason, msg)
 	}
 
-	job, err := renderbackup.AggregateJob(neo4j, renderbackup.JobName(b), claim, dbArtifacts)
+	job, err := renderbackup.AggregateJob(neo4j, renderbackup.JobName(b), in)
 	if err != nil {
 		return r.fail(ctx, b, oracle.ReasonBackupSourceUnsupported, err.Error())
 	}
@@ -226,7 +226,7 @@ func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1bet
 	}
 	switch complete, failed, jmsg := shared.JobTerminal(&owned); {
 	case complete:
-		return r.succeedAggregate(ctx, b, &src, claim, &owned)
+		return r.succeedAggregate(ctx, b, &src, in, &owned)
 	case failed:
 		if podMsg := shared.JobPodTerminationMessage(ctx, r.Client, owned.Namespace, owned.Name); podMsg != "" {
 			jmsg = podMsg
@@ -238,34 +238,65 @@ func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1bet
 	}
 }
 
-// aggregateInputs validates the source is PVC-backed with recorded artifacts and returns the claim
-// plus each database's latest artifact path (the chain's last link, chain-sub-dir included) for the
-// aggregate Job. All databases must live on the one claim. Unlike restore's aggregate, it does not
-// require the target to mount the claim — the Job mounts it directly.
-func aggregateInputs(b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup) (claim string, dbArtifacts map[string]string, reason *oracle.Reason, msg string) {
+// aggregateInputs validates the source's recorded artifacts and returns the resolved aggregate
+// inputs (PVC claim + per-db chain link, or object-store url + db operands) for the aggregate Job.
+// All databases must live in the same store and location. PVC sources need a recorded artifact
+// filename (the chain's last link); object-store sources (ADR-016) aggregate the folder directly and
+// take their credentials from this backup's own destination (or the target's workload identity).
+// Unlike restore's aggregate, it does not require the target to mount the claim — the Job does.
+func aggregateInputs(b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup) (renderbackup.AggregateInputs, *oracle.Reason, string) {
 	unsupported := oracle.ReasonBackupSourceUnsupported
 	notFound := oracle.ReasonBackupSourceNotFound
-	dbArtifacts = map[string]string{}
+	fail := func(reason oracle.Reason, msg string) (renderbackup.AggregateInputs, *oracle.Reason, string) {
+		return renderbackup.AggregateInputs{}, &reason, msg
+	}
+	in := renderbackup.AggregateInputs{DBArtifacts: map[string]string{}}
+	var claim, objURL string
 	for _, db := range b.Spec.Databases {
 		a, ok := artifactFor(src, db)
 		if !ok {
-			return "", nil, &notFound, "source.backupRef " + src.Name + " has no artifact for database " + db
+			return fail(notFound, "source.backupRef "+src.Name+" has no artifact for database "+db)
 		}
-		if !strings.HasPrefix(a.URI, "pvc://") {
-			return "", nil, &unsupported, "aggregate supports only PVC-backed backups; artifact for " + db + " is " + a.URI
+		if strings.HasPrefix(a.URI, "pvc://") {
+			if objURL != "" {
+				return fail(unsupported, "aggregate requires all databases in the same store (mixed pvc and object-store artifacts)")
+			}
+			if a.Path == "" {
+				return fail(unsupported, "source recorded no artifact filename for "+db+"; cannot aggregate")
+			}
+			c := strings.TrimPrefix(a.URI, "pvc://")
+			if claim == "" {
+				claim = c
+			} else if claim != c {
+				return fail(unsupported, "aggregate requires all databases on the same backup claim")
+			}
+			in.DBArtifacts[db] = a.Path
+			continue
 		}
-		if a.Path == "" {
-			return "", nil, &unsupported, "source recorded no artifact filename for " + db + "; cannot aggregate"
+		// Object store (s3/gs/azb): aggregate the chain under the recorded folder url in place.
+		if claim != "" {
+			return fail(unsupported, "aggregate requires all databases in the same store (mixed pvc and object-store artifacts)")
 		}
-		c := strings.TrimPrefix(a.URI, "pvc://")
-		if claim == "" {
-			claim = c
-		} else if claim != c {
-			return "", nil, &unsupported, "aggregate requires all databases on the same backup claim"
+		if a.URI == "" {
+			return fail(unsupported, "source recorded no artifact location for "+db+"; cannot aggregate")
 		}
-		dbArtifacts[db] = a.Path
+		if objURL == "" {
+			objURL = a.URI
+		} else if objURL != a.URI {
+			return fail(unsupported, "aggregate requires all databases at the same object-store url")
+		}
+		in.Databases = append(in.Databases, db)
 	}
-	return claim, dbArtifacts, nil, ""
+	switch {
+	case claim != "":
+		in.PVCClaim = claim
+	case objURL != "":
+		in.ObjectURL = objURL
+		in.Credentials = b.Spec.Destination.Credentials
+	default:
+		return fail(unsupported, "type Aggregate requires at least one database with a recorded artifact")
+	}
+	return in, nil, ""
 }
 
 // artifactFor finds the recorded artifact for a database (exact match, or a "*" artifact standing
@@ -282,23 +313,36 @@ func artifactFor(src *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.Backup
 // succeedAggregate catalogs the recovered full(s) the aggregate Job produced (chain-prefixed path,
 // Type Full, pvc://<source claim> URI) so a restore can seed them directly. It belongs to the same
 // chain as its source. An empty recorded path means the aggregate produced nothing usable → fail.
-func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup, claim string, job *batchv1.Job) (ctrl.Result, error) {
-	arts := r.artifactPaths(ctx, job)
+func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup, in renderbackup.AggregateInputs, job *batchv1.Job) (ctrl.Result, error) {
 	now := metav1.Now()
 	out := make([]neo4jv1beta1.BackupArtifact, 0, len(b.Spec.Databases))
-	for _, db := range b.Spec.Databases {
-		art, ok := arts[db]
-		if !ok || art.Name == "" {
-			return r.fail(ctx, b, oracle.ReasonBackupJobFailed, "aggregate produced no recovered artifact for database "+db)
+	if in.ObjectURL != "" {
+		// Object store: the recovered full lands under the same url and there is no mounted
+		// filesystem to record its filename from, so seed the folder (which now recovers to it).
+		for _, db := range b.Spec.Databases {
+			out = append(out, neo4jv1beta1.BackupArtifact{
+				Database:    db,
+				Type:        neo4jv1beta1.BackupTypeFull, // the recovered artifact is a standalone full
+				URI:         in.ObjectURL,
+				CompletedAt: &now,
+			})
 		}
-		out = append(out, neo4jv1beta1.BackupArtifact{
-			Database:    db,
-			Type:        neo4jv1beta1.BackupTypeFull, // the recovered artifact is a standalone full
-			URI:         "pvc://" + claim,
-			Path:        art.Name,
-			SizeBytes:   art.SizeBytes,
-			CompletedAt: &now,
-		})
+	} else {
+		arts := r.artifactPaths(ctx, job)
+		for _, db := range b.Spec.Databases {
+			art, ok := arts[db]
+			if !ok || art.Name == "" {
+				return r.fail(ctx, b, oracle.ReasonBackupJobFailed, "aggregate produced no recovered artifact for database "+db)
+			}
+			out = append(out, neo4jv1beta1.BackupArtifact{
+				Database:    db,
+				Type:        neo4jv1beta1.BackupTypeFull, // the recovered artifact is a standalone full
+				URI:         "pvc://" + in.PVCClaim,
+				Path:        art.Name,
+				SizeBytes:   art.SizeBytes,
+				CompletedAt: &now,
+			})
+		}
 	}
 	b.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
 	b.Status.Reason = ""

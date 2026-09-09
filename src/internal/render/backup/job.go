@@ -114,9 +114,9 @@ func FromAddress(ctx render.Context) string {
 // BackupJob builds the run-to-completion Job for a Neo4jBackup. chainSubDir, when non-empty,
 // isolates a chain's artifacts under <destination>/<chainSubDir> so an aggregation of one chain can
 // never make a later differential of another chain mis-parent onto it (a schedule sets it to the
-// chain id; ad-hoc backups pass "" and stay flat). It is PVC-only — object-store chain isolation
-// lands with object-store aggregate/prune (ADR-016). It is a pure function; the owner/controller
-// reference is applied by shared.Apply.
+// chain id; ad-hoc backups pass "" and stay flat). It is PVC-only — object-store chain
+// isolation/prune is a later ADR-016 increment (object-store aggregate has landed). It is a pure
+// function; the owner/controller reference is applied by shared.Apply.
 func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chainSubDir string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
@@ -220,8 +220,8 @@ func destination(d neo4jv1beta1.BackupDestination, subDir string) (toPath string
 	// neo4j-admin --to-path treats an object-store url without a trailing '/' as a file, not a
 	// directory, and fails ("not a directory - please add a terminal '/'"). A backup destination is
 	// always a directory, so normalize it here rather than making every user remember the slash.
-	// ponytail: chain sub-directories are PVC-only for now; object-store chain isolation lands with
-	// object-store aggregate/prune (ADR-016). subDir is intentionally not applied to the url.
+	// ponytail: chain sub-directories are PVC-only for now; object-store chain isolation/prune is a
+	// later ADR-016 increment (aggregate has landed). subDir is intentionally not applied to the url.
 	url := d.URL
 	if !strings.HasSuffix(url, "/") {
 		url += "/"
