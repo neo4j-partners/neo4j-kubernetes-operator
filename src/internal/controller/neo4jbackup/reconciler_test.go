@@ -264,7 +264,7 @@ func TestReconcileAggregateProducesRecoveredFull(t *testing.T) {
 
 	// Pre-create the owned aggregate Job (Complete) plus a pod recording the recovered full, so
 	// the reconciler mirrors success and catalogs it — the same harness the backup path uses.
-	job, err := renderbackup.AggregateJob(enterpriseNeo4j(), renderbackup.JobName(agg), "backups", map[string]string{"neo4j": srcPath})
+	job, err := renderbackup.AggregateJob(enterpriseNeo4j(), renderbackup.JobName(agg), renderbackup.AggregateInputs{PVCClaim: "backups", DBArtifacts: map[string]string{"neo4j": srcPath}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,9 +327,52 @@ func TestReconcileAggregateSourceNotFoundIsRetryable(t *testing.T) {
 	}
 }
 
-func TestReconcileAggregateNonPVCSourceUnsupported(t *testing.T) {
+// Object-store sources aggregate the chain under the url directly (ADR-016): the Job runs
+// `neo4j-admin backup aggregate --from-path=<url>` with no mount and projects the destination's
+// credentials Secret. Mixed stores (below) still fail as unsupported.
+func TestReconcileAggregateObjectStoreSource(t *testing.T) {
 	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
-	r, c := newReconciler(t, enterpriseNeo4j(), src, aggregateCR("chain-last"))
+	agg := aggregateCR("chain-last")
+	agg.Spec.Destination = neo4jv1beta1.BackupDestination{
+		Type:        neo4jv1beta1.BackupDestinationS3,
+		URL:         "s3://b/p/",
+		Credentials: &neo4jv1beta1.BackupCredentials{SecretName: "creds"},
+	}
+	r, c := newReconciler(t, enterpriseNeo4j(), src, agg)
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if got := getBackup(t, c); got.Status.Phase == neo4jv1beta1.RunPhaseFailed {
+		t.Fatalf("status = phase %q reason %q, want the object-store aggregate Job to be created", got.Status.Phase, got.Status.Reason)
+	}
+	var job batchv1.Job
+	if err := c.Get(t.Context(), types.NamespacedName{Name: renderbackup.JobName(agg), Namespace: "ns"}, &job); err != nil {
+		t.Fatalf("expected object-store aggregate Job: %v", err)
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	script := container.Command[2]
+	if !strings.Contains(script, "backup aggregate --from-path=s3://b/p/ --keep-old-backup=true") || !strings.HasSuffix(script, " neo4j") {
+		t.Errorf("object-store aggregate script = %q, want a folder --from-path with the db operand", script)
+	}
+	if len(container.EnvFrom) != 1 || container.EnvFrom[0].SecretRef.Name != "creds" {
+		t.Errorf("EnvFrom = %+v, want the destination credentials Secret projected", container.EnvFrom)
+	}
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			t.Errorf("object-store aggregate must not mount a PVC; got volume %q", v.Name)
+		}
+	}
+}
+
+func TestReconcileAggregateMixedStoresUnsupported(t *testing.T) {
+	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
+	src.Spec.Databases = []string{"neo4j", "extra"}
+	src.Status.Artifacts = append(src.Status.Artifacts, neo4jv1beta1.BackupArtifact{
+		Database: "extra", Type: neo4jv1beta1.BackupTypeIncremental, URI: "pvc://backups", Path: "sch-0100/extra.backup",
+	})
+	agg := aggregateCR("chain-last")
+	agg.Spec.Databases = []string{"neo4j", "extra"}
+	r, c := newReconciler(t, enterpriseNeo4j(), src, agg)
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
