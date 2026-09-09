@@ -1,0 +1,40 @@
+name: feature-backup-s3-aggregate
+description: >
+  Object-store (S3/MinIO) AGGREGATE backup + restore round-trip with static-key credentials (ADR-016
+  object-store aggregate increment). Reuses the feature-backup-s3 harness (single-node MinIO + an
+  Enterprise Standalone Neo4j whose spec.security.cloudIdentity.staticKeySecret points at the MinIO
+  credentials). Writes probe #1 and takes a Full Neo4jBackup to s3://<bucket>/<cr>/, then writes
+  probe #2 and takes an Incremental Neo4jBackup to the SAME url (appending to the chain), then takes
+  an Aggregate Neo4jBackup(source.backupRef=<inc>) to the SAME url — the aggregate Job runs
+  `neo4j-admin backup aggregate --from-path=s3://…` with NO volume mount, authenticating to MinIO via
+  the projected AWS_* env, and collapses the full+incremental chain into a single recovered full.
+  Writes probe #post (after the aggregate) then applies a Neo4jRestore(source.backupRef=<agg>,
+  overwrite) over `neo4j`. Asserts the aggregate backup reaches Succeeded with an s3:// FOLDER
+  artifact (empty path, type Full), the restore reaches Succeeded, `neo4j` comes online, BOTH probe
+  #1 and probe #2 are present (the aggregate captured the whole chain tip), and probe #post is gone.
+  This is the object-store analogue of the PVC aggregate path — it validates the folder --from-path +
+  db-operand call and the folder-seed on restore without needing a real cloud account.
+brief_ref: neo4j-backup-s3-aggregate
+use_pipeline: neo4j-suite
+on_case_failure: stop
+# Single-node only, same rationale as feature-backup-s3: MinIO's emptyDir bucket and the static-key
+# Secret are namespace-local and the suite provisions its own object store. Pin to kind so it
+# self-skips on managed clouds (which run the workload-identity path manually per the runbook).
+clouds: [local-kind]
+pipeline:
+  case_assert:
+    - minio/install
+    - assert/standalone-ready
+    - backup/s3-aggregate
+    - assert/restore-s3-aggregate
+  case_teardown:
+    - backup/s3-aggregate-cleanup
+    - minio/cleanup
+
+cases:
+  - id: s3-aggregate
+    comment: ADR-016 — a Neo4jBackup(type=Aggregate, destination.type=s3, source.backupRef=<inc>) collapses a full+incremental chain in MinIO into a recovered full (folder artifact, empty path), and a Neo4jRestore(source.backupRef=<agg>, overwrite) seeds `neo4j` back from s3:// via CloudSeedProvider; both chain probes land and the post-aggregate probe is dropped.
+    fixture: tests/fixtures/neo4j-backup-s3.yaml
+    assert: restore-s3-aggregate
+    expect: success
+    cr_name: e2e-s3agg
