@@ -38,7 +38,14 @@ func HoldPrimaries(n *neo4jv1beta1.Neo4j, secondaries []PoolState) bool {
 		return false // first install, or no version change in flight
 	}
 	for _, p := range secondaries {
-		if !p.OnTarget || p.Rolling || p.Updated < p.Desired || p.Ready < p.Desired {
+		// Settled first, and for the same reason Observe needs it: OnTarget is read from the pod
+		// template, which the operator has just written, while everything after it is read from the
+		// StatefulSet's status, which its controller has not yet caught up with. In that window a
+		// pool whose image changed a moment ago still reports every replica updated and ready at the
+		// old revision — converged, by every other test here — and the primaries would be released
+		// onto the new image before the secondary had restarted a single pod. That is precisely the
+		// order Neo4j forbids (R3), so the gate has to survive the gap between spec and status.
+		if !p.Settled || !p.OnTarget || p.Rolling || p.Updated < p.Desired || p.Ready < p.Desired {
 			return true
 		}
 	}
