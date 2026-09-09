@@ -141,6 +141,16 @@ Cloud connector settings the seed providers need (region, endpoint override for 
 | Azure | Azure Workload Identity (pod label + projected token) | yes |
 | OpenShift / ROSA | SCC-bound SA + platform IRSA/WI | later (M-05) |
 
+### Object-store aggregate (increment)
+
+`neo4j-admin backup aggregate` reads and writes object stores directly (S3 ≥5.19, GCS ≥5.21, Azure ≥5.24; MinIO via `AWS_ENDPOINT_URL_S3`), so a `Neo4jBackup` of `type: Aggregate` whose source chain lives in a bucket runs the **same aggregate Job** as the PVC path — with `--from-path=<url>` and **no volume mount** — reusing this ADR's identity model for the read/write: `destination.credentials` (static-key Secret) is projected as `envFrom`, else the target's `spec.security.cloudIdentity.workloadIdentity` is applied to the Job pod. Decisions that fall out of the object store having no mounted filesystem the operator can `ls`:
+
+- **No recovered filename is recorded.** The PVC path records the recovered full's real filename (from `/dev/termination-log`) so restore seeds `file:/backups/<file>`. In a bucket there is nothing to `ls` and `neo4j-admin` writes the recovered full back under the same url, so the status artifact records the **folder url** (empty `Path`) and restore seeds that folder — which now recovers to the aggregated full. This matches how ordinary object-store backups already seed (folder, not file).
+- **All requested databases must share one store and one location.** Mixing `pvc://` and object-store artifacts, or two different urls, fails `BackupSourceUnsupported` — the Job authenticates and points `--from-path` at exactly one place.
+- **`--keep-old-backup=true` stays mandatory** (as PVC): aggregation never deletes the user's existing chain.
+
+Object-store chain isolation (per-chain sub-directories for scheduled backups) and object-store retention/prune remain the next increments; they are **not** required for on-demand aggregate to be correct.
+
 ### Explicitly out of scope
 
 - The **credential-free `file:`/`server:` restore path** and the **RWX `backups` volume** (they serve PVC users with zero cloud identity — owned by [ADR-015](015-backup-and-restore.md) restore + [BDR-005](../business/neo4j/005-storage-volume-mode.md)).
