@@ -23,6 +23,9 @@ const (
 	ServiceRoleInternals = "internals"
 	ServiceRoleAdmin     = "admin"
 	AppNameValue         = "neo4j"
+	// ComponentStorage marks claims the operator renders, which is what tells them apart from a
+	// user's Existing.claimName PVC once both are sitting in the same namespace.
+	ComponentStorage = "storage"
 )
 
 // PoolID identifies a workload pool for naming and labels (ADR-005, BDR-009).
@@ -209,7 +212,7 @@ func OperandInstanceLabels(neo4jName string) map[string]string {
 // StoragePVCSelector lists Dynamic PVCs created for this Neo4j instance.
 func StoragePVCSelector(neo4jName string) labels.Selector {
 	m := OperandInstanceLabels(neo4jName)
-	m[LabelComponent] = "storage"
+	m[LabelComponent] = ComponentStorage
 	return labels.SelectorFromSet(m)
 }
 

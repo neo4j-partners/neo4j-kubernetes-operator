@@ -80,8 +80,29 @@ Pause annotation: `neo4j.com/paused: "true"` → skip reconcile (log, no requeue
 | `ConfigMap` | Only if referenced (rare BYO) | Update |
 | `Pod` | Owned pods (pool STS) | Ready / phase change for formation |
 | `StatefulSet` | Owned STS | Generation / replicas |
+| `PersistentVolumeClaim` | `neo4j.com/component=storage` provenance label, else `Existing.claimName` match | `status.phase`, `status.capacity`, `status.conditions` |
 
 Use `handler.EnqueueRequestsFromMapFunc` — map to `Neo4j` namespacedName via ownerRef or spec refs.
+
+`Owns` cannot carry the claim watch: a Dynamic claim is created by the StatefulSet controller, which
+leaves no ownerRef at all, and an `Existing.claimName` claim predates the CR. Both need the mapper,
+and for two different reasons — the Dynamic claim carries operator provenance labels, the BYO claim
+carries nothing the operator put there and is recognised by name only.
+
+Without this watch, readiness is poll-only for anything the claim alone reports. The cost is
+unequal across storage modes. A Dynamic bind is usually covered anyway, because the pod start that
+follows it moves the StatefulSet, which *is* watched. Two cases have no such cover: an expansion
+restarts no pod and leaves the immutable template untouched, so the claim is the only object that
+moves; and a BYO claim that is still unbound keeps its pods `Pending`, so no StatefulSet event ever
+arrives. Both would wait out the full 30 s requeue.
+
+The predicate is not an optimisation detail. A bind stamps several annotations on the claim, and
+each is an Update that would re-run a pipeline opening Bolt sessions in Cluster mode. Create and
+Delete stay unfiltered: a claim a scale-out creates is born at the template's older size and has to
+be grown on sight.
+
+The PVC informer takes no label selector, since a selector would hide exactly the BYO claims the
+second mapper path exists to catch. Scope stays bounded by the cache's `DefaultNamespaces`.
 
 ### Owned resources
 
@@ -104,10 +125,14 @@ Use `handler.EnqueueRequestsFromMapFunc` — map to `Neo4j` namespacedName via o
 
 - Cert rotation triggers reconcile without polling.
 - Predicates avoid reconciling on status-only Pod updates unrelated to readiness.
+- A completed volume expansion and a BYO claim binding report at once instead of waiting out the
+  30 s requeue, which are the two storage transitions no other watched object reflects.
 
 ### Negative
 
 - Map functions must stay in sync with spec ref fields — test in envtest.
+- The claim informer caches every PVC in the watched namespaces, not only operator-created ones,
+  because a label selector would filter out the BYO claims the name-match path is there to catch.
 
 ### Neutral
 
