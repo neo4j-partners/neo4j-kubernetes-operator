@@ -196,15 +196,32 @@ fi
 # ---------------------------------------------------------------------------
 # 5. The CR reports the grow finished, exactly once
 # ---------------------------------------------------------------------------
+# Every claim now serves the new size, so the claim is the last object that moved: a grow reaches
+# no PodTemplate and no template, so no StatefulSet or Pod event follows it. That makes this the one
+# transition the operator can only learn from the PVC watch (ADR-009); without it the next timed
+# requeue is the only wake-up, up to 30s away.
+#
+# The latency is measured and logged rather than bounded tightly. A wall-clock threshold cannot tell
+# "the watch fired" from "the timer happened to fire early", so a tight bound here would be flaky
+# rather than informative. The mechanism is asserted in the mapper and predicate unit tests; this
+# budget only catches an operator that went back to waiting out the poll, and the logged figure is
+# the number to read when this case is under suspicion.
+REACTION_BUDGET=60
 log "Waiting for StorageReady to return to ${BOUND_REASON}"
-deadline=$((SECONDS + 180))
+settled_at=""
+started=${SECONDS}
+deadline=$((SECONDS + REACTION_BUDGET))
 while [[ "${SECONDS}" -lt "${deadline}" ]]; do
-  [[ "$(storage_condition StorageReady status)" == "True" \
-    && "$(storage_condition StorageReady reason)" == "${BOUND_REASON}" ]] && break
-  sleep 5
+  if [[ "$(storage_condition StorageReady status)" == "True" \
+    && "$(storage_condition StorageReady reason)" == "${BOUND_REASON}" ]]; then
+    settled_at=$((SECONDS - started))
+    break
+  fi
+  sleep 2
 done
-[[ "$(storage_condition StorageReady reason)" == "${BOUND_REASON}" ]] \
-  || { storage_dump "grow"; die "StorageReady=$(storage_condition StorageReady status)/$(storage_condition StorageReady reason) after the grow completed, expected True/${BOUND_REASON}"; }
+[[ -n "${settled_at}" ]] \
+  || { storage_dump "grow"; die "StorageReady=$(storage_condition StorageReady status)/$(storage_condition StorageReady reason) ${REACTION_BUDGET}s after every claim reached ${TARGET}, expected True/${BOUND_REASON} — nothing but the claim moves at the end of a grow, so this is what the PVC watch is for"; }
+log "StorageReady returned to ${BOUND_REASON} ${settled_at}s after the last claim reached ${TARGET}"
 
 kubectl wait --for=condition=Ready "neo4j/${NEO4J_CR_NAME}" \
   -n "${NEO4J_NAMESPACE}" --timeout=300s >/dev/null 2>&1 \

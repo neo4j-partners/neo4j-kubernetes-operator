@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlbuilder "sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -286,6 +287,12 @@ func (r *Neo4jReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		builder = builder.Owns(obj)
 	}
 	builder = builder.Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.mapSecretToNeo4j))
+	// Claims have no ownerRef to the CR, so Owns() sees neither a bind nor a completed expansion.
+	// A grow restarts no pod and leaves the StatefulSet untouched, so without this watch the only
+	// wake-up left is the 30s requeue (ADR-009).
+	builder = builder.Watches(&corev1.PersistentVolumeClaim{},
+		handler.EnqueueRequestsFromMapFunc(r.mapPVCToNeo4j),
+		ctrlbuilder.WithPredicates(pvcStatusChanged()))
 	n, err := NormalizeMaxConcurrentReconciles(r.MaxConcurrentReconciles)
 	if err != nil {
 		return err
