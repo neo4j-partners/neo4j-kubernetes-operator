@@ -190,3 +190,49 @@ func TestObserveAndWritePhaseFromRevisions(t *testing.T) {
 		})
 	}
 }
+
+// The other half of the observedGeneration contract, whose error-path counterpart lives in
+// internal/controller/neo4j: the field must advance here, on a pass that actually applied the
+// spec. Pinned so that keeping a failed pass from advancing it can never be "fixed" by stopping
+// the successful pass from advancing it either — that would wedge every automation waiting on it.
+func TestObserveAndWriteAdvancesObservedGenerationOnSuccess(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	neo4j := standaloneWithDynamicSC("dev", "default", "")
+	neo4j.Spec.Version = "2026.05.0"
+	neo4j.Generation = 4
+	neo4j.Status = served()
+	neo4j.Status.ObservedGeneration = 3
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev-server", Namespace: "default"},
+		Status: appsv1.StatefulSetStatus{
+			ReadyReplicas:   1,
+			CurrentRevision: "rev-1",
+			UpdateRevision:  "rev-1",
+		},
+	}
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "data-dev-server-0", Namespace: "default"},
+		Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimBound},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(neo4j, sts, pvc).
+		WithStatusSubresource(&neo4jv1beta1.Neo4j{}).Build()
+
+	got := &neo4jv1beta1.Neo4j{}
+	if err := c.Get(t.Context(), types.NamespacedName{Name: "dev", Namespace: "default"}, got); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	got.Status.ObservedGeneration = 3
+
+	if err := NewWriter(c).ObserveAndWrite(t.Context(), got); err != nil {
+		t.Fatalf("ObserveAndWrite: %v", err)
+	}
+	if got.Status.ObservedGeneration != got.Generation {
+		t.Errorf("observedGeneration = %d, want %d — a successful pass must record the generation it applied",
+			got.Status.ObservedGeneration, got.Generation)
+	}
+}

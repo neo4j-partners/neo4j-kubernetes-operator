@@ -123,7 +123,11 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 		log.Error(err, "pipeline failed")
 		r.StatusWriter.MarkPipelineError(&neo4j, err)
-		neo4j.Status.ObservedGeneration = neo4j.Generation
+		// observedGeneration is deliberately left where it was: it means "this generation was
+		// fully reconciled" (ADR-004), and automation gates on it to decide whether status
+		// describes the current spec. Advancing it here told every such gate the change had been
+		// applied at the exact moment the operator gave up on it. Only the success path in
+		// status/writer.go moves it forward.
 		_ = r.Client.Status().Update(ctx, &neo4j)
 		return ctrl.Result{}, err
 	}
