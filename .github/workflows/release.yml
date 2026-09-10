@@ -2,6 +2,7 @@ name: Release
 
 # Cut a public release from a semver tag (e.g. v0.1.0):
 #   - operator image  -> ghcr.io/<owner>/neo4j-kubernetes-operator:<version>
+#                        (manifest index: linux/amd64 + linux/arm64)
 #   - Helm chart (OCI) -> oci://ghcr.io/<owner>/charts/neo4j-operator:<version>
 #   - GitHub Release   -> the 1.5 MB CRD as a downloadable asset (server-side apply)
 #
@@ -60,9 +61,16 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/amd64
-          # Keep it a plain single-arch image, not an index with attestations,
-          # so older runtimes pull it cleanly.
+          # One tag, one manifest index, two architectures — each node's runtime selects its own,
+          # so a mixed-architecture cluster needs no second tag and no `--set image.*`. Both are
+          # built and pushed in this single step, so the tag never exists as amd64-only.
+          #
+          # The Dockerfile cross-compiles from the native builder, so this costs a second `go
+          # build` rather than an emulated image build: no setup-qemu-action is needed.
+          platforms: linux/amd64,linux/arm64
+          # Attestations add manifests to the index that some registries and admission tools still
+          # mis-read. The index itself is now unavoidable — it is what carries the two
+          # architectures — but keeping provenance off holds it to the two entries and nothing else.
           provenance: false
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.v.outputs.version }}
 

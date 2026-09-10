@@ -27,13 +27,20 @@ debug container.
 
 ### Cross-building for your cluster's architecture
 
-Docker builds for the architecture of your machine. On Apple silicon, that produces an `arm64`
-image that will crash-loop on the usual `amd64` nodes with an exec format error. Ask for the
-target platform explicitly:
+This concerns your own builds only. The published image is a manifest index covering `linux/amd64`
+and `linux/arm64`, so installing it needs nothing here.
+
+`make docker-build` produces a single-architecture image, for the architecture of your machine. On
+Apple silicon that is `arm64`, which will crash-loop on the usual `amd64` nodes with an exec format
+error. Ask for the target platform explicitly:
 
 ```bash
 make docker-build IMG=neo4j-operator:local DOCKER_PLATFORM=linux/amd64
 ```
+
+The manager is pure Go, so this cross-compiles on a native builder instead of emulating the target
+— a plain `go build` for another architecture, not a slower image build. Single-architecture is
+deliberate for local work: `kind load docker-image` does not take a multi-platform archive.
 
 ## Make the image reachable
 
@@ -184,19 +191,29 @@ push that worked yesterday fails with a `401` that mentions no credentials at al
 ### Mirroring the published image instead of building
 
 If you only need the image to come from your own registry, copy the released one — no clone, no
-Docker build, and you keep the exact bits that were tested:
+Docker build, and you keep the exact bits that were tested.
+
+Copy it with [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) or
+[skopeo](https://github.com/containers/skopeo) rather than Docker. The released tag is a manifest
+index covering `linux/amd64` and `linux/arm64`, and these copy it whole:
 
 ```bash
 VERSION=1.0.0-rc1
 SRC=ghcr.io/neo4j-partners/neo4j-kubernetes-operator:${VERSION}
 DST=myregistry.example.com/neo4j-operator:${VERSION}
 
-docker pull "$SRC" && docker tag "$SRC" "$DST" && docker push "$DST"
+crane copy "$SRC" "$DST"
 ```
 
-With [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) or
-[skopeo](https://github.com/containers/skopeo), `crane copy "$SRC" "$DST"` does the same without a
-local Docker daemon and preserves the multi-architecture manifest.
+`docker pull` then `docker push` also works but **flattens the index to one architecture** — the
+one the machine running the commands happens to be. Mirroring from an Apple silicon laptop that way
+publishes an `arm64`-only tag, and the operator then crash-loops on `amd64` nodes with an exec
+format error. If Docker is the only tool available, name the platform and accept that the mirror
+covers that platform alone:
+
+```bash
+docker pull --platform linux/amd64 "$SRC" && docker tag "$SRC" "$DST" && docker push "$DST"
+```
 
 ## Point the install at your image
 
