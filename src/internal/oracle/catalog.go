@@ -410,8 +410,8 @@ var (
 		asEvent("Retention removed a whole expired backup chain; the Event names the chain and how many backups and artifacts were pruned (BDR-014 §10)"))
 	ReasonSchedulePruneFailed = declare("SchedulePruneFailed", SeverityWarn, SurfaceEvent,
 		asEvent("The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail"))
-	ReasonSchedulePruneUnsupported = declare("SchedulePruneUnsupported", SeverityWarn, SurfaceEvent,
-		asEvent("A chain is eligible for retention pruning but its destination is object storage, which the operator cannot prune yet (pending ADR-016 cloud identity); the chain is kept"))
+	ReasonSchedulePruneDelegated = declareNominal("SchedulePruneDelegated", SurfaceEvent,
+		asEvent("A chain is eligible for retention but its destination is object storage; object deletion is delegated to the bucket's own lifecycle rules by design (ADR-016), so the operator keeps the chain and its records. Configure a lifecycle rule on the chain prefix to reclaim storage"))
 	ReasonScheduleCompacted = declareNominal("ScheduleCompacted", SurfaceEvent,
 		asEvent("Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10)"))
 	ReasonScheduleAggregateFailed = declare("ScheduleAggregateFailed", SeverityWarn, SurfaceEvent,

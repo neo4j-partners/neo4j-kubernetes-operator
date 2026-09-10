@@ -21,7 +21,9 @@ limitations under the License.
 // skip). It also enforces full.retention by pruning whole expired chains (PVC artifacts via an
 // owned Job, then the records — BDR-014 §10) and, when aggregate.enabled, realizes
 // incremental.retention by compacting each closed chain into its recovered full (aggregate, then
-// prune the original links). Object-store pruning (ADR-016) is a later increment.
+// prune the original links). For object-store destinations, object deletion is delegated to the
+// bucket's own lifecycle rules by design (ADR-016 — no cloud CLI in the operator's images); the
+// operator keeps those chains and emits SchedulePruneDelegated.
 package neo4jbackupschedule
 
 import (
@@ -437,10 +439,12 @@ func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo
 func (r *ScheduleReconciler) compactChain(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j, chain string, links []*neo4jv1beta1.Neo4jBackup, agg *neo4jv1beta1.Neo4jBackup) (time.Duration, error) {
 	claim, files, objectStore := pvcArtifacts(links)
 	if objectStore {
-		// ponytail: object-store link deletion needs a provider SDK (ADR-016). Keep the links.
+		// Object-store object deletion is delegated to bucket lifecycle rules by design (ADR-016 —
+		// no cloud CLI in the operator's images). The chain is aggregated and its links are kept;
+		// a lifecycle rule on the chain prefix reclaims the superseded links.
 		if r.Recorder != nil {
-			r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneUnsupported.String(),
-				"chain "+chain+" aggregated but its destination is object storage; pruning its links is not yet supported (ADR-016)")
+			r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonSchedulePruneDelegated.String(),
+				"chain "+chain+" aggregated; its object-store links are retained for the bucket lifecycle rule to reclaim (ADR-016)")
 		}
 		return 0, nil
 	}
@@ -610,11 +614,13 @@ func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4
 
 	claim, files, objectStore := pvcArtifacts(items)
 	if objectStore {
-		// ponytail: object-store pruning needs a provider SDK / bucket lifecycle rules (ADR-016).
-		// Until then keep the chain rather than orphan its objects, and say so once.
+		// Object-store retention is delegated to the bucket's own lifecycle rules by design (ADR-016
+		// — no cloud CLI in the operator's images to delete objects). The operator keeps the chain
+		// and its records; a lifecycle rule on the per-chain prefix reclaims the storage. The event
+		// is Normal (a design decision, not a failure) and the API server dedupes repeats.
 		if r.Recorder != nil {
-			r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneUnsupported.String(),
-				"chain "+chain+" is expired but its destination is object storage; pruning it is not yet supported (ADR-016)")
+			r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonSchedulePruneDelegated.String(),
+				"chain "+chain+" is expired; its object-store storage is reclaimed by the bucket lifecycle rule, not the operator (ADR-016)")
 		}
 		return 0, nil
 	}

@@ -417,7 +417,7 @@ func TestReconcilePrunesExpiredPVCChainViaJob(t *testing.T) {
 	}
 }
 
-func TestReconcilePruneObjectStoreUnsupported(t *testing.T) {
+func TestReconcilePruneObjectStoreDelegated(t *testing.T) {
 	keep := int32(1)
 	old := chainBackup("old-f", "old", creation.Add(-time.Hour), s3Dest())
 	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
@@ -429,13 +429,14 @@ func TestReconcilePruneObjectStoreUnsupported(t *testing.T) {
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	// Object-store chains are kept (deleting the record would orphan the bucket objects)…
+	// Object-store retention is delegated to bucket lifecycle rules (ADR-016): the operator keeps
+	// the chain and its records (deleting a record would orphan the bucket objects it points at)…
 	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
-		t.Fatalf("object-store chain must be kept until ADR-016: %v", err)
+		t.Fatalf("object-store chain must be kept (retention delegated to bucket lifecycle): %v", err)
 	}
-	// …and the operator says so.
-	if !hasEvent(r, "SchedulePruneUnsupported") {
-		t.Error("expected a SchedulePruneUnsupported event for the object-store chain")
+	// …and the operator says so, as a Normal (not Warning) decision event.
+	if !hasEvent(r, "SchedulePruneDelegated") {
+		t.Error("expected a SchedulePruneDelegated event for the object-store chain")
 	}
 }
 
