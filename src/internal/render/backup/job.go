@@ -114,9 +114,10 @@ func FromAddress(ctx render.Context) string {
 // BackupJob builds the run-to-completion Job for a Neo4jBackup. chainSubDir, when non-empty,
 // isolates a chain's artifacts under <destination>/<chainSubDir> so an aggregation of one chain can
 // never make a later differential of another chain mis-parent onto it (a schedule sets it to the
-// chain id; ad-hoc backups pass "" and stay flat). It is PVC-only — object-store chain
-// isolation/prune is a later ADR-016 increment (object-store aggregate has landed). It is a pure
-// function; the owner/controller reference is applied by shared.Apply.
+// chain id; ad-hoc backups pass "" and stay flat). It applies to both PVC (nested dir) and
+// object-store (nested prefix) destinations (ADR-016 chain isolation); object-store retention/prune
+// remains a later increment. It is a pure function; the owner/controller reference is applied by
+// shared.Apply.
 func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chainSubDir string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
@@ -192,8 +193,9 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chai
 }
 
 // destination resolves the neo4j-admin --to-path plus any volumes/mounts the store needs.
-// Object stores map straight to the url; a PVC is mounted and the path is the mount, with an
-// optional per-chain sub-directory nested under it (subDir) so chains are isolated on disk.
+// A PVC is mounted and the path is the mount; an object store maps to its url. Either way an
+// optional per-chain sub-directory (subDir) is nested under it so a schedule's chains are isolated
+// (on disk for PVC, as a key prefix for object stores).
 func destination(d neo4jv1beta1.BackupDestination, subDir string) (toPath string, volumes []corev1.Volume, mounts []corev1.VolumeMount, err error) {
 	if d.Type == neo4jv1beta1.BackupDestinationPVC {
 		if d.PVC == nil || d.PVC.ClaimName == "" {
@@ -217,16 +219,25 @@ func destination(d neo4jv1beta1.BackupDestination, subDir string) (toPath string
 	if d.URL == "" {
 		return "", nil, nil, fmt.Errorf("object-store destination requires url")
 	}
-	// neo4j-admin --to-path treats an object-store url without a trailing '/' as a file, not a
-	// directory, and fails ("not a directory - please add a terminal '/'"). A backup destination is
-	// always a directory, so normalize it here rather than making every user remember the slash.
-	// ponytail: chain sub-directories are PVC-only for now; object-store chain isolation/prune is a
-	// later ADR-016 increment (aggregate has landed). subDir is intentionally not applied to the url.
-	url := d.URL
+	return ObjectStoreFolder(d.URL, subDir), nil, nil, nil
+}
+
+// ObjectStoreFolder is the directory url neo4j-admin writes to (and restore/aggregate later read
+// from) for an object-store destination, with an optional per-chain sub-directory nested under it.
+// It is the single place the write path (destination → --to-path) and the record path
+// (artifactsFor → status.artifacts[].uri) agree on a chain's folder, so restore-by-backupRef and
+// object-store aggregate resolve the exact prefix the backup wrote to (ADR-016 chain isolation).
+// neo4j-admin --to-path treats a url without a trailing '/' as a file, not a directory, and fails
+// ("not a directory - please add a terminal '/'"); a backup destination is always a directory, so
+// the slash is normalized here rather than making every user remember it.
+func ObjectStoreFolder(url, subDir string) string {
 	if !strings.HasSuffix(url, "/") {
 		url += "/"
 	}
-	return url, nil, nil, nil
+	if subDir != "" {
+		url += subDir + "/"
+	}
+	return url
 }
 
 // backupScript runs neo4j-admin then records the real artifact path neo4j-admin chose for
