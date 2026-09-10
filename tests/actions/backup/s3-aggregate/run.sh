@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # backup/s3-aggregate — prove object-store aggregate end to end against MinIO (ADR-016 increment):
-#   1. write probe #1 into `neo4j`, take a Full Neo4jBackup to s3://<bucket>/<cr>/ (static-key creds)
-#   2. write probe #2, take an Incremental Neo4jBackup to the SAME url — it appends to the chain
-#   3. take an Aggregate Neo4jBackup (source.backupRef=<inc>) to the SAME url — the aggregate Job
-#      runs `neo4j-admin backup aggregate --from-path=s3://<bucket>/<cr>/ neo4j` with NO mount,
-#      authenticating to MinIO via the projected AWS_* env, and collapses the full+inc chain into a
-#      single recovered full written back under the same url
+#   1. write probe #1 into `neo4j`, take a Full Neo4jBackup to s3://<bucket>/<cr>/ (static-key creds).
+#      Ad-hoc backups isolate into a daily chain, so it actually lands under s3://<bucket>/<cr>/<cr>-<UTCdate>/
+#   2. write probe #2, take an Incremental Neo4jBackup to the SAME url — same UTC day, so it derives
+#      the same daily chain and appends to the full under that prefix
+#   3. take an Aggregate Neo4jBackup (source.backupRef=<inc>) — the aggregate Job resolves the chain
+#      folder from the source's recorded uri and runs `neo4j-admin backup aggregate --from-path=<chain-folder> neo4j`
+#      with NO mount, authenticating to MinIO via the projected AWS_* env, collapsing the full+inc
+#      chain into a single recovered full written back under the same folder
 #   4. write probe #post (after the aggregate, so NOT in the recovered full)
 #   5. apply a Neo4jRestore(source.backupRef=<agg>, overwrite) over `neo4j`
 # The assert (assert/restore-s3-aggregate) checks probe #1 AND #2 land (the aggregate captured the
@@ -106,6 +108,25 @@ spec:
 EOF
 wait_backup "${INC}"
 
+# Chain isolation (ADR-016): with no labels and no backupRef, both ad-hoc backups derive the SAME
+# daily chain <cr>-<UTCdate> and nest under one prefix, so the incremental parents onto the full
+# instead of mis-parenting. Derive the expected chain from what the operator recorded (not a locally
+# computed date) so a run straddling UTC midnight can't false-fail.
+full_chain="$(kubectl get "neo4jbackup/${FULL}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.chain}' 2>/dev/null || true)"
+inc_chain="$(kubectl get "neo4jbackup/${INC}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.chain}' 2>/dev/null || true)"
+[[ -n "${full_chain}" && "${full_chain}" == "${inc_chain}" ]] \
+  || die "expected full and incremental to share one daily chain, got full='${full_chain}' inc='${inc_chain}'"
+case "${full_chain}" in
+  "${NEO4J_CR_NAME}-"*) : ;;
+  *) die "daily chain '${full_chain}' should be shaped <cr>-<UTCdate>" ;;
+esac
+CHAIN_URL="${S3_URL}${full_chain}/"
+full_uri="$(kubectl get "neo4jbackup/${FULL}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.artifacts[0].uri}' 2>/dev/null || true)"
+inc_uri="$(kubectl get "neo4jbackup/${INC}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.artifacts[0].uri}' 2>/dev/null || true)"
+[[ "${full_uri}" == "${CHAIN_URL}" && "${inc_uri}" == "${CHAIN_URL}" ]] \
+  || die "expected full+inc artifacts nested under ${CHAIN_URL}, got full='${full_uri}' inc='${inc_uri}'"
+log "Chain isolation OK — full+inc share daily chain ${full_chain}, nested under ${CHAIN_URL}"
+
 log "Taking an Aggregate Neo4jBackup ${AGG} (source.backupRef=${INC}) → ${S3_URL}"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
 apiVersion: neo4j.com/v1beta1
@@ -126,6 +147,13 @@ spec:
       secretName: ${SECRET}
 EOF
 wait_backup "${AGG}"
+
+# The recovered full lands in the SAME dated chain folder the source chain lives in — proving the
+# aggregate resolved the chain prefix from the source's recorded uri, not the flat base url.
+agg_uri="$(kubectl get "neo4jbackup/${AGG}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.artifacts[0].uri}' 2>/dev/null || true)"
+[[ "${agg_uri}" == "${CHAIN_URL}" ]] \
+  || die "expected aggregate artifact under the chain folder ${CHAIN_URL}, got '${agg_uri}'"
+log "Aggregate folder OK — recovered full recorded under ${CHAIN_URL}"
 
 # probe #post lands after the aggregate — the overwrite restore must drop it.
 log "Writing probe #post (after the aggregate, so NOT in the recovered full)"

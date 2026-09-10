@@ -3,6 +3,7 @@ package neo4jbackup
 import (
 	"strings"
 	"testing"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -411,27 +412,36 @@ func TestReconcileScheduleLabelledBackupUsesChainSubDir(t *testing.T) {
 	}
 }
 
-func TestChainSubDirObjectStore(t *testing.T) {
-	// A scheduled object-store backup isolates its chain even for a wildcard database (no filename-
-	// recording script keys off the names, unlike PVC), while ad-hoc backups (no chain label) and
-	// non-seedable PVC wildcards stay flat.
+// todayChain is the ad-hoc daily chain id a backup for target <neo4j> gets today (UTC).
+func todayChain(neo4j string) string { return neo4j + "-" + time.Now().UTC().Format("20060102") }
+
+func TestChainSubDir(t *testing.T) {
+	// A schedule label always wins; an ad-hoc backup gets a daily chain <neo4jRef>-<UTCdate>.
+	// A wildcard PVC backup has no recordable path (its filename script keys off named dbs), so it
+	// stays flat — every other destination isolates.
 	mk := func(typ neo4jv1beta1.BackupDestinationType, dbs []string, chain string) *neo4jv1beta1.Neo4jBackup {
-		b := &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{Databases: dbs}}
+		b := &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef: neo4jv1beta1.Neo4jRef{Name: "g"}, Databases: dbs,
+		}}
 		b.Spec.Destination.Type = typ
 		if chain != "" {
 			b.Labels = map[string]string{neo4jbackupschedule.LabelChain: chain}
 		}
 		return b
 	}
+	today := todayChain("g")
 	cases := []struct {
 		name string
 		b    *neo4jv1beta1.Neo4jBackup
 		want string
 	}{
-		{"object-store scheduled wildcard isolates", mk(neo4jv1beta1.BackupDestinationS3, []string{"*"}, "sch-1"), "sch-1"},
-		{"object-store ad-hoc stays flat", mk(neo4jv1beta1.BackupDestinationS3, []string{"neo4j"}, ""), ""},
+		{"object-store scheduled uses label", mk(neo4jv1beta1.BackupDestinationS3, []string{"*"}, "sch-1"), "sch-1"},
+		{"object-store ad-hoc gets daily chain", mk(neo4jv1beta1.BackupDestinationS3, []string{"neo4j"}, ""), today},
+		{"object-store ad-hoc wildcard still isolates", mk(neo4jv1beta1.BackupDestinationS3, []string{"*"}, ""), today},
 		{"pvc scheduled wildcard stays flat", mk(neo4jv1beta1.BackupDestinationPVC, []string{"*"}, "sch-1"), ""},
-		{"pvc scheduled named isolates", mk(neo4jv1beta1.BackupDestinationPVC, []string{"neo4j"}, "sch-1"), "sch-1"},
+		{"pvc scheduled named uses label", mk(neo4jv1beta1.BackupDestinationPVC, []string{"neo4j"}, "sch-1"), "sch-1"},
+		{"pvc ad-hoc named gets daily chain", mk(neo4jv1beta1.BackupDestinationPVC, []string{"neo4j"}, ""), today},
+		{"pvc ad-hoc wildcard stays flat", mk(neo4jv1beta1.BackupDestinationPVC, []string{"*"}, ""), ""},
 	}
 	for _, tc := range cases {
 		if got := chainSubDir(tc.b); got != tc.want {
@@ -446,6 +456,7 @@ func TestArtifactsForObjectStoreRecordsChainFolder(t *testing.T) {
 	b := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{neo4jbackupschedule.LabelChain: "sch-1"}},
 		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
 			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://bucket/prod"},
 			Type:        neo4jv1beta1.BackupTypeFull,
@@ -454,10 +465,10 @@ func TestArtifactsForObjectStoreRecordsChainFolder(t *testing.T) {
 	if got := artifactsFor(b, nil); got[0].URI != "s3://bucket/prod/sch-1/" {
 		t.Errorf("scheduled object-store URI = %q, want s3://bucket/prod/sch-1/", got[0].URI)
 	}
-	// Ad-hoc (no chain label) records the base url unchanged — backward-compatible.
+	// Ad-hoc (no chain label) nests under its daily chain.
 	b.Labels = nil
-	if got := artifactsFor(b, nil); got[0].URI != "s3://bucket/prod" {
-		t.Errorf("ad-hoc object-store URI = %q, want s3://bucket/prod (unchanged)", got[0].URI)
+	if got, want := artifactsFor(b, nil)[0].URI, "s3://bucket/prod/"+todayChain("g")+"/"; got != want {
+		t.Errorf("ad-hoc object-store URI = %q, want %q", got, want)
 	}
 }
 
@@ -489,7 +500,10 @@ func TestReconcileMirrorsJobCompletion(t *testing.T) {
 	if got.Status.Chain == "" {
 		t.Error("expected status.chain to be set on success")
 	}
-	if len(got.Status.Artifacts) != 1 || got.Status.Artifacts[0].URI != "s3://b/p/" {
-		t.Errorf("expected one artifact pointing at the destination; got %+v", got.Status.Artifacts)
+	// Ad-hoc backup: the artifact nests under its daily chain (status.chain), so restore-by-backupRef
+	// resolves the exact prefix the Job wrote to.
+	wantURI := "s3://b/p/" + got.Status.Chain + "/"
+	if len(got.Status.Artifacts) != 1 || got.Status.Artifacts[0].URI != wantURI {
+		t.Errorf("expected one artifact at %q; got %+v", wantURI, got.Status.Artifacts)
 	}
 }
