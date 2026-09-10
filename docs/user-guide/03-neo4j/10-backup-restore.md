@@ -217,6 +217,21 @@ There is no per-increment retention: deleting a mid-chain link would break every
 restore, so within-chain growth is bounded by the aggregate cadence and by starting a fresh chain,
 not by dropping links.
 
+**On object stores, retention is delegated to bucket lifecycle rules.** The operator deletes files
+only on PVC destinations — it carries no cloud SDK, so it never deletes bucket objects. For S3/GCS/
+Azure, it keeps expired chains (and their records) and emits a Normal `SchedulePruneDelegated` event;
+you reclaim the storage with a **native lifecycle rule on the backup prefix**. Because each chain is
+its own prefix (`<url>/<chainId>/`), the rule is straightforward — e.g. S3:
+
+```json
+{ "Rules": [{ "ID": "neo4j-backups", "Status": "Enabled",
+  "Filter": { "Prefix": "backups/" }, "Expiration": { "Days": 30 } }] }
+```
+
+(Azure blob lifecycle management and GCS object lifecycle offer the same age-based expiry.) Keep the
+lifecycle window comfortably longer than your restore needs — deleting a full still in use breaks its
+chain's restore, exactly as on PVC.
+
 **Aggregate compaction is boundary-triggered.** With `aggregate.enabled: true`, when a new full
 closes the previous chain, the schedule waits for that closed chain to quiesce (every link
 `Succeeded`), emits an `Aggregate` backup for it, and — only once the recovered full is verified and

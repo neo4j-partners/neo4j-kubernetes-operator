@@ -158,7 +158,18 @@ A schedule may run several chains into one bucket over time (each `Full` anchors
 - **Scheduled** backups carry the operator-generated `neo4j.com/chain` label (`<schedule>-<UTCminute>`) — authoritative, and unique per full cadence.
 - **Ad-hoc** backups get a **daily chain per target**, `<neo4jRef>-<UTCdate>`, derived from the record's creation day (`controller/neo4jbackup.chainID`). The day's `Full` anchors it and same-day `Incremental`s derive the *same* id, so they co-locate and neo4j-admin parents them correctly — with no label, no `source.backupRef`, and no user-typed identifier to fat-finger. A new UTC day rolls a new chain, giving the intended "one full per day, then incrementals" shape (an incremental on a day with no full fails cleanly — neo4j-admin finds no full to extend). A wildcard PVC backup is the one exception that stays flat: its filename-recording script keys off named databases, so a `*` PVC backup has no recordable seed path.
 
-This keeps manual and scheduled backups coherent (both isolate; the only difference is who generates the id) while removing the "set a metadata label by hand" footgun. Object-store retention/prune remains the next increment; it is **not** required for chain isolation or on-demand aggregate to be correct.
+This keeps manual and scheduled backups coherent (both isolate; the only difference is who generates the id) while removing the "set a metadata label by hand" footgun.
+
+### Object-store retention — delegated to bucket lifecycle
+
+Backup, aggregate, and restore all move bytes *through* `neo4j-admin` or the Neo4j server, which carry bundled cloud connectors — but there is **no `neo4j-admin` command that deletes objects**, and this ADR (via [ADR-015](015-backup-and-restore.md)) forbids a cloud SDK/CLI in the operator's images. So retention **prune** — unlike aggregate — has no in-image vehicle. Rather than pull a third-party delete tool (e.g. `rclone`) into a new required image (a supply-chain and air-gap-mirroring burden for every operator install), we **delegate object deletion to the object store's own lifecycle rules**:
+
+- The operator writes each chain to its own prefix (`<url>/<chainId>/`, above), which is exactly the granularity a bucket lifecycle rule keys on. Users set an S3/GCS/Azure lifecycle rule (age- or count-based) on the backup prefix; the cloud reclaims the storage.
+- When `full.retention` marks an object-store chain expired, the operator **keeps the chain and its `Neo4jBackup` records** (deleting a record would orphan the bucket objects it points at, losing the catalog link that makes them discoverable) and emits a Normal `SchedulePruneDelegated` event pointing at this policy. PVC retention is unchanged (the operator owns that filesystem and prunes it via a Job).
+
+This trades operator-driven *whole-chain-count* retention (PVC) for cloud-native *lifecycle* retention (object stores), and keeps the operator SDK-free. If a future increment needs operator-driven object deletion, the seam is a dedicated prune Job with a delete tool authenticated by this ADR's identity model — but it is explicitly out of scope here.
+
+With aggregate, chain isolation, and this retention decision, ADR-016's chain lifecycle for object stores is complete.
 
 ### Explicitly out of scope
 
