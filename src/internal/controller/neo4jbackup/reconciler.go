@@ -136,23 +136,36 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 }
 
-// chainSubDir isolates a schedule-managed chain's artifacts under <destination>/<chainId> so an
-// aggregation of one chain can never make a later differential of another chain mis-parent onto it.
-// It applies to any backup that carries a schedule's chain label; ad-hoc backups (no label) stay
-// flat (""). PVC additionally requires seedable (named-database) backups because its filename-
-// recording script keys off the named databases; object stores have no such script (they seed the
-// folder), so a wildcard chain isolates there too (ADR-016 chain isolation).
-func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
-	chain := b.Labels[neo4jbackupschedule.LabelChain]
-	if chain == "" {
-		return ""
+// chainID is the backup chain a run belongs to (BDR-014/ADR-016). A schedule owns cross-backup
+// chains and stamps its generated id as a label — always authoritative. An ad-hoc backup gets a
+// daily chain per target, <neo4jRef>-<UTCdate>, derived from its creation day: the day's Full
+// anchors the chain and same-day Incrementals derive the same id, so they co-locate and neo4j-admin
+// parents them correctly — no label, no ref, no user-typed id to get wrong. A new UTC day rolls a
+// new chain, so the model is "one full per day, then incrementals" (an incremental on a day with no
+// full fails cleanly — neo4j-admin finds no full to extend). Aggregate never reaches here.
+func chainID(b *neo4jv1beta1.Neo4jBackup) string {
+	if lbl := b.Labels[neo4jbackupschedule.LabelChain]; lbl != "" {
+		return lbl
 	}
+	day := b.CreationTimestamp.Time
+	if day.IsZero() {
+		day = time.Now()
+	}
+	return b.Spec.Neo4jRef.Name + "-" + day.UTC().Format("20060102")
+}
+
+// chainSubDir is the per-chain sub-directory the backup Job writes into so an aggregation of one
+// chain can never make a later differential of another chain mis-parent onto it. It is chainID for
+// every destination except a wildcard PVC backup: PVC's filename-recording script keys off named
+// databases, so a "*" PVC backup has no recordable path and stays flat (unchanged). Object stores
+// seed the folder, so they always isolate (ADR-016 chain isolation).
+func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
 	if b.Spec.Destination.Type == neo4jv1beta1.BackupDestinationPVC {
 		if _, ok := renderbackup.SeedableDatabases(b); !ok {
 			return ""
 		}
 	}
-	return chain
+	return chainID(b)
 }
 
 func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) (ctrl.Result, error) {
@@ -169,14 +182,8 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 	b.Status.Reason = ""
 	b.Status.Message = ""
 	b.Status.Artifacts = artifactsFor(b, r.artifactPaths(ctx, job))
-	// A scheduled backup carries its chain id as a label (the schedule owns cross-backup chains);
-	// an ad-hoc backup anchors its own chain, so it falls back to the record name.
 	if b.Status.Chain == "" {
-		if chain := b.Labels[neo4jbackupschedule.LabelChain]; chain != "" {
-			b.Status.Chain = chain
-		} else {
-			b.Status.Chain = b.Name
-		}
+		b.Status.Chain = chainID(b)
 	}
 	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionTrue, oracle.ReasonBackupSucceeded, "backup completed")
 	return ctrl.Result{}, r.writeStatus(ctx, b)

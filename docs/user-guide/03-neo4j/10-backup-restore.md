@@ -102,6 +102,27 @@ defined in --to-path. No existing backup found here: /destination
 
 Use `type: Auto` to avoid that entirely — it self-seeds a full on the first run.
 
+#### How chains are laid out (you never name them)
+
+To keep two chains from co-mingling in one destination — which would let an increment attach to the
+wrong full, or an aggregate trip over another chain's files — each chain is written into its own
+sub-directory/prefix. **You never type a chain id**; the operator generates one, because the same
+string must be a valid object-store key, a label value, *and* a Kubernetes object name at once:
+
+- **Scheduled** backups use the schedule's generated chain (`<schedule>-<time>`).
+- **Manual** backups get a **daily chain per target**: `<neo4jRef>-<UTCdate>` (e.g.
+  `my-neo4j-20260910`). The day's first `Full` anchors it under `<destination>/<neo4jRef>-<date>/`,
+  and any `Incremental` you take **the same UTC day** lands in the same place automatically and
+  extends it. A new day starts a new chain — so the natural rhythm is **one full per day, then
+  incrementals**. (Take the full *before* the day's incrementals; an incremental on a day with no
+  full yet fails with the "no existing backup found" message above.)
+
+So to run several independent chains by hand, you don't label anything — you just let each day be its
+chain, or point each chain at a distinct `destination.url`. Restore and aggregate always resolve the
+exact folder from the backup's recorded `status.artifacts[].uri`, so the layout is transparent to
+you. (A wildcard-database PVC backup is the one exception that stays flat — it has no per-database
+seed path to record.)
+
 ### Aggregating a chain ad hoc
 
 `type: Aggregate` collapses a chain into a single **recovered full** so a later restore seeds one
@@ -204,9 +225,10 @@ is never left without a restorable artifact. The active chain is never touched.
 
 Set `suspend: true` to pause every cadence without deleting the schedule or its history.
 
-> On a PVC destination, scheduled backups are isolated per chain in their own sub-directory so an
-> aggregation of one chain can never make a later increment of another chain mis-parent onto it.
-> Ad-hoc `Neo4jBackup` objects stay flat.
+> Scheduled backups are isolated per chain in their own sub-directory/prefix (on PVC and object
+> stores alike) so an aggregation of one chain can never make a later increment of another chain
+> mis-parent onto it. Ad-hoc backups are isolated the same way, by their daily chain (see
+> [How chains are laid out](#how-chains-are-laid-out-you-never-name-them)).
 
 ## Restoring
 
