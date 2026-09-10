@@ -411,6 +411,56 @@ func TestReconcileScheduleLabelledBackupUsesChainSubDir(t *testing.T) {
 	}
 }
 
+func TestChainSubDirObjectStore(t *testing.T) {
+	// A scheduled object-store backup isolates its chain even for a wildcard database (no filename-
+	// recording script keys off the names, unlike PVC), while ad-hoc backups (no chain label) and
+	// non-seedable PVC wildcards stay flat.
+	mk := func(typ neo4jv1beta1.BackupDestinationType, dbs []string, chain string) *neo4jv1beta1.Neo4jBackup {
+		b := &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{Databases: dbs}}
+		b.Spec.Destination.Type = typ
+		if chain != "" {
+			b.Labels = map[string]string{neo4jbackupschedule.LabelChain: chain}
+		}
+		return b
+	}
+	cases := []struct {
+		name string
+		b    *neo4jv1beta1.Neo4jBackup
+		want string
+	}{
+		{"object-store scheduled wildcard isolates", mk(neo4jv1beta1.BackupDestinationS3, []string{"*"}, "sch-1"), "sch-1"},
+		{"object-store ad-hoc stays flat", mk(neo4jv1beta1.BackupDestinationS3, []string{"neo4j"}, ""), ""},
+		{"pvc scheduled wildcard stays flat", mk(neo4jv1beta1.BackupDestinationPVC, []string{"*"}, "sch-1"), ""},
+		{"pvc scheduled named isolates", mk(neo4jv1beta1.BackupDestinationPVC, []string{"neo4j"}, "sch-1"), "sch-1"},
+	}
+	for _, tc := range cases {
+		if got := chainSubDir(tc.b); got != tc.want {
+			t.Errorf("%s: chainSubDir = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestArtifactsForObjectStoreRecordsChainFolder(t *testing.T) {
+	// The recorded URI must be the per-chain folder the Job wrote to, so restore-by-backupRef and
+	// object-store aggregate seed the exact prefix (ADR-016 chain isolation).
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{neo4jbackupschedule.LabelChain: "sch-1"}},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://bucket/prod"},
+			Type:        neo4jv1beta1.BackupTypeFull,
+		},
+	}
+	if got := artifactsFor(b, nil); got[0].URI != "s3://bucket/prod/sch-1/" {
+		t.Errorf("scheduled object-store URI = %q, want s3://bucket/prod/sch-1/", got[0].URI)
+	}
+	// Ad-hoc (no chain label) records the base url unchanged — backward-compatible.
+	b.Labels = nil
+	if got := artifactsFor(b, nil); got[0].URI != "s3://bucket/prod" {
+		t.Errorf("ad-hoc object-store URI = %q, want s3://bucket/prod (unchanged)", got[0].URI)
+	}
+}
+
 func TestReconcileMirrorsJobCompletion(t *testing.T) {
 	s := scheme(t)
 	backup := backupCR()

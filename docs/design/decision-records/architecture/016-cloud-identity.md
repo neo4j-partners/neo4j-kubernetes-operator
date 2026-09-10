@@ -149,7 +149,11 @@ Cloud connector settings the seed providers need (region, endpoint override for 
 - **All requested databases must share one store and one location.** Mixing `pvc://` and object-store artifacts, or two different urls, fails `BackupSourceUnsupported` — the Job authenticates and points `--from-path` at exactly one place.
 - **`--keep-old-backup=true` stays mandatory** (as PVC): aggregation never deletes the user's existing chain.
 
-Object-store chain isolation (per-chain sub-directories for scheduled backups) and object-store retention/prune remain the next increments; they are **not** required for on-demand aggregate to be correct.
+### Object-store chain isolation (increment)
+
+A schedule may run several chains into one bucket over time (each `Full` anchors a new chain, differentials attach to it). neo4j-admin resolves "which full does this differential belong to" from the artifacts sitting in the **same directory**, so co-mingling chains in one flat prefix lets a differential mis-parent onto the wrong chain and lets an aggregate of one chain trip over another's files. The PVC path already isolates each chain in its own sub-directory (`render/backup/job.go` `chainSubDir`); this increment applies the **same per-chain layout to object stores** — the backup Job writes to `<url>/<chainId>/` (a key prefix; no `mkdir`, the store materializes it on write). One helper (`render/backup.ObjectStoreFolder`) computes that folder for both the **write** path (`--to-path`) and the **record** path (`status.artifacts[].uri`), so restore-by-`backupRef` and object-store aggregate resolve the exact prefix the backup wrote to. Ad-hoc backups (no chain label) stay flat, and pre-existing flat backups keep their recorded base url — so this is backward-compatible.
+
+Object-store retention/prune remains the next increment; it is **not** required for chain isolation or on-demand aggregate to be correct.
 
 ### Explicitly out of scope
 

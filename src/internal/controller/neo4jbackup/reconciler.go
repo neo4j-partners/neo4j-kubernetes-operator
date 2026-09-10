@@ -138,13 +138,21 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 // chainSubDir isolates a schedule-managed chain's artifacts under <destination>/<chainId> so an
 // aggregation of one chain can never make a later differential of another chain mis-parent onto it.
-// It applies only to PVC-backed, seedable (named-database) backups that carry a schedule's chain
-// label; ad-hoc backups (no label) and non-seedable/object-store backups stay flat ("").
+// It applies to any backup that carries a schedule's chain label; ad-hoc backups (no label) stay
+// flat (""). PVC additionally requires seedable (named-database) backups because its filename-
+// recording script keys off the named databases; object stores have no such script (they seed the
+// folder), so a wildcard chain isolates there too (ADR-016 chain isolation).
 func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
-	if _, ok := renderbackup.SeedableDatabases(b); !ok {
+	chain := b.Labels[neo4jbackupschedule.LabelChain]
+	if chain == "" {
 		return ""
 	}
-	return b.Labels[neo4jbackupschedule.LabelChain]
+	if b.Spec.Destination.Type == neo4jv1beta1.BackupDestinationPVC {
+		if _, ok := renderbackup.SeedableDatabases(b); !ok {
+			return ""
+		}
+	}
+	return chain
 }
 
 func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) (ctrl.Result, error) {
@@ -363,9 +371,15 @@ func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1
 // (BDR-014 §13 — restore-by-backupRef resolves this). The requested type is recorded as-is.
 // For PVC destinations it records Path, the real artifact filename the Job reported (arts[db].Name),
 // so restore can seed file:/backups/<path> — the chain's last link — without parsing filenames,
-// plus SizeBytes when the Job could stat it.
+// plus SizeBytes when the Job could stat it. For a schedule-isolated object-store chain the URI is
+// the per-chain folder the Job actually wrote to (ADR-016), so restore/aggregate seed that prefix.
 func artifactsFor(b *neo4jv1beta1.Neo4jBackup, arts map[string]shared.NamedArtifact) []neo4jv1beta1.BackupArtifact {
 	uri := renderbackup.DestinationURI(b.Spec.Destination)
+	if b.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
+		if sub := chainSubDir(b); sub != "" {
+			uri = renderbackup.ObjectStoreFolder(b.Spec.Destination.URL, sub)
+		}
+	}
 	now := metav1.Now()
 	dbs := b.Spec.Databases
 	if len(dbs) == 0 {

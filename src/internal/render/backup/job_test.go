@@ -244,6 +244,47 @@ func TestBackupJobChainSubDirIsolatesArtifacts(t *testing.T) {
 	}
 }
 
+func TestBackupJobChainSubDirIsolatesObjectStore(t *testing.T) {
+	// A scheduled object-store chain writes to <url>/<chainId>/ (a key prefix) so chains never
+	// co-mingle in one flat bucket (ADR-016 chain isolation). No mount, no mkdir — the store
+	// materializes the prefix on write, so the bare neo4j-admin command carries the nested url.
+	b := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "sch-20260903-0100-f", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://bucket/prod"},
+			Type:        neo4jv1beta1.BackupTypeFull,
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b, "sch-20260903-0100")
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	if !hasArg(c.Args, "--to-path=s3://bucket/prod/sch-20260903-0100/") {
+		t.Errorf("expected chain-isolated object-store to-path; got %v", c.Args)
+	}
+	if hasVolume(job.Spec.Template.Spec.Volumes, pvcVolume) {
+		t.Errorf("object-store backup must not mount a pvc; got %v", job.Spec.Template.Spec.Volumes)
+	}
+}
+
+func TestObjectStoreFolder(t *testing.T) {
+	for _, tc := range []struct {
+		url, sub, want string
+	}{
+		{"s3://b/p/", "", "s3://b/p/"},              // ad-hoc: already a dir, no chain
+		{"s3://b/p", "", "s3://b/p/"},               // ad-hoc: slash normalized
+		{"s3://b/p", "chain-1", "s3://b/p/chain-1/"}, // scheduled: nested prefix
+		{"azb://a/x/", "chain-1", "azb://a/x/chain-1/"},
+	} {
+		if got := ObjectStoreFolder(tc.url, tc.sub); got != tc.want {
+			t.Errorf("ObjectStoreFolder(%q,%q) = %q, want %q", tc.url, tc.sub, got, tc.want)
+		}
+	}
+}
+
 func TestBackupJobSatisfiesRestrictedPodSecurity(t *testing.T) {
 	b := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
