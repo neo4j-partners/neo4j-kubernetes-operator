@@ -304,7 +304,7 @@ Map of mount id → Secret projection into the Neo4j container (`spec.storage.se
 
 **Reserved paths:** `/data`, `/var/lib/neo4j/certificates/*` — webhook/reconcile rejects user mounts (operator-owned).
 
-**vs other secrets:** TLS → `spec.trust`; auth password → `spec.auth`; restore Job creds → `Neo4jRestore.spec.source.credentials`.
+**vs other secrets:** TLS → `spec.trust`; auth password → `spec.auth`; object-store identity → `spec.security.cloudIdentity` (ADR-016); per-backup static keys → `Neo4jBackup.spec.destination.credentials`.
 
 ---
 

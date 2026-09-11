@@ -88,6 +88,72 @@ func TestValidateSecurityRejectsCloudIAMAnnotations(t *testing.T) {
 	}
 }
 
+func TestValidateSecurityAcceptsCloudIdentityWorkloadIdentity(t *testing.T) {
+	// The typed opt-in is what relaxes NEO-002: a WI binding that matches its provider is accepted.
+	cases := map[neo4jv1beta1.CloudWorkloadIdentityProvider]string{
+		neo4jv1beta1.CloudProviderAWS:   "eks.amazonaws.com/role-arn",
+		neo4jv1beta1.CloudProviderGCP:   "iam.gke.io/gcp-service-account",
+		neo4jv1beta1.CloudProviderAzure: "azure.workload.identity/client-id",
+	}
+	for provider, key := range cases {
+		neo4j := &neo4jv1beta1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "dev"},
+			Spec: neo4jv1beta1.Neo4jSpec{
+				Security: &neo4jv1beta1.SecuritySpec{
+					CloudIdentity: &neo4jv1beta1.CloudIdentity{
+						WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{
+							Provider:    provider,
+							Annotations: map[string]string{key: "x"},
+						},
+					},
+				},
+			},
+		}
+		if err := ValidateSecurity(neo4j); err != nil {
+			t.Fatalf("%s: unexpected error %v", provider, err)
+		}
+	}
+}
+
+func TestValidateSecurityRejectsCloudIdentityProviderMismatch(t *testing.T) {
+	// An Azure client-id under provider=aws is neither the right binding nor allowlisted for AWS.
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Security: &neo4jv1beta1.SecuritySpec{
+				CloudIdentity: &neo4jv1beta1.CloudIdentity{
+					WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{
+						Provider:    neo4jv1beta1.CloudProviderAWS,
+						Annotations: map[string]string{"azure.workload.identity/client-id": "x"},
+					},
+				},
+			},
+		},
+	}
+	if err := ValidateSecurity(neo4j); err == nil || !strings.Contains(err.Error(), "not a recognised aws") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateSecurityRejectsCloudIdentityArbitraryAnnotation(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Security: &neo4jv1beta1.SecuritySpec{
+				CloudIdentity: &neo4jv1beta1.CloudIdentity{
+					WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{
+						Provider:    neo4jv1beta1.CloudProviderGCP,
+						Annotations: map[string]string{"example.com/note": "x"},
+					},
+				},
+			},
+		},
+	}
+	if err := ValidateSecurity(neo4j); err == nil || !strings.Contains(err.Error(), "example.com/note") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestContainerSecurityContextMergesOverDefaults(t *testing.T) {
 	uid := int64(1000)
 	priv := true // would be rejected by Validate; merge must still force false

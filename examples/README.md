@@ -58,6 +58,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/22-security.yaml`](standalone/22-security.yaml) | `security.serviceAccount.annotations` + opt-in NetworkPolicy |
 | [`standalone/23-namespace-quota.yaml`](standalone/23-namespace-quota.yaml) | Namespace `ResourceQuota` backstop (NEO-014) |
 | [`standalone/24-community.yaml`](standalone/24-community.yaml) | Community edition — `edition: community`, no `license` block |
+| [`standalone/25-cloud-identity.yaml`](standalone/25-cloud-identity.yaml) | `security.cloudIdentity` — object-store workload identity / static keys for backup & restore (Azure test runbook: [`25-cloud-identity-azure-backup.md`](standalone/25-cloud-identity-azure-backup.md)) |
 
 ## Cluster
 
@@ -122,6 +123,7 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | Scheduling (affinity/tolerations/spread) | [`standalone/10`](standalone/10-scheduling.yaml) | [`cluster/08`](cluster/08-scheduling.yaml) |
 | `resources` (CPU/memory) | [`standalone/21`](standalone/21-resources.yaml) | same field on Cluster CR |
 | `security` (SA annotations / contexts / NetworkPolicy) | [`standalone/22`](standalone/22-security.yaml) | same fields on Cluster CR |
+| `security.cloudIdentity` (object-store WI / static keys) | [`standalone/25`](standalone/25-cloud-identity.yaml) | same field on Cluster CR |
 | PodDisruptionBudget | *(works on Standalone too)* | [`cluster/15`](cluster/15-pdb.yaml) |
 | Custom probes | [`standalone/11`](standalone/11-probes-custom.yaml) | [`cluster/09`](cluster/09-probes-custom.yaml) |
 | `config.neo4j` / `config.jvm` / `config.apoc` | [`standalone/12`](standalone/12-config-jvm.yaml) | [`cluster/10`](cluster/10-config-jvm.yaml) |

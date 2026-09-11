@@ -1,0 +1,49 @@
+# Backup e2e target: an Enterprise Standalone Neo4j with the backup listener enabled
+# (features.backup + connectivity.listeners.backup) plus the pre-created destination PVC the
+# Neo4jBackup writes into. Applied together (single kubectl apply) by deploy/neo4j so the claim
+# exists before the backup runs. The Neo4jBackup itself is applied later by backup/create, after
+# the workload is Ready — the backup Job dials the backup listener, so racing boot would exhaust
+# the Job backoff. The PVC destination requires an EXISTING claimName (render/backup/job.go).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e2e-backup-dest
+  labels:
+    app.kubernetes.io/managed-by: neo4j-e2e
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true

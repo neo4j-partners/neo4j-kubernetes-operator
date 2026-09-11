@@ -1,0 +1,76 @@
+# Purpose: cloud object-store identity for backup/restore (ADR-016). security.cloudIdentity is the
+#   instance-level credential the operator wires to (a) the dedicated backup Job ServiceAccount
+#   "<name>-backup" and (b) the Neo4j server pods (restore seed-from-URI). It is only needed when an
+#   executor reads/writes an object store (s3://, gs://, azb://) directly — PVC / file: restore needs
+#   none of this.
+# Prerequisites:
+#   - Workload identity (shown active below): pre-create the cloud IAM binding against the
+#     ServiceAccount name "cloud-identity-backup" in this namespace — e.g. an AWS IAM role whose trust
+#     policy allows system:serviceaccount:<ns>:cloud-identity-backup. The operator only annotates the
+#     SA; it never creates the cloud-side role. WI is instance-level precisely because that trust
+#     binds to a fixed SA name (so it cannot be chosen per Neo4jBackup).
+#   - Static keys (commented alternative): a Secret with provider env keys (AWS_ACCESS_KEY_ID, …)
+#     labelled neo4j.com/mountable-by-operator: "true".
+# Apply: kubectl apply -f examples/standalone/25-cloud-identity.yaml
+# Test on Azure (end-to-end backup with Workload Identity): ./25-cloud-identity-azure-backup.md
+# Related README: ../README.md#standalone · user guide ../../docs/user-guide/03-neo4j/10-backup-restore.md
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: cloud-identity
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      backup: 6362
+  security:
+    # Keyless workload identity (recommended on managed clouds). Exactly one of workloadIdentity or
+    # staticKeySecret. provider drives provider-specific pod plumbing (Azure also gets the
+    # azure.workload.identity/use pod label + a platform-injected projected token); the annotations
+    # carry the binding — the single key each provider documents.
+    cloudIdentity:
+      workloadIdentity:
+        provider: aws
+        annotations:
+          eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-s3
+      # --- Azure Workload Identity (alternative) ---
+      # workloadIdentity:
+      #   provider: azure
+      #   annotations:
+      #     azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000
+      # --- GKE Workload Identity (alternative) ---
+      # workloadIdentity:
+      #   provider: gcp
+      #   annotations:
+      #     iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
+      # --- Portable static keys (alternative; works anywhere incl. MinIO) ---
+      # staticKeySecret: neo4j-cloud-creds
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  auth:
+    generatePassword: true
+# Back up to an object store with this identity — omit destination.credentials to use the workload
+# identity above (the "<name>-backup" SA); set destination.credentials for a per-backup static Secret:
+#
+#   apiVersion: neo4j.com/v1beta1
+#   kind: Neo4jBackup
+#   metadata: { name: bk-s3 }
+#   spec:
+#     neo4jRef: { name: cloud-identity }
+#     databases: ["neo4j"]
+#     type: Full
+#     destination:
+#       type: s3
+#       url: s3://my-bucket/neo4j

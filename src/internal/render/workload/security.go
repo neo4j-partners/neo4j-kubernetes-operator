@@ -32,36 +32,69 @@ func ValidateSecurity(neo4j *neo4jv1beta1.Neo4j) error {
 	if err := validateContainerSecurityContext(neo4j.Spec.Security.ContainerSecurityContext); err != nil {
 		return err
 	}
-	return validateServiceAccountSpec(neo4j.Spec.Security.ServiceAccount)
+	if err := validateServiceAccountSpec(neo4j.Spec.Security.ServiceAccount); err != nil {
+		return err
+	}
+	return validateCloudIdentity(neo4j.Spec.Security.CloudIdentity)
 }
 
 func validateServiceAccountSpec(sa *neo4jv1beta1.ServiceAccountSpec) error {
 	if sa == nil {
 		return nil
 	}
+	// Plain serviceAccount.annotations must never smuggle cloud IAM in — that binding is only a
+	// deliberate, validated opt-in through spec.security.cloudIdentity.workloadIdentity (NEO-002).
 	for k := range sa.Annotations {
 		if isCloudWorkloadIdentityAnnotation(k) {
-			return fmt.Errorf("spec.security.serviceAccount.annotations[%q] is not allowed (cloud IAM / workload identity; NEO-002)", k)
+			return fmt.Errorf("spec.security.serviceAccount.annotations[%q] is not allowed (cloud IAM / workload identity; use spec.security.cloudIdentity.workloadIdentity; NEO-002)", k)
 		}
 	}
 	return nil
 }
 
-// isCloudWorkloadIdentityAnnotation matches keys that bind a K8s SA to cloud IAM.
+// validateCloudIdentity checks the opt-in cloud-IAM binding (ADR-016). workloadIdentity is what
+// relaxes NEO-002, so its provider must be set and every annotation must be a recognised binding for
+// that provider — a mismatched or arbitrary key is rejected. Static-key Secrets carry no IAM
+// annotations, so nothing to check here (CEL enforces the staticKeySecret/workloadIdentity XOR).
+func validateCloudIdentity(ci *neo4jv1beta1.CloudIdentity) error {
+	if ci == nil || ci.WorkloadIdentity == nil {
+		return nil
+	}
+	wi := ci.WorkloadIdentity
+	if wi.Provider == "" {
+		return fmt.Errorf("spec.security.cloudIdentity.workloadIdentity.provider is required (NEO-002)")
+	}
+	for k := range wi.Annotations {
+		if !workloadIdentityAnnotationForProvider(k, wi.Provider) {
+			return fmt.Errorf("spec.security.cloudIdentity.workloadIdentity.annotations[%q] is not a recognised %s workload-identity binding (NEO-002)", k, wi.Provider)
+		}
+	}
+	return nil
+}
+
+// isCloudWorkloadIdentityAnnotation matches keys that bind a K8s SA to cloud IAM (any provider).
 func isCloudWorkloadIdentityAnnotation(key string) bool {
-	switch {
-	case key == "eks.amazonaws.com/role-arn":
-		return true
-	case key == "eks.amazonaws.com/audience":
-		return true
-	case strings.HasPrefix(key, "eks.amazonaws.com/"):
-		return true
-	case key == "iam.gke.io/gcp-service-account":
-		return true
-	case strings.HasPrefix(key, "iam.gke.io/"):
-		return true
-	case strings.HasPrefix(key, "azure.workload.identity/"):
-		return true
+	for _, p := range []neo4jv1beta1.CloudWorkloadIdentityProvider{
+		neo4jv1beta1.CloudProviderAWS, neo4jv1beta1.CloudProviderGCP, neo4jv1beta1.CloudProviderAzure,
+	} {
+		if workloadIdentityAnnotationForProvider(key, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// workloadIdentityAnnotationForProvider reports whether key is a workload-identity SA binding for the
+// given provider: eks.amazonaws.com/* (AWS, incl. role-arn and audience), iam.gke.io/* (GCP), or
+// azure.workload.identity/* (Azure, incl. client-id).
+func workloadIdentityAnnotationForProvider(key string, p neo4jv1beta1.CloudWorkloadIdentityProvider) bool {
+	switch p {
+	case neo4jv1beta1.CloudProviderAWS:
+		return strings.HasPrefix(key, "eks.amazonaws.com/")
+	case neo4jv1beta1.CloudProviderGCP:
+		return strings.HasPrefix(key, "iam.gke.io/")
+	case neo4jv1beta1.CloudProviderAzure:
+		return strings.HasPrefix(key, "azure.workload.identity/")
 	default:
 		return false
 	}
@@ -104,6 +137,19 @@ func validateContainerSecurityContext(csc *corev1.SecurityContext) error {
 		}
 	}
 	return nil
+}
+
+// PodSecurityContext and ContainerSecurityContext expose the hardened operand security contexts
+// (defaults plus CR overrides) for reuse by satellite renders such as the backup Job. Sharing
+// them makes those pods pass restricted Pod Security and, crucially, run with the operand's
+// fsGroup so files the Job writes to a shared backups PVC are readable by the Neo4j servers.
+func PodSecurityContext(ctx render.Context) *corev1.PodSecurityContext {
+	return podSecurityContext(ctx)
+}
+
+// ContainerSecurityContext — see PodSecurityContext.
+func ContainerSecurityContext(ctx render.Context) *corev1.SecurityContext {
+	return containerSecurityContext(ctx)
 }
 
 func podSecurityContext(ctx render.Context) *corev1.PodSecurityContext {

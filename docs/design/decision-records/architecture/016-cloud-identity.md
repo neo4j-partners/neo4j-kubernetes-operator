@@ -1,0 +1,211 @@
+# ADR-016 — Cloud identity for backup and restore
+
+| | |
+|---|---|
+| **Status** | accepted |
+| **Date** | 2026-08-28 (accepted 2026-09-07) |
+| **Depends on** | [ADR-015](015-backup-and-restore.md) — backup/restore execution (delegates "credentials / cloud identity" here) · [BDR-014](../business/backup-restore/014-backup-restore.md) — CRD contract (`credentials` fields) · [ADR-013](013-neo4j-conf-directory-fragments.md) — neo4j.conf fragments (connector config) · [ADR-001](001-crd-validation-process.md) — CEL vs webhook · [BDR-005](../business/neo4j/005-storage-volume-mode.md) — storage volumes |
+| **Constraints** | No cloud SDK in the operator image (ADR-015) · Enterprise only · workload-identity paths are **not** locally testable (need cloud CI) · V2 |
+
+---
+
+## Context
+
+[ADR-015](015-backup-and-restore.md) fixed the execution model — backup runs in a **Job pod** (`neo4j-admin database backup`), restore runs on the **Neo4j server pods** (online seed-from-URI over Bolt) — and explicitly deferred one thing: *how those pods authenticate to cloud object storage* (S3 / GCS / Azure Blob). This ADR decides that, and only that.
+
+**What already exists (the seams):**
+
+- Backup Job projects `spec.destination.credentials.secretName` as `envFrom` into the Job container ([ADR-015](015-backup-and-restore.md); `render/backup/job.go`). Static-key backup to a cloud bucket already works.
+- The workload StatefulSet runs under a **per-instance ServiceAccount** (`OperandServiceAccountName` = the CR name), and `OperandServiceAccount` already copies `spec.security.serviceAccount.annotations` onto that SA.
+- A cloud-workload-identity annotation detector (`isCloudWorkloadIdentityAnnotation`: `eks.amazonaws.com/*`, `iam.gke.io/*`, `azure.workload.identity/*`) already exists — but today it is used to **reject** those annotations (NEO-002).
+
+**The two real gaps:**
+
+1. **Backup Job pods have no ServiceAccount** — they fall back to the namespace `default` SA. There is nothing to bind cloud IAM to and no projected OIDC token, so the "omit `credentials` → workload identity" path promised by [BDR-014](../business/backup-restore/014-backup-restore.md) is unimplemented for backup.
+2. **The Neo4j workload has no cloud-credential surface at all.** WI annotations on the workload SA are rejected (NEO-002); there is no pod-annotation/label, `serviceAccountName`, or `envFrom`/`extraEnv` field on the workload container. So **cloud restore is blocked**: the seed providers on the server pods cannot authenticate. Azure WI in particular needs a **pod label** (`azure.workload.identity/use: "true"`) plus a projected service-account token — neither has a spec home today.
+
+**What this ADR is *not* about — the credential-free path.** Restore can seed from a backup on the server's own filesystem with **no cloud credentials** via the `file:` (`FileSeedProvider`, 5.26+) and `server:` (`ServerSeedProvider`, 2026.04+) providers — `CREATE OR REPLACE DATABASE db OPTIONS { seedURI:'file:/backups/db.backup' }`. That serves PVC / RWX users and requires nothing here (see [ADR-015](015-backup-and-restore.md) restore sequencing and [BDR-005](../business/neo4j/005-storage-volume-mode.md) for the RWX `backups` volume). **Cloud identity is only needed when the executor must read/write an object store (`s3://` / `gs://` / `azb://`) directly.**
+
+**Provider matrix in play** ([`dependencies.md`](../../dependencies.md), backlog M-02…M-06): AWS **IRSA** and **EKS Pod Identity**, **GKE Workload Identity** (`iam.gke.io/gcp-service-account`), **Azure Workload Identity** (federated UAMI + pod label + projected token), OpenShift (SCC-bound SA + platform IRSA/WI). Local / kind has no cloud IAM.
+
+**Forces / what breaks if we choose wrong:**
+
+- Pulling a cloud SDK into the operator to sign requests drags provider libraries + their CVE surface into the manager image and RBAC blast radius — [ADR-015](015-backup-and-restore.md) forbids this on purpose. Identity plumbing must stay declarative (SAs, annotations, projected tokens, env), with all object I/O inside `neo4j-admin` (Job) or the Neo4j server (restore).
+- Relaxing NEO-002 blindly lets any user bind the workload to an arbitrary cloud IAM role — an escalation surface. The opt-in must be explicit and auditable.
+- A WI-only design strands air-gapped / on-prem / local users who have no cloud identity provider; a Secret-only design forces long-lived static keys, which security teams increasingly forbid.
+
+---
+
+## Analysis
+
+The question is narrow: **how does an object-store credential reach the executor** — the Job pod (backup) and the Neo4j server pods (restore)?
+
+### Option A — Static-key Secret projected as env
+
+The user creates a `Secret` with provider keys (`AWS_ACCESS_KEY_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `AZURE_STORAGE_KEY`, …); the operator projects it as `envFrom` into the Job (already done) and into the workload pods (new).
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Portable — works on any cluster, cloud or on-prem | Long-lived static keys; rotation is the user's problem |
+| **Locally testable** (MinIO / fake-gcs on kind) | Broad env projection leaks all Secret keys into the pod |
+| No per-provider plumbing | Not the production-preferred posture on managed clouds |
+
+### Option B — Kubernetes-native workload identity (keyless)
+
+Bind an annotated ServiceAccount to a cloud IAM principal; the platform (IRSA/Pod Identity/GKE WI/Azure WI webhook) injects short-lived credentials via a projected OIDC token.
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Keyless, short-lived, cloud best practice | Per-provider annotations + Azure pod label + projected token |
+| No Secret to rotate or leak | **Not locally testable** — needs a real cloud + IAM setup |
+| Auditable via cloud IAM | Requires relaxing NEO-002 behind an explicit opt-in |
+
+### Option C — Both, layered (Secret baseline + WI opt-in) — **chosen**
+
+Static-key Secret is the portable, testable default; workload identity is an explicit opt-in for managed clouds. The executor plumbing (which SA, which env, which token) is identical; only the *source* of the credential differs.
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Serves on-prem/local **and** managed-cloud users | Two credential paths to document and validate |
+| Ship + test the Secret path now; add WI per provider | WI validation can't be gated in-cluster on kind |
+| Matches the delegation already written in [BDR-014](../business/backup-restore/014-backup-restore.md) | — |
+
+---
+
+## Comparison
+
+| Criterion | A — Static keys | B — Workload identity | C — Both (chosen) |
+|-----------|-----------------|-----------------------|-------------------|
+| Portability (on-prem/local) | **yes** | no | **yes** |
+| Cloud security posture | weak | **strong** | **strong** (opt-in) |
+| Locally testable | **yes** (MinIO) | no | **yes** (Secret path) |
+| Operator SDK blast radius | none | none | none |
+| Time-to-first-tested-cloud path | **fast** | slow (cloud CI) | **fast** |
+
+---
+
+## Decision
+
+We will support **both** credential models (Option C): a portable **static-key Secret** path and an opt-in **workload-identity** path, plumbed identically to the two executors. The operator carries **no cloud SDK** — it only wires ServiceAccounts, annotations, pod labels, projected tokens, and env.
+
+### Two executors, one identity model
+
+| Executor | Runs | Identity carrier |
+|----------|------|------------------|
+| Backup **Job** pod | `neo4j-admin database backup` → writes object store | dedicated Job ServiceAccount (annotated for WI) **or** `destination.credentials` Secret as env |
+| Neo4j **workload** pods | seed providers read object store during restore | workload ServiceAccount (annotated for WI) **or** a static-key Secret projected as env |
+
+### Backup Job identity
+
+- Give the backup Job pod a **dedicated ServiceAccount** named `<neo4j>-backup`, created and owned by the operator via the workload reconciler (the manager Role already permits `serviceaccounts` create). It **must not** silently use the namespace `default` SA. The name is derived from the `Neo4j` CR so it is **stable and predictable**: a user pre-binds this exact name to a cloud IAM role once for the instance.
+- `spec.destination.credentials.secretName` set → project as `envFrom` (unchanged). This is the **per-backup** knob (a Secret rides in the pod as env, so it can vary per backup).
+- omitted → the `<neo4j>-backup` SA carries the WI annotations taken from the target's `spec.security.cloudIdentity.workloadIdentity`; the platform injects the token. No static keys.
+- **Workload identity is instance-level, not per-backup** — for three reasons that all point the same way:
+  1. **The trust anchor is a fixed SA name.** Cloud IAM trust (IRSA trust policy, GKE IAM binding, Azure federated credential) is pre-created out-of-band against an exact `system:serviceaccount:<ns>:<name>` subject. A `Neo4jBackup` is applied on demand / by a schedule — there is no moment to provision cloud trust for a per-backup SA, so the SA must be stable and predictable (`<neo4j>-backup`), i.e. a property of the instance.
+  2. **WI is slow-moving infra; backups are fast-moving data.** Setting up WI (OIDC issuer + identity + role + federated credential) is a one-time admin act; requiring it per backup would couple "back up now" to "provision a cloud identity first."
+  3. **The read side is definitionally instance-level.** Restore seeds from the **server pods** (the operand SA) — there is no restore pod to hang an identity on — so the read identity can only live on the `Neo4j`. Keeping the write identity there too means one `spec.security.cloudIdentity` covers both directions.
+
+  Hence there is no `destination.workloadIdentity`; WI lives on `spec.security.cloudIdentity`, and the same instance identity serves both the backup write and the restore-seed read of the same store. Per-backup variation, when genuinely needed, is served by the data-only static-key Secret (`destination.credentials`), which needs no cloud-side pre-provisioning.
+
+### Workload (restore) identity
+
+- **Relax NEO-002 behind an explicit opt-in.** Cloud-IAM annotations on the workload SA are allowed only when the user has opted in (a dedicated field, not a silent allow), so binding the workload to a cloud role is a deliberate, auditable choice.
+- Add the missing surface for WI: a **pod label** channel (Azure requires `azure.workload.identity/use: "true"`) and a **projected service-account token** volume/mount on the workload pods (and Job pods) for providers that consume it directly.
+- Add a **static-key surface** for the portable path: allow a referenced `Secret` to be projected as env into the workload container (mirrors the Job's `envFrom`), so cloud restore works without WI (and is MinIO-testable).
+
+### CRD surface (ratified — [BDR-014](../business/backup-restore/014-backup-restore.md) amendment)
+
+The user-facing field shapes were proposed here and ratified in the [BDR-014](../business/backup-restore/014-backup-restore.md) cloud-identity amendment:
+
+- `spec.security.cloudIdentity` (typed): exactly one of `staticKeySecret` or `workloadIdentity` (provider + allowlisted annotations). Typed was chosen over an `allowCloudIdentityAnnotations` gate for validation and portability (M-01).
+- The backup family selects only its **static-key** Secret per backup (`destination.credentials`); WI is inherited from the target instance's `spec.security.cloudIdentity` because IAM trust binds to a fixed SA name (see Backup Job identity).
+- Azure's pod label (`azure.workload.identity/use`) is inferred from `workloadIdentity.provider == azure`; the projected token is injected by the platform webhook.
+
+### Seed-provider / connector configuration
+
+Cloud connector settings the seed providers need (region, endpoint override for S3-compatible stores, etc.) ride on the existing **`spec.config.neo4j`** free-form map ([ADR-013](013-neo4j-conf-directory-fragments.md)); the operator injects no provider config of its own beyond identity. Any required env (`AWS_REGION`, `AWS_ROLE_ARN`, `AWS_WEB_IDENTITY_TOKEN_FILE`, …) is either set by the platform's WI webhook or supplied via the static-key Secret.
+
+### Validation
+
+- Secret vs WI are **mutually exclusive** per executor — CEL `XValidation` on the relevant types (mirror the `RestoreSource` exactly-one-of pattern).
+- WI annotations are checked against the existing allowlist (`isCloudWorkloadIdentityAnnotation`); anything off-list stays rejected.
+- `Neo4jBackup` / `Neo4jRestore` have **no admission webhook** (CEL + reconciler-time only), while `Neo4j` has the `ValidateNeo4j` chain. Cloud-identity validation therefore lives in CEL on the backup/restore types and in `ValidateSecurity` for the workload; a webhook is **not** added unless a cross-object lookup (e.g. verifying a referenced Secret/SA) proves necessary.
+
+### Provider scope
+
+| Provider | Mechanism | V1 target |
+|----------|-----------|-----------|
+| Static keys (any, incl. MinIO) | Secret → env | **yes** (testable) |
+| AWS | IRSA **and** EKS Pod Identity | yes |
+| GCP | GKE Workload Identity | yes |
+| Azure | Azure Workload Identity (pod label + projected token) | yes |
+| OpenShift / ROSA | SCC-bound SA + platform IRSA/WI | later (M-05) |
+
+### Object-store aggregate (increment)
+
+`neo4j-admin backup aggregate` reads and writes object stores directly (S3 ≥5.19, GCS ≥5.21, Azure ≥5.24; MinIO via `AWS_ENDPOINT_URL_S3`), so a `Neo4jBackup` of `type: Aggregate` whose source chain lives in a bucket runs the **same aggregate Job** as the PVC path — with `--from-path=<url>` and **no volume mount** — reusing this ADR's identity model for the read/write: `destination.credentials` (static-key Secret) is projected as `envFrom`, else the target's `spec.security.cloudIdentity.workloadIdentity` is applied to the Job pod. Decisions that fall out of the object store having no mounted filesystem the operator can `ls`:
+
+- **No recovered filename is recorded.** The PVC path records the recovered full's real filename (from `/dev/termination-log`) so restore seeds `file:/backups/<file>`. In a bucket there is nothing to `ls` and `neo4j-admin` writes the recovered full back under the same url, so the status artifact records the **folder url** (empty `Path`) and restore seeds that folder — which now recovers to the aggregated full. This matches how ordinary object-store backups already seed (folder, not file).
+- **All requested databases must share one store and one location.** Mixing `pvc://` and object-store artifacts, or two different urls, fails `BackupSourceUnsupported` — the Job authenticates and points `--from-path` at exactly one place.
+- **`--keep-old-backup=true` stays mandatory** (as PVC): aggregation never deletes the user's existing chain.
+
+### Object-store chain isolation (schedule-owned)
+
+A schedule may run several chains into one bucket over time (each `Full` anchors a new chain, differentials attach to it). neo4j-admin resolves "which full does this differential belong to" from the artifacts sitting in the **same directory**, so co-mingling a schedule's chains in one flat prefix lets a differential mis-parent onto the wrong chain and lets an aggregate of one chain trip over another's files. So a schedule isolates each chain in its own sub-directory (`render/backup/job.go` `chainSubDir`) on both PVC and object stores — the backup Job writes to `<url>/<chainId>/` (a key prefix; no `mkdir`, the store materializes it on write). One helper (`render/backup.ObjectStoreFolder`) computes that folder for both the **write** path (`--to-path`) and the **record** path (`status.artifacts[].uri`), so restore-by-`backupRef` and object-store aggregate resolve the exact prefix the backup wrote to.
+
+**Only a schedule isolates; an ad-hoc backup writes where its author pointed it.** A chain id flows into places that constrain its shape (the key prefix, `status.chain`, the retention-grouping label, derived object names like `<chain>-agg`), so it must be a valid object-store key segment, label value, and DNS-1123 name at once — an invariant that only holds if it is *generated*. A `Neo4jBackupSchedule` generates it (`neo4j.com/chain` = `<schedule>-<UTCminute>`) and stamps it as a label; the backup reconciler (`controller/neo4jbackup.chainSubDir`) reads that label to pick the sub-directory. An **ad-hoc `Neo4jBackup` carries no label**, so the operator invents no path — it writes straight to the `destination.url`/claim its author gave and records that exact location. The author owns the layout, including not colliding two independent chains in one folder (point each at a distinct `url`).
+
+We deliberately do **not** synthesize a chain boundary the operator cannot know for a hand-made backup. An earlier "daily chain per target" heuristic (`<neo4jRef>-<UTCdate>`) did exactly that and split a full from a next-day incremental into different folders, so a later `aggregate` pointed at one folder found only a full to collapse — nothing — and exited "successfully" while aggregating nothing. Writing to the url as given makes a manual full + its incrementals + their aggregate share one folder, which is what the author intends. A wildcard PVC backup stays flat regardless: its filename-recording script keys off named databases, so a `*` PVC backup has no recordable seed path.
+
+### Object-store retention — operator-owned, one source of truth
+
+Backup, aggregate, and restore all move bytes *through* `neo4j-admin` or the Neo4j server, which carry bundled cloud connectors — but there is **no `neo4j-admin` command that deletes a whole backup**, and this ADR (via [ADR-015](015-backup-and-restore.md)) forbids a cloud SDK/CLI in the *operator* process. Retention still needs to delete objects, so we split the delete across the two vehicles that already exist plus one small mirrorable tool, run in its own Job and authorized by this ADR's identity model:
+
+- **Within-chain churn (the bulk) — `neo4j-admin`.** Scheduled aggregate compaction runs `neo4j-admin backup aggregate --keep-old-backup=false`, so neo4j-admin itself deletes the source chain's original full+increments from the bucket after writing the recovered full. No extra tool. (An ad-hoc `type: Aggregate` keeps `--keep-old-backup=true` — a user's manual aggregate must never destroy their data.)
+- **Whole expired chains — a dedicated `rclone` prune Job.** When `full.retention` marks a chain expired, the operator runs a short-lived Job (image `rclone/rclone`, overridable via `--object-store-prune-image` for air-gapped mirrors) that `rclone purge`s the chain's prefix. rclone is the one small, mirrorable tool that deletes across S3/GCS/Azure with the **same** env-configured auth the backup Job uses — static keys projected as `envFrom`, or workload identity via the backup ServiceAccount — so it needs no new credential path, only delete permission on the identity (`s3:DeleteObject` / Azure "Storage Blob Data Contributor" / GCS `storage.objects.delete`). The Job verifies the prefix is empty before it reports success, so a swallowed delete error can never let the operator drop the `Neo4jBackup` records while blobs remain.
+- **The records — the operator.** Once the stored artifacts are gone (the compaction links, or a whole chain's prefix), the operator deletes the corresponding `Neo4jBackup` records, exactly as it already does for PVC.
+
+This keeps **`keepLast` the single source of truth**: the operator owns the delete end-to-end for every destination, so there is no second place (a bucket lifecycle rule) to configure and keep in sync — a mismatch there is an operability footgun (retention "succeeds" while storage grows, or a lifecycle rule silently deletes a full still in use). It stays SDK-free in the *operator* itself: the delete tool runs in its own Job pod, never in the manager, authenticated by this ADR's identity model — which is exactly the prune-Job seam this ADR always named for operator-driven object deletion.
+
+With aggregate, chain isolation, and this retention decision, ADR-016's chain lifecycle for object stores is complete.
+
+### Explicitly out of scope
+
+- The **credential-free `file:`/`server:` restore path** and the **RWX `backups` volume** (they serve PVC users with zero cloud identity — owned by [ADR-015](015-backup-and-restore.md) restore + [BDR-005](../business/neo4j/005-storage-volume-mode.md)).
+- Any **object-store SDK in the operator** (forbidden by [ADR-015](015-backup-and-restore.md)).
+- Continuous / WAL backup.
+
+---
+
+## Consequences
+
+### Positive
+
+- On-prem/local **and** managed-cloud users are served; nobody is forced into static keys or into a specific cloud.
+- The static-key path ships and is **testable now** (MinIO on kind); WI lands per provider on cloud CI without reworking the executor plumbing.
+- The operator stays SDK-free; identity is declarative K8s primitives only.
+- Reuses seams already in the tree (Job `envFrom`, per-instance workload SA + annotation copy, WI annotation detector), so the diff is plumbing, not new subsystems.
+
+### Negative
+
+- Two credential paths to document, validate, and support.
+- Relaxing NEO-002 widens the workload's potential trust surface — mitigated by an explicit opt-in and the annotation allowlist.
+- Workload-identity paths are **not** locally testable; correctness depends on cloud CI (the repo already exercises GKE WI federation, Azure SP, and EKS Pod Identity in CI — precedent, but cloud-only).
+- Azure WI needs a pod label + projected token, i.e. new pod-level spec surface that other providers don't use.
+
+### Neutral
+
+- The backup Job gaining a dedicated SA is strictly better hygiene than the current `default` SA, independent of cloud identity.
+- Static-key restore reuses the same env-projection idiom as backup — no new primitive.
+- OpenShift identity is deferred without blocking the three major clouds.
+
+---
+
+## References
+
+- [ADR-015](015-backup-and-restore.md) — backup/restore execution (delegates cloud identity here) · [BDR-014](../business/backup-restore/014-backup-restore.md) — CRD contract
+- [ADR-001](001-crd-validation-process.md) — CEL vs webhook · [ADR-013](013-neo4j-conf-directory-fragments.md) — neo4j.conf fragments · [BDR-005](../business/neo4j/005-storage-volume-mode.md) — storage volumes (RWX `backups`)
+- [`dependencies.md`](../../dependencies.md) — platform identity matrix (AKS WI · GKE WI · EKS IRSA/Pod Identity · OpenShift SCC)
+- Backlog `M-02…M-06` — `.cursor/skills/operator-architecture-orchestrator/architecture-backlog.md`
+- [Neo4j — seed from URI (seed providers: file / server / s3 / gs / azb)](https://neo4j.com/docs/operations-manual/current/database-administration/standard-databases/seed-from-uri/)
+- [AWS IRSA](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) · [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) · [GKE Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) · [Azure Workload Identity](https://azure.github.io/azure-workload-identity/docs/)

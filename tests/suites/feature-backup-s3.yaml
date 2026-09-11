@@ -1,0 +1,40 @@
+name: feature-backup-s3
+description: >
+  Object-store (S3/MinIO) backup + restore round-trip with static-key credentials (ADR-016). Stands
+  up a single-node MinIO in the Neo4j namespace and an Enterprise Standalone Neo4j whose
+  spec.security.cloudIdentity.staticKeySecret points at the MinIO credentials Secret (which also
+  auto-enables CloudSeedProvider). Writes probe #1, takes a Full Neo4jBackup to s3://<bucket>/<cr>/
+  with destination.credentials (the backup Job authenticates to MinIO via the projected AWS_* env);
+  writes probe #post (after the backup, so NOT in the artifact); then applies a
+  Neo4jRestore(source.backupRef=<full>, overwrite) over `neo4j`. On restore the server pods carry the
+  same static keys and seed-from-URI straight from MinIO. Asserts the backup reaches Succeeded with
+  an s3:// artifact, the restore reaches Succeeded, `neo4j` comes online, probe #1 is present, and
+  probe #post is gone — proving the object-store write path (neo4j-admin → S3), the read path
+  (CloudSeedProvider ← S3), and the overwrite. This is the object-store analogue of
+  feature-restore-backupref (PVC + FileSeedProvider); it validates the ADR-016 credential plumbing
+  without needing a real cloud account.
+brief_ref: neo4j-backup-s3
+use_pipeline: neo4j-suite
+on_case_failure: stop
+# Single-node only: MinIO's emptyDir bucket and the static-key Secret are namespace-local, and the
+# suite provisions its own object store, so it neither needs nor benefits from a managed cloud. Pin
+# to kind so it self-skips on AKS/GKE/EKS (which run the workload-identity path manually per the
+# examples/standalone/25-cloud-identity-azure-backup.md runbook).
+clouds: [local-kind]
+pipeline:
+  case_assert:
+    - minio/install
+    - assert/standalone-ready
+    - backup/s3-roundtrip
+    - assert/restore-s3
+  case_teardown:
+    - backup/s3-cleanup
+    - minio/cleanup
+
+cases:
+  - id: s3-full
+    comment: ADR-016 — a Neo4jBackup(type=Full, destination.type=s3, credentials) writes to MinIO and a Neo4jRestore(source.backupRef=<full>, overwrite) seeds `neo4j` back from s3:// via CloudSeedProvider; the backed-up probe lands and the post-backup probe is dropped by the overwrite.
+    fixture: tests/fixtures/neo4j-backup-s3.yaml
+    assert: restore-s3
+    expect: success
+    cr_name: e2e-s3
