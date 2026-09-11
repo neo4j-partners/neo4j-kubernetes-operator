@@ -136,36 +136,25 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 }
 
-// chainID is the backup chain a run belongs to (BDR-014/ADR-016). A schedule owns cross-backup
-// chains and stamps its generated id as a label — always authoritative. An ad-hoc backup gets a
-// daily chain per target, <neo4jRef>-<UTCdate>, derived from its creation day: the day's Full
-// anchors the chain and same-day Incrementals derive the same id, so they co-locate and neo4j-admin
-// parents them correctly — no label, no ref, no user-typed id to get wrong. A new UTC day rolls a
-// new chain, so the model is "one full per day, then incrementals" (an incremental on a day with no
-// full fails cleanly — neo4j-admin finds no full to extend). Aggregate never reaches here.
-func chainID(b *neo4jv1beta1.Neo4jBackup) string {
-	if lbl := b.Labels[neo4jbackupschedule.LabelChain]; lbl != "" {
-		return lbl
-	}
-	day := b.CreationTimestamp.Time
-	if day.IsZero() {
-		day = time.Now()
-	}
-	return b.Spec.Neo4jRef.Name + "-" + day.UTC().Format("20060102")
-}
-
-// chainSubDir is the per-chain sub-directory the backup Job writes into so an aggregation of one
-// chain can never make a later differential of another chain mis-parent onto it. It is chainID for
-// every destination except a wildcard PVC backup: PVC's filename-recording script keys off named
-// databases, so a "*" PVC backup has no recordable path and stays flat (unchanged). Object stores
-// seed the folder, so they always isolate (ADR-016 chain isolation).
+// chainSubDir is the schedule-owned per-chain sub-directory a backup Job writes into so a schedule's
+// chains can never mis-parent onto each other (a new full's differentials attaching to an older
+// chain's links that share one flat folder). Only a Neo4jBackupSchedule sets it, via the
+// neo4j.com/chain label. An ad-hoc Neo4jBackup carries no label and writes straight to the
+// destination url/claim its author gave — the operator invents no path, so the author owns the
+// layout, including not colliding two chains in one folder (BDR-014/ADR-016). A wildcard PVC backup
+// has no recordable artifact filename (its filename script keys off named databases), so it stays
+// flat even when labelled.
 func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
+	chain := b.Labels[neo4jbackupschedule.LabelChain]
+	if chain == "" {
+		return ""
+	}
 	if b.Spec.Destination.Type == neo4jv1beta1.BackupDestinationPVC {
 		if _, ok := renderbackup.SeedableDatabases(b); !ok {
 			return ""
 		}
 	}
-	return chainID(b)
+	return chain
 }
 
 func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) (ctrl.Result, error) {
@@ -183,7 +172,7 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 	b.Status.Message = ""
 	b.Status.Artifacts = artifactsFor(b, r.artifactPaths(ctx, job))
 	if b.Status.Chain == "" {
-		b.Status.Chain = chainID(b)
+		b.Status.Chain = b.Labels[neo4jbackupschedule.LabelChain]
 	}
 	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionTrue, oracle.ReasonBackupSucceeded, "backup completed")
 	return ctrl.Result{}, r.writeStatus(ctx, b)
@@ -387,9 +376,10 @@ func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1
 func artifactsFor(b *neo4jv1beta1.Neo4jBackup, arts map[string]shared.NamedArtifact) []neo4jv1beta1.BackupArtifact {
 	uri := renderbackup.DestinationURI(b.Spec.Destination)
 	if b.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
-		if sub := chainSubDir(b); sub != "" {
-			uri = renderbackup.ObjectStoreFolder(b.Spec.Destination.URL, sub)
-		}
+		// Record the exact folder the Job wrote to — trailing slash normalized, per-chain sub-dir for
+		// a schedule, the url as given for an ad-hoc backup — so restore-by-backupRef and aggregate
+		// point --from-path at that same prefix.
+		uri = renderbackup.ObjectStoreFolder(b.Spec.Destination.URL, chainSubDir(b))
 	}
 	now := metav1.Now()
 	dbs := b.Spec.Databases
