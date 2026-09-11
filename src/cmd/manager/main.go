@@ -37,6 +37,7 @@ import (
 	neo4jrestorectrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jrestore"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
+	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
 )
 
@@ -58,6 +59,7 @@ func main() {
 	var enableWebhooks bool
 	var webhookCertDir string
 	var allowedImageRepos string
+	var objectStorePruneImage string
 	var maxConcurrentReconciles int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "Metrics bind address. \"0\" disables the endpoint. Any other value requires --metrics-secure (NEO-017).")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -67,6 +69,8 @@ func main() {
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory with tls.crt and tls.key for the webhook server.")
 	flag.StringVar(&allowedImageRepos, "allowed-image-repositories", "",
 		"Comma-separated image repository prefixes allowed in Neo4j CRs (NEO-012). Empty uses defaults (neo4j, docker.io/neo4j). Use * to allow any (lab only).")
+	flag.StringVar(&objectStorePruneImage, "object-store-prune-image", "",
+		fmt.Sprintf("rclone image the object-store retention prune Job runs (ADR-016). Empty uses %q, or OBJECT_STORE_PRUNE_IMAGE. Override for air-gapped mirrors.", renderbackup.DefaultObjectStorePruneImage))
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 0,
 		fmt.Sprintf("Max concurrent Neo4j reconciles (NEO-014). 0 uses %d, or MAX_CONCURRENT_RECONCILES. Maximum %d.",
 			neo4jctrl.DefaultMaxConcurrentReconciles, neo4jctrl.MaxConcurrentReconcilesLimit))
@@ -79,6 +83,9 @@ func main() {
 		allowedImageRepos = os.Getenv("ALLOWED_IMAGE_REPOSITORIES")
 	}
 	imagepolicy.SetAllowedRepositories(allowedImageRepos)
+	if objectStorePruneImage == "" {
+		objectStorePruneImage = os.Getenv("OBJECT_STORE_PRUNE_IMAGE")
+	}
 	if maxConcurrentReconciles <= 0 {
 		if v := os.Getenv("MAX_CONCURRENT_RECONCILES"); v != "" {
 			n, err := strconv.Atoi(v)
@@ -164,7 +171,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := neo4jschedulectrl.NewReconciler(mgr).SetupWithManager(mgr); err != nil {
+	schedRec := neo4jschedulectrl.NewReconciler(mgr)
+	if objectStorePruneImage != "" {
+		schedRec.ObjectPruneImage = objectStorePruneImage
+	}
+	if err := schedRec.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Neo4jBackupSchedule")
 		os.Exit(1)
 	}

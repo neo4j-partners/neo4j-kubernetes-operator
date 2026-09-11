@@ -92,7 +92,7 @@ Reasons that report a problem, a decision, or an operation in progress.
 | ScheduleReady | ScheduleTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
 | ScheduleReady | ScheduleEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
 | ScheduleReady | ScheduleInvalidCron | error | condition+event | A cron expression (full or incremental) could not be parsed |
-| — (Event only) | SchedulePruneFailed | warn | event | The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail |
+| — (Event only) | SchedulePruneFailed | warn | event | The Job that deletes an expired chain's artifacts (PVC files, or the object-store prefix via rclone) failed, or its destination is misconfigured; the chain and its records are kept and retried, and the message carries the failure detail |
 | — (Event only) | ScheduleAggregateFailed | warn | event | The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
@@ -123,8 +123,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | RestoreReady | RestoreSucceeded | info | condition | Every requested database was seeded and is online |
 | ScheduleReady | ScheduleActive | info | condition | Cadences are parsed and the schedule is emitting Neo4jBackup objects on time |
 | — (Event only) | ScheduleBackupEmitted | info | event | A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain |
-| — (Event only) | SchedulePruned | info | event | Retention removed a whole expired backup chain; the Event names the chain and how many backups and artifacts were pruned (BDR-014 §10) |
-| — (Event only) | SchedulePruneDelegated | info | event | A chain is eligible for retention but its destination is object storage; object deletion is delegated to the bucket's own lifecycle rules by design (ADR-016), so the operator keeps the chain and its records. Configure a lifecycle rule on the chain prefix to reclaim storage |
+| — (Event only) | SchedulePruned | info | event | Retention removed a whole expired backup chain — its stored artifacts (PVC files, or the object-store prefix purged by the rclone prune Job) and its records; the Event names the chain and how many backups were pruned (BDR-014 §10) |
 | — (Event only) | ScheduleCompacted | info | event | Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10) |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |

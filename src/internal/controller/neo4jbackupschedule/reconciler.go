@@ -18,12 +18,13 @@ limitations under the License.
 // on independent full/incremental cron cadences (BDR-014 §10). It is the CronJob→Job mapping,
 // doubled: each full anchors a new chain (status.currentChain), incrementals attach to it. Emitted
 // backups are named by their scheduled minute so a re-reconcile is idempotent (AlreadyExists →
-// skip). It also enforces full.retention by pruning whole expired chains (PVC artifacts via an
-// owned Job, then the records — BDR-014 §10) and, when aggregate.enabled, realizes
+// skip). It also enforces full.retention by pruning whole expired chains (the stored artifacts via
+// an owned Job, then the records — BDR-014 §10) and, when aggregate.enabled, realizes
 // incremental.retention by compacting each closed chain into its recovered full (aggregate, then
-// prune the original links). For object-store destinations, object deletion is delegated to the
-// bucket's own lifecycle rules by design (ADR-016 — no cloud CLI in the operator's images); the
-// operator keeps those chains and emits SchedulePruneDelegated.
+// prune the original links). The operator owns the delete end-to-end for every destination — PVC
+// files via the neo4j image's rm, object stores via an rclone prune Job and neo4j-admin
+// --keep-old-backup=false compaction (ADR-016) — so keepLast is the one source of truth and there
+// is no second place (bucket lifecycle) to keep in sync.
 package neo4jbackupschedule
 
 import (
@@ -67,15 +68,19 @@ type ScheduleReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
+	// ObjectPruneImage is the rclone image the object-store expiry prune Job runs. Defaulted by
+	// NewReconciler; overridable by the manager (--object-store-prune-image) for air-gapped mirrors.
+	ObjectPruneImage string
 	// Now is injected by tests; nil → time.Now.
 	Now func() time.Time
 }
 
 func NewReconciler(mgr ctrl.Manager) *ScheduleReconciler {
 	return &ScheduleReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("neo4jbackupschedule-controller"),
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		Recorder:         mgr.GetEventRecorderFor("neo4jbackupschedule-controller"),
+		ObjectPruneImage: renderbackup.DefaultObjectStorePruneImage,
 	}
 }
 
@@ -438,18 +443,11 @@ func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo
 // as expiry pruning; the recovered full (a different record) is never in this set.
 func (r *ScheduleReconciler) compactChain(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j, chain string, links []*neo4jv1beta1.Neo4jBackup, agg *neo4jv1beta1.Neo4jBackup) (time.Duration, error) {
 	claim, files, objectStore := pvcArtifacts(links)
-	if objectStore {
-		// Object-store object deletion is delegated to bucket lifecycle rules by design (ADR-016 —
-		// no cloud CLI in the operator's images). The chain is aggregated and its links are kept;
-		// a lifecycle rule on the chain prefix reclaims the superseded links.
-		if r.Recorder != nil {
-			r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonSchedulePruneDelegated.String(),
-				"chain "+chain+" aggregated; its object-store links are retained for the bucket lifecycle rule to reclaim (ADR-016)")
-		}
-		return 0, nil
-	}
-
-	if len(files) > 0 {
+	// PVC: delete the link files via an owned Job before the records (crash-safe order). Object store:
+	// the compaction aggregate ran with --keep-old-backup=false, so neo4j-admin already deleted the
+	// chain's original full+increments from the bucket — there is nothing to prune, drop straight to
+	// deleting the link records (the recovered full, a different record, is kept).
+	if !objectStore && len(files) > 0 {
 		job, err := renderbackup.PruneJob(neo4j, compactJobName(chain), claim, files)
 		if err != nil {
 			return 0, err
@@ -613,25 +611,33 @@ func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4
 	}
 
 	claim, files, objectStore := pvcArtifacts(items)
-	if objectStore {
-		// Object-store retention is delegated to the bucket's own lifecycle rules by design (ADR-016
-		// — no cloud CLI in the operator's images to delete objects). The operator keeps the chain
-		// and its records; a lifecycle rule on the per-chain prefix reclaims the storage. The event
-		// is Normal (a design decision, not a failure) and the API server dedupes repeats.
+
+	// Delete the chain's stored artifacts via an owned Job before deleting the records, so a crash
+	// never leaves orphaned (un-catalogued, un-prunable) data behind. PVC deletes the files with the
+	// neo4j image's rm; object stores purge the whole chain prefix with rclone (ADR-016 — the
+	// operator's own images carry no cloud CLI, so a dedicated prune tool authenticated by the same
+	// identity model does the delete). Retention owns the delete end-to-end: one source of truth
+	// (keepLast), no second place (bucket lifecycle) to keep in sync.
+	var job *batchv1.Job
+	var err error
+	switch {
+	case objectStore:
+		if url := objectChainURL(items); url != "" {
+			job, err = renderbackup.ObjectStorePruneJob(neo4j, renderbackup.PruneJobName(chain), r.ObjectPruneImage, items[0].Spec.Destination, url)
+		}
+	case len(files) > 0:
+		job, err = renderbackup.PruneJob(neo4j, renderbackup.PruneJobName(chain), claim, files)
+	}
+	if err != nil {
+		// A misconfigured url/type must surface and must NOT fall through to record deletion (that
+		// would orphan the blobs). Stop this pass; a corrected spec retries on the next reconcile.
 		if r.Recorder != nil {
-			r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonSchedulePruneDelegated.String(),
-				"chain "+chain+" is expired; its object-store storage is reclaimed by the bucket lifecycle rule, not the operator (ADR-016)")
+			r.Recorder.Event(sched, corev1.EventTypeWarning, oracle.ReasonSchedulePruneFailed.String(),
+				"prune of chain "+chain+": "+err.Error())
 		}
 		return 0, nil
 	}
-
-	// PVC chain: delete the artifact files via an owned Job before deleting the records, so a
-	// crash never leaves an orphaned (un-catalogued, un-prunable) file behind.
-	if len(files) > 0 {
-		job, err := renderbackup.PruneJob(neo4j, renderbackup.PruneJobName(chain), claim, files)
-		if err != nil {
-			return 0, err
-		}
+	if job != nil {
 		if err := shared.Apply(ctx, r.Client, r.Scheme, sched, job, func() error { return nil }); err != nil {
 			return 0, err
 		}
@@ -657,7 +663,7 @@ func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4
 		case !complete:
 			return 15 * time.Second, nil
 		}
-		// complete → the files are gone; delete the records below.
+		// complete → the stored artifacts are gone; delete the records below.
 	}
 
 	deleted := 0
@@ -669,7 +675,7 @@ func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4
 	}
 	if r.Recorder != nil {
 		r.Recorder.Event(sched, corev1.EventTypeNormal, oracle.ReasonSchedulePruned.String(),
-			fmt.Sprintf("pruned expired chain %s (%d backups, %d artifacts)", chain, deleted, len(files)))
+			fmt.Sprintf("pruned expired chain %s (%d backups)", chain, deleted))
 	}
 	// More expired chains may remain — come back promptly to drain them.
 	if len(expired) > 1 {
@@ -776,6 +782,20 @@ func pvcArtifacts(items []*neo4jv1beta1.Neo4jBackup) (claim string, files []stri
 		}
 	}
 	return claim, files, false
+}
+
+// objectChainURL is the object-store folder a chain's backups were written to (the per-chain prefix,
+// recorded on status.artifacts[].uri). All of a chain's backups share it, so the first non-empty uri
+// wins. Empty when no object-store artifact has been recorded yet (nothing to purge).
+func objectChainURL(items []*neo4jv1beta1.Neo4jBackup) string {
+	for _, b := range items {
+		for _, a := range b.Status.Artifacts {
+			if a.URI != "" {
+				return a.URI
+			}
+		}
+	}
+	return ""
 }
 
 func (r *ScheduleReconciler) now() time.Time {

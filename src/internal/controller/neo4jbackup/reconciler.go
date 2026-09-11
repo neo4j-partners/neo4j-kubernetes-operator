@@ -308,6 +308,10 @@ func aggregateInputs(b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup)
 	case objURL != "":
 		in.ObjectURL = objURL
 		in.Credentials = b.Spec.Destination.Credentials
+		// Schedule-managed compaction (the aggregate carries the schedule's chain label) reclaims the
+		// churn: neo4j-admin deletes the source chain's original full+increments from the bucket
+		// (--keep-old-backup=false). An ad-hoc Aggregate has no label and always keeps the user's chain.
+		in.DeleteOldChain = b.Labels[neo4jbackupschedule.LabelChain] != ""
 	default:
 		return fail(unsupported, "type Aggregate requires at least one database with a recorded artifact")
 	}
