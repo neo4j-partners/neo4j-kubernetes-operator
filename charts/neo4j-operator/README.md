@@ -91,6 +91,16 @@ helm upgrade --install neo4j-operator ./charts/neo4j-operator \
 # or: --set image.tag=0.1.0
 ```
 
+Released images are a manifest index covering `linux/amd64` and `linux/arm64`, so a tag needs no
+architecture suffix and a mixed-architecture cluster needs no second value. When pinning by digest,
+take the **index** digest — the one `docker buildx imagetools inspect` prints first, or the
+`ghcr.io` UI shows for the tag. An architecture-specific digest also resolves, but it pins the
+operator to that architecture and will fail to start on any other node:
+
+```bash
+docker buildx imagetools inspect ghcr.io/neo4j-partners/neo4j-kubernetes-operator:0.1.0
+```
+
 ## Validating webhook (optional)
 
 Rejects privileged containers / `hostPath` at `kubectl apply` (NEO-001). Requires cert-manager:
