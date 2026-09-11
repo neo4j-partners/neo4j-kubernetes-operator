@@ -20,7 +20,7 @@ oracle_reasons_for() {  # <condition>
     Ready) printf '%s\n' AllMembersReady MembersNotReady TLSNotReady StorageNotReady OfflineMaintenance ReconcileError ;;
     Reconciling) printf '%s\n' InProgress Completed Failed ;;
     Installed) printf '%s\n' ObjectsCreated Pending ;;
-    Error) printf '%s\n' NoError ReconcileFailed SecretNotMountable SecretNotDelegated AuthSecretInvalid StorageTemplateDrift ;;
+    Error) printf '%s\n' NoError ReconcileFailed SecretNotMountable SecretNotDelegated AuthSecretInvalid StorageTemplateDrift VersionDowngradeRefused VersionUpgradeRefused ;;
     StorageReady) printf '%s\n' PVCBound PVCPending StorageResizing StorageResizeFailed ;;
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
@@ -57,6 +57,8 @@ oracle_severity() {  # <reason>
     SecretNotDelegated) echo error ;;
     AuthSecretInvalid) echo error ;;
     StorageTemplateDrift) echo error ;;
+    VersionDowngradeRefused) echo error ;;
+    VersionUpgradeRefused) echo error ;;
     PVCBound) echo info ;;
     PVCPending) echo warn ;;
     StorageResizing) echo info ;;

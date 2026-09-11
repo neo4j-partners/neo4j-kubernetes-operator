@@ -1,0 +1,40 @@
+# 3 primaries plus a read pool, deployed at the upgrade-from version.
+#
+# The read pool is the point: the operator renders it with
+# server.cluster.system_database_mode=SECONDARY, which is what makes Neo4j's ordering rule apply —
+# system-database secondaries must reach the new version before the system primary does. A
+# primaries-only cluster would upgrade correctly without the operator ordering anything, and prove
+# nothing about it.
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "__NEO4J_VERSION__"
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    secondaries:
+      read:
+        members: 1
+    defaultPrimariesCount: 3
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  connectivity:
+    service:
+      type: ClusterIP
+  auth:
+    generatePassword: true
+  trust:
+    # NEO-004: explicit opt-in to plaintext operator admin Bolt (Warning event).
+    enabled: false
+    insecureAdminConnection: true

@@ -11,6 +11,10 @@ export NEO4J_KIND="${NEO4J_KIND:-Neo4j}"
 export NEO4J_NAMESPACE="${NEO4J_NAMESPACE:-default}"
 export NEO4J_EDITION="${NEO4J_EDITION:-enterprise}"
 export NEO4J_VERSION="${NEO4J_VERSION:-${NEO4J_VERSION_DEFAULT}}"
+# The version this run is testing, captured before any case is sourced. feature-upgrade deploys one
+# version back by overriding NEO4J_VERSION, so _config_reset_case_vars restores this between cases —
+# resetting to NEO4J_VERSION_DEFAULT instead would discard the version CI passed in.
+export NEO4J_VERSION_RUN="${NEO4J_VERSION_RUN:-${NEO4J_VERSION}}"
 export NEO4J_LICENSE_ACCEPT="${NEO4J_LICENSE_ACCEPT:-yes}"
 export NEO4J_TOPOLOGY_MODE="${NEO4J_TOPOLOGY_MODE:-Standalone}"
 

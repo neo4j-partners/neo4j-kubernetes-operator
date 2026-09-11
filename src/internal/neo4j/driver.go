@@ -117,6 +117,37 @@ func asStringList(v any) []string {
 	return out
 }
 
+// ClusterStable is the between-member gate from the Neo4j upgrade guide. Both queries are expected
+// to return no rows; the first row found is reported back as the reason we are still waiting.
+func (a *driverAdmin) ClusterStable(ctx context.Context) (bool, string, error) {
+	servers, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"SHOW SERVERS YIELD name, hosting, requestedHosting WHERE requestedHosting <> hosting",
+		nil, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	if err != nil {
+		return false, "", err
+	}
+	if len(servers.Records) > 0 {
+		name, _ := servers.Records[0].Get("name")
+		return false, fmt.Sprintf("server %v is not hosting every database asked of it", name), nil
+	}
+
+	databases, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"SHOW DATABASES YIELD name, currentStatus, requestedStatus WHERE currentStatus <> requestedStatus",
+		nil, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	if err != nil {
+		return false, "", err
+	}
+	if len(databases.Records) > 0 {
+		name, _ := databases.Records[0].Get("name")
+		current, _ := databases.Records[0].Get("currentStatus")
+		requested, _ := databases.Records[0].Get("requestedStatus")
+		return false, fmt.Sprintf("database %v is %v, not %v", name, current, requested), nil
+	}
+	return true, "", nil
+}
+
 func (a *driverAdmin) ShowDatabaseTopologies(ctx context.Context) ([]DatabaseTopology, error) {
 	result, err := neo4j.ExecuteQuery(ctx, a.driver,
 		"SHOW DATABASES YIELD name, type, requestedPrimariesCount, requestedSecondariesCount, currentPrimariesCount, currentSecondariesCount",

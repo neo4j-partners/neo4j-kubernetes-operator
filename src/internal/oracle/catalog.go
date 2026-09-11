@@ -274,6 +274,10 @@ var (
 		on(ConditionError, "Auth Secret holds a `NEO4J_AUTH` value the Neo4j image entrypoint cannot use; the pod would crash-loop"))
 	ReasonStorageTemplateDrift = declare("StorageTemplateDrift", SeverityError, SurfaceBoth,
 		on(ConditionError, "The volumeClaimTemplates the spec renders differ from the live StatefulSet's in more than size, and Kubernetes accepts no new set. The operator applies nothing rather than leave the pod template mounting a volume no template backs; the message names the volumes that diverge"))
+	ReasonVersionDowngradeRefused = declare("VersionDowngradeRefused", SeverityError, SurfaceBoth,
+		on(ConditionError, "`spec.version` moves backwards. Neo4j supports no downgrade in any form, and reverting the field does not undo a store the newer binary has already opened — the documented recovery is restoring a backup taken before the upgrade (ADR-017)"))
+	ReasonVersionUpgradeRefused = declare("VersionUpgradeRefused", SeverityError, SurfaceBoth,
+		on(ConditionError, "A `spec.version` change the operator will not roll out as written: an upgrade path that skips an LTS checkpoint, a digest-pinned image where the new version would never be pulled, offline maintenance, or plugin JARs on an `Existing` volume that nothing refreshes. The message names which (ADR-017)"))
 )
 
 // StorageReady — the data claim (BDR-005).
