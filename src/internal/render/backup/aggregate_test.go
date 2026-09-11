@@ -114,3 +114,23 @@ func TestAggregateJobObjectStore(t *testing.T) {
 		t.Error("object-store aggregate must still mount the scratch temp volume")
 	}
 }
+
+func TestAggregateJobObjectStoreDeleteOldChain(t *testing.T) {
+	// Schedule-managed compaction sets DeleteOldChain, so neo4j-admin runs with
+	// --keep-old-backup=false and deletes the source chain's churn from the bucket.
+	job, err := AggregateJob(testNeo4j(), "agg-obj", AggregateInputs{
+		ObjectURL:      "s3://bkt/backups/neo4j/",
+		Databases:      []string{"neo4j"},
+		DeleteOldChain: true,
+	})
+	if err != nil {
+		t.Fatalf("AggregateJob: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	if !strings.Contains(script, "--keep-old-backup=false") {
+		t.Errorf("DeleteOldChain must run with --keep-old-backup=false; got %q", script)
+	}
+	if strings.Contains(script, "--keep-old-backup=true") {
+		t.Errorf("DeleteOldChain must not keep the old chain; got %q", script)
+	}
+}

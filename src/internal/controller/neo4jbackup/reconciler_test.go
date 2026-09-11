@@ -365,6 +365,31 @@ func TestReconcileAggregateObjectStoreSource(t *testing.T) {
 	}
 }
 
+// A schedule-managed object-store aggregate (carries the chain label) runs with
+// --keep-old-backup=false so neo4j-admin reclaims the churn on the bucket; ad-hoc keeps it (true,
+// asserted by TestReconcileAggregateObjectStoreSource).
+func TestReconcileAggregateObjectStoreCompactionDeletesOldChain(t *testing.T) {
+	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
+	agg := aggregateCR("chain-last")
+	agg.Labels = map[string]string{neo4jbackupschedule.LabelChain: "sch-0100"}
+	agg.Spec.Destination = neo4jv1beta1.BackupDestination{
+		Type:        neo4jv1beta1.BackupDestinationS3,
+		URL:         "s3://b/p/",
+		Credentials: &neo4jv1beta1.BackupCredentials{SecretName: "creds"},
+	}
+	r, c := newReconciler(t, enterpriseNeo4j(), src, agg)
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	var job batchv1.Job
+	if err := c.Get(t.Context(), types.NamespacedName{Name: renderbackup.JobName(agg), Namespace: "ns"}, &job); err != nil {
+		t.Fatalf("expected aggregate Job: %v", err)
+	}
+	if script := job.Spec.Template.Spec.Containers[0].Command[2]; !strings.Contains(script, "--keep-old-backup=false") {
+		t.Errorf("schedule-managed object-store aggregate must delete the old chain (--keep-old-backup=false); got %q", script)
+	}
+}
+
 func TestReconcileAggregateMixedStoresUnsupported(t *testing.T) {
 	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
 	src.Spec.Databases = []string{"neo4j", "extra"}

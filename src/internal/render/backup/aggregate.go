@@ -42,6 +42,12 @@ type AggregateInputs struct {
 	ObjectURL   string
 	Databases   []string                        // object store: db operands to aggregate
 	Credentials *neo4jv1beta1.BackupCredentials // object store: static-key Secret (nil → workload identity)
+	// DeleteOldChain runs the object-store aggregate with --keep-old-backup=false, so neo4j-admin
+	// deletes the source chain's original full+increments from the bucket after producing the
+	// recovered full. It is set only for schedule-managed compaction (which owns the chain and wants
+	// to reclaim the churn); an ad-hoc Aggregate always keeps the old chain (never destroys the
+	// user's data). PVC aggregation ignores it — its churn is pruned by a separate PruneJob.
+	DeleteOldChain bool
 }
 
 // AggregateJob builds the run-to-completion Job (named jobName, owner-referenced by the caller) that
@@ -79,7 +85,7 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, jobName string, in AggregateInputs)
 	case in.ObjectURL != "":
 		// No mount: neo4j-admin streams the chain in/out of the object store itself. Credentials
 		// are projected below; workload identity (if any) is applied via ApplyBackupPodIdentity.
-		script = aggregateScriptObjectStore(in.ObjectURL, in.Databases)
+		script = aggregateScriptObjectStore(in.ObjectURL, in.Databases, in.DeleteOldChain)
 	default:
 		return nil, fmt.Errorf("aggregate inputs specify neither a PVC claim nor an object-store url")
 	}
@@ -175,22 +181,29 @@ func aggregateScript(toPath string, dbArtifacts map[string]string) string {
 }
 
 // aggregateScriptObjectStore runs `neo4j-admin backup aggregate` per database against the chain
-// under the object-store url (in place, --keep-old-backup=true so the source chain is never
-// deleted). Unlike the PVC path it records no recovered filename: there is no mounted filesystem to
-// ls (and no cloud CLI in the image), and neo4j-admin writes the recovered full back under the same
-// url, so restore seeds that folder — which now recovers to the aggregated full. Databases are
-// sorted for a deterministic script.
-func aggregateScriptObjectStore(url string, dbs []string) string {
+// under the object-store url (in place). --keep-old-backup is true for an ad-hoc aggregate (never
+// destroy the user's chain) and false for schedule-managed compaction, where neo4j-admin then
+// deletes the source chain's original full+increments from the bucket after writing the recovered
+// full (it needs delete permission on the identity — s3:DeleteObject / Azure "Storage Blob Data
+// Contributor"). Unlike the PVC path it records no recovered filename: there is no mounted
+// filesystem to ls, and neo4j-admin writes the recovered full back under the same url, so restore
+// seeds that folder — which now recovers to the aggregated full. Databases are sorted for a
+// deterministic script.
+func aggregateScriptObjectStore(url string, dbs []string, deleteOldChain bool) string {
 	sorted := append([]string(nil), dbs...)
 	sort.Strings(sorted)
+	keepOld := "true"
+	if deleteOldChain {
+		keepOld = "false"
+	}
 	var b strings.Builder
 	for i, db := range sorted {
 		if i > 0 {
 			b.WriteString(" && ")
 		}
 		fmt.Fprintf(&b,
-			"neo4j-admin backup aggregate --from-path=%s --keep-old-backup=true --temp-path=%s %s",
-			url, scratchMountPath, db)
+			"neo4j-admin backup aggregate --from-path=%s --keep-old-backup=%s --temp-path=%s %s",
+			url, keepOld, scratchMountPath, db)
 	}
 	return b.String()
 }

@@ -417,26 +417,63 @@ func TestReconcilePrunesExpiredPVCChainViaJob(t *testing.T) {
 	}
 }
 
-func TestReconcilePruneObjectStoreDelegated(t *testing.T) {
+// s3ChainWithURI is an expired object-store chain backup whose recorded artifact carries the chain
+// folder (status.artifacts[].uri) — what the rclone prune Job purges.
+func s3ChainWithURI(name, chain, uri string, created time.Time) *neo4jv1beta1.Neo4jBackup {
+	b := chainBackup(name, chain, created, s3Dest())
+	b.Status.Artifacts = []neo4jv1beta1.BackupArtifact{{Database: "neo4j", URI: uri}}
+	return &b
+}
+
+func TestReconcilePruneObjectStoreChainViaRcloneJob(t *testing.T) {
 	keep := int32(1)
-	old := chainBackup("old-f", "old", creation.Add(-time.Hour), s3Dest())
+	old := s3ChainWithURI("old-f", "old", "s3://b/prod/old/", creation.Add(-time.Hour))
 	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
 		s.Spec.BackupTemplate.Destination = s3Dest()
 		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
 	})
-	r, c := newReconciler(t, enterpriseNeo4j(), sched, &old)
+	r, c := newReconciler(t, enterpriseNeo4j(), sched, old)
+
+	res, err := r.Reconcile(context.Background(), req())
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	// An rclone prune Job purges the chain's object-store prefix (ADR-016 — the operator owns the
+	// delete, not a bucket lifecycle rule)…
+	var job batchv1.Job
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "prune-old", Namespace: "ns"}, &job); err != nil {
+		t.Fatalf("expected object-store prune Job prune-old: %v", err)
+	}
+	script := job.Spec.Template.Spec.Containers[0].Command[2]
+	if !strings.Contains(script, "rclone purge") || !strings.Contains(script, "b/prod/old") {
+		t.Errorf("prune Job must rclone-purge the chain prefix; script = %q", script)
+	}
+	// …and the records survive until it completes, so no object is ever orphaned.
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+		t.Fatalf("object-store chain record must survive until the prune Job completes: %v", err)
+	}
+	if res.RequeueAfter <= 0 || res.RequeueAfter > 15*time.Second {
+		t.Errorf("requeue = %v, want a short poll (<=15s) while the prune Job runs", res.RequeueAfter)
+	}
+}
+
+func TestReconcilePruneObjectStoreDeletesRecordsWhenJobCompletes(t *testing.T) {
+	keep := int32(1)
+	old := s3ChainWithURI("old-f", "old", "s3://b/prod/old/", creation.Add(-time.Hour))
+	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+		s.Spec.BackupTemplate.Destination = s3Dest()
+		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
+	})
+	r, c := newReconciler(t, enterpriseNeo4j(), sched, old, completeJob("prune-old"))
 
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	// Object-store retention is delegated to bucket lifecycle rules (ADR-016): the operator keeps
-	// the chain and its records (deleting a record would orphan the bucket objects it points at)…
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
-		t.Fatalf("object-store chain must be kept (retention delegated to bucket lifecycle): %v", err)
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err == nil {
+		t.Error("object-store chain record must be deleted once the prune Job completed")
 	}
-	// …and the operator says so, as a Normal (not Warning) decision event.
-	if !hasEvent(r, "SchedulePruneDelegated") {
-		t.Error("expected a SchedulePruneDelegated event for the object-store chain")
+	if !hasEvent(r, "SchedulePruned") {
+		t.Error("expected a SchedulePruned event for the object-store chain")
 	}
 }
 
@@ -603,6 +640,37 @@ func TestReconcileCompactionCompletesKeepingRecoveredFull(t *testing.T) {
 		}
 	}
 	// …the recovered full is kept.
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+		t.Fatalf("recovered full old-agg must be kept: %v", err)
+	}
+	if !hasEvent(r, "ScheduleCompacted") {
+		t.Error("expected a ScheduleCompacted event")
+	}
+}
+
+func TestReconcileCompactionObjectStoreDeletesRecords(t *testing.T) {
+	// Object store: the compaction aggregate ran with --keep-old-backup=false (neo4j-admin deleted
+	// the churn on the bucket), so the schedule prunes the link RECORDS directly — no compact Job —
+	// and keeps the recovered full.
+	t0 := creation.Add(-10 * time.Minute)
+	full := chainBackup("old-f", "old", t0, s3Dest())
+	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), s3Dest())
+	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), s3Dest(), neo4jv1beta1.RunPhaseSucceeded)
+	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc, &agg)
+
+	if _, err := r.Reconcile(context.Background(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	// No compaction Job for object stores — neo4j-admin already deleted the blobs.
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "compact-old", Namespace: "ns"}, &batchv1.Job{}); err == nil {
+		t.Error("object-store compaction must not create a prune Job")
+	}
+	// Link records gone, recovered full kept.
+	for _, name := range []string{"old-f", "old-1-i"} {
+		if err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err == nil {
+			t.Errorf("link %s record must be deleted for object-store compaction", name)
+		}
+	}
 	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
 		t.Fatalf("recovered full old-agg must be kept: %v", err)
 	}

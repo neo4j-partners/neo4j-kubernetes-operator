@@ -217,20 +217,19 @@ There is no per-increment retention: deleting a mid-chain link would break every
 restore, so within-chain growth is bounded by the aggregate cadence and by starting a fresh chain,
 not by dropping links.
 
-**On object stores, retention is delegated to bucket lifecycle rules.** The operator deletes files
-only on PVC destinations — it carries no cloud SDK, so it never deletes bucket objects. For S3/GCS/
-Azure, it keeps expired chains (and their records) and emits a Normal `SchedulePruneDelegated` event;
-you reclaim the storage with a **native lifecycle rule on the backup prefix**. Because each chain is
-its own prefix (`<url>/<chainId>/`), the rule is straightforward — e.g. S3:
+**On object stores, retention is operator-owned too — one setting, nothing else to keep in sync.**
+`keepLast`/`keepDays` bound the number of chains on S3/GCS/Azure exactly as on PVC; you do **not**
+configure a bucket lifecycle rule. The operator carries no cloud SDK itself, so it reclaims bucket
+storage two ways: scheduled aggregate compaction runs `neo4j-admin backup aggregate
+--keep-old-backup=false` (neo4j-admin deletes each closed chain's original full+increments after
+writing the recovered full), and a short-lived **`rclone` prune Job** purges a whole expired chain's
+prefix. Both authenticate with the **same** credentials or workload identity your backups use — the
+identity just needs **delete** permission on the store (`s3:DeleteObject`, Azure "Storage Blob Data
+Contributor", or GCS `storage.objects.delete`). Air-gapped installs mirror and override the rclone
+image with `--object-store-prune-image`.
 
-```json
-{ "Rules": [{ "ID": "neo4j-backups", "Status": "Enabled",
-  "Filter": { "Prefix": "backups/" }, "Expiration": { "Days": 30 } }] }
-```
-
-(Azure blob lifecycle management and GCS object lifecycle offer the same age-based expiry.) Keep the
-lifecycle window comfortably longer than your restore needs — deleting a full still in use breaks its
-chain's restore, exactly as on PVC.
+> An ad-hoc `Neo4jBackup` of `type: Aggregate` you run by hand keeps `--keep-old-backup=true` — it
+> never deletes your existing chain. Only a schedule's own compaction reclaims within-chain churn.
 
 **Aggregate compaction is boundary-triggered.** With `aggregate.enabled: true`, when a new full
 closes the previous chain, the schedule waits for that closed chain to quiesce (every link

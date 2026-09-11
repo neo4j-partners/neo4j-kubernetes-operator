@@ -407,11 +407,9 @@ var (
 	ReasonScheduleBackupEmitted = declareNominal("ScheduleBackupEmitted", SurfaceEvent,
 		asEvent("A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain"))
 	ReasonSchedulePruned = declareNominal("SchedulePruned", SurfaceEvent,
-		asEvent("Retention removed a whole expired backup chain; the Event names the chain and how many backups and artifacts were pruned (BDR-014 §10)"))
+		asEvent("Retention removed a whole expired backup chain — its stored artifacts (PVC files, or the object-store prefix purged by the rclone prune Job) and its records; the Event names the chain and how many backups were pruned (BDR-014 §10)"))
 	ReasonSchedulePruneFailed = declare("SchedulePruneFailed", SeverityWarn, SurfaceEvent,
-		asEvent("The Job that deletes an expired chain's PVC artifacts failed; the chain is kept and retried, and the message carries the failure detail"))
-	ReasonSchedulePruneDelegated = declareNominal("SchedulePruneDelegated", SurfaceEvent,
-		asEvent("A chain is eligible for retention but its destination is object storage; object deletion is delegated to the bucket's own lifecycle rules by design (ADR-016), so the operator keeps the chain and its records. Configure a lifecycle rule on the chain prefix to reclaim storage"))
+		asEvent("The Job that deletes an expired chain's artifacts (PVC files, or the object-store prefix via rclone) failed, or its destination is misconfigured; the chain and its records are kept and retried, and the message carries the failure detail"))
 	ReasonScheduleCompacted = declareNominal("ScheduleCompacted", SurfaceEvent,
 		asEvent("Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10)"))
 	ReasonScheduleAggregateFailed = declare("ScheduleAggregateFailed", SeverityWarn, SurfaceEvent,
