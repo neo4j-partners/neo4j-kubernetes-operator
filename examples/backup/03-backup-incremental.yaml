@@ -1,0 +1,17 @@
+# Purpose: a one-shot Incremental backup — a differential that attaches to the latest chain in the
+#   destination (the full from 02). Restoring the chain replays the full + every increment in order.
+# Prerequisites: 02-backup-full.yaml Succeeded (a full must exist for the increment to attach to).
+# Apply: kubectl apply -f examples/backup/03-backup-incremental.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: bk-incr
+spec:
+  neo4jRef:
+    name: backup-demo
+  databases: ["neo4j"]
+  type: Incremental
+  destination:
+    type: pvc
+    pvc:
+      claimName: neo4j-backups

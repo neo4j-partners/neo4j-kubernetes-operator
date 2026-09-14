@@ -1,0 +1,18 @@
+# Purpose: restore the neo4j database from a Neo4jBackup record. source.backupRef resolves the
+#   artifact location and walks the chain; because backup-demo mounts the destination claim as its
+#   backups volume, the operator seeds file:/backups/<artifact>. overwrite: true replaces the
+#   existing database (a name clash otherwise fails — BDR-014 §11). system is never restored.
+#   Swap backupRef to bk-aggregate to restore from the single recovered full instead of the chain.
+# Prerequisites: a Succeeded backup to restore from (bk-full, or bk-aggregate).
+# Apply: kubectl apply -f examples/backup/05-restore.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: rst-demo
+spec:
+  neo4jRef:
+    name: backup-demo
+  databases: ["neo4j"]
+  overwrite: true            # replace the existing database with the restored store
+  source:
+    backupRef: bk-full

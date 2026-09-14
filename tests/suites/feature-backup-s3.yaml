@@ -19,7 +19,7 @@ on_case_failure: stop
 # Single-node only: MinIO's emptyDir bucket and the static-key Secret are namespace-local, and the
 # suite provisions its own object store, so it neither needs nor benefits from a managed cloud. Pin
 # to kind so it self-skips on AKS/GKE/EKS (which run the workload-identity path manually per the
-# examples/standalone/25-cloud-identity-azure-backup.md runbook).
+# examples/backup/azure-blob.md runbook).
 clouds: [local-kind]
 pipeline:
   case_assert:

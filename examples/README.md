@@ -58,7 +58,7 @@ apply companion PVCs/Secrets before CRs that reference them).
 | [`standalone/22-security.yaml`](standalone/22-security.yaml) | `security.serviceAccount.annotations` + opt-in NetworkPolicy |
 | [`standalone/23-namespace-quota.yaml`](standalone/23-namespace-quota.yaml) | Namespace `ResourceQuota` backstop (NEO-014) |
 | [`standalone/24-community.yaml`](standalone/24-community.yaml) | Community edition — `edition: community`, no `license` block |
-| [`standalone/25-cloud-identity.yaml`](standalone/25-cloud-identity.yaml) | `security.cloudIdentity` — object-store workload identity / static keys for backup & restore (Azure test runbook: [`25-cloud-identity-azure-backup.md`](standalone/25-cloud-identity-azure-backup.md)) |
+| [`standalone/25-cloud-identity.yaml`](standalone/25-cloud-identity.yaml) | `security.cloudIdentity` — object-store workload identity / static keys for backup & restore (Azure test runbook: [`backup/azure-blob.md`](backup/azure-blob.md)) |
 
 ## Cluster
 
@@ -101,6 +101,37 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | [`storage/11-full.yaml`](storage/11-full.yaml) | Kitchen sink (`dev-storage-full`) |
 | [`storage/12-aux-share-plugins-apoc.yaml`](storage/12-aux-share-plugins-apoc.yaml) | `volumes.plugins` Share + APOC + neo4j.conf procedure overrides |
 
+## Backup / Restore / Schedule
+
+The [`backup/`](backup/) directory holds the day-2 CRs — `Neo4jBackup`, `Neo4jBackupSchedule`,
+`Neo4jRestore` — plus **step-by-step test runbooks** that exercise the whole surface end-to-end
+(backup → incremental → aggregate → restore, then a schedule with `aggregate.enabled` and
+operator-owned `keepLast` retention). Start with the credential-free PVC runbook, then pick a cloud.
+
+**Runbooks (copy-paste, with expected output):**
+
+| Runbook | Destination | Auth | Topology |
+|---------|-------------|------|----------|
+| [`backup/pvc-standalone.md`](backup/pvc-standalone.md) | PVC (no cloud) | none | Standalone |
+| [`backup/azure-blob.md`](backup/azure-blob.md) | Azure Blob | Workload Identity (+ static key) | Standalone |
+| [`backup/aws-s3.md`](backup/aws-s3.md) | Amazon S3 | IRSA (+ static key) | Standalone |
+| [`backup/gcs.md`](backup/gcs.md) | Google Cloud Storage | Workload Identity | Standalone |
+| [`backup/cluster-objectstore.md`](backup/cluster-objectstore.md) | Object store | any of the above | **Cluster** (3 primaries) |
+
+**Manifests** (used by the PVC runbook; the cloud runbooks inline their own with the `destination`
+block swapped):
+
+| File | Demonstrates |
+|------|--------------|
+| [`backup/01-neo4j-pvc-destination.yaml`](backup/01-neo4j-pvc-destination.yaml) | Target + destination PVC mounted as `backups` (enables restore round-trip) |
+| [`backup/02-backup-full.yaml`](backup/02-backup-full.yaml) | `Neo4jBackup` type `Full` (anchors a chain) |
+| [`backup/03-backup-incremental.yaml`](backup/03-backup-incremental.yaml) | `Neo4jBackup` type `Incremental` (extends the chain) |
+| [`backup/04-backup-aggregate.yaml`](backup/04-backup-aggregate.yaml) | `Neo4jBackup` type `Aggregate` (collapse chain → recovered full) |
+| [`backup/05-restore.yaml`](backup/05-restore.yaml) | `Neo4jRestore` by `source.backupRef` |
+| [`backup/06-schedule.yaml`](backup/06-schedule.yaml) | `Neo4jBackupSchedule` + `aggregate.enabled` + `full.retention.keepLast` |
+
+Concepts and field reference: [Backup and restore](../docs/user-guide/03-neo4j/10-backup-restore.md).
+
 ## Feature × topology matrix
 
 | Feature | Standalone | Cluster |
@@ -124,6 +155,8 @@ auxiliary volumes (`Share` / `Dynamic` / `Existing`), `additionalMounts`, and `s
 | `resources` (CPU/memory) | [`standalone/21`](standalone/21-resources.yaml) | same field on Cluster CR |
 | `security` (SA annotations / contexts / NetworkPolicy) | [`standalone/22`](standalone/22-security.yaml) | same fields on Cluster CR |
 | `security.cloudIdentity` (object-store WI / static keys) | [`standalone/25`](standalone/25-cloud-identity.yaml) | same field on Cluster CR |
+| Backup / restore / schedule CRs (day-2) | [`backup/`](backup/) (PVC, [Azure](backup/azure-blob.md), [AWS](backup/aws-s3.md), [GCS](backup/gcs.md)) | [`backup/cluster-objectstore.md`](backup/cluster-objectstore.md) |
+| Schedule + object-store retention (`keepLast`) | [`backup/06`](backup/06-schedule.yaml) + cloud runbooks | same CRs, `neo4jRef` → cluster |
 | PodDisruptionBudget | *(works on Standalone too)* | [`cluster/15`](cluster/15-pdb.yaml) |
 | Custom probes | [`standalone/11`](standalone/11-probes-custom.yaml) | [`cluster/09`](cluster/09-probes-custom.yaml) |
 | `config.neo4j` / `config.jvm` / `config.apoc` | [`standalone/12`](standalone/12-config-jvm.yaml) | [`cluster/10`](cluster/10-config-jvm.yaml) |

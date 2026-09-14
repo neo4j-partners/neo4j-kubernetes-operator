@@ -1,0 +1,59 @@
+# Purpose: a Neo4j Standalone set up as a backup/restore target with a PersistentVolumeClaim
+#   destination. The same claim (neo4j-backups) is BOTH the Neo4jBackup destination AND mounted as
+#   storage.volumes.backups, so a Neo4jRestore source.backupRef can seed file:/backups/<artifact>
+#   back into the database (ADR-015 round-trip, BDR-014 §13). No cloud account or credentials needed.
+# Prerequisites: operator installed; a default StorageClass (RWO) for the two claims.
+#   Single-node only — the RWO backups claim is shared by the server pod and the one-shot backup
+#   Jobs on the same node (a multi-node cluster would need an RWX backups volume).
+# Apply: kubectl apply -f examples/backup/01-neo4j-pvc-destination.yaml
+# Then follow the step-by-step: examples/backup/pvc-standalone.md
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-backups
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: neo4j.com/v1beta1
+kind: Neo4j
+metadata:
+  name: backup-demo
+spec:
+  edition: enterprise
+  version: "2026.05.0"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+      backups:            # mount the destination claim so restore-by-backupRef can read it back
+        mode: Existing
+        existing:
+          claimName: neo4j-backups
+  features:
+    backup:
+      enabled: true
+  connectivity:
+    listeners:
+      bolt: 7687
+      http: 7474
+      backup: 6362
+    service:
+      type: ClusterIP
+      expose: [bolt, http]
+  auth:
+    generatePassword: true
+  trust:
+    # Restore seeds over the operator's admin Bolt (CREATE DATABASE … OPTIONS {seedURI}). This lab
+    # opts in to plaintext admin Bolt (the operator records a Warning event); prefer
+    # trust.certificates.bolt with trust.enabled: true for verified TLS in production (NEO-004).
+    enabled: false
+    insecureAdminConnection: true

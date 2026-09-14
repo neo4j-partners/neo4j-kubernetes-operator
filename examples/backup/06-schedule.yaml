@@ -1,0 +1,32 @@
+# Purpose: scheduled backups with operator-owned retention. Each `full` tick anchors a new chain;
+#   `incremental` attaches differentials to the active chain; `aggregate.enabled` compacts each
+#   CLOSED chain into one recovered full; `full.retention.keepLast` keeps only the last N whole
+#   chains and prunes older ones end-to-end — the stored files AND the Neo4jBackup records
+#   (BDR-014 §10). keepLast is the single source of truth for retention.
+#
+# NOTE: the crons below are DEMO-FAST (full every 5 min, incremental every min) so you can watch
+#   chains form and retention prune within minutes. Use realistic crons in production, e.g.
+#   full: "0 2 * * *" (02:00 daily) and incremental: "0 * * * *" (hourly).
+# Prerequisites: examples/backup/01-neo4j-pvc-destination.yaml applied and Ready.
+# Apply: kubectl apply -f examples/backup/06-schedule.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackupSchedule
+metadata:
+  name: sched-demo
+spec:
+  neo4jRef:
+    name: backup-demo
+  full:
+    schedule: "*/5 * * * *"        # DEMO-FAST — anchors a new chain every 5 minutes
+    retention:
+      keepLast: 3                  # keep the last 3 whole chains; prune older ones entirely
+  incremental:
+    schedule: "* * * * *"          # DEMO-FAST — a differential every minute onto the active chain
+  aggregate:
+    enabled: true                  # compact each closed chain into one recovered full
+  backupTemplate:
+    databases: ["neo4j"]
+    destination:
+      type: pvc
+      pvc:
+        claimName: neo4j-backups

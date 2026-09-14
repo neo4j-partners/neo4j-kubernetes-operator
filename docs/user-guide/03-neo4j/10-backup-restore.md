@@ -417,7 +417,7 @@ Two pods touch the bucket, so there are **two subjects to trust** — this is th
 > `azure.workload.identity/use=true`).
 
 See [`examples/standalone/25-cloud-identity.yaml`](../../../examples/standalone/25-cloud-identity.yaml)
-and the [Azure Workload Identity backup + restore runbook](../../../examples/standalone/25-cloud-identity-azure-backup.md)
+and the [Azure Workload Identity backup + restore runbook](../../../examples/backup/azure-blob.md)
 for a full, copy-pasteable walkthrough.
 
 ## What is not covered

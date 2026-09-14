@@ -1,0 +1,22 @@
+# Purpose: collapse an existing chain into a single recovered full via `neo4j-admin backup
+#   aggregate`, so a later restore seeds one artifact instead of replaying the whole chain. This is
+#   NOT a live backup — source.backupRef names any link of the chain (here the increment bk-incr) and
+#   neo4j-admin walks the chain from that record. The recovered full is written beside the source
+#   chain; an ad-hoc Aggregate keeps the original links (it never deletes your data).
+# Prerequisites: bk-full + bk-incr Succeeded.
+# Apply: kubectl apply -f examples/backup/04-backup-aggregate.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: bk-aggregate
+spec:
+  neo4jRef:
+    name: backup-demo
+  databases: ["neo4j"]
+  type: Aggregate
+  source:
+    backupRef: bk-incr
+  destination:
+    type: pvc
+    pvc:
+      claimName: neo4j-backups

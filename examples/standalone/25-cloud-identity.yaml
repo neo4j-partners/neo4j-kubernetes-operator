@@ -12,7 +12,7 @@
 #   - Static keys (commented alternative): a Secret with provider env keys (AWS_ACCESS_KEY_ID, …)
 #     labelled neo4j.com/mountable-by-operator: "true".
 # Apply: kubectl apply -f examples/standalone/25-cloud-identity.yaml
-# Test on Azure (end-to-end backup with Workload Identity): ./25-cloud-identity-azure-backup.md
+# Test on Azure (end-to-end backup with Workload Identity): ../backup/azure-blob.md
 # Related README: ../README.md#standalone · user guide ../../docs/user-guide/03-neo4j/10-backup-restore.md
 apiVersion: neo4j.com/v1beta1
 kind: Neo4j

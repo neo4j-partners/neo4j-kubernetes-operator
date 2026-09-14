@@ -97,7 +97,7 @@ az identity federated-credential create \
 
 ## 5. Deploy Neo4j with the Azure cloud identity
 
-Apply this (a variant of `25-cloud-identity.yaml` with the Azure provider and your client id):
+Apply this (a variant of `standalone/25-cloud-identity.yaml` with the Azure provider and your client id):
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
@@ -228,9 +228,72 @@ If it fails with `RestoreSeedFailed … does not point to a valid location`, it 
 operand visa: re-check the step-8 subject is **exactly** `system:serviceaccount:${NS}:${NEO4J}` and
 that step 9's pod check shows the label + `AZURE_*` env.
 
+## 10. Scheduled backups with operator-owned retention
+
+Steps 6–9 were manual. A `Neo4jBackupSchedule` automates the chain **and owns retention on the
+bucket** — no Azure lifecycle rule to configure. `keepLast` keeps the last N whole chains and prunes
+older ones end-to-end: an `rclone` prune Job deletes the expired chain's blobs, then the operator
+deletes its records. That prune Job runs as the **same `${NEO4J}-backup` identity** as the backup
+Job, so no new federation is needed — and the `Storage Blob Data Contributor` role from step 3
+already includes **delete**, so retention just works.
+
+The example uses **demo-fast crons** (full every 5 min, incremental every min) so you can watch it in
+minutes; use realistic crons in production (e.g. full `0 2 * * *`, incremental `0 * * * *`).
+
+```bash
+cat <<YAML | kubectl apply -n "$NS" -f -
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackupSchedule
+metadata:
+  name: sched-azure
+spec:
+  neo4jRef: { name: ${NEO4J} }
+  full:
+    schedule: "*/5 * * * *"       # DEMO-FAST — new chain every 5 min
+    retention: { keepLast: 3 }    # keep the last 3 whole chains; prune older ones entirely
+  incremental:
+    schedule: "* * * * *"         # DEMO-FAST — a differential every minute
+  aggregate: { enabled: true }    # compact each closed chain into one recovered full
+  backupTemplate:
+    databases: ["neo4j"]
+    destination:
+      type: azure
+      url: azb://${STORAGE}/${CONTAINER}/scheduled/   # schedule isolates each chain in its own prefix
+YAML
+```
+
+Watch chains accumulate, then confirm retention keeps only the last 3 — in the bucket and in the records:
+
+```bash
+# Records: distinct chains remaining should settle at 3
+kubectl -n "$NS" get neo4jbackup -l neo4j.com/schedule=sched-azure \
+  -o jsonpath='{range .items[*]}{.status.chain}{"\n"}{end}' | sort -u
+# expect: exactly 3 chain ids after ~20 min
+
+# Bucket: one prefix per surviving chain under scheduled/ (older prefixes purged by the rclone Job)
+az storage blob list --account-name "$STORAGE" -c "$CONTAINER" --prefix scheduled/ \
+  --auth-mode login --query "[].name" -o tsv | sed 's#\(scheduled/[^/]*\)/.*#\1#' | sort -u
+
+# The prune and compaction actually ran:
+kubectl -n "$NS" get events --field-selector reason=SchedulePruned    --sort-by=.lastTimestamp | tail -3
+kubectl -n "$NS" get events --field-selector reason=ScheduleCompacted --sort-by=.lastTimestamp | tail -3
+```
+
+> If chains pile up past `keepLast` and you see `SchedulePruneFailed`, the identity is missing
+> **delete** on the account — re-check the `Storage Blob Data Contributor` assignment from step 3 is
+> on `$UAMI_PRINCIPAL_ID` and scoped to `$STORAGE_ID`.
+
+Pause it when you're done watching:
+
+```bash
+kubectl -n "$NS" patch neo4jbackupschedule sched-azure --type merge -p '{"spec":{"suspend":true}}'
+```
+
 ## Cleanup
 
 ```bash
+kubectl -n "$NS" delete neo4jbackupschedule sched-azure --ignore-not-found
+kubectl -n "$NS" delete neo4jbackup -l neo4j.com/schedule=sched-azure --ignore-not-found
 kubectl -n "$NS" delete neo4jrestore rst-azure --ignore-not-found
 kubectl -n "$NS" delete neo4jbackup bk-azure
 kubectl -n "$NS" delete neo4j ${NEO4J}

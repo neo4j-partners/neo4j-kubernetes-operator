@@ -1,0 +1,17 @@
+# Purpose: a one-shot Full backup of the neo4j database into the PVC destination (neo4j-backups).
+#   A Full anchors a new backup chain. Watch it: kubectl get neo4jbackup bk-full -w
+# Prerequisites: examples/backup/01-neo4j-pvc-destination.yaml applied and Ready.
+# Apply: kubectl apply -f examples/backup/02-backup-full.yaml
+apiVersion: neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: bk-full
+spec:
+  neo4jRef:
+    name: backup-demo
+  databases: ["neo4j"]
+  type: Full
+  destination:
+    type: pvc
+    pvc:
+      claimName: neo4j-backups
