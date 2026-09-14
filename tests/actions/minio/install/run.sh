@@ -11,7 +11,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../../lib/common.sh
 source "${SCRIPT_DIR}/../../../lib/common.sh"
 
-MINIO_IMAGE="${MINIO_IMAGE:-minio/minio:latest}"
+# MinIO stopped publishing free community images to Docker Hub AND Quay on 2025-10-23 (source-only
+# now), so minio/minio:latest no longer pulls ("pull access denied"). We pin a community mirror of the
+# last official release (RELEASE.2025-10-15T17-29-55Z) on GHCR — a byte-for-byte drop-in (runs as
+# root, same server args/env), pinned for determinism, and not Docker Hub rate-limited. Override
+# MINIO_IMAGE to point at an internal mirror (air-gapped) or a maintained rebuild (e.g. Chainguard).
+MINIO_IMAGE="${MINIO_IMAGE:-ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z}"
 INIT_IMAGE="${MINIO_INIT_IMAGE:-busybox:1.36}"
 BUCKET="${S3_BUCKET:-neo4jbackups}"
 SECRET="${S3_CREDS_SECRET:-e2e-s3-creds}"
