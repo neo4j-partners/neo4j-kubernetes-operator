@@ -2,7 +2,9 @@
 # assert/backup-succeeded — the Neo4jBackup completes end to end:
 #   - the owned run-to-completion Job (<cr>-run-backup) reaches condition=complete
 #   - the Neo4jBackup reaches status.phase=Succeeded with BackupReady=True/BackupSucceeded
-#   - status.artifacts records the destination and status.chain is set
+#   - status.artifacts records the destination (status.chain is set only for schedule-managed
+#     backups, which carry a neo4j.com/chain label; an ad-hoc backup writes to the URL as given
+#     and leaves status.chain empty — see d816bdc / ADR-016 — so it is logged, not required here)
 # Contract sources: src/internal/controller/neo4jbackup/reconciler.go, render/backup/job.go,
 # reasons via tests/lib/oracle.sh (BackupReady/BackupSucceeded).
 set -euo pipefail
@@ -45,8 +47,9 @@ done
 [[ "${status}" == "True" && "${reason}" == "${EXPECT_REASON}" ]] \
   || die "expected BackupReady=True/${EXPECT_REASON}, got status='${status:-<none>}' reason='${reason:-<none>}'"
 
+# status.chain is populated only for schedule-managed backups (neo4j.com/chain label). An ad-hoc
+# backup like this one intentionally leaves it empty (d816bdc / ADR-016), so we log it, not assert it.
 chain="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.chain}' 2>/dev/null || true)"
-[[ -n "${chain}" ]] || die "expected ${RES} status.chain to be set"
 arturi="$(kubectl get "${RES}" -n "${NEO4J_NAMESPACE}" -o jsonpath='{.status.artifacts[0].uri}' 2>/dev/null || true)"
 [[ "${arturi}" == "pvc://e2e-backup-dest" ]] \
   || die "expected status.artifacts[0].uri=pvc://e2e-backup-dest, got '${arturi:-<none>}'"

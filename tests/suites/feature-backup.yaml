@@ -4,7 +4,8 @@ description: >
   backup listener enabled (features.backup + connectivity.listeners.backup) and a pre-created PVC
   destination, waits for the workload to be Ready, creates a Full Neo4jBackup, then asserts the
   record reaches Succeeded (BackupReady=True/BackupSucceeded), the owned run-to-completion Job
-  (<cr>-run-backup) completes, and status.chain + status.artifacts[].uri are populated.
+  (<cr>-run-backup) completes, and status.artifacts[].uri is populated (status.chain is
+  schedule-only — an ad-hoc backup writes to the URL as given and leaves it empty, ADR-016).
 brief_ref: neo4j-backup-run
 use_pipeline: neo4j-suite
 on_case_failure: stop
