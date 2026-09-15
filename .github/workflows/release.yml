@@ -25,6 +25,7 @@ concurrency:
 permissions:
   contents: write # create the GitHub Release + upload the CRD asset
   packages: write # push image + chart to GHCR
+  id-token: write # keyless cosign signing via Sigstore/GitHub OIDC (NEO-009)
 
 env:
   REGISTRY: ghcr.io
@@ -57,6 +58,7 @@ jobs:
           password: ${{ secrets.GH_TOKEN }}
 
       - name: Build & push operator image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -73,6 +75,27 @@ jobs:
           # architectures — but keeping provenance off holds it to the two entries and nothing else.
           provenance: false
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.v.outputs.version }}
+
+      # Everything below binds to the immutable build digest, never the mutable tag, so the artifact
+      # a customer verifies is exactly the one this run pushed (NEO-009: CWE-1357/CWE-494).
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      # Keyless signature + SPDX SBOM attestation, both on <image>@<digest>. cosign stores these as
+      # separate .sig/.att tags, not index entries, so the two-arch index stays clean (provenance:false).
+      - name: Sign image and attest SBOM (by digest)
+        env:
+          IMAGE_DIGEST: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          SBOM_FILE: sbom-${{ steps.v.outputs.version }}.spdx.json
+          COSIGN_YES: "true"
+        run: |
+          cosign sign "${IMAGE_DIGEST}"
+          syft "${IMAGE_DIGEST}" -o spdx-json > "${SBOM_FILE}"
+          cosign attest --predicate "${SBOM_FILE}" --type spdxjson "${IMAGE_DIGEST}"
+          # Record the immutable reference so consumers can pin image.digest in the chart.
+          echo "${IMAGE_DIGEST}" > "image-digest-${{ steps.v.outputs.version }}.txt"
 
       # helm push authenticates against its own registry config, not docker login.
       - name: Package & push Helm chart (OCI)
@@ -91,5 +114,7 @@ jobs:
           cp config/crd/bases/neo4j.com_neo4js.yaml "neo4j-crd-${{ steps.v.outputs.version }}.yaml"
           gh release create "${{ steps.v.outputs.tag }}" \
             "neo4j-crd-${{ steps.v.outputs.version }}.yaml" \
+            "sbom-${{ steps.v.outputs.version }}.spdx.json" \
+            "image-digest-${{ steps.v.outputs.version }}.txt" \
             --title "${{ steps.v.outputs.tag }}" \
             --generate-notes
