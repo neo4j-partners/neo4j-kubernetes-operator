@@ -36,7 +36,12 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 + tags so the notes step can walk the full history between tags;
+      # the default shallow checkout has no previous tag to diff against.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       # One source of truth for the release identifiers: `tag` keeps the leading v
       # (GitHub Release + git tag), `version` drops it (semver for image + chart).
@@ -106,6 +111,27 @@ jobs:
             --app-version "${{ steps.v.outputs.version }}"
           helm push "neo4j-operator-${{ steps.v.outputs.version }}.tgz" "${CHART_OCI}"
 
+      # Notes come from conventional-commit subjects between the previous tag and this one, so the
+      # release lists the features/fixes added rather than a single commit. We commit straight to
+      # main (no PRs), so GitHub's PR-based --generate-notes would be empty; the git log is the source.
+      - name: Build release notes from commits
+        run: |
+          prev="$(git describe --tags --abbrev=0 "${{ steps.v.outputs.tag }}^" 2>/dev/null || true)"
+          range="${prev:+${prev}..}${{ steps.v.outputs.tag }}"
+          feats="$(git log --no-merges --pretty='- %s' ${range} | grep -E '^- feat' | sed -E 's/^- feat(\([^)]*\))?!?: /- /' || true)"
+          fixes="$(git log --no-merges --pretty='- %s' ${range} | grep -E '^- fix'  | sed -E 's/^- fix(\([^)]*\))?!?: /- /'  || true)"
+          {
+            echo "## ${{ steps.v.outputs.tag }}"
+            echo
+            echo "### Features"
+            echo "${feats:-- _none_}"
+            echo
+            echo "### Fixes"
+            echo "${fixes:-- _none_}"
+            [ -n "${prev}" ] && { echo; echo "**Full changelog**: https://github.com/${{ github.repository }}/compare/${prev}...${{ steps.v.outputs.tag }}"; }
+          } > release-notes.md
+          cat release-notes.md
+
       # `gh release create` uses the pushed tag, or creates it at HEAD on manual dispatch.
       - name: Publish GitHub Release with CRD asset
         env:
@@ -119,4 +145,4 @@ jobs:
             "sbom-${{ steps.v.outputs.version }}.spdx.json" \
             "image-digest-${{ steps.v.outputs.version }}.txt" \
             --title "${{ steps.v.outputs.tag }}" \
-            --generate-notes
+            --notes-file release-notes.md
