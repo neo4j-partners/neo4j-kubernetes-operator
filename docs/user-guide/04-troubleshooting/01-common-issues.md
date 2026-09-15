@@ -17,8 +17,8 @@ cluster. If you only have a condition reason and want to know what it means, sta
 kubectl apply --server-side --force-conflicts -k config/crd/bases
 ```
 
-Without a clone, the same definition is a release asset — see
-[Install the CRD](../02-operator-installation/03-install.md#install-the-crd).
+Without a clone, the same definitions ship as a release asset — see
+[Install the operator](../02-operator-installation/03-install.md).
 
 If a previous failed apply left a broken CRD object, delete it first (only when no Neo4j workloads depend on it):
 
@@ -31,8 +31,8 @@ kubectl apply --server-side --force-conflicts -k config/crd/bases
 
 **Symptom:** `no matches for kind "Neo4j" in version "neo4j.com/v1"`
 
-**Fix:** Install the CRD first, as described in
-[Install the CRD](../02-operator-installation/03-install.md#install-the-crd):
+**Fix:** Install the CRDs first, as described in
+[Install the operator](../02-operator-installation/03-install.md):
 
 ```bash
 kubectl get crd neo4js.neo4j.com

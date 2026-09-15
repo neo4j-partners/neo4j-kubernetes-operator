@@ -22,14 +22,14 @@ Neo4j license you will need on the resources you create later.
 ## Choice A — install the published release
 
 Each release publishes three artefacts: the controller image, the Helm chart as an OCI artefact,
-and the CRD as a downloadable asset. Take the version from the
+and the CRDs (all four kinds, bundled in one file) as a downloadable asset. Take the version from the
 [latest release](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases) without its
 leading `v`:
 
 ```bash
 VERSION=1.0.0
 
-# 1. The CRD, server-side. Not part of the chart — see below.
+# 1. The CRDs, server-side. Not part of the chart — see below.
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
 
@@ -42,11 +42,11 @@ helm upgrade --install neo4j-operator \
 There is no image to specify: the chart defaults to the published controller image at its own
 version, and both artefacts are public, so no registry credentials are involved.
 
-**The CRD is deliberately outside the chart.** It is around 1.5 MB, close to the etcd object limit,
-and Helm never upgrades what it finds in `crds/` — so a chart that owned it could not deliver a
-schema change, and a `helm uninstall` could take every `Neo4j` resource in the cluster with it.
-Applying it yourself also means it must be applied server-side: the client-side form stores the
-whole schema in an annotation and fails on its size limit.
+**The CRDs are deliberately outside the chart.** The `Neo4j` one is around 1.5 MB, close to the etcd
+object limit, and Helm never upgrades what it finds in `crds/` — so a chart that owned them could not
+deliver a schema change, and a `helm uninstall` could take every `Neo4j` resource in the cluster with
+it. Applying them yourself also means they must be applied server-side: the client-side form stores
+the whole schema in an annotation and fails on its size limit.
 
 Confirm the controller came up before going further:
 

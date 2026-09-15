@@ -5,9 +5,9 @@ data volumes are three separate lifecycles, and you decide how far to go.
 
 | Step | Removes | Keeps |
 |------|---------|-------|
-| Remove the controller | Operator Deployment, ServiceAccount, RBAC | CRD, `Neo4j` resources, running pods, data |
+| Remove the controller | Operator Deployment, ServiceAccount, RBAC | CRDs, `Neo4j` resources, running pods, data |
 | Delete a `Neo4j` resource | Its StatefulSet, Services, ConfigMap, generated Secret | PersistentVolumeClaims, unless you opted into deletion |
-| Remove the CRD | Every `Neo4j` resource cluster-wide, and everything they own | Nothing |
+| Remove the CRDs | Every `Neo4j`/backup/restore resource cluster-wide, and everything they own | Nothing |
 
 ## Remove the controller
 
@@ -87,12 +87,13 @@ shares an instance label without being managed by this operator.
 behind so the data is recoverable, and you clean them up yourself. See
 [Clustering](../03-neo4j/02-clustering.md#scaling-members).
 
-## Remove the CRD
+## Remove the CRDs
 
-Only once no `Neo4j` resource remains anywhere in the cluster:
+Only once no `Neo4j`, `Neo4jBackup`, `Neo4jBackupSchedule` or `Neo4jRestore` resource remains
+anywhere in the cluster:
 
 ```bash
-kubectl get neo4j -A
+kubectl get neo4j,neo4jbackup,neo4jbackupschedule,neo4jrestore -A
 kubectl delete -k config/crd/bases
 ```
 

@@ -12,15 +12,16 @@ This is not the Neo4j *workload* chart (`helm-charts/neo4j`).
 
 ## Install from the published chart (OCI)
 
-Released charts and images are published to GHCR under `neo4j-partners`. The CRD is
-**not** bundled (it is ~1.5 MB — near the etcd object limit — and Helm never upgrades
-`crds/`), so apply it once with **server-side apply** from the release asset, then
-install or upgrade the chart. `VERSION` is the release without the leading `v`.
+Released charts and images are published to GHCR under `neo4j-partners`. The CRDs are
+**not** bundled (the `Neo4j` schema alone is ~1.5 MB — near the etcd object limit — and Helm never
+upgrades `crds/`), so apply them once with **server-side apply** from the release asset — one file
+containing all four CRDs — then install or upgrade the chart. `VERSION` is the release without the
+leading `v`.
 
 ```bash
 VERSION=1.0.0
 
-# 1. CRD (once per version; safe to re-run on upgrade)
+# 1. CRDs (once per version; safe to re-run on upgrade)
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
 
@@ -35,7 +36,7 @@ resolves the tag from `Chart.appVersion`, so no `--set image.*` is needed.
 
 ## Install from a local checkout (development)
 
-The Neo4j CRD OpenAPI schema is large; install it with **server-side apply** first:
+The `Neo4j` CRD OpenAPI schema is large; install all the CRDs with **server-side apply** first:
 
 ```bash
 # from repository root

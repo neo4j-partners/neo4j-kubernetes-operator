@@ -71,7 +71,7 @@ what the operator asked for. Set `spec.resources` explicitly if that matters to 
 
 ### 2. Install the operator
 
-The CRD ships as a release asset and the controller as a chart. Take the version from the
+The CRDs ship as a release asset and the controller as a chart. Take the version from the
 [latest release](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases) without its
 leading `v`:
 
@@ -87,10 +87,10 @@ helm upgrade --install neo4j-operator \
   --wait --timeout 300s
 ```
 
-Verify the CRD and controller:
+Verify the CRDs and controller:
 
 ```bash
-kubectl get crd neo4js.neo4j.com
+kubectl get crd neo4js.neo4j.com neo4jbackups.neo4j.com neo4jbackupschedules.neo4j.com neo4jrestores.neo4j.com
 kubectl get pods -n neo4j-operator-system
 ```
 

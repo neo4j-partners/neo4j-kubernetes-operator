@@ -1,54 +1,73 @@
 # Install the operator
 
-Install the `Neo4j` CustomResourceDefinition and the controller into `neo4j-operator-system`. The
-procedure is identical on every Kubernetes distribution; only where the image comes from differs,
-which is the choice described in [Operator installation](readme.md).
+Install the operator's CustomResourceDefinitions — `Neo4j`, `Neo4jBackup`, `Neo4jBackupSchedule` and
+`Neo4jRestore` — and the controller into `neo4j-operator-system`. The procedure is identical on every
+Kubernetes distribution; only where the image comes from differs, which is the choice described in
+[Operator installation](readme.md).
 
 Before starting, make sure the [prerequisites](01-prerequisites.md) are met and, if you built your
 own image, that it is reachable from the cluster.
 
-## Install the CRD
+The chart does **not** contain the CRDs (the `Neo4j` schema alone is ~1.5 MB, and Helm never upgrades
+`crds/`), so every install is two steps: apply the CRDs, then install the chart. Pick one recipe
+below and run the whole block — each is complete on its own.
 
-The CRD must be applied server-side. Its schema is large enough to exceed the annotation size
-limit that a client-side `kubectl apply -f` relies on, so the plain form fails with a metadata
-error. Apply the release asset — `VERSION` is the release tag without its leading `v`:
+## Install — from the published release (remote)
+
+Nothing to build and no image to name: the chart defaults to the published controller image at this
+version, and both artefacts are public. `VERSION` is the release tag without its leading `v`.
 
 ```bash
 VERSION=1.0.0
 
+# 1. CRDs — all four kinds, bundled in one asset. Server-side apply is required:
+#    the Neo4j schema alone exceeds the client-side annotation size limit.
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
-```
 
-From a clone, the same definition is checked in, which is what you want when you changed the API:
-
-```bash
-kubectl apply --server-side --force-conflicts -k config/crd/bases
-```
-
-Every install path below depends on this step, and it is also the only one needed when you run the
-controller locally. Re-apply it when you upgrade: the chart never touches the CRD.
-
-## From the published chart
-
-Nothing to build and no image to name. The chart defaults to the controller image published at its
-own version, and both artefacts are public:
-
-```bash
+# 2. Operator — the same command installs and upgrades.
 helm upgrade --install neo4j-operator \
-  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version ${VERSION} \
+  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version "${VERSION}" \
   --namespace neo4j-operator-system --create-namespace
 ```
 
-The same command upgrades an existing release. Add `--set` flags from the table below, or a values
-file, exactly as with a local chart.
+That is a complete install — nothing else is required. The operator watches the `default` namespace
+out of the box, so a `Neo4j` CR applied there is reconciled immediately; to watch other namespaces
+set `watchNamespaces` (see [Watch scope and RBAC](04-operator-scope.md)). Re-apply the CRDs on
+upgrade — the chart never touches them.
 
-## From a clone — manifests
+## Install — from a local clone (Helm)
 
-Three applies, in this order: the namespace, the roles and bindings the controller uses in the
-namespaces it watches, then the controller Deployment.
+The same two steps against your working tree, run from the repository root: the CRDs from the
+checked-in kustomize base, the chart from the local path.
 
 ```bash
+# 1. CRDs — all four, server-side. `make install` runs this same apply.
+kubectl apply --server-side --force-conflicts -k config/crd/bases
+
+# 2. Operator from the working-tree chart. Defaults to the published image at
+#    Chart.appVersion, so it works with no --set flags at all.
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system --create-namespace
+```
+
+To run your own build and widen the scope, add `--set` flags:
+
+```bash
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system --create-namespace \
+  --set image.repository=myregistry.example.com/neo4j-operator \
+  --set image.tag=1.0.0 \
+  --set 'watchNamespaces={default,team-a}'
+```
+
+## Install — from a clone, raw manifests (no Helm)
+
+Four applies, in this order: the CRDs, the namespace, the roles and bindings the controller uses in
+the namespaces it watches, then the controller Deployment.
+
+```bash
+kubectl apply --server-side --force-conflicts -k config/crd/bases
 kubectl apply -f config/default/namespace.yaml
 kubectl apply -k config/rbac
 kubectl apply -k config/manager
@@ -66,7 +85,7 @@ kubectl delete clusterrole neo4j-operator-manager-role --ignore-not-found
 The Deployment runs whatever `config/manager/manager.yaml` names, `controller:latest` out of the
 box. These manifests substitute nothing, so pointing them at your own build means editing that
 file — see
-[Point the install at your image](02-build-image.md#point-the-install-at-your-image). Either chart
+[Point the install at your image](02-build-image.md#point-the-install-at-your-image). The chart
 takes that reference as a value instead, which is why the chart is the better choice for anything
 but a scratch cluster.
 
@@ -75,18 +94,6 @@ The Deployment ships with `WATCH_NAMESPACE=default` (workload namespace only). E
 (NEO-016). To reconcile other namespaces, read
 [Watch scope and RBAC](04-operator-scope.md) before you go further — the environment variable and
 the roles have to be changed together.
-
-## From a clone — the local chart
-
-Same chart as the published one, read from your working tree, with your image and your scope:
-
-```bash
-helm upgrade --install neo4j-operator ./charts/neo4j-operator \
-  --namespace neo4j-operator-system --create-namespace \
-  --set image.repository=myregistry.example.com/neo4j-operator \
-  --set image.tag=1.0.0 \
-  --set 'watchNamespaces={default,team-a}'
-```
 
 Values worth knowing, on either chart:
 
@@ -127,7 +134,8 @@ for the manifest path, or through chart values for Helm. Keep it consistent with
 ## Verify
 
 ```bash
-kubectl get crd neo4js.neo4j.com
+kubectl get crd neo4js.neo4j.com neo4jbackups.neo4j.com \
+  neo4jbackupschedules.neo4j.com neo4jrestores.neo4j.com
 
 kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager \
   -n neo4j-operator-system --timeout=120s
@@ -148,7 +156,7 @@ published version that does not exist. `kubectl describe pod` names the referenc
 ## Run the controller on your machine
 
 While developing you can skip the image altogether and run the controller as a local process
-against your kubeconfig, with the CRD as its only prerequisite. The command lives with the other
+against your kubeconfig, with the CRDs as its only prerequisite. The command lives with the other
 from-source workflows, in
 [Build the operator image](02-build-image.md#skipping-the-image-entirely).
 
