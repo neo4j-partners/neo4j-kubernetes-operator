@@ -23,7 +23,7 @@ kubectl apply --server-side --force-conflicts \
 From a clone, the same definition is checked in, which is what you want when you changed the API:
 
 ```bash
-kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+kubectl apply --server-side --force-conflicts -k config/crd/bases
 ```
 
 Every install path below depends on this step, and it is also the only one needed when you run the

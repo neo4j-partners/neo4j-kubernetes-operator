@@ -111,7 +111,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          cp config/crd/bases/neo4j.com_neo4js.yaml "neo4j-crd-${{ steps.v.outputs.version }}.yaml"
+          # Bundle every CRD (Neo4j + backup/restore/schedule), not just neo4js, or a release
+          # install leaves those controllers without their CRDs. kustomize tracks config/crd/bases.
+          kubectl kustomize config/crd/bases > "neo4j-crd-${{ steps.v.outputs.version }}.yaml"
           gh release create "${{ steps.v.outputs.tag }}" \
             "neo4j-crd-${{ steps.v.outputs.version }}.yaml" \
             "sbom-${{ steps.v.outputs.version }}.spdx.json" \

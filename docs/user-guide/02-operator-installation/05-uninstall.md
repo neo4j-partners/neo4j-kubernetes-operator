@@ -93,7 +93,7 @@ Only once no `Neo4j` resource remains anywhere in the cluster:
 
 ```bash
 kubectl get neo4j -A
-kubectl delete -f config/crd/bases/neo4j.com_neo4js.yaml
+kubectl delete -k config/crd/bases
 ```
 
 Deleting a CRD deletes every custom resource of that kind cluster-wide, which cascades to the

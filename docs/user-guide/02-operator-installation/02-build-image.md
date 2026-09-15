@@ -296,7 +296,7 @@ For development you can run the controller as a local process against your kubec
 needs no image at all:
 
 ```bash
-kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+kubectl apply --server-side --force-conflicts -k config/crd/bases
 make run
 ```
 

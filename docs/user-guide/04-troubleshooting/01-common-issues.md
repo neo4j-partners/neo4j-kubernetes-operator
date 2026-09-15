@@ -14,7 +14,7 @@ cluster. If you only have a condition reason and want to know what it means, sta
 **Fix:** Use server-side apply, which stores no such annotation:
 
 ```bash
-kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+kubectl apply --server-side --force-conflicts -k config/crd/bases
 ```
 
 Without a clone, the same definition is a release asset — see
@@ -24,7 +24,7 @@ If a previous failed apply left a broken CRD object, delete it first (only when 
 
 ```bash
 kubectl delete crd neo4js.neo4j.com --ignore-not-found
-kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4js.yaml
+kubectl apply --server-side --force-conflicts -k config/crd/bases
 ```
 
 ## CRD not found when applying Neo4j
