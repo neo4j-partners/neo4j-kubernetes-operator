@@ -101,7 +101,7 @@ Apply this (a variant of `standalone/25-cloud-identity.yaml` with the Azure prov
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: ${NEO4J}
@@ -136,7 +136,7 @@ kubectl -n "$NS" get sa ${NEO4J}-backup -o jsonpath='{.metadata.annotations}'; e
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: bk-azure
@@ -211,7 +211,7 @@ Then restore the backup you took in step 6 (the operator resolves the `azb://` l
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata: { name: rst-azure }
 spec:
@@ -242,7 +242,7 @@ minutes; use realistic crons in production (e.g. full `0 2 * * *`, incremental `
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackupSchedule
 metadata:
   name: sched-azure
@@ -318,7 +318,7 @@ kubectl -n "$NS" create secret generic neo4j-cloud-creds \
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata: { name: bk-azure-key }
 spec:

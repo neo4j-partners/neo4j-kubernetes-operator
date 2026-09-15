@@ -5,7 +5,7 @@
 #   (creates Secrets dev-tls-https-cluster-key / -cert / -ca in namespace "default")
 # Apply: kubectl apply -f examples/standalone/07-tls-https-bolt.yaml
 # Related README: ../README.md#tls--auth--plugin-prerequisites , ../secrets/README.md
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-tls-https

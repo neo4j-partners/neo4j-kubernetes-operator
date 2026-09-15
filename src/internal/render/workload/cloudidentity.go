@@ -20,7 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -33,11 +33,11 @@ const azureWorkloadIdentityUseLabel = "azure.workload.identity/use"
 // and predictable: a user pre-binds this exact name to a cloud IAM role for workload identity
 // (IRSA trust policy / GKE IAM binding / Azure federated credential), which is why WI is an
 // instance-level concern and cannot vary per backup. The pods never use the namespace default SA.
-func BackupServiceAccountName(neo4j *neo4jv1beta1.Neo4j) string { return neo4j.Name + "-backup" }
+func BackupServiceAccountName(neo4j *neo4jv1.Neo4j) string { return neo4j.Name + "-backup" }
 
 // cloudIdentity returns the instance-level object-store identity (spec.security.cloudIdentity), or
 // nil when unset.
-func cloudIdentity(neo4j *neo4jv1beta1.Neo4j) *neo4jv1beta1.CloudIdentity {
+func cloudIdentity(neo4j *neo4jv1.Neo4j) *neo4jv1.CloudIdentity {
 	if s := neo4j.Spec.Security; s != nil {
 		return s.CloudIdentity
 	}
@@ -46,7 +46,7 @@ func cloudIdentity(neo4j *neo4jv1beta1.Neo4j) *neo4jv1beta1.CloudIdentity {
 
 // clusterWorkloadIdentity returns the instance-level workload identity opt-in
 // (spec.security.cloudIdentity.workloadIdentity), or nil when unset or when static keys are used.
-func clusterWorkloadIdentity(neo4j *neo4jv1beta1.Neo4j) *neo4jv1beta1.WorkloadIdentity {
+func clusterWorkloadIdentity(neo4j *neo4jv1.Neo4j) *neo4jv1.WorkloadIdentity {
 	if ci := cloudIdentity(neo4j); ci != nil {
 		return ci.WorkloadIdentity
 	}
@@ -58,7 +58,7 @@ func clusterWorkloadIdentity(neo4j *neo4jv1beta1.Neo4j) *neo4jv1beta1.WorkloadId
 // projected as env into the Neo4j container; workload identity relies on the operand SA's annotations
 // (see OperandServiceAccount) plus, for Azure, the pod label the webhook keys token injection off.
 // It complements the backup-write side (ApplyBackupPodIdentity) with the same primitives.
-func ApplyWorkloadPodIdentity(neo4j *neo4jv1beta1.Neo4j, tmpl *corev1.PodTemplateSpec) {
+func ApplyWorkloadPodIdentity(neo4j *neo4jv1.Neo4j, tmpl *corev1.PodTemplateSpec) {
 	ci := cloudIdentity(neo4j)
 	if ci == nil {
 		return
@@ -68,7 +68,7 @@ func ApplyWorkloadPodIdentity(neo4j *neo4jv1beta1.Neo4j, tmpl *corev1.PodTemplat
 			SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: ci.StaticKeySecret}},
 		})
 	}
-	if wi := ci.WorkloadIdentity; wi != nil && wi.Provider == neo4jv1beta1.CloudProviderAzure {
+	if wi := ci.WorkloadIdentity; wi != nil && wi.Provider == neo4jv1.CloudProviderAzure {
 		if tmpl.Labels == nil {
 			tmpl.Labels = map[string]string{}
 		}
@@ -106,9 +106,9 @@ func BackupServiceAccount(ctx render.Context) *corev1.ServiceAccount {
 // ponytail: the projected service-account token is injected by the platform WI webhook (Azure, EKS)
 // or served by the node metadata server (GKE); the upgrade path is an explicit projected-token
 // volume if we ever target a provider that ships no such webhook.
-func ApplyBackupPodIdentity(neo4j *neo4jv1beta1.Neo4j, tmpl *corev1.PodTemplateSpec) {
+func ApplyBackupPodIdentity(neo4j *neo4jv1.Neo4j, tmpl *corev1.PodTemplateSpec) {
 	tmpl.Spec.ServiceAccountName = BackupServiceAccountName(neo4j)
-	if wi := clusterWorkloadIdentity(neo4j); wi != nil && wi.Provider == neo4jv1beta1.CloudProviderAzure {
+	if wi := clusterWorkloadIdentity(neo4j); wi != nil && wi.Provider == neo4jv1.CloudProviderAzure {
 		if tmpl.Labels == nil {
 			tmpl.Labels = map[string]string{}
 		}

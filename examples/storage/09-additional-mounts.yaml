@@ -1,7 +1,7 @@
 # Purpose: Dynamic data + additionalMounts emptyDir at /extra-data (not under reserved paths — ADD-07).
 # Prerequisites: none.
 # Apply: kubectl apply -f examples/storage/09-additional-mounts.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-storage-additional

@@ -1,4 +1,4 @@
-package v1beta1
+package v1
 
 import (
 	"os"
@@ -29,7 +29,7 @@ func loadSample(t *testing.T, name string) Neo4j {
 }
 
 func TestSampleStandaloneUnmarshals(t *testing.T) {
-	neo4j := loadSample(t, "neo4j_v1beta1_neo4j.yaml")
+	neo4j := loadSample(t, "neo4j_v1_neo4j.yaml")
 	if neo4j.Spec.Topology.Mode != TopologyModeStandalone {
 		t.Fatalf("mode = %q, want Standalone", neo4j.Spec.Topology.Mode)
 	}
@@ -42,7 +42,7 @@ func TestSampleStandaloneUnmarshals(t *testing.T) {
 }
 
 func TestSampleClusterUnmarshals(t *testing.T) {
-	neo4j := loadSample(t, "neo4j_v1beta1_neo4j_cluster.yaml")
+	neo4j := loadSample(t, "neo4j_v1_neo4j_cluster.yaml")
 	if neo4j.Spec.Topology.Mode != TopologyModeCluster {
 		t.Fatalf("mode = %q, want Cluster", neo4j.Spec.Topology.Mode)
 	}

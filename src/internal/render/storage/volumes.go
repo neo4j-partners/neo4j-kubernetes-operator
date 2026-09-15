@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -28,7 +28,7 @@ const (
 type auxRole struct {
 	name      string
 	mountPath string
-	spec      *neo4jv1beta1.AuxiliaryVolumeSpec
+	spec      *neo4jv1.AuxiliaryVolumeSpec
 }
 
 // Apply attaches data + aux + escape-hatch mounts/volumes and returns StatefulSet volumeClaimTemplates.
@@ -96,9 +96,9 @@ func DataPVCLookup(ctx render.Context) (name string, ok bool) {
 	}
 	data := ctx.Neo4j.Spec.Storage.Volumes.Data
 	switch data.Mode {
-	case neo4jv1beta1.VolumeModeDynamic:
+	case neo4jv1.VolumeModeDynamic:
 		return fmt.Sprintf("%s-%s-0", dataVolumeName, ctx.STSName()), true
-	case neo4jv1beta1.VolumeModeExisting:
+	case neo4jv1.VolumeModeExisting:
 		if data.Existing == nil {
 			return "", false
 		}
@@ -114,7 +114,7 @@ func DataPVCLookup(ctx render.Context) (name string, ok bool) {
 	}
 }
 
-func auxRoles(vols *neo4jv1beta1.VolumesSpec) []auxRole {
+func auxRoles(vols *neo4jv1.VolumesSpec) []auxRole {
 	return []auxRole{
 		{name: "backups", mountPath: BackupsMountPath, spec: vols.Backups},
 		{name: "logs", mountPath: "/logs", spec: vols.Logs},
@@ -125,11 +125,11 @@ func auxRoles(vols *neo4jv1beta1.VolumesSpec) []auxRole {
 	}
 }
 
-func materializeData(ctx render.Context, data *neo4jv1beta1.DataVolumeSpec) (*corev1.PersistentVolumeClaim, *corev1.Volume) {
+func materializeData(ctx render.Context, data *neo4jv1.DataVolumeSpec) (*corev1.PersistentVolumeClaim, *corev1.Volume) {
 	switch data.Mode {
-	case neo4jv1beta1.VolumeModeDynamic:
+	case neo4jv1.VolumeModeDynamic:
 		return dynamicPVC(ctx, dataVolumeName, data.Dynamic), nil
-	case neo4jv1beta1.VolumeModeExisting:
+	case neo4jv1.VolumeModeExisting:
 		return existingMaterial(dataVolumeName, data.Existing)
 	default:
 		return nil, nil
@@ -139,21 +139,21 @@ func materializeData(ctx render.Context, data *neo4jv1beta1.DataVolumeSpec) (*co
 func materializeAux(ctx render.Context, role auxRole) (*corev1.PersistentVolumeClaim, *corev1.Volume, *corev1.VolumeMount) {
 	mode := role.spec.Mode
 	if mode == "" {
-		mode = neo4jv1beta1.VolumeModeShare
+		mode = neo4jv1.VolumeModeShare
 	}
 	switch mode {
-	case neo4jv1beta1.VolumeModeShare:
+	case neo4jv1.VolumeModeShare:
 		mount := &corev1.VolumeMount{
 			Name:        dataVolumeName,
 			MountPath:   role.mountPath,
 			SubPathExpr: shareSubPathExpr(role.name),
 		}
 		return nil, nil, mount
-	case neo4jv1beta1.VolumeModeDynamic:
+	case neo4jv1.VolumeModeDynamic:
 		vct := dynamicPVC(ctx, role.name, role.spec.Dynamic)
 		mount := &corev1.VolumeMount{Name: role.name, MountPath: role.mountPath, SubPathExpr: shareSubPathExpr(role.name)}
 		return vct, nil, mount
-	case neo4jv1beta1.VolumeModeExisting:
+	case neo4jv1.VolumeModeExisting:
 		vct, vol := existingMaterial(role.name, role.spec.Existing)
 		mount := &corev1.VolumeMount{Name: role.name, MountPath: role.mountPath, SubPathExpr: shareSubPathExpr(role.name)}
 		if vct == nil && vol == nil {
@@ -178,7 +178,7 @@ func shareSubPathExpr(role string) string {
 	}
 }
 
-func dynamicPVC(ctx render.Context, name string, dyn *neo4jv1beta1.DynamicVolumeSpec) *corev1.PersistentVolumeClaim {
+func dynamicPVC(ctx render.Context, name string, dyn *neo4jv1.DynamicVolumeSpec) *corev1.PersistentVolumeClaim {
 	if dyn == nil {
 		return nil
 	}
@@ -217,7 +217,7 @@ func dynamicPVC(ctx render.Context, name string, dyn *neo4jv1beta1.DynamicVolume
 	return &corev1.PersistentVolumeClaim{ObjectMeta: meta, Spec: spec}
 }
 
-func existingMaterial(name string, existing *neo4jv1beta1.ExistingVolumeSpec) (*corev1.PersistentVolumeClaim, *corev1.Volume) {
+func existingMaterial(name string, existing *neo4jv1.ExistingVolumeSpec) (*corev1.PersistentVolumeClaim, *corev1.Volume) {
 	if existing == nil {
 		return nil, nil
 	}

@@ -1,7 +1,7 @@
 # Purpose: Dynamic data + logs/metrics Share from data (subPathExpr logs|metrics/$(POD_NAME)).
 # Prerequisites: none.
 # Apply: kubectl apply -f examples/storage/06-aux-share-logs-metrics.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-storage-share

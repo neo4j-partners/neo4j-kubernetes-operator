@@ -3,14 +3,14 @@ package render
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestActivePoolsStandalone(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	pools := ActivePools(neo4j)
@@ -20,16 +20,16 @@ func TestActivePoolsStandalone(t *testing.T) {
 }
 
 func TestActivePoolsCluster(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{
 					Members: 3,
 				},
-				Secondaries: &neo4jv1beta1.SecondariesSpec{
-					Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
-					Read:      &neo4jv1beta1.SecondaryPoolSpec{Members: 2},
+				Secondaries: &neo4jv1.SecondariesSpec{
+					Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1},
+					Read:      &neo4jv1.SecondaryPoolSpec{Members: 2},
 				},
 			},
 		},
@@ -47,16 +47,16 @@ func TestActivePoolsCluster(t *testing.T) {
 }
 
 func TestPoolReplicasCluster(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{
 					Members: 3,
 				},
-				Secondaries: &neo4jv1beta1.SecondariesSpec{
-					Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
+				Secondaries: &neo4jv1.SecondariesSpec{
+					Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1},
 				},
 			},
 		},
@@ -70,7 +70,7 @@ func TestPoolReplicasCluster(t *testing.T) {
 }
 
 func TestConfigMapNamePerPool(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "prod"}}
+	neo4j := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "prod"}}
 	if got := StandaloneContext(neo4j).ConfigMapName(); got != "prod-config" {
 		t.Fatalf("standalone config = %q", got)
 	}

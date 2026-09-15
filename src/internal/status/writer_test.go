@@ -9,16 +9,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 func TestBuildEndpointsPlainBolt(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	ep := buildEndpoints(render.ClientServiceContext(neo4j))
@@ -35,24 +35,24 @@ func TestBuildEndpointsPlainBolt(t *testing.T) {
 
 func TestBuildEndpointsBoltTLSAndHTTPS(t *testing.T) {
 	https := int32(7473)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{HTTPS: &https},
-				Service:   &neo4jv1beta1.ConnectivityServiceSpec{Expose: []string{"bolt", "http", "https"}},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{HTTPS: &https},
+				Service:   &neo4jv1.ConnectivityServiceSpec{Expose: []string{"bolt", "http", "https"}},
 			},
-			Trust: &neo4jv1beta1.TrustSpec{
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{
-						PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-key"},
-						PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-cert"},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{
+						PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-key"},
+						PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-cert"},
 					},
-					HTTPS: &neo4jv1beta1.TLSPolicySpec{
-						PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-key"},
-						PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-cert"},
+					HTTPS: &neo4jv1.TLSPolicySpec{
+						PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "https-key"},
+						PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "https-cert"},
 					},
 				},
 			},
@@ -76,7 +76,7 @@ func TestBuildEndpointsBoltTLSAndHTTPS(t *testing.T) {
 func TestObservePoolStorageReadyPendingWithStorageClass(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	sc := "missing-sc"
 	neo4j := standaloneWithDynamicSC("dev", "default", sc)
@@ -98,7 +98,7 @@ func TestObservePoolStorageReadyPendingWithStorageClass(t *testing.T) {
 func TestObservePoolStorageReadyPendingNoStorageClass(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := standaloneWithDynamicSC("dev", "default", "")
 	pvc := &corev1.PersistentVolumeClaim{
@@ -118,7 +118,7 @@ func TestObservePoolStorageReadyPendingNoStorageClass(t *testing.T) {
 func TestObservePoolStorageReadyBound(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := standaloneWithDynamicSC("dev", "default", "standard")
 	pvc := &corev1.PersistentVolumeClaim{
@@ -135,7 +135,7 @@ func TestObservePoolStorageReadyBound(t *testing.T) {
 func TestObservePoolStorageReadyPVCMissing(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := standaloneWithDynamicSC("dev", "default", "standard")
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
@@ -148,16 +148,16 @@ func TestObservePoolStorageReadyPVCMissing(t *testing.T) {
 	}
 }
 
-func standaloneCertManagerCR() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func standaloneCertManagerCR() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Trust: &neo4jv1beta1.TrustSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Trust: &neo4jv1.TrustSpec{
 				Enabled:     true,
-				CertManager: &neo4jv1beta1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1beta1.IssuerRef{Name: "corp-ca"}},
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{SecretName: "dev-bolt-tls"},
+				CertManager: &neo4jv1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"}},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{SecretName: "dev-bolt-tls"},
 				},
 			},
 		},
@@ -167,11 +167,11 @@ func standaloneCertManagerCR() *neo4jv1beta1.Neo4j {
 func TestObserveTLSReadyDisabled(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec:       neo4jv1beta1.Neo4jSpec{Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone}},
+		Spec:       neo4jv1.Neo4jSpec{Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone}},
 	}
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
 	ok, reason, _ := w.observeTLSReady(t.Context(), neo4j)
@@ -185,7 +185,7 @@ func TestObserveTLSReadyDisabled(t *testing.T) {
 func TestObserveTLSReadyCertManagerPending(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := standaloneCertManagerCR()
 	w := NewWriter(fake.NewClientBuilder().WithScheme(scheme).Build())
@@ -201,7 +201,7 @@ func TestObserveTLSReadyCertManagerPending(t *testing.T) {
 func TestObserveTLSReadyCertManagerIssued(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := standaloneCertManagerCR()
 	secret := &corev1.Secret{
@@ -215,16 +215,16 @@ func TestObserveTLSReadyCertManagerIssued(t *testing.T) {
 	}
 }
 
-func standaloneWithDynamicSC(name, ns, sc string) *neo4jv1beta1.Neo4j {
-	dyn := &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi", StorageClassName: sc}
-	return &neo4jv1beta1.Neo4j{
+func standaloneWithDynamicSC(name, ns, sc string) *neo4jv1.Neo4j {
+	dyn := &neo4jv1.DynamicVolumeSpec{Size: "10Gi", StorageClassName: sc}
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
 						Dynamic: dyn,
 					},
 				},

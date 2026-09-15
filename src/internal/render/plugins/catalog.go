@@ -3,7 +3,7 @@ package plugins
 import (
 	"fmt"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // catalogToImage maps CRD catalog ids (BDR-004) to NEO4J_PLUGINS names accepted by the
@@ -29,16 +29,16 @@ func ImageName(catalogID string) string {
 
 // SkipNetworkFetch is true when plugins are supplied on an Existing volume.
 // The image entrypoint must not download JARs in that case (NEO-013).
-func SkipNetworkFetch(neo4j *neo4jv1beta1.Neo4j) bool {
+func SkipNetworkFetch(neo4j *neo4jv1.Neo4j) bool {
 	if neo4j.Spec.Storage == nil || neo4j.Spec.Storage.Volumes == nil || neo4j.Spec.Storage.Volumes.Plugins == nil {
 		return false
 	}
-	return neo4j.Spec.Storage.Volumes.Plugins.Mode == neo4jv1beta1.VolumeModeExisting
+	return neo4j.Spec.Storage.Volumes.Plugins.Mode == neo4jv1.VolumeModeExisting
 }
 
 // Validate rejects unknown catalog ids, unused version pins, and unknown
 // pluginDefinitions keys (NEO-013).
-func Validate(neo4j *neo4jv1beta1.Neo4j) error {
+func Validate(neo4j *neo4jv1.Neo4j) error {
 	for _, id := range assignedIDs(neo4j) {
 		if !Known(id) {
 			return fmt.Errorf("plugin %q is not in the V1 catalog (apoc, gds, bloom)", id)
@@ -55,7 +55,7 @@ func Validate(neo4j *neo4jv1beta1.Neo4j) error {
 	return nil
 }
 
-func assignedIDs(neo4j *neo4jv1beta1.Neo4j) []string {
+func assignedIDs(neo4j *neo4jv1.Neo4j) []string {
 	var ids []string
 	ids = append(ids, neo4j.Spec.Plugins...)
 	if neo4j.Spec.Topology.Primaries != nil {

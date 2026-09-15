@@ -109,7 +109,7 @@ ServiceAccounts, so the two subjects the role trusts both assume it:
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: ${NEO4J}
@@ -150,7 +150,7 @@ kubectl -n "$NS" exec ${NEO4J}-server-0 -c neo4j -- \
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata: { name: bk-s3 }
 spec:
@@ -189,7 +189,7 @@ kubectl -n "$NS" exec ${NEO4J}-server-0 -c neo4j -- \
   cypher-shell -u neo4j -p "$PW" "MATCH (n:Item) DELETE n;"
 
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata: { name: rst-s3 }
 spec:
@@ -218,7 +218,7 @@ chain prefixes. Demo-fast crons let you watch it in minutes:
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackupSchedule
 metadata: { name: sched-s3 }
 spec:

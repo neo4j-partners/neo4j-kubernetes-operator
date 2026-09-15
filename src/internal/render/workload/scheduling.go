@@ -4,7 +4,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -56,7 +56,7 @@ func withDefaultSpreadSelectors(ctx render.Context, in []corev1.TopologySpreadCo
 	return out
 }
 
-func resolveAffinity(ctx render.Context, aff *neo4jv1beta1.SchedulingAffinitySpec) *corev1.Affinity {
+func resolveAffinity(ctx render.Context, aff *neo4jv1.SchedulingAffinitySpec) *corev1.Affinity {
 	if aff == nil {
 		return nil
 	}

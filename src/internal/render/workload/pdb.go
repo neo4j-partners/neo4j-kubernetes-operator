@@ -7,12 +7,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 // PDBEnabled is true when spec.podDisruptionBudget.enabled.
-func PDBEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+func PDBEnabled(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j.Spec.PodDisruptionBudget != nil && neo4j.Spec.PodDisruptionBudget.Enabled
 }
 
@@ -23,7 +23,7 @@ func PDBName(ctx render.Context) string {
 
 // ValidatePDB rejects minAvailable that can never be satisfied (ADD-03).
 // An unsatisfiable budget permanently blocks voluntary node drains / evictions.
-func ValidatePDB(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidatePDB(neo4j *neo4jv1.Neo4j) error {
 	pdb := neo4j.Spec.PodDisruptionBudget
 	if pdb == nil || !pdb.Enabled || pdb.MinAvailable == nil {
 		return nil
@@ -69,14 +69,14 @@ func PodDisruptionBudget(ctx render.Context) *policyv1.PodDisruptionBudget {
 	}
 }
 
-func defaultPDBMinAvailable(neo4j *neo4jv1beta1.Neo4j) intstr.IntOrString {
+func defaultPDBMinAvailable(neo4j *neo4jv1.Neo4j) intstr.IntOrString {
 	if render.IsClusterMode(neo4j) && totalDesiredMembers(neo4j) >= 3 {
 		return intstr.FromInt32(2)
 	}
 	return intstr.FromInt32(1)
 }
 
-func totalDesiredMembers(neo4j *neo4jv1beta1.Neo4j) int32 {
+func totalDesiredMembers(neo4j *neo4jv1.Neo4j) int32 {
 	var n int32
 	for _, pool := range render.ActivePools(neo4j) {
 		n += render.ContextForPool(neo4j, pool).PoolReplicas()

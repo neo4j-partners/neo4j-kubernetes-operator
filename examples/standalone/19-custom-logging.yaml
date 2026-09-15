@@ -2,7 +2,7 @@
 # Purpose: mount server-logs.xml / user-logs.xml and point server.logs.* at them.
 # Apply: kubectl apply -f examples/standalone/19-custom-logging.yaml
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: lab-logging

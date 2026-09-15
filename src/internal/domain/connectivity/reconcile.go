@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderconn "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/connectivity"
@@ -25,7 +25,7 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 	return &Reconciler{Client: c, Scheme: scheme}
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)

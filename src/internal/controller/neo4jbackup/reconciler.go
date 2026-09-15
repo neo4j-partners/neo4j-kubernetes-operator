@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackupschedule"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
@@ -64,7 +64,7 @@ func NewReconciler(mgr ctrl.Manager) *BackupReconciler {
 func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4jbackup")
 
-	var backup neo4jv1beta1.Neo4jBackup
+	var backup neo4jv1.Neo4jBackup
 	if err := r.Get(ctx, req.NamespacedName, &backup); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -73,12 +73,12 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Immutable record: a terminal run never spawns a second Job (GitOps re-apply safe).
-	if backup.Status.Phase == neo4jv1beta1.RunPhaseSucceeded || backup.Status.Phase == neo4jv1beta1.RunPhaseFailed {
+	if backup.Status.Phase == neo4jv1.RunPhaseSucceeded || backup.Status.Phase == neo4jv1.RunPhaseFailed {
 		return ctrl.Result{}, nil
 	}
 
 	// Resolve the target workload (same namespace).
-	var neo4j neo4jv1beta1.Neo4j
+	var neo4j neo4jv1.Neo4j
 	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Neo4jRef.Name, Namespace: backup.Namespace}, &neo4j); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Target may still be provisioning — wait rather than failing the record terminally.
@@ -88,14 +88,14 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	if neo4j.Spec.Edition != neo4jv1beta1.EditionEnterprise {
+	if neo4j.Spec.Edition != neo4jv1.EditionEnterprise {
 		return r.fail(ctx, &backup, oracle.ReasonBackupEditionUnsupported,
 			"backup requires Enterprise edition; target is "+string(neo4j.Spec.Edition))
 	}
 
 	// Aggregate is a file-only operation on the backup PVC (no live server, no backup listener):
 	// it collapses source's chain into a recovered full. Diverge here before the listener gate.
-	if backup.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+	if backup.Spec.Type == neo4jv1.BackupTypeAggregate {
 		return r.reconcileAggregate(ctx, &backup, &neo4j)
 	}
 
@@ -144,12 +144,12 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // layout, including not colliding two chains in one folder (BDR-014/ADR-016). A wildcard PVC backup
 // has no recordable artifact filename (its filename script keys off named databases), so it stays
 // flat even when labelled.
-func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
+func chainSubDir(b *neo4jv1.Neo4jBackup) string {
 	chain := b.Labels[neo4jbackupschedule.LabelChain]
 	if chain == "" {
 		return ""
 	}
-	if b.Spec.Destination.Type == neo4jv1beta1.BackupDestinationPVC {
+	if b.Spec.Destination.Type == neo4jv1.BackupDestinationPVC {
 		if _, ok := renderbackup.SeedableDatabases(b); !ok {
 			return ""
 		}
@@ -157,8 +157,8 @@ func chainSubDir(b *neo4jv1beta1.Neo4jBackup) string {
 	return chain
 }
 
-func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) (ctrl.Result, error) {
-	b.Status.Phase = neo4jv1beta1.RunPhaseRunning
+func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1.Neo4jBackup) (ctrl.Result, error) {
+	b.Status.Phase = neo4jv1.RunPhaseRunning
 	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionFalse, oracle.ReasonBackupInProgress, "backup Job running")
 	if err := r.writeStatus(ctx, b); err != nil {
 		return ctrl.Result{}, err
@@ -166,8 +166,8 @@ func (r *BackupReconciler) setRunning(ctx context.Context, b *neo4jv1beta1.Neo4j
 	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 }
 
-func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) (ctrl.Result, error) {
-	b.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
+func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1.Neo4jBackup, job *batchv1.Job) (ctrl.Result, error) {
+	b.Status.Phase = neo4jv1.RunPhaseSucceeded
 	b.Status.Reason = ""
 	b.Status.Message = ""
 	b.Status.Artifacts = artifactsFor(b, r.artifactPaths(ctx, job))
@@ -183,7 +183,7 @@ func (r *BackupReconciler) succeed(ctx context.Context, b *neo4jv1beta1.Neo4jBac
 // output (a Full the restore path can seed directly, no chain replay). It reuses the same owned
 // Job name/lifecycle as a normal backup, only the inputs (from the source chain) and the recorded
 // artifact (Type Full, path = the recovered file) differ.
-func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
+func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1.Neo4jBackup, neo4j *neo4jv1.Neo4j) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4jbackup")
 
 	if b.Spec.Source == nil || b.Spec.Source.BackupRef == "" {
@@ -196,14 +196,14 @@ func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1bet
 	}
 
 	// The source chain must exist and have Succeeded before we can aggregate it — wait otherwise.
-	var src neo4jv1beta1.Neo4jBackup
+	var src neo4jv1.Neo4jBackup
 	if err := r.Get(ctx, types.NamespacedName{Name: b.Spec.Source.BackupRef, Namespace: b.Namespace}, &src); err != nil {
 		if apierrors.IsNotFound(err) {
 			return r.retryable(ctx, b, oracle.ReasonBackupSourceNotFound, "source.backupRef "+b.Spec.Source.BackupRef+" not found")
 		}
 		return ctrl.Result{}, err
 	}
-	if src.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if src.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		return r.retryable(ctx, b, oracle.ReasonBackupSourceNotFound,
 			"source.backupRef "+b.Spec.Source.BackupRef+" has not Succeeded (phase "+string(src.Status.Phase)+")")
 	}
@@ -248,7 +248,7 @@ func (r *BackupReconciler) reconcileAggregate(ctx context.Context, b *neo4jv1bet
 // filename (the chain's last link); object-store sources (ADR-016) aggregate the folder directly and
 // take their credentials from this backup's own destination (or the target's workload identity).
 // Unlike restore's aggregate, it does not require the target to mount the claim — the Job does.
-func aggregateInputs(b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup) (renderbackup.AggregateInputs, *oracle.Reason, string) {
+func aggregateInputs(b *neo4jv1.Neo4jBackup, src *neo4jv1.Neo4jBackup) (renderbackup.AggregateInputs, *oracle.Reason, string) {
 	unsupported := oracle.ReasonBackupSourceUnsupported
 	notFound := oracle.ReasonBackupSourceNotFound
 	fail := func(reason oracle.Reason, msg string) (renderbackup.AggregateInputs, *oracle.Reason, string) {
@@ -309,7 +309,7 @@ func aggregateInputs(b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup)
 
 // artifactFor finds the recorded artifact for a database (exact match, or a "*" artifact standing
 // for all databases).
-func artifactFor(src *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.BackupArtifact, bool) {
+func artifactFor(src *neo4jv1.Neo4jBackup, db string) (*neo4jv1.BackupArtifact, bool) {
 	for i := range src.Status.Artifacts {
 		if a := &src.Status.Artifacts[i]; a.Database == db || a.Database == "*" {
 			return a, true
@@ -321,16 +321,16 @@ func artifactFor(src *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.Backup
 // succeedAggregate catalogs the recovered full(s) the aggregate Job produced (chain-prefixed path,
 // Type Full, pvc://<source claim> URI) so a restore can seed them directly. It belongs to the same
 // chain as its source. An empty recorded path means the aggregate produced nothing usable → fail.
-func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, src *neo4jv1beta1.Neo4jBackup, in renderbackup.AggregateInputs, job *batchv1.Job) (ctrl.Result, error) {
+func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1.Neo4jBackup, src *neo4jv1.Neo4jBackup, in renderbackup.AggregateInputs, job *batchv1.Job) (ctrl.Result, error) {
 	now := metav1.Now()
-	out := make([]neo4jv1beta1.BackupArtifact, 0, len(b.Spec.Databases))
+	out := make([]neo4jv1.BackupArtifact, 0, len(b.Spec.Databases))
 	if in.ObjectURL != "" {
 		// Object store: the recovered full lands under the same url and there is no mounted
 		// filesystem to record its filename from, so seed the folder (which now recovers to it).
 		for _, db := range b.Spec.Databases {
-			out = append(out, neo4jv1beta1.BackupArtifact{
+			out = append(out, neo4jv1.BackupArtifact{
 				Database:    db,
-				Type:        neo4jv1beta1.BackupTypeFull, // the recovered artifact is a standalone full
+				Type:        neo4jv1.BackupTypeFull, // the recovered artifact is a standalone full
 				URI:         in.ObjectURL,
 				CompletedAt: &now,
 			})
@@ -342,9 +342,9 @@ func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1
 			if !ok || art.Name == "" {
 				return r.fail(ctx, b, oracle.ReasonBackupJobFailed, "aggregate produced no recovered artifact for database "+db)
 			}
-			out = append(out, neo4jv1beta1.BackupArtifact{
+			out = append(out, neo4jv1.BackupArtifact{
 				Database:    db,
-				Type:        neo4jv1beta1.BackupTypeFull, // the recovered artifact is a standalone full
+				Type:        neo4jv1.BackupTypeFull, // the recovered artifact is a standalone full
 				URI:         "pvc://" + in.PVCClaim,
 				Path:        art.Name,
 				SizeBytes:   art.SizeBytes,
@@ -352,7 +352,7 @@ func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1
 			})
 		}
 	}
-	b.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
+	b.Status.Phase = neo4jv1.RunPhaseSucceeded
 	b.Status.Reason = ""
 	b.Status.Message = ""
 	b.Status.Artifacts = out
@@ -373,9 +373,9 @@ func (r *BackupReconciler) succeedAggregate(ctx context.Context, b *neo4jv1beta1
 // so restore can seed file:/backups/<path> — the chain's last link — without parsing filenames,
 // plus SizeBytes when the Job could stat it. For a schedule-isolated object-store chain the URI is
 // the per-chain folder the Job actually wrote to (ADR-016), so restore/aggregate seed that prefix.
-func artifactsFor(b *neo4jv1beta1.Neo4jBackup, arts map[string]shared.NamedArtifact) []neo4jv1beta1.BackupArtifact {
+func artifactsFor(b *neo4jv1.Neo4jBackup, arts map[string]shared.NamedArtifact) []neo4jv1.BackupArtifact {
 	uri := renderbackup.DestinationURI(b.Spec.Destination)
-	if b.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
+	if b.Spec.Destination.Type != neo4jv1.BackupDestinationPVC {
 		// Record the exact folder the Job wrote to — trailing slash normalized, per-chain sub-dir for
 		// a schedule, the url as given for an ad-hoc backup — so restore-by-backupRef and aggregate
 		// point --from-path at that same prefix.
@@ -386,9 +386,9 @@ func artifactsFor(b *neo4jv1beta1.Neo4jBackup, arts map[string]shared.NamedArtif
 	if len(dbs) == 0 {
 		dbs = []string{"*"}
 	}
-	out := make([]neo4jv1beta1.BackupArtifact, 0, len(dbs))
+	out := make([]neo4jv1.BackupArtifact, 0, len(dbs))
 	for _, db := range dbs {
-		a := neo4jv1beta1.BackupArtifact{
+		a := neo4jv1.BackupArtifact{
 			Database:    db,
 			Type:        b.Spec.Type,
 			URI:         uri,
@@ -413,8 +413,8 @@ func (r *BackupReconciler) artifactPaths(ctx context.Context, job *batchv1.Job) 
 }
 
 // fail records a terminal failure with a catalogued reason and a Warning Event.
-func (r *BackupReconciler) fail(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, reason oracle.Reason, msg string) (ctrl.Result, error) {
-	b.Status.Phase = neo4jv1beta1.RunPhaseFailed
+func (r *BackupReconciler) fail(ctx context.Context, b *neo4jv1.Neo4jBackup, reason oracle.Reason, msg string) (ctrl.Result, error) {
+	b.Status.Phase = neo4jv1.RunPhaseFailed
 	b.Status.Reason = reason.String()
 	b.Status.Message = msg
 	setCondition(b, oracle.ConditionBackupReady, metav1.ConditionFalse, reason, msg)
@@ -425,9 +425,9 @@ func (r *BackupReconciler) fail(ctx context.Context, b *neo4jv1beta1.Neo4jBackup
 }
 
 // retryable records a non-terminal wait (target/listener not ready yet) and requeues.
-func (r *BackupReconciler) retryable(ctx context.Context, b *neo4jv1beta1.Neo4jBackup, reason oracle.Reason, msg string) (ctrl.Result, error) {
+func (r *BackupReconciler) retryable(ctx context.Context, b *neo4jv1.Neo4jBackup, reason oracle.Reason, msg string) (ctrl.Result, error) {
 	if b.Status.Phase == "" {
-		b.Status.Phase = neo4jv1beta1.RunPhasePending
+		b.Status.Phase = neo4jv1.RunPhasePending
 	}
 	b.Status.Reason = reason.String()
 	b.Status.Message = msg
@@ -438,7 +438,7 @@ func (r *BackupReconciler) retryable(ctx context.Context, b *neo4jv1beta1.Neo4jB
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func (r *BackupReconciler) writeStatus(ctx context.Context, b *neo4jv1beta1.Neo4jBackup) error {
+func (r *BackupReconciler) writeStatus(ctx context.Context, b *neo4jv1.Neo4jBackup) error {
 	b.Status.ObservedGeneration = b.Generation
 	if err := r.Status().Update(ctx, b); err != nil {
 		if apierrors.IsConflict(err) {
@@ -450,7 +450,7 @@ func (r *BackupReconciler) writeStatus(ctx context.Context, b *neo4jv1beta1.Neo4
 }
 
 // setCondition takes catalogued values only — see internal/oracle and status.setCondition.
-func setCondition(b *neo4jv1beta1.Neo4jBackup, ctype oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
+func setCondition(b *neo4jv1.Neo4jBackup, ctype oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
 	meta.SetStatusCondition(&b.Status.Conditions, metav1.Condition{
 		Type:               ctype.String(),
 		Status:             status,
@@ -463,7 +463,7 @@ func setCondition(b *neo4jv1beta1.Neo4jBackup, ctype oracle.Condition, status me
 
 func (r *BackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&neo4jv1beta1.Neo4jBackup{}).
+		For(&neo4jv1.Neo4jBackup{}).
 		Owns(&batchv1.Job{}).
 		Complete(r)
 }

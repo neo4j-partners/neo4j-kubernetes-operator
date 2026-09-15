@@ -11,7 +11,7 @@
 #
 # Only `name: __CR_NAME__` and the storage placeholders are substituted; the secretName literals
 # are fixed and must match trust/provision-byo.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

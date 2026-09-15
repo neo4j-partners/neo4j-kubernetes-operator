@@ -1,7 +1,7 @@
 # Purpose: single-primary analytics-style cluster (1 primary + secondaries). Valid for deploy.
 #   Scaling primaries 1→N or N→1 is NOT supported — recreate at the target size instead.
 # Apply: kubectl apply -f examples/cluster/02-lab-single-primary.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: analytics-lab

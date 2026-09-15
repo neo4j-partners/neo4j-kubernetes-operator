@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
@@ -34,7 +34,7 @@ func NewWriter(c client.Client) *Writer {
 }
 
 // MarkReconciling sets the Reconciling condition at pipeline start.
-func (w *Writer) MarkReconciling(neo4j *neo4jv1beta1.Neo4j) {
+func (w *Writer) MarkReconciling(neo4j *neo4jv1.Neo4j) {
 	setCondition(neo4j, oracle.ConditionReconciling, metav1.ConditionTrue, oracle.ReasonInProgress, "Reconciliation in progress")
 	setCondition(neo4j, oracle.ConditionError, metav1.ConditionFalse, oracle.ReasonNoError, "")
 }
@@ -57,18 +57,18 @@ func PipelineErrorReason(err error) oracle.Reason {
 }
 
 // MarkPipelineError records a reconcile failure.
-func (w *Writer) MarkPipelineError(neo4j *neo4jv1beta1.Neo4j, err error) {
+func (w *Writer) MarkPipelineError(neo4j *neo4jv1.Neo4j, err error) {
 	setCondition(neo4j, oracle.ConditionError, metav1.ConditionTrue, PipelineErrorReason(err), err.Error())
 	setCondition(neo4j, oracle.ConditionReady, metav1.ConditionFalse, oracle.ReasonReconcileError, err.Error())
 	setCondition(neo4j, oracle.ConditionReconciling, metav1.ConditionFalse, oracle.ReasonFailed, err.Error())
 	if rendertrust.TrustEnabled(neo4j) && isTLSSecretError(err) {
 		setCondition(neo4j, oracle.ConditionTLSReady, metav1.ConditionFalse, oracle.ReasonSecretMissing, err.Error())
 	}
-	neo4j.Status.Phase = neo4jv1beta1.Neo4jPhaseFailed
+	neo4j.Status.Phase = neo4jv1.Neo4jPhaseFailed
 }
 
 // ObserveAndWrite refreshes status from the API server and patches status subresource.
-func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) error {
+func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1.Neo4j) error {
 	log := ctrllog.FromContext(ctx).WithName("status").WithValues("domain", "status", "reconciler", "status")
 	var ready, desired int32
 	var anySTSFound, rolling bool
@@ -114,7 +114,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	setCondition(neo4j, oracle.ConditionTLSReady, boolCondition(tlsReady), tlsReason, tlsMsg)
 
 	setCondition(neo4j, oracle.ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
-	neo4j.Status.ServerSummary = &neo4jv1beta1.ReplicaSummary{Servers: desired, Ready: ready}
+	neo4j.Status.ServerSummary = &neo4jv1.ReplicaSummary{Servers: desired, Ready: ready}
 	setCondition(neo4j, oracle.ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
 
 	// Read once: it gates allReady just below, and it is also the signal that a scale-in the user
@@ -300,7 +300,7 @@ func storageClassNameOf(pvc *corev1.PersistentVolumeClaim, ctxRender render.Cont
 	return ctxRender.DataStorageClassName()
 }
 
-func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ok bool, reason oracle.Reason, message string) {
+func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1.Neo4j) (ok bool, reason oracle.Reason, message string) {
 	if !rendertrust.TrustEnabled(neo4j) {
 		return true, oracle.ReasonTrustDisabled, "trust.enabled is false"
 	}
@@ -344,7 +344,7 @@ func (w *Writer) observeTLSReady(ctx context.Context, neo4j *neo4jv1beta1.Neo4j)
 	return true, oracle.ReasonSecretsPresent, "required TLS secrets and keys present"
 }
 
-func buildEndpoints(ctx render.Context) *neo4jv1beta1.EndpointsStatus {
+func buildEndpoints(ctx render.Context) *neo4jv1.EndpointsStatus {
 	ns := ctx.Namespace()
 	name := ctx.ClientServiceName()
 	boltPort := ctx.ServiceFacadePort(render.ConnectorBolt)
@@ -359,11 +359,11 @@ func buildEndpoints(ctx render.Context) *neo4jv1beta1.EndpointsStatus {
 	}
 	host := fmt.Sprintf("%s.%s.svc:%d", name, ns, boltPort)
 	boltURI := fmt.Sprintf("%s://%s", scheme, host)
-	ep := &neo4jv1beta1.EndpointsStatus{
+	ep := &neo4jv1.EndpointsStatus{
 		Bolt:     boltURI,
 		Neo4j:    boltURI,
 		Internal: fmt.Sprintf("%s.%s.svc:%d", ctx.HeadlessServiceName(), ns, ctx.BoltPort()),
-		ConnectionExamples: &neo4jv1beta1.ConnectionExamples{
+		ConnectionExamples: &neo4jv1.ConnectionExamples{
 			BoltURI:     boltURI,
 			Neo4jURI:    boltURI,
 			PortForward: portForwardHint(ns, name, boltPort, directScheme),
@@ -413,7 +413,7 @@ func isTLSSecretError(err error) bool {
 
 // setCondition takes catalogued values only: an undeclared reason cannot be built outside
 // internal/oracle, so it cannot reach the status subresource (ADR-014).
-func setCondition(neo4j *neo4jv1beta1.Neo4j, typ oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
+func setCondition(neo4j *neo4jv1.Neo4j, typ oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
 	meta.SetStatusCondition(&neo4j.Status.Conditions, metav1.Condition{
 		Type:               typ.String(),
 		Status:             status,
@@ -462,21 +462,21 @@ func readyMessage(ready, desired int32) string {
 // the operator is doing; health is carried by Ready and the domain conditions, never by a phase
 // downgrade. Hence the two ordering rules below: a workload that has already been ready never falls
 // back to Provisioning or Bootstrapping, and a not-ready state the user asked for keeps Running.
-func nextPhase(prior neo4jv1beta1.Neo4jStatus, offline, allReady, anySTSFound,
-	changing bool) neo4jv1beta1.Neo4jPhase {
+func nextPhase(prior neo4jv1.Neo4jStatus, offline, allReady, anySTSFound,
+	changing bool) neo4jv1.Neo4jPhase {
 	switch {
 	case offline:
-		return neo4jv1beta1.Neo4jPhaseMaintenance
+		return neo4jv1.Neo4jPhaseMaintenance
 	case allReady:
-		return neo4jv1beta1.Neo4jPhaseRunning
+		return neo4jv1.Neo4jPhaseRunning
 	case !anySTSFound:
-		return neo4jv1beta1.Neo4jPhaseProvisioning
+		return neo4jv1.Neo4jPhaseProvisioning
 	case !established(prior):
-		return neo4jv1beta1.Neo4jPhaseBootstrapping // never been ready — a genuine first install
+		return neo4jv1.Neo4jPhaseBootstrapping // never been ready — a genuine first install
 	case changing:
-		return neo4jv1beta1.Neo4jPhaseRunning // a roll, a scale or an upgrade we asked for
+		return neo4jv1.Neo4jPhaseRunning // a roll, a scale or an upgrade we asked for
 	default:
-		return neo4jv1beta1.Neo4jPhaseDegraded // unplanned loss after the object was established
+		return neo4jv1.Neo4jPhaseDegraded // unplanned loss after the object was established
 	}
 }
 
@@ -484,14 +484,14 @@ func nextPhase(prior neo4jv1beta1.Neo4jStatus, offline, allReady, anySTSFound,
 // than by something that went wrong: a spec change not yet absorbed, a StatefulSet still moving pods
 // onto a new revision, or a scale-in waiting on Neo4j to release a member (ADR-007). This is the
 // predicate that keeps a routine roll from being reported as a degradation.
-func changeInFlight(neo4j *neo4jv1beta1.Neo4j, rolling, drainPending bool) bool {
+func changeInFlight(neo4j *neo4jv1.Neo4j, rolling, drainPending bool) bool {
 	return neo4j.Generation != neo4j.Status.ObservedGeneration || rolling || drainPending
 }
 
 // established reports whether the workload has ever been fully ready, read from status.version:
 // the writer sets it only under allReady, and unlike phase it survives the Failed value a transient
 // pipeline error leaves behind — so a CR that has served is never called Bootstrapping again.
-func established(prior neo4jv1beta1.Neo4jStatus) bool {
+func established(prior neo4jv1.Neo4jStatus) bool {
 	return prior.Version != ""
 }
 
@@ -504,7 +504,7 @@ func stsRolling(sts appsv1.StatefulSet) bool {
 }
 
 // IsReady reports whether the Ready condition is True.
-func IsReady(neo4j *neo4jv1beta1.Neo4j) bool {
+func IsReady(neo4j *neo4jv1.Neo4j) bool {
 	for _, c := range neo4j.Status.Conditions {
 		if c.Type == oracle.ConditionReady.String() {
 			return c.Status == metav1.ConditionTrue
@@ -514,10 +514,10 @@ func IsReady(neo4j *neo4jv1beta1.Neo4j) bool {
 }
 
 // OfflineMode reports whether the CR requests offline maintenance (NEO-3-017-MNT-01).
-func OfflineMode(neo4j *neo4jv1beta1.Neo4j) bool {
+func OfflineMode(neo4j *neo4jv1.Neo4j) bool {
 	return offlineMode(neo4j)
 }
 
-func offlineMode(neo4j *neo4jv1beta1.Neo4j) bool {
+func offlineMode(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j.Spec.Maintenance != nil && neo4j.Spec.Maintenance.OfflineMode
 }

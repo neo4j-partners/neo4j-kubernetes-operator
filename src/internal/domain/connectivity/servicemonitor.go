@@ -10,13 +10,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderconn "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/connectivity"
 )
 
-func (r *Reconciler) reconcileServiceMonitor(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) reconcileServiceMonitor(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	renderCtx := render.ClientServiceContext(neo4j)
 
 	if !renderconn.ServiceMonitorEnabled(renderCtx) {
@@ -55,7 +55,7 @@ func (r *Reconciler) reconcileServiceMonitor(ctx context.Context, neo4j *neo4jv1
 	return shared.Done()
 }
 
-func (r *Reconciler) deleteServiceMonitorIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) deleteServiceMonitorIfPresent(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	renderCtx := render.ClientServiceContext(neo4j)
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(renderconn.ServiceMonitorGVK)

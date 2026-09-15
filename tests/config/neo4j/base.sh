@@ -6,7 +6,7 @@
 # shellcheck source=../versions.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/versions.sh"
 
-export NEO4J_API_VERSION="${NEO4J_API_VERSION:-neo4j.com/v1beta1}"
+export NEO4J_API_VERSION="${NEO4J_API_VERSION:-neo4j.com/v1}"
 export NEO4J_KIND="${NEO4J_KIND:-Neo4j}"
 export NEO4J_NAMESPACE="${NEO4J_NAMESPACE:-default}"
 export NEO4J_EDITION="${NEO4J_EDITION:-enterprise}"

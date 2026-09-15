@@ -8,7 +8,7 @@
 #   (creates Secrets prod-full-cluster-key / -cert / -ca in namespace "default")
 # Apply: kubectl apply -f examples/cluster/14-full.yaml
 # Related README: ../README.md#cluster
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod-full

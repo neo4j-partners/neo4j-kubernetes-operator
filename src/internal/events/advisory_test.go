@@ -8,12 +8,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
 
-func obj(generation int64) *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{
+func obj(generation int64) *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{
 		Name: "c", Namespace: "ns", UID: "uid-1", Generation: generation,
 	}}
 }

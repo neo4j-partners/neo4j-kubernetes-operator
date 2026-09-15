@@ -56,7 +56,7 @@ probe() {
 log "Writing probe #1, then taking a Full Neo4jBackup ${BACKUP_NAME} → ${S3_URL}"
 probe "e2e-s3c-1"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: ${BACKUP_NAME}
@@ -92,7 +92,7 @@ probe "e2e-s3c-post"
 
 log "Applying Neo4jRestore ${RESTORE_NAME} (backupRef=${BACKUP_NAME}, overwrite ${TARGET_DB})"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata:
   name: ${RESTORE_NAME}

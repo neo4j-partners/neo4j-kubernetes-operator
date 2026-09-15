@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/connectivity"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
@@ -92,7 +92,7 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	log := ctrllog.FromContext(ctx).WithName("neo4j")
 	log.V(1).Info("reconcile start")
 
-	var neo4j neo4jv1beta1.Neo4j
+	var neo4j neo4jv1.Neo4j
 	if err := r.Get(ctx, req.NamespacedName, &neo4j); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -170,7 +170,7 @@ func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 }
 
-func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
+func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1.Neo4j) (ctrl.Result, error) {
 	if err := validation.ValidateNeo4j(neo4j); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -228,7 +228,7 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1beta1.N
 // has no warn level, hence Info on the log and a Warning Event carrying the oracle reason.
 //
 // Field-agnostic on purpose: every source returning render.Duplicate reports the same way.
-func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, advisories *events.Advisory, neo4j *neo4jv1beta1.Neo4j) {
+func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, advisories *events.Advisory, neo4j *neo4jv1.Neo4j) {
 	for _, d := range renderconfig.Duplicates(neo4j) {
 		log.Info("duplicate entry",
 			"field", d.Field, "key", d.Key,
@@ -239,7 +239,7 @@ func reportDuplicateEntries(log logr.Logger, recorder record.EventRecorder, advi
 	}
 }
 
-func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (ctrl.Result, error) {
+func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1.Neo4j) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(neo4j, FinalizerName) {
 		return ctrl.Result{}, nil
 	}
@@ -265,7 +265,7 @@ func (r *Neo4jReconciler) reconcileDelete(ctx context.Context, neo4j *neo4jv1bet
 }
 
 func (r *Neo4jReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	builder := ctrl.NewControllerManagedBy(mgr).For(&neo4jv1beta1.Neo4j{})
+	builder := ctrl.NewControllerManagedBy(mgr).For(&neo4jv1.Neo4j{})
 	for _, obj := range serverconfig.OwnedTypes() {
 		builder = builder.Owns(obj)
 	}

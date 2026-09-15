@@ -6,7 +6,7 @@
 #   covering all 3 primary DNS names)
 # Apply: kubectl apply -f examples/cluster/06-tls-full.yaml
 # Related README: ../README.md#tls--auth--plugin-prerequisites , ../secrets/README.md
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod-tls

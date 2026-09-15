@@ -242,7 +242,7 @@ Neo4j config injected when `privateKey` material present (BYO) or policy `secret
 Typical production: Secrets created out-of-band (Vault, cert tooling), split key/cert Secrets, custom key names via `subPath`.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod
@@ -307,7 +307,7 @@ spec:
 Operator owns `cert-manager.io/v1` `Certificate` per configured policy; user supplies Issuer + target `secretName`.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod
@@ -397,7 +397,7 @@ spec:
 Corporate PKI: server TLS + clients must present a certificate signed by a corporate CA. Mirrors [Neo4j Kubernetes SSL doc](https://neo4j.com/docs/operations-manual/current/kubernetes/security/) pattern (`client_auth` + `trustedCerts`).
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod-mtls

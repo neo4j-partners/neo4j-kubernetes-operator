@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
@@ -38,7 +38,7 @@ func New(c client.Client, recorder record.EventRecorder) *Reconciler {
 	return &Reconciler{Client: c, Recorder: recorder}
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	if err := renderstorage.Validate(neo4j); err != nil {
 		log.Error(err, "storage validation failed")
@@ -55,8 +55,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 		log.Info("pinned volumeClaimRetentionWhenDeleted",
 			"whenDeleted", string(*neo4j.Status.VolumeClaimRetentionWhenDeleted))
 	} else if neo4j.Status.VolumeClaimRetentionWhenDeleted != nil &&
-		renderstorage.SpecWhenDeleted(neo4j) == neo4jv1beta1.VolumeClaimRetentionDelete &&
-		*neo4j.Status.VolumeClaimRetentionWhenDeleted != neo4jv1beta1.VolumeClaimRetentionDelete {
+		renderstorage.SpecWhenDeleted(neo4j) == neo4jv1.VolumeClaimRetentionDelete &&
+		*neo4j.Status.VolumeClaimRetentionWhenDeleted != neo4jv1.VolumeClaimRetentionDelete {
 		log.Info("ignoring late whenDeleted=Delete; uninstall wipe remains pinned",
 			"pinned", string(*neo4j.Status.VolumeClaimRetentionWhenDeleted))
 	}
@@ -80,7 +80,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	return shared.Done()
 }
 
-func storageReasonIs(neo4j *neo4jv1beta1.Neo4j, reason oracle.Reason) bool {
+func storageReasonIs(neo4j *neo4jv1.Neo4j, reason oracle.Reason) bool {
 	c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionStorageReady.String())
 	return c != nil && c.Reason == reason.String()
 }
@@ -98,7 +98,7 @@ func logDataPlan(log logr.Logger, ctxRender render.Context) {
 		"sts", ctxRender.STSName(),
 	}
 	switch data.Mode {
-	case neo4jv1beta1.VolumeModeDynamic:
+	case neo4jv1.VolumeModeDynamic:
 		size, sc := "", ""
 		if data.Dynamic != nil {
 			size = data.Dynamic.Size
@@ -111,7 +111,7 @@ func logDataPlan(log logr.Logger, ctxRender render.Context) {
 			"pvc", pvc,
 			"provisioning", "StatefulSet volumeClaimTemplate (controller creates PVC)",
 		)
-	case neo4jv1beta1.VolumeModeExisting:
+	case neo4jv1.VolumeModeExisting:
 		if data.Existing != nil && data.Existing.ClaimName != "" {
 			keys = append(keys, "pvc", data.Existing.ClaimName, "binding", "existing claimName mount")
 		} else if data.Existing != nil && data.Existing.Volume != nil {
@@ -135,7 +135,7 @@ func logAuxPlans(log logr.Logger, ctxRender render.Context) {
 	vols := ctxRender.Neo4j.Spec.Storage.Volumes
 	for _, item := range []struct {
 		name string
-		aux  *neo4jv1beta1.AuxiliaryVolumeSpec
+		aux  *neo4jv1.AuxiliaryVolumeSpec
 	}{
 		{"backups", vols.Backups},
 		{"logs", vols.Logs},
@@ -149,7 +149,7 @@ func logAuxPlans(log logr.Logger, ctxRender render.Context) {
 		}
 		mode := item.aux.Mode
 		if mode == "" {
-			mode = neo4jv1beta1.VolumeModeShare
+			mode = neo4jv1.VolumeModeShare
 		}
 		log.V(1).Info("storage aux plan",
 			"pool", string(ctxRender.Pool),

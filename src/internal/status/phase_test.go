@@ -10,13 +10,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // served is the status of a CR that has already been fully ready once — status.version is what
 // records that, so it is what makes a phase regression detectable (ADR-004).
-func served() neo4jv1beta1.Neo4jStatus {
-	return neo4jv1beta1.Neo4jStatus{Phase: neo4jv1beta1.Neo4jPhaseRunning, Version: "2026.05.0"}
+func served() neo4jv1.Neo4jStatus {
+	return neo4jv1.Neo4jStatus{Phase: neo4jv1.Neo4jPhaseRunning, Version: "2026.05.0"}
 }
 
 // nextPhase is the whole phase contract in one function: a wrong answer either tells the user their
@@ -24,47 +24,47 @@ func served() neo4jv1beta1.Neo4jStatus {
 func TestNextPhase(t *testing.T) {
 	cases := []struct {
 		name                                     string
-		prior                                    neo4jv1beta1.Neo4jStatus
+		prior                                    neo4jv1.Neo4jStatus
 		offline, allReady, anySTSFound, changing bool
-		want                                     neo4jv1beta1.Neo4jPhase
+		want                                     neo4jv1.Neo4jPhase
 	}{
 		{
 			name:  "offline maintenance outranks everything, ready included",
 			prior: served(), offline: true, allReady: true, anySTSFound: true,
-			want: neo4jv1beta1.Neo4jPhaseMaintenance,
+			want: neo4jv1.Neo4jPhaseMaintenance,
 		},
 		{
 			name:  "everything the CR asked for is serving",
 			prior: served(), allReady: true, anySTSFound: true,
-			want: neo4jv1beta1.Neo4jPhaseRunning,
+			want: neo4jv1.Neo4jPhaseRunning,
 		},
 		{
 			name:  "no StatefulSet observed yet",
-			prior: neo4jv1beta1.Neo4jStatus{},
-			want:  neo4jv1beta1.Neo4jPhaseProvisioning,
+			prior: neo4jv1.Neo4jStatus{},
+			want:  neo4jv1.Neo4jPhaseProvisioning,
 		},
 		{
 			name:  "first install, pods still starting",
-			prior: neo4jv1beta1.Neo4jStatus{Phase: neo4jv1beta1.Neo4jPhaseBootstrapping}, anySTSFound: true,
-			want: neo4jv1beta1.Neo4jPhaseBootstrapping,
+			prior: neo4jv1.Neo4jStatus{Phase: neo4jv1.Neo4jPhaseBootstrapping}, anySTSFound: true,
+			want: neo4jv1.Neo4jPhaseBootstrapping,
 		},
 		{
 			// Bootstrapping outranks the in-flight branch: a CR that has never served is installing,
 			// whatever else is going on.
 			name:  "first install while the spec is already changing again",
-			prior: neo4jv1beta1.Neo4jStatus{}, anySTSFound: true, changing: true,
-			want: neo4jv1beta1.Neo4jPhaseBootstrapping,
+			prior: neo4jv1.Neo4jStatus{}, anySTSFound: true, changing: true,
+			want: neo4jv1.Neo4jPhaseBootstrapping,
 		},
 		{
 			// The regression this decision exists to remove.
 			name:  "a roll, scale or upgrade we asked for keeps Running",
 			prior: served(), anySTSFound: true, changing: true,
-			want: neo4jv1beta1.Neo4jPhaseRunning,
+			want: neo4jv1.Neo4jPhaseRunning,
 		},
 		{
 			name:  "members lost with nothing in flight is a degradation",
 			prior: served(), anySTSFound: true,
-			want: neo4jv1beta1.Neo4jPhaseDegraded,
+			want: neo4jv1.Neo4jPhaseDegraded,
 		},
 		{
 			// Documented, not incidental: the no-StatefulSet branch is tested before establishment,
@@ -72,7 +72,7 @@ func TestNextPhase(t *testing.T) {
 			// pipeline re-applies it before the writer runs, so this is a hand-edit only.
 			name:  "an established CR whose StatefulSet vanished falls back to Provisioning",
 			prior: served(),
-			want:  neo4jv1beta1.Neo4jPhaseProvisioning,
+			want:  neo4jv1.Neo4jPhaseProvisioning,
 		},
 	}
 	for _, tc := range cases {
@@ -101,9 +101,9 @@ func TestChangeInFlight(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			neo4j := &neo4jv1beta1.Neo4j{
+			neo4j := &neo4jv1.Neo4j{
 				ObjectMeta: metav1.ObjectMeta{Generation: tc.generation},
-				Status:     neo4jv1beta1.Neo4jStatus{ObservedGeneration: tc.observed},
+				Status:     neo4jv1.Neo4jStatus{ObservedGeneration: tc.observed},
 			}
 			if got := changeInFlight(neo4j, tc.rolling, tc.drainPending); got != tc.want {
 				t.Errorf("changeInFlight() = %v, want %v", got, tc.want)
@@ -142,17 +142,17 @@ func TestObserveAndWritePhaseFromRevisions(t *testing.T) {
 	cases := []struct {
 		name            string
 		current, update string
-		want            neo4jv1beta1.Neo4jPhase
+		want            neo4jv1.Neo4jPhase
 	}{
-		{name: "rolling after a config change", current: "rev-1", update: "rev-2", want: neo4jv1beta1.Neo4jPhaseRunning},
-		{name: "not rolling — a member was lost", current: "rev-1", update: "rev-1", want: neo4jv1beta1.Neo4jPhaseDegraded},
+		{name: "rolling after a config change", current: "rev-1", update: "rev-2", want: neo4jv1.Neo4jPhaseRunning},
+		{name: "not rolling — a member was lost", current: "rev-1", update: "rev-1", want: neo4jv1.Neo4jPhaseDegraded},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
 			_ = appsv1.AddToScheme(scheme)
-			_ = neo4jv1beta1.AddToScheme(scheme)
+			_ = neo4jv1.AddToScheme(scheme)
 
 			neo4j := standaloneWithDynamicSC("dev", "default", "")
 			neo4j.Spec.Version = "2026.05.0"
@@ -171,9 +171,9 @@ func TestObserveAndWritePhaseFromRevisions(t *testing.T) {
 			}
 			c := fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(neo4j, sts, pvc).
-				WithStatusSubresource(&neo4jv1beta1.Neo4j{}).Build()
+				WithStatusSubresource(&neo4jv1.Neo4j{}).Build()
 
-			got := &neo4jv1beta1.Neo4j{}
+			got := &neo4jv1.Neo4j{}
 			if err := c.Get(t.Context(), types.NamespacedName{Name: "dev", Namespace: "default"}, got); err != nil {
 				t.Fatalf("Get: %v", err)
 			}
@@ -199,7 +199,7 @@ func TestObserveAndWriteAdvancesObservedGenerationOnSuccess(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := standaloneWithDynamicSC("dev", "default", "")
 	neo4j.Spec.Version = "2026.05.0"
@@ -220,9 +220,9 @@ func TestObserveAndWriteAdvancesObservedGenerationOnSuccess(t *testing.T) {
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(neo4j, sts, pvc).
-		WithStatusSubresource(&neo4jv1beta1.Neo4j{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4j{}).Build()
 
-	got := &neo4jv1beta1.Neo4j{}
+	got := &neo4jv1.Neo4j{}
 	if err := c.Get(t.Context(), types.NamespacedName{Name: "dev", Namespace: "default"}, got); err != nil {
 		t.Fatalf("Get: %v", err)
 	}

@@ -10,7 +10,7 @@
 # Community is Standalone only. Asking for topology.mode: Cluster, features.backup or
 # features.monitoring.prometheus here is rejected at admission (EDT-001, EDT-007, EDT-008) rather
 # than left to crash-loop, since a Community server refuses to start on Enterprise settings.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-community

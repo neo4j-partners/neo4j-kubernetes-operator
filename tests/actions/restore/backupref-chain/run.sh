@@ -62,7 +62,7 @@ run_backup() {
   local name="$1" type="$2"
   log "Applying ${type} Neo4jBackup ${name} → pvc ${CLAIM}"
   kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: ${name}
@@ -110,7 +110,7 @@ sys "DROP ROLE ${META_ROLE};"
 
 log "Applying Neo4jRestore ${RESTORE_NAME} (backupRef=${INC_BACKUP}, overwrite+metadata ${TARGET_DB})"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata:
   name: ${RESTORE_NAME}

@@ -1,6 +1,6 @@
 # `Neo4j` — status model
 
-**API**: `neo4j.com/v1beta1` · **Subresource**: `status`  
+**API**: `neo4j.com/v1` · **Subresource**: `status`  
 **Sources**: [BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [ADR-004](../../decision-records/architecture/004-status-and-conditions.md) · [ADR-014](../../decision-records/architecture/014-operator-observability.md) · `OP-1-003` / `AC-OP-STATUS-*`
 
 ---

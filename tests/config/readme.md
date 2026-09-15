@@ -95,4 +95,4 @@ E2E profile=happy-path cloud=local-kind operator=local-image neo4j=standalone-mi
 
 ## Operator vs tests/old
 
-This operator uses `neo4js.neo4j.com` / `Neo4j` (`neo4j.com/v1beta1`). Do not reuse `tests/old` CR kinds (`Neo4jEnterpriseStandalone`, etc.).
+This operator uses `neo4js.neo4j.com` / `Neo4j` (`neo4j.com/v1`). Do not reuse `tests/old` CR kinds (`Neo4jEnterpriseStandalone`, etc.).

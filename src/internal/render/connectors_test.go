@@ -3,23 +3,23 @@ package render
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestClientExposeDefaultsAndFacade(t *testing.T) {
 	httpFacade := int32(80)
 	https := int32(7473)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{
 					HTTPS: &https,
 				},
-				Service: &neo4jv1beta1.ConnectivityServiceSpec{
-					Ports: &neo4jv1beta1.ServicePortsSpec{HTTP: &httpFacade},
+				Service: &neo4jv1.ConnectivityServiceSpec{
+					Ports: &neo4jv1.ServicePortsSpec{HTTP: &httpFacade},
 				},
 			},
 		},
@@ -41,10 +41,10 @@ func TestClientExposeDefaultsAndFacade(t *testing.T) {
 }
 
 func TestShouldCreateAdminServiceGates(t *testing.T) {
-	standalone := &neo4jv1beta1.Neo4j{
+	standalone := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	if StandaloneContext(standalone).ShouldCreateAdminService() {
@@ -52,16 +52,16 @@ func TestShouldCreateAdminServiceGates(t *testing.T) {
 	}
 
 	withBackup := standalone.DeepCopy()
-	withBackup.Spec.Features = &neo4jv1beta1.FeaturesSpec{
-		Backup: &neo4jv1beta1.BackupFeatureSpec{Enabled: true},
+	withBackup.Spec.Features = &neo4jv1.FeaturesSpec{
+		Backup: &neo4jv1.BackupFeatureSpec{Enabled: true},
 	}
 	if !StandaloneContext(withBackup).ShouldCreateAdminService() {
 		t.Fatal("expected admin when backup enabled")
 	}
 
 	cluster := standalone.DeepCopy()
-	cluster.Spec.Topology.Mode = neo4jv1beta1.TopologyModeCluster
-	cluster.Spec.Topology.Primaries = &neo4jv1beta1.PrimariesSpec{Members: 3}
+	cluster.Spec.Topology.Mode = neo4jv1.TopologyModeCluster
+	cluster.Spec.Topology.Primaries = &neo4jv1.PrimariesSpec{Members: 3}
 	if !ContextForPool(cluster, PoolPrimary).ShouldCreateAdminService() {
 		t.Fatal("expected admin in cluster mode")
 	}

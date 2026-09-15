@@ -3,21 +3,21 @@ package neo4j
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/persistence"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/trust"
 )
 
 func TestStandalonePersistenceStep(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -30,7 +30,7 @@ func TestStandalonePersistenceStep(t *testing.T) {
 }
 
 func TestTrustNoopWhenDisabled(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{}
+	neo4j := &neo4jv1.Neo4j{}
 	out := trust.New(nil, nil).Reconcile(t.Context(), neo4j)
 	if out.Err != nil {
 		t.Fatalf("trust step failed: %v", out.Err)

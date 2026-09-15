@@ -27,7 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
@@ -55,7 +55,7 @@ const (
 )
 
 // JobName is the deterministic Job name for a Neo4jBackup (owner-referenced by it).
-func JobName(backup *neo4jv1beta1.Neo4jBackup) string { return backup.Name + "-backup" }
+func JobName(backup *neo4jv1.Neo4jBackup) string { return backup.Name + "-backup" }
 
 // SeedableDatabases reports the databases a PVC-destination backup exposes as file: seeds, and
 // true when that applies at all. Only explicitly named databases on a PVC qualify: a wildcard
@@ -63,8 +63,8 @@ func JobName(backup *neo4jv1beta1.Neo4jBackup) string { return backup.Name + "-b
 // object-store destinations seed from their URL directly. Incrementals qualify too — restore
 // seeds the artifact this backup produced (the chain's last link) and Neo4j replays the whole
 // chain from the same directory (ADR-015).
-func SeedableDatabases(backup *neo4jv1beta1.Neo4jBackup) ([]string, bool) {
-	if backup.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
+func SeedableDatabases(backup *neo4jv1.Neo4jBackup) ([]string, bool) {
+	if backup.Spec.Destination.Type != neo4jv1.BackupDestinationPVC {
 		return nil, false
 	}
 	dbs := backup.Spec.Databases
@@ -82,8 +82,8 @@ func SeedableDatabases(backup *neo4jv1beta1.Neo4jBackup) ([]string, bool) {
 // DestinationURI is the stable, user-facing location of a backup's artifacts, recorded on
 // each Neo4jBackup.status.artifacts[] so Neo4jRestore.source.backupRef can resolve it (BDR-014
 // §13). Object stores report the url; a PVC reports pvc://<claimName>.
-func DestinationURI(d neo4jv1beta1.BackupDestination) string {
-	if d.Type == neo4jv1beta1.BackupDestinationPVC {
+func DestinationURI(d neo4jv1.BackupDestination) string {
+	if d.Type == neo4jv1.BackupDestinationPVC {
 		if d.PVC != nil && d.PVC.ClaimName != "" {
 			return "pvc://" + d.PVC.ClaimName
 		}
@@ -93,11 +93,11 @@ func DestinationURI(d neo4jv1beta1.BackupDestination) string {
 }
 
 // AdminType maps the API backup type to the neo4j-admin --type value (BDR-014 §9).
-func AdminType(t neo4jv1beta1.BackupType) string {
+func AdminType(t neo4jv1.BackupType) string {
 	switch t {
-	case neo4jv1beta1.BackupTypeFull:
+	case neo4jv1.BackupTypeFull:
 		return "FULL"
-	case neo4jv1beta1.BackupTypeIncremental:
+	case neo4jv1.BackupTypeIncremental:
 		return "DIFF"
 	default:
 		return "AUTO"
@@ -118,7 +118,7 @@ func FromAddress(ctx render.Context) string {
 // object-store (nested prefix) destinations (ADR-016 chain isolation); object-store retention/prune
 // remains a later increment. It is a pure function; the owner/controller reference is applied by
 // shared.Apply.
-func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chainSubDir string) (*batchv1.Job, error) {
+func BackupJob(neo4j *neo4jv1.Neo4j, backup *neo4jv1.Neo4jBackup, chainSubDir string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
 	toPath, volumes, mounts, err := destination(backup.Spec.Destination, chainSubDir)
@@ -196,8 +196,8 @@ func BackupJob(neo4j *neo4jv1beta1.Neo4j, backup *neo4jv1beta1.Neo4jBackup, chai
 // A PVC is mounted and the path is the mount; an object store maps to its url. Either way an
 // optional per-chain sub-directory (subDir) is nested under it so a schedule's chains are isolated
 // (on disk for PVC, as a key prefix for object stores).
-func destination(d neo4jv1beta1.BackupDestination, subDir string) (toPath string, volumes []corev1.Volume, mounts []corev1.VolumeMount, err error) {
-	if d.Type == neo4jv1beta1.BackupDestinationPVC {
+func destination(d neo4jv1.BackupDestination, subDir string) (toPath string, volumes []corev1.Volume, mounts []corev1.VolumeMount, err error) {
+	if d.Type == neo4jv1.BackupDestinationPVC {
 		if d.PVC == nil || d.PVC.ClaimName == "" {
 			// ponytail: PVC provisioning (size/storageClassName) is a follow-up; require an
 			// existing claim for now. Upgrade path: render a PVC like BDR-005 dynamic volumes.
@@ -275,7 +275,7 @@ func backupScript(args []string, toPath string, dbs []string, chainSubDir string
 
 // backupArgs composes the neo4j-admin argument vector from operator-owned flags, typed
 // options, and the allow-listed extraArgs (BDR-014 §12 / ADR-015).
-func backupArgs(ctx render.Context, backup *neo4jv1beta1.Neo4jBackup, toPath string) []string {
+func backupArgs(ctx render.Context, backup *neo4jv1.Neo4jBackup, toPath string) []string {
 	args := []string{
 		"database", "backup",
 		"--from=" + FromAddress(ctx),

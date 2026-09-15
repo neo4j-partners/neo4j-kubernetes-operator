@@ -134,7 +134,7 @@ helm-uninstall: ## helm uninstall operator (keeps CRD and Neo4j workloads)
 
 .PHONY: sample-standalone
 sample-standalone: install ## Apply Standalone sample (default namespace)
-	kubectl apply -f config/samples/neo4j_v1beta1_neo4j.yaml
+	kubectl apply -f config/samples/neo4j_v1_neo4j.yaml
 
 .PHONY: test-e2e
 test-e2e: ## Run e2e suite (CLOUD, E2E_PROFILE=happy-path|matrix|explicit, SUITE=)

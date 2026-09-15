@@ -47,7 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -93,7 +93,7 @@ func NewReconciler(mgr ctrl.Manager) *ScheduleReconciler {
 func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4jbackupschedule")
 
-	var sched neo4jv1beta1.Neo4jBackupSchedule
+	var sched neo4jv1.Neo4jBackupSchedule
 	if err := r.Get(ctx, req.NamespacedName, &sched); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -119,7 +119,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	var neo4j neo4jv1beta1.Neo4j
+	var neo4j neo4jv1.Neo4j
 	if err := r.Get(ctx, types.NamespacedName{Name: sched.Spec.Neo4jRef.Name, Namespace: sched.Namespace}, &neo4j); err != nil {
 		if apierrors.IsNotFound(err) {
 			return r.retryable(ctx, &sched, oracle.ReasonScheduleTargetNotFound,
@@ -127,7 +127,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		return ctrl.Result{}, err
 	}
-	if neo4j.Spec.Edition != neo4jv1beta1.EditionEnterprise {
+	if neo4j.Spec.Edition != neo4jv1.EditionEnterprise {
 		return r.fail(ctx, &sched, oracle.ReasonScheduleEditionUnsupported,
 			"backup requires Enterprise edition; target is "+string(neo4j.Spec.Edition))
 	}
@@ -137,7 +137,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// FULL cadence — a full anchors a new chain.
 	if fire, scheduled := due(fullSched, baseTime(sched.Status.LastFullTime, sched.CreationTimestamp), now); fire {
 		chain := chainID(&sched, scheduled)
-		name, err := r.emit(ctx, &sched, &neo4j, neo4jv1beta1.BackupTypeFull, chain, scheduled)
+		name, err := r.emit(ctx, &sched, &neo4j, neo4jv1.BackupTypeFull, chain, scheduled)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -168,7 +168,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					return ctrl.Result{}, err
 				}
 				if ready {
-					name, err := r.emit(ctx, &sched, &neo4j, neo4jv1beta1.BackupTypeIncremental, sched.Status.CurrentChain, scheduled)
+					name, err := r.emit(ctx, &sched, &neo4j, neo4jv1.BackupTypeIncremental, sched.Status.CurrentChain, scheduled)
 					if err != nil {
 						return ctrl.Result{}, err
 					}
@@ -221,16 +221,16 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 // emit creates one owned Neo4jBackup for a cadence tick, named by the scheduled minute so a
 // re-reconcile of the same tick is a no-op (AlreadyExists → skip). Returns the backup name.
-func (r *ScheduleReconciler) emit(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j, typ neo4jv1beta1.BackupType, chain string, scheduled time.Time) (string, error) {
+func (r *ScheduleReconciler) emit(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, neo4j *neo4jv1.Neo4j, typ neo4jv1.BackupType, chain string, scheduled time.Time) (string, error) {
 	tmpl := sched.Spec.BackupTemplate
 	name := backupName(sched, typ, scheduled)
-	b := &neo4jv1beta1.Neo4jBackup{
+	b := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: sched.Namespace,
 			Labels:    emitLabels(sched, typ, chain, tmpl.Databases),
 		},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
+		Spec: neo4jv1.Neo4jBackupSpec{
 			Neo4jRef:    sched.Spec.Neo4jRef,
 			Databases:   tmpl.Databases,
 			Destination: tmpl.Destination,
@@ -258,21 +258,21 @@ func (r *ScheduleReconciler) emit(ctx context.Context, sched *neo4jv1beta1.Neo4j
 // recovered full. It is named <chain>-agg (idempotent: a re-reconcile is AlreadyExists → skip) and
 // points at tip — the chain's last link — which neo4j-admin walks back to the full. The backup
 // reconciler runs the Job and catalogs the recovered full; compaction then prunes the links.
-func (r *ScheduleReconciler) emitAggregate(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, chain, tip string) (string, error) {
+func (r *ScheduleReconciler) emitAggregate(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, chain, tip string) (string, error) {
 	tmpl := sched.Spec.BackupTemplate
 	name := aggregateName(chain)
-	b := &neo4jv1beta1.Neo4jBackup{
+	b := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: sched.Namespace,
-			Labels:    emitLabels(sched, neo4jv1beta1.BackupTypeAggregate, chain, tmpl.Databases),
+			Labels:    emitLabels(sched, neo4jv1.BackupTypeAggregate, chain, tmpl.Databases),
 		},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
+		Spec: neo4jv1.Neo4jBackupSpec{
 			Neo4jRef:    sched.Spec.Neo4jRef,
 			Databases:   tmpl.Databases,
 			Destination: tmpl.Destination,
-			Type:        neo4jv1beta1.BackupTypeAggregate,
-			Source:      &neo4jv1beta1.BackupSource{BackupRef: tip},
+			Type:        neo4jv1.BackupTypeAggregate,
+			Source:      &neo4jv1.BackupSource{BackupRef: tip},
 			Options:     tmpl.Options,
 		},
 	}
@@ -300,18 +300,18 @@ func aggregateName(chain string) string { return chain + "-agg" }
 // the schedule holds incrementals until it is true. The full's object name is deterministic —
 // <chain>-f — so this is a single Get, not a list.
 func (r *ScheduleReconciler) chainFullReady(ctx context.Context, ns, chain string) (bool, error) {
-	var full neo4jv1beta1.Neo4jBackup
+	var full neo4jv1.Neo4jBackup
 	switch err := r.Get(ctx, types.NamespacedName{Name: chain + "-f", Namespace: ns}, &full); {
 	case apierrors.IsNotFound(err):
 		return false, nil
 	case err != nil:
 		return false, err
 	default:
-		return full.Status.Phase == neo4jv1beta1.RunPhaseSucceeded, nil
+		return full.Status.Phase == neo4jv1.RunPhaseSucceeded, nil
 	}
 }
 
-func emitLabels(sched *neo4jv1beta1.Neo4jBackupSchedule, typ neo4jv1beta1.BackupType, chain string, dbs []string) map[string]string {
+func emitLabels(sched *neo4jv1.Neo4jBackupSchedule, typ neo4jv1.BackupType, chain string, dbs []string) map[string]string {
 	l := map[string]string{
 		render.LabelManagedBy: render.ManagedByValue,
 		LabelSchedule:         sched.Name,
@@ -359,15 +359,15 @@ func requeueDelay(next, now time.Time) time.Duration {
 }
 
 // chainID names the chain a full anchors: <schedule>-<UTC minute>. Incrementals reuse it.
-func chainID(sched *neo4jv1beta1.Neo4jBackupSchedule, scheduled time.Time) string {
+func chainID(sched *neo4jv1.Neo4jBackupSchedule, scheduled time.Time) string {
 	return sched.Name + "-" + scheduled.UTC().Format("20060102-1504")
 }
 
 // backupName is the deterministic per-tick object name (idempotency key). Minute granularity
 // matches cron's finest resolution.
-func backupName(sched *neo4jv1beta1.Neo4jBackupSchedule, typ neo4jv1beta1.BackupType, scheduled time.Time) string {
+func backupName(sched *neo4jv1.Neo4jBackupSchedule, typ neo4jv1.BackupType, scheduled time.Time) string {
 	suffix := "f"
-	if typ == neo4jv1beta1.BackupTypeIncremental {
+	if typ == neo4jv1.BackupTypeIncremental {
 		suffix = "i"
 	}
 	return sched.Name + "-" + scheduled.UTC().Format("20060102-1504") + "-" + suffix
@@ -378,14 +378,14 @@ func backupName(sched *neo4jv1beta1.Neo4jBackupSchedule, typ neo4jv1beta1.Backup
 // prunes the chain's original links (keeping the recovered full — "preserve-then-clean"). It drains
 // one chain's action per reconcile and returns a short requeue while work is in flight. The active
 // chain is never touched, and a chain full.retention is about to drop is left to that wholesale path.
-func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j) (time.Duration, error) {
+func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, neo4j *neo4jv1.Neo4j) (time.Duration, error) {
 	if sched.Spec.Aggregate == nil || !sched.Spec.Aggregate.Enabled {
 		return 0, nil
 	}
 
 	// ponytail: a second List per reconcile (pruneExpiredChains lists too). Cheap against the
 	// cached client; fold into one pass if it ever shows up hot.
-	var backups neo4jv1beta1.Neo4jBackupList
+	var backups neo4jv1.Neo4jBackupList
 	if err := r.List(ctx, &backups, client.InNamespace(sched.Namespace), client.MatchingLabels{LabelSchedule: sched.Name}); err != nil {
 		return 0, err
 	}
@@ -418,7 +418,7 @@ func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo
 		}
 
 		switch agg.Status.Phase {
-		case neo4jv1beta1.RunPhaseFailed:
+		case neo4jv1.RunPhaseFailed:
 			// Keep the links (the chain is still fully restorable); surface it and move on. Deleting
 			// the failed aggregate record lets a later reconcile retry.
 			if r.Recorder != nil {
@@ -426,7 +426,7 @@ func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo
 					"aggregate of chain "+chain+" failed: "+agg.Status.Message)
 			}
 			continue
-		case neo4jv1beta1.RunPhaseSucceeded:
+		case neo4jv1.RunPhaseSucceeded:
 			if len(links) == 0 {
 				continue // already compacted
 			}
@@ -441,7 +441,7 @@ func (r *ScheduleReconciler) reconcileCompaction(ctx context.Context, sched *neo
 // compactChain deletes a chain's original link artifacts (files then records) once its recovered
 // full is cataloged, keeping the recovered full. Files-before-records is the same crash-safe order
 // as expiry pruning; the recovered full (a different record) is never in this set.
-func (r *ScheduleReconciler) compactChain(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j, chain string, links []*neo4jv1beta1.Neo4jBackup, agg *neo4jv1beta1.Neo4jBackup) (time.Duration, error) {
+func (r *ScheduleReconciler) compactChain(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, neo4j *neo4jv1.Neo4j, chain string, links []*neo4jv1.Neo4jBackup, agg *neo4jv1.Neo4jBackup) (time.Duration, error) {
 	claim, files, objectStore := pvcArtifacts(links)
 	// PVC: delete the link files via an owned Job before the records (crash-safe order). Object store:
 	// the compaction aggregate ran with --keep-old-backup=false, so neo4j-admin already deleted the
@@ -500,9 +500,9 @@ func compactJobName(chain string) string { return "compact-" + chain }
 
 // splitChain separates a chain's backups into ordinary links (Full/Incremental) and its aggregate
 // recovered-full record, if one has been emitted.
-func splitChain(items []*neo4jv1beta1.Neo4jBackup) (links []*neo4jv1beta1.Neo4jBackup, aggregate *neo4jv1beta1.Neo4jBackup) {
+func splitChain(items []*neo4jv1.Neo4jBackup) (links []*neo4jv1.Neo4jBackup, aggregate *neo4jv1.Neo4jBackup) {
 	for _, b := range items {
-		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+		if b.Spec.Type == neo4jv1.BackupTypeAggregate {
 			aggregate = b
 			continue
 		}
@@ -511,9 +511,9 @@ func splitChain(items []*neo4jv1beta1.Neo4jBackup) (links []*neo4jv1beta1.Neo4jB
 	return links, aggregate
 }
 
-func hasIncremental(links []*neo4jv1beta1.Neo4jBackup) bool {
+func hasIncremental(links []*neo4jv1.Neo4jBackup) bool {
 	for _, b := range links {
-		if b.Spec.Type == neo4jv1beta1.BackupTypeIncremental {
+		if b.Spec.Type == neo4jv1.BackupTypeIncremental {
 			return true
 		}
 	}
@@ -522,9 +522,9 @@ func hasIncremental(links []*neo4jv1beta1.Neo4jBackup) bool {
 
 // allSucceeded is true only when every link is terminal-Succeeded (and there is at least one) — an
 // aggregate must never run over a chain with a still-running or failed link.
-func allSucceeded(links []*neo4jv1beta1.Neo4jBackup) bool {
+func allSucceeded(links []*neo4jv1.Neo4jBackup) bool {
 	for _, b := range links {
-		if b.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+		if b.Status.Phase != neo4jv1.RunPhaseSucceeded {
 			return false
 		}
 	}
@@ -533,8 +533,8 @@ func allSucceeded(links []*neo4jv1beta1.Neo4jBackup) bool {
 
 // chainTipName is the chain's last link — newest by creation time (ties broken by name) — which
 // neo4j-admin walks back to the full when aggregating.
-func chainTipName(links []*neo4jv1beta1.Neo4jBackup) string {
-	var tip *neo4jv1beta1.Neo4jBackup
+func chainTipName(links []*neo4jv1.Neo4jBackup) string {
+	var tip *neo4jv1.Neo4jBackup
 	for _, b := range links {
 		switch {
 		case tip == nil:
@@ -553,7 +553,7 @@ func chainTipName(links []*neo4jv1beta1.Neo4jBackup) string {
 
 // closedChainsOldestFirst lists every chain except the active one, oldest anchor first, so
 // compaction drains the oldest closed chain first.
-func closedChainsOldestFirst(chains map[string][]*neo4jv1beta1.Neo4jBackup, current string) []string {
+func closedChainsOldestFirst(chains map[string][]*neo4jv1.Neo4jBackup, current string) []string {
 	type ci struct {
 		id string
 		at time.Time
@@ -583,12 +583,12 @@ func closedChainsOldestFirst(chains map[string][]*neo4jv1beta1.Neo4jBackup, curr
 // oldest expired chain per reconcile (retention is not latency-sensitive) and returns a requeue
 // delay > 0 while a prune Job is in flight or more chains remain. incremental.retention is realized
 // by the aggregate cadence, not here — individual mid-chain links are never deleted.
-func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, neo4j *neo4jv1beta1.Neo4j) (time.Duration, error) {
+func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, neo4j *neo4jv1.Neo4j) (time.Duration, error) {
 	if sched.Spec.Full.Retention == nil {
 		return 0, nil
 	}
 
-	var backups neo4jv1beta1.Neo4jBackupList
+	var backups neo4jv1.Neo4jBackupList
 	if err := r.List(ctx, &backups, client.InNamespace(sched.Namespace), client.MatchingLabels{LabelSchedule: sched.Name}); err != nil {
 		return 0, err
 	}
@@ -605,7 +605,7 @@ func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4
 
 	// Never prune a chain that still has a run in flight — wait for it to finish.
 	for _, b := range items {
-		if b.Status.Phase != neo4jv1beta1.RunPhaseSucceeded && b.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+		if b.Status.Phase != neo4jv1.RunPhaseSucceeded && b.Status.Phase != neo4jv1.RunPhaseFailed {
 			return 0, nil
 		}
 	}
@@ -686,8 +686,8 @@ func (r *ScheduleReconciler) pruneExpiredChains(ctx context.Context, sched *neo4
 
 // groupChains buckets a schedule's backups by their chain label. Backups without one (a hand-made
 // Neo4jBackup that happens to carry the schedule label) are ignored.
-func groupChains(items []neo4jv1beta1.Neo4jBackup) map[string][]*neo4jv1beta1.Neo4jBackup {
-	chains := map[string][]*neo4jv1beta1.Neo4jBackup{}
+func groupChains(items []neo4jv1.Neo4jBackup) map[string][]*neo4jv1.Neo4jBackup {
+	chains := map[string][]*neo4jv1.Neo4jBackup{}
 	for i := range items {
 		if chain := items[i].Labels[LabelChain]; chain != "" {
 			chains[chain] = append(chains[chain], &items[i])
@@ -699,7 +699,7 @@ func groupChains(items []neo4jv1beta1.Neo4jBackup) map[string][]*neo4jv1beta1.Ne
 // expiredChains returns the chain ids that fall outside full.retention, oldest-first, never
 // including the active chain. keepLast counts whole chains (the active one included in the budget);
 // keepDays keeps chains whose anchoring full is younger than the window.
-func expiredChains(chains map[string][]*neo4jv1beta1.Neo4jBackup, ret *neo4jv1beta1.BackupRetention, current string, now time.Time) []string {
+func expiredChains(chains map[string][]*neo4jv1.Neo4jBackup, ret *neo4jv1.BackupRetention, current string, now time.Time) []string {
 	type chainInfo struct {
 		id string
 		at time.Time
@@ -753,7 +753,7 @@ func expiredChains(chains map[string][]*neo4jv1beta1.Neo4jBackup, ret *neo4jv1be
 }
 
 // chainTime is the chain's anchoring point: the earliest creation among its backups (the full).
-func chainTime(items []*neo4jv1beta1.Neo4jBackup) time.Time {
+func chainTime(items []*neo4jv1.Neo4jBackup) time.Time {
 	var t time.Time
 	for _, b := range items {
 		ct := b.CreationTimestamp.Time
@@ -767,9 +767,9 @@ func chainTime(items []*neo4jv1beta1.Neo4jBackup) time.Time {
 // pvcArtifacts collects the recorded artifact filenames and the claim for a chain. objectStore is
 // true if any backup targets object storage (which the operator cannot prune yet) — a chain shares
 // one destination, so this is all-or-nothing in practice.
-func pvcArtifacts(items []*neo4jv1beta1.Neo4jBackup) (claim string, files []string, objectStore bool) {
+func pvcArtifacts(items []*neo4jv1.Neo4jBackup) (claim string, files []string, objectStore bool) {
 	for _, b := range items {
-		if b.Spec.Destination.Type != neo4jv1beta1.BackupDestinationPVC {
+		if b.Spec.Destination.Type != neo4jv1.BackupDestinationPVC {
 			return "", nil, true
 		}
 		if b.Spec.Destination.PVC != nil && b.Spec.Destination.PVC.ClaimName != "" {
@@ -787,7 +787,7 @@ func pvcArtifacts(items []*neo4jv1beta1.Neo4jBackup) (claim string, files []stri
 // objectChainURL is the object-store folder a chain's backups were written to (the per-chain prefix,
 // recorded on status.artifacts[].uri). All of a chain's backups share it, so the first non-empty uri
 // wins. Empty when no object-store artifact has been recorded yet (nothing to purge).
-func objectChainURL(items []*neo4jv1beta1.Neo4jBackup) string {
+func objectChainURL(items []*neo4jv1.Neo4jBackup) string {
 	for _, b := range items {
 		for _, a := range b.Status.Artifacts {
 			if a.URI != "" {
@@ -805,7 +805,7 @@ func (r *ScheduleReconciler) now() time.Time {
 	return time.Now()
 }
 
-func (r *ScheduleReconciler) fail(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, reason oracle.Reason, msg string) (ctrl.Result, error) {
+func (r *ScheduleReconciler) fail(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, reason oracle.Reason, msg string) (ctrl.Result, error) {
 	r.setCondition(sched, metav1.ConditionFalse, reason, msg)
 	if r.Recorder != nil {
 		r.Recorder.Event(sched, corev1.EventTypeWarning, reason.String(), msg)
@@ -813,7 +813,7 @@ func (r *ScheduleReconciler) fail(ctx context.Context, sched *neo4jv1beta1.Neo4j
 	return ctrl.Result{}, r.writeStatus(ctx, sched)
 }
 
-func (r *ScheduleReconciler) retryable(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule, reason oracle.Reason, msg string) (ctrl.Result, error) {
+func (r *ScheduleReconciler) retryable(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule, reason oracle.Reason, msg string) (ctrl.Result, error) {
 	r.setCondition(sched, metav1.ConditionFalse, reason, msg)
 	if err := r.writeStatus(ctx, sched); err != nil {
 		return ctrl.Result{}, err
@@ -821,7 +821,7 @@ func (r *ScheduleReconciler) retryable(ctx context.Context, sched *neo4jv1beta1.
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func (r *ScheduleReconciler) setCondition(sched *neo4jv1beta1.Neo4jBackupSchedule, status metav1.ConditionStatus, reason oracle.Reason, msg string) {
+func (r *ScheduleReconciler) setCondition(sched *neo4jv1.Neo4jBackupSchedule, status metav1.ConditionStatus, reason oracle.Reason, msg string) {
 	meta.SetStatusCondition(&sched.Status.Conditions, metav1.Condition{
 		Type:               oracle.ConditionScheduleReady.String(),
 		Status:             status,
@@ -832,7 +832,7 @@ func (r *ScheduleReconciler) setCondition(sched *neo4jv1beta1.Neo4jBackupSchedul
 	})
 }
 
-func (r *ScheduleReconciler) writeStatus(ctx context.Context, sched *neo4jv1beta1.Neo4jBackupSchedule) error {
+func (r *ScheduleReconciler) writeStatus(ctx context.Context, sched *neo4jv1.Neo4jBackupSchedule) error {
 	sched.Status.ObservedGeneration = sched.Generation
 	if err := r.Status().Update(ctx, sched); err != nil {
 		if apierrors.IsConflict(err) {
@@ -845,8 +845,8 @@ func (r *ScheduleReconciler) writeStatus(ctx context.Context, sched *neo4jv1beta
 
 func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&neo4jv1beta1.Neo4jBackupSchedule{}).
-		Owns(&neo4jv1beta1.Neo4jBackup{}).
+		For(&neo4jv1.Neo4jBackupSchedule{}).
+		Owns(&neo4jv1.Neo4jBackup{}).
 		Owns(&batchv1.Job{}).
 		Complete(r)
 }

@@ -47,7 +47,7 @@ log "Seed artifact: ${artifact}"
 
 log "Applying Neo4jRestore ${RESTORE_NAME} (seed ${RESTORED_DB} from file:${artifact})"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata:
   name: ${RESTORE_NAME}

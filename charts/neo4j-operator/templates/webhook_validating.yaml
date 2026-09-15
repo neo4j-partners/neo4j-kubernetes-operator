@@ -19,7 +19,7 @@ webhooks:
     service:
       name: neo4j-operator-webhook-service
       namespace: {{ .Release.Namespace }}
-      path: /validate-neo4j-com-v1beta1-neo4j
+      path: /validate-neo4j-com-v1-neo4j
     {{- if .Values.webhook.certManager.enabled }}
     # Placeholder until cert-manager cainjector writes the real CA.
     caBundle: Cg==
@@ -31,7 +31,7 @@ webhooks:
   timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
   rules:
   - apiGroups: ["neo4j.com"]
-    apiVersions: ["v1beta1"]
+    apiVersions: ["v1"]
     operations: ["CREATE", "UPDATE"]
     resources: ["neo4js"]
     scope: Namespaced

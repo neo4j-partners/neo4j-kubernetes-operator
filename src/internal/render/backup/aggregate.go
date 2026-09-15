@@ -25,7 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
@@ -41,7 +41,7 @@ type AggregateInputs struct {
 	DBArtifacts map[string]string // PVC only: db -> artifact path (chain's last link)
 	ObjectURL   string
 	Databases   []string                        // object store: db operands to aggregate
-	Credentials *neo4jv1beta1.BackupCredentials // object store: static-key Secret (nil → workload identity)
+	Credentials *neo4jv1.BackupCredentials // object store: static-key Secret (nil → workload identity)
 	// DeleteOldChain runs the object-store aggregate with --keep-old-backup=false, so neo4j-admin
 	// deletes the source chain's original full+increments from the bucket after producing the
 	// recovered full. It is set only for schedule-managed compaction (which owns the chain and wants
@@ -62,7 +62,7 @@ type AggregateInputs struct {
 //
 // --keep-old-backup=true is mandatory: aggregation must never delete the user's existing chain
 // (it is a read of the backups plus a new artifact, not a rewrite of them).
-func AggregateJob(neo4j *neo4jv1beta1.Neo4j, jobName string, in AggregateInputs) (*batchv1.Job, error) {
+func AggregateJob(neo4j *neo4jv1.Neo4j, jobName string, in AggregateInputs) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
 	var (
@@ -74,9 +74,9 @@ func AggregateJob(neo4j *neo4jv1beta1.Neo4j, jobName string, in AggregateInputs)
 	case in.PVCClaim != "":
 		// Reuse the backup Job's PVC wiring so the aggregate reads/writes at the same sub-path the
 		// backup wrote to (storage.BackupsSubPath) — otherwise it would aggregate an empty directory.
-		toPath, vols, mnts, err := destination(neo4jv1beta1.BackupDestination{
-			Type: neo4jv1beta1.BackupDestinationPVC,
-			PVC:  &neo4jv1beta1.BackupPVC{ClaimName: in.PVCClaim},
+		toPath, vols, mnts, err := destination(neo4jv1.BackupDestination{
+			Type: neo4jv1.BackupDestinationPVC,
+			PVC:  &neo4jv1.BackupPVC{ClaimName: in.PVCClaim},
 		}, "")
 		if err != nil {
 			return nil, err

@@ -24,7 +24,7 @@ subresource, so `kubectl scale neo4j <name> --replicas=N` adjusts
 ## Minimal resource
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

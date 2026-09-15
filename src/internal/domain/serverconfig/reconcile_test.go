@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 )
@@ -21,12 +21,12 @@ func TestConfigReconcileUpdatesConfigMapAndRollsWorkload(t *testing.T) {
 	if err := scheme.AddToScheme(s); err != nil {
 		t.Fatalf("core scheme: %v", err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatalf("neo4j scheme: %v", err)
 	}
 
 	neo4j := standaloneNeo4j(t)
-	neo4j.Spec.Config = &neo4jv1beta1.ConfigSpec{
+	neo4j.Spec.Config = &neo4jv1.ConfigSpec{
 		Neo4j: map[string]string{"db.transaction.timeout": "42s"},
 	}
 
@@ -91,7 +91,7 @@ func TestDeleteConfigMapSkipsUnowned(t *testing.T) {
 	if err := scheme.AddToScheme(s); err != nil {
 		t.Fatalf("core scheme: %v", err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatalf("neo4j scheme: %v", err)
 	}
 	neo4j := standaloneNeo4j(t)
@@ -116,22 +116,22 @@ func TestDeleteConfigMapSkipsUnowned(t *testing.T) {
 	}
 }
 
-func standaloneNeo4j(t *testing.T) *neo4jv1beta1.Neo4j {
+func standaloneNeo4j(t *testing.T) *neo4jv1.Neo4j {
 	t.Helper()
-	return &neo4jv1beta1.Neo4j{
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: "2026.05.0",
-			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeStandalone,
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeStandalone,
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode: neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode: neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{
 							Size: "10Gi",
 						},
 					},
@@ -141,7 +141,7 @@ func standaloneNeo4j(t *testing.T) *neo4jv1beta1.Neo4j {
 	}
 }
 
-func mustGetConfigMap(t *testing.T, c client.Client, neo4j *neo4jv1beta1.Neo4j) *corev1.ConfigMap {
+func mustGetConfigMap(t *testing.T, c client.Client, neo4j *neo4jv1.Neo4j) *corev1.ConfigMap {
 	t.Helper()
 	cm := &corev1.ConfigMap{}
 	if err := c.Get(t.Context(), client.ObjectKey{Name: neo4j.Name + "-config", Namespace: neo4j.Namespace}, cm); err != nil {
@@ -150,7 +150,7 @@ func mustGetConfigMap(t *testing.T, c client.Client, neo4j *neo4jv1beta1.Neo4j) 
 	return cm
 }
 
-func mustGetStatefulSet(t *testing.T, c client.Client, neo4j *neo4jv1beta1.Neo4j) *appsv1.StatefulSet {
+func mustGetStatefulSet(t *testing.T, c client.Client, neo4j *neo4jv1.Neo4j) *appsv1.StatefulSet {
 	t.Helper()
 	sts := &appsv1.StatefulSet{}
 	if err := c.Get(t.Context(), client.ObjectKey{Name: neo4j.Name + "-server", Namespace: neo4j.Namespace}, sts); err != nil {

@@ -3,7 +3,7 @@ package render
 import (
 	"strings"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // Connector names used in connectivity.service.expose and Service port names (BDR-007).
@@ -42,7 +42,7 @@ func (c Context) ShouldCreateAdminService() bool {
 	return IsClusterMode(c.Neo4j) || c.BackupFeatureEnabled() || c.PrometheusFeatureEnabled()
 }
 
-func (c Context) listeners() *neo4jv1beta1.ConnectivityListenersSpec {
+func (c Context) listeners() *neo4jv1.ConnectivityListenersSpec {
 	if c.Neo4j.Spec.Connectivity == nil {
 		return nil
 	}

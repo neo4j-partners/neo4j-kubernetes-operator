@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
@@ -24,7 +24,7 @@ func certManagerScheme(t *testing.T) *runtime.Scheme {
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
-	if err := neo4jv1beta1.AddToScheme(scheme); err != nil {
+	if err := neo4jv1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
 	gvk := rendertrust.CertificateGVK
@@ -35,16 +35,16 @@ func certManagerScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func standaloneCertManagerCR() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func standaloneCertManagerCR() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default", UID: types.UID("cr-uid")},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Trust: &neo4jv1beta1.TrustSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Trust: &neo4jv1.TrustSpec{
 				Enabled:     true,
-				CertManager: &neo4jv1beta1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1beta1.IssuerRef{Name: "corp-ca"}},
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{SecretName: "dev-bolt-tls-secret"},
+				CertManager: &neo4jv1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"}},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{SecretName: "dev-bolt-tls-secret"},
 				},
 			},
 		},
@@ -158,9 +158,9 @@ func TestCertManagerPrunesCertificateWhenDisabled(t *testing.T) {
 
 	// Turning cert-manager off must stop renewals, not leave a live Certificate behind.
 	neo4j.Spec.Trust.CertManager.Enabled = false
-	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1beta1.TLSPolicySpec{
-		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-tls-secret"},
-		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-tls-secret"},
+	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "dev-bolt-tls-secret"},
+		PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "dev-bolt-tls-secret"},
 	}
 	byoSecret := issuedSecret("dev-bolt-tls-secret", rendersecrets.WithMountableLabel(nil))
 	byoSecret.Data["private.key"] = []byte("key")

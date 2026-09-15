@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
 )
@@ -44,13 +44,13 @@ func PruneJobName(chain string) string { return "prune-" + chain }
 // links). It mounts the claim at the same sub-path the backup Job wrote to (storage.BackupsSubPath),
 // so each file — recorded on Neo4jBackup.status.artifacts[].path — resolves under the mount. It is
 // a pure function; the owner reference (the Neo4jBackupSchedule) is applied by shared.Apply.
-func PruneJob(neo4j *neo4jv1beta1.Neo4j, name, claim string, files []string) (*batchv1.Job, error) {
+func PruneJob(neo4j *neo4jv1.Neo4j, name, claim string, files []string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
 	// Reuse the backup Job's PVC wiring so we delete at the exact path the backup wrote to.
-	toPath, volumes, mounts, err := destination(neo4jv1beta1.BackupDestination{
-		Type: neo4jv1beta1.BackupDestinationPVC,
-		PVC:  &neo4jv1beta1.BackupPVC{ClaimName: claim},
+	toPath, volumes, mounts, err := destination(neo4jv1.BackupDestination{
+		Type: neo4jv1.BackupDestinationPVC,
+		PVC:  &neo4jv1.BackupPVC{ClaimName: claim},
 	}, "")
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func pruneScript(toPath string, files []string) string {
 // them up; workload identity is applied via ApplyBackupPodIdentity exactly as for the backup pods.
 // image defaults to DefaultObjectStorePruneImage. It is a pure function; the owner reference is
 // applied by shared.Apply.
-func ObjectStorePruneJob(neo4j *neo4jv1beta1.Neo4j, name, image string, dest neo4jv1beta1.BackupDestination, url string) (*batchv1.Job, error) {
+func ObjectStorePruneJob(neo4j *neo4jv1.Neo4j, name, image string, dest neo4jv1.BackupDestination, url string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 	script, err := objectStorePruneScript(dest, url)
 	if err != nil {
@@ -205,21 +205,21 @@ func ObjectStorePruneJob(neo4j *neo4jv1beta1.Neo4j, name, image string, dest neo
 // caller delete the Neo4jBackup records while blobs remain (retention must never orphan objects).
 // Purging an already-gone prefix is tolerated (idempotent re-runs). The url always carries the
 // per-chain sub-path, and the empty-remote guard refuses to purge a bucket/container root.
-func objectStorePruneScript(dest neo4jv1beta1.BackupDestination, url string) (string, error) {
+func objectStorePruneScript(dest neo4jv1.BackupDestination, url string) (string, error) {
 	var backend, remote, pre string
 	switch dest.Type {
-	case neo4jv1beta1.BackupDestinationS3:
+	case neo4jv1.BackupDestinationS3:
 		backend = "s3"
 		remote = strings.TrimPrefix(url, "s3://")
 		// MinIO / non-AWS endpoints (AWS_ENDPOINT_URL_S3, set by the same creds Secret neo4j-admin
 		// reads) need path-style addressing and a non-AWS provider; plain AWS otherwise.
 		pre = `export RCLONE_S3_ENV_AUTH=true; ` +
 			`if [ -n "${AWS_ENDPOINT_URL_S3:-}" ]; then export RCLONE_S3_ENDPOINT="$AWS_ENDPOINT_URL_S3" RCLONE_S3_PROVIDER=Other RCLONE_S3_FORCE_PATH_STYLE=true; else export RCLONE_S3_PROVIDER=AWS; fi; `
-	case neo4jv1beta1.BackupDestinationGCS:
+	case neo4jv1.BackupDestinationGCS:
 		backend = "gcs"
 		remote = strings.TrimPrefix(url, "gs://")
 		pre = `export RCLONE_GCS_ENV_AUTH=true; `
-	case neo4jv1beta1.BackupDestinationAzure:
+	case neo4jv1.BackupDestinationAzure:
 		backend = "azureblob"
 		rest := strings.TrimPrefix(url, "azb://")
 		i := strings.IndexByte(rest, '/')

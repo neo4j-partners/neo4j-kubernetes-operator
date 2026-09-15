@@ -5,7 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -32,7 +32,7 @@ func TestDesiredAndTailMembers(t *testing.T) {
 }
 
 func TestDrainOKStatusRoundTrip(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "prod", Generation: 7}}
+	neo4j := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "prod", Generation: 7}}
 	SetDrainOK(neo4j, render.PoolPrimary, 3, false)
 	SetDrainOK(neo4j, render.PoolRead, 1, false)
 	got := ParseDrainOK(neo4j)
@@ -103,7 +103,7 @@ func TestAdminBoltURIUsesRouting(t *testing.T) {
 
 func TestClientBoltURIIgnoresAttackerClusterDomain(t *testing.T) {
 	neo4j := testClusterCR(3)
-	neo4j.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{ClusterDomain: "evil.example.com"}
+	neo4j.Spec.Connectivity = &neo4jv1.ConnectivitySpec{ClusterDomain: "evil.example.com"}
 	got := ClientBoltURI(neo4j)
 	want := "bolt://prod.default.svc:7687"
 	if got != want {

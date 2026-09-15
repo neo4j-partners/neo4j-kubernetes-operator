@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,10 +26,10 @@ import (
 func TestAdminConnectOptsWarnsOncePerGeneration(t *testing.T) {
 	rec := record.NewFakeRecorder(10)
 	r := &Reconciler{Recorder: rec}
-	n := &neo4jv1beta1.Neo4j{
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns", UID: "uid-1", Generation: 1},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Trust: &neo4jv1beta1.TrustSpec{InsecureAdminConnection: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Trust: &neo4jv1.TrustSpec{InsecureAdminConnection: true},
 		},
 	}
 	for range 4 {
@@ -55,7 +55,7 @@ func TestAdminConnectOptsWarnsOncePerGeneration(t *testing.T) {
 func TestAdminConnectOptsFailClosed(t *testing.T) {
 	rec := record.NewFakeRecorder(2)
 	r := &Reconciler{Recorder: rec}
-	n := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"}}
+	n := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"}}
 	_, err := r.adminConnectOpts(context.Background(), n)
 	if err == nil || !strings.Contains(err.Error(), "insecureAdminConnection") {
 		t.Fatalf("expected fail-closed, got %v", err)
@@ -73,10 +73,10 @@ func TestAdminConnectOptsFailClosed(t *testing.T) {
 func TestAdminConnectOptsInsecureEmitsWarning(t *testing.T) {
 	rec := record.NewFakeRecorder(2)
 	r := &Reconciler{Recorder: rec}
-	n := &neo4jv1beta1.Neo4j{
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Trust: &neo4jv1beta1.TrustSpec{InsecureAdminConnection: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Trust: &neo4jv1.TrustSpec{InsecureAdminConnection: true},
 		},
 	}
 	opts, err := r.adminConnectOpts(context.Background(), n)
@@ -113,16 +113,16 @@ func selfSignedPEM(t *testing.T) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
-func certManagerBoltCR() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func certManagerBoltCR() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Trust: &neo4jv1beta1.TrustSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Trust: &neo4jv1.TrustSpec{
 				Enabled:     true,
-				CertManager: &neo4jv1beta1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1beta1.IssuerRef{Name: "corp-ca"}},
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{SecretName: "dev-bolt-tls"},
+				CertManager: &neo4jv1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"}},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{SecretName: "dev-bolt-tls"},
 				},
 			},
 		},
@@ -135,7 +135,7 @@ func certManagerBoltCR() *neo4jv1beta1.Neo4j {
 func TestLoadBoltRootCAsTrustsCertManagerLeaf(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := certManagerBoltCR()
 	secret := &corev1.Secret{
@@ -156,7 +156,7 @@ func TestLoadBoltRootCAsTrustsCertManagerLeaf(t *testing.T) {
 func TestLoadBoltRootCAsCertManagerSecretMissingKey(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	neo4j := certManagerBoltCR()
 	secret := &corev1.Secret{

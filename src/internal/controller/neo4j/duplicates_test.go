@@ -8,19 +8,19 @@ import (
 	"k8s.io/client-go/tools/record"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
 
-func neo4jWithJVM(args ...string) *neo4jv1beta1.Neo4j {
+func neo4jWithJVM(args ...string) *neo4jv1.Neo4j {
 	useDefaults := true
-	return &neo4jv1beta1.Neo4j{
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Config: &neo4jv1beta1.ConfigSpec{
-				JVM: &neo4jv1beta1.JVMSpec{UseDefaults: &useDefaults, AdditionalArguments: args},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Config: &neo4jv1.ConfigSpec{
+				JVM: &neo4jv1.JVMSpec{UseDefaults: &useDefaults, AdditionalArguments: args},
 			},
 		},
 	}
@@ -55,14 +55,14 @@ func TestReportDuplicateEntriesEmitsWarningEvent(t *testing.T) {
 // is field-agnostic, only the message changes.
 func TestReportDuplicateEntriesCoversPlainConfigKeys(t *testing.T) {
 	recorder := record.NewFakeRecorder(10)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
-			Config: &neo4jv1beta1.ConfigSpec{Neo4j: map[string]string{"dbms.routing.enabled": "false"}},
+			Config: &neo4jv1.ConfigSpec{Neo4j: map[string]string{"dbms.routing.enabled": "false"}},
 		},
 	}
 

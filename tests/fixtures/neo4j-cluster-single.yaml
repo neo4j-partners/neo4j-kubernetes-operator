@@ -1,6 +1,6 @@
 # Cluster mode with a single primary — lab topology (no quorum, not HA).
 # Mirrors examples/cluster/02-lab-single-primary.yaml.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

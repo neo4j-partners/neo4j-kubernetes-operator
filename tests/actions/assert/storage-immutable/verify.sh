@@ -2,7 +2,7 @@
 # assert/storage-immutable — every storage change that cannot be applied is refused at admission.
 #
 # These are CEL transition rules (they read oldSelf), so nothing but a live UPDATE can exercise
-# them: the unit test in src/api/v1beta1 proves they compile, not that they hold. And they have to
+# them: the unit test in src/api/v1 proves they compile, not that they hold. And they have to
 # hold at admission rather than in the reconciler, because each of these fields decides the shape of
 # a StatefulSet volumeClaimTemplate — a set Kubernetes will not let anyone replace once the
 # StatefulSet exists. A change the API accepted here could never be applied, which is how a storage

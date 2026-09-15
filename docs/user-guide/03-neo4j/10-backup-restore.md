@@ -43,7 +43,7 @@ spec:
 ## Taking a one-off backup
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: nightly-2026-09-05
@@ -128,7 +128,7 @@ artifact instead of replaying the whole chain (lower restore time). It points at
 chain via `spec.source.backupRef` and runs `neo4j-admin backup aggregate`:
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: prod-monday-recovered
@@ -152,7 +152,7 @@ The `destination` can also be an **object store** — the aggregate runs in the 
 `destination.credentials` or the target's `spec.security.cloudIdentity` workload identity:
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata: { name: prod-monday-agg }
 spec:
@@ -178,7 +178,7 @@ rejected). Requires S3 ≥ 5.19, GCS ≥ 5.21, or Azure ≥ 5.24 (MinIO via `AWS
 `Neo4jBackup` objects (owner-referenced by the schedule), so everything above applies to each one.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackupSchedule
 metadata:
   name: prod-backups
@@ -249,7 +249,7 @@ restored this way — whole-cluster disaster recovery is a manual runbook (see
 [what is not covered](#what-is-not-covered)).
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata:
   name: restore-neo4j

@@ -3,7 +3,7 @@ package connectivity
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -12,18 +12,18 @@ import (
 func int32Ptr(v int32) *int32 { return &v }
 
 func TestServiceMonitorDefaults(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "demo"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Features: &neo4jv1beta1.FeaturesSpec{
-				Monitoring: &neo4jv1beta1.MonitoringFeaturesSpec{
-					Prometheus:     &neo4jv1beta1.PrometheusMonitoringSpec{Enabled: true},
-					ServiceMonitor: &neo4jv1beta1.ServiceMonitorSpec{Enabled: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Features: &neo4jv1.FeaturesSpec{
+				Monitoring: &neo4jv1.MonitoringFeaturesSpec{
+					Prometheus:     &neo4jv1.PrometheusMonitoringSpec{Enabled: true},
+					ServiceMonitor: &neo4jv1.ServiceMonitorSpec{Enabled: true},
 				},
 			},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{Metrics: int32Ptr(2004)},
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{Metrics: int32Ptr(2004)},
 			},
 		},
 	}
@@ -62,13 +62,13 @@ func TestServiceMonitorDefaults(t *testing.T) {
 }
 
 func TestServiceMonitorOverrides(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Features: &neo4jv1beta1.FeaturesSpec{
-				Monitoring: &neo4jv1beta1.MonitoringFeaturesSpec{
-					ServiceMonitor: &neo4jv1beta1.ServiceMonitorSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Features: &neo4jv1.FeaturesSpec{
+				Monitoring: &neo4jv1.MonitoringFeaturesSpec{
+					ServiceMonitor: &neo4jv1.ServiceMonitorSpec{
 						Enabled:  true,
 						Port:     "custom-metrics",
 						Path:     "/prom",
@@ -102,9 +102,9 @@ func TestServiceMonitorOverrides(t *testing.T) {
 }
 
 func TestServiceMonitorDisabled(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec:       neo4jv1beta1.Neo4jSpec{Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone}},
+		Spec:       neo4jv1.Neo4jSpec{Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone}},
 	}
 	if ServiceMonitorEnabled(render.ClientServiceContext(neo4j)) {
 		t.Fatal("expected disabled")

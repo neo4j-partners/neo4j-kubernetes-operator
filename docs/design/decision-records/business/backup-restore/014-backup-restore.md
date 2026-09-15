@@ -86,7 +86,7 @@ These are the reasons a single `schedule` + single `retention` is insufficient: 
 Direct CNPG mapping. `Neo4jBackup` is an **immutable run-to-completion record**; `Neo4jBackupSchedule` owns cron **and** retention/pruning and spawns `Neo4jBackup` objects; `Neo4jRestore` is a one-shot record that restores/seeds databases into a target `Neo4j`.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: nightly-adhoc
@@ -112,7 +112,7 @@ status:
 ```
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackupSchedule
 metadata:
   name: nightly
@@ -140,7 +140,7 @@ status:
 ```
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata:
   name: restore-prod
@@ -282,7 +282,7 @@ ADR-016 ratified how the executors authenticate to object storage. This amends t
 
 ### Neutral
 
-- CRD group/version (`neo4j.com/v1beta1`) and exact field spelling (`keepLast` vs `keepDays`, `type` casing) are finalized in the CRD spec, not here.
+- CRD group/version (`neo4j.com/v1`) and exact field spelling (`keepLast` vs `keepDays`, `type` casing) are finalized in the CRD spec, not here.
 - Continuous/WAL backup remains future work; within-chain PITR (`--restore-until`) is a later enhancement the chain model already supports.
 
 ---

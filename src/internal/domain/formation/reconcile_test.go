@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
@@ -116,16 +116,16 @@ func (f *fakeAdmin) CreateOrReplaceDatabaseWithSeed(context.Context, string, str
 func (f *fakeAdmin) StopDatabase(context.Context, string) error  { return nil }
 func (f *fakeAdmin) StartDatabase(context.Context, string) error { return nil }
 
-func testClusterCR(primaries int32) *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func testClusterCR(primaries int32) *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: "2026.05.0",
-			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: primaries},
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: primaries},
 			},
 		},
 	}
@@ -136,14 +136,14 @@ func ptr[T any](v T) *T { return &v }
 func TestReconcileEnablesAllFreeInOnePass(t *testing.T) {
 	neo4j := testClusterCR(3)
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{servers: []intneo4j.Server{
 		{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
@@ -152,7 +152,7 @@ func TestReconcileEnablesAllFreeInOnePass(t *testing.T) {
 	}}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -183,14 +183,14 @@ func TestReconcileFormsWhenGateExceedsShrunkPool(t *testing.T) {
 	}
 
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 	admin := &fakeAdmin{servers: []intneo4j.Server{
 		{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
 		{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
@@ -198,7 +198,7 @@ func TestReconcileFormsWhenGateExceedsShrunkPool(t *testing.T) {
 	}}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -216,14 +216,14 @@ func TestReconcileFormsWhenGateExceedsShrunkPool(t *testing.T) {
 func TestReconcileDrainsTail(t *testing.T) {
 	neo4j := testClusterCR(1)
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(2)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{servers: []intneo4j.Server{
 		{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
@@ -231,7 +231,7 @@ func TestReconcileDrainsTail(t *testing.T) {
 	}}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -261,14 +261,14 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 	neo4j := testClusterCR(3)
 	// defaultPrimariesCount stays 1; scale-in must shrink hosting to pool size (3), not to 1.
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(5)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{
 		servers: []intneo4j.Server{
@@ -286,7 +286,7 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -321,10 +321,10 @@ func TestReconcileShrinksTopologyBeforeDrain(t *testing.T) {
 func TestReconcileReportsDatabaseTopologyResize(t *testing.T) {
 	neo4j := testClusterCR(3)
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(5)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -347,7 +347,7 @@ func TestReconcileReportsDatabaseTopologyResize(t *testing.T) {
 	r := &Reconciler{
 		Client:   c,
 		Recorder: recorder,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -374,10 +374,10 @@ func TestReconcileReportsDatabaseTopologyResize(t *testing.T) {
 func TestReconcileNoResizeEventWhenTopologiesAlreadyFit(t *testing.T) {
 	neo4j := testClusterCR(3)
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -398,7 +398,7 @@ func TestReconcileNoResizeEventWhenTopologiesAlreadyFit(t *testing.T) {
 	r := &Reconciler{
 		Client:   c,
 		Recorder: recorder,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -431,15 +431,15 @@ func findEvent(recorder *record.FakeRecorder, reason string) string {
 func TestReconcileLeavesTopologyAloneWhenPoolsAreWider(t *testing.T) {
 	neo4j := testClusterCR(3)
 	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(3))
-	neo4j.Spec.Topology.Secondaries = &neo4jv1beta1.SecondariesSpec{
-		Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
-		Read:      &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
+	neo4j.Spec.Topology.Secondaries = &neo4jv1.SecondariesSpec{
+		Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1},
+		Read:      &neo4jv1.SecondaryPoolSpec{Members: 1},
 	}
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	r3, r1 := int32(3), int32(1)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &r3}},
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-analytics", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &r1}},
@@ -462,7 +462,7 @@ func TestReconcileLeavesTopologyAloneWhenPoolsAreWider(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -489,10 +489,10 @@ func TestReconcileAppliesCreationDefaults(t *testing.T) {
 	neo4j := testClusterCR(3)
 	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(3))
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -510,7 +510,7 @@ func TestReconcileAppliesCreationDefaults(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -529,10 +529,10 @@ func TestReconcileScaleInLeavesFittingTopologyAlone(t *testing.T) {
 	neo4j := testClusterCR(3)
 	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(1))
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(5)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -553,7 +553,7 @@ func TestReconcileScaleInLeavesFittingTopologyAlone(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -588,10 +588,10 @@ func TestReconcileKeepsUserTopologyAcrossPasses(t *testing.T) {
 	neo4j := testClusterCR(3)
 	neo4j.Spec.Topology.DefaultPrimariesCount = ptr(int32(3))
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &replicas}},
 	).Build()
@@ -610,7 +610,7 @@ func TestReconcileKeepsUserTopologyAcrossPasses(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}
@@ -628,14 +628,14 @@ func TestReconcileKeepsUserTopologyAcrossPasses(t *testing.T) {
 func TestReconcileBlocksMultiPrimaryToOne(t *testing.T) {
 	neo4j := testClusterCR(1)
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	replicas := int32(3)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(neo4j.DeepCopy(), sts).Build()
 
 	admin := &fakeAdmin{
 		servers: []intneo4j.Server{
@@ -651,7 +651,7 @@ func TestReconcileBlocksMultiPrimaryToOne(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}

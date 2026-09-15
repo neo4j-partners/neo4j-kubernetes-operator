@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
@@ -35,7 +35,7 @@ func (v *Neo4jValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	// Finalizer removal is an UPDATE. Do not re-apply spec checks or a stale/invalid
 	// CR cannot finish deleting (NEO-010).
-	if neo4j, ok := newObj.(*neo4jv1beta1.Neo4j); ok && neo4j.DeletionTimestamp != nil && !neo4j.DeletionTimestamp.IsZero() {
+	if neo4j, ok := newObj.(*neo4jv1.Neo4j); ok && neo4j.DeletionTimestamp != nil && !neo4j.DeletionTimestamp.IsZero() {
 		return nil, nil
 	}
 	if err := validateMinimumMembersImmutable(oldObj, newObj); err != nil {
@@ -49,7 +49,7 @@ func (v *Neo4jValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 // gate is read once at bootstrap. Deliberately not a CEL rule — an always-on rule would also reject
 // that scale-in, and controller-gen has no create-only form.
 func validateBootstrapGateFitsPool(obj runtime.Object) error {
-	n, ok := obj.(*neo4jv1beta1.Neo4j)
+	n, ok := obj.(*neo4jv1.Neo4j)
 	if !ok {
 		return nil
 	}
@@ -67,8 +67,8 @@ func validateBootstrapGateFitsPool(obj runtime.Object) error {
 // validateMinimumMembersImmutable rejects updates that change topology.minimumMembers
 // (CEL also enforces this when the CRD is current; webhook covers enable-webhooks installs).
 func validateMinimumMembersImmutable(oldObj, newObj runtime.Object) error {
-	oldN, okOld := oldObj.(*neo4jv1beta1.Neo4j)
-	newN, okNew := newObj.(*neo4jv1beta1.Neo4j)
+	oldN, okOld := oldObj.(*neo4jv1.Neo4j)
+	newN, okNew := newObj.(*neo4jv1.Neo4j)
 	if !okOld || !okNew {
 		return nil
 	}
@@ -95,7 +95,7 @@ func (v *Neo4jValidator) validate(ctx context.Context, obj runtime.Object) error
 	if v.Client == nil {
 		return nil
 	}
-	neo4j, ok := obj.(*neo4jv1beta1.Neo4j)
+	neo4j, ok := obj.(*neo4jv1.Neo4j)
 	if !ok {
 		return fmt.Errorf("expected a Neo4j object, got %T", obj)
 	}
@@ -104,7 +104,7 @@ func (v *Neo4jValidator) validate(ctx context.Context, obj runtime.Object) error
 
 // ValidateNeo4j runs CR-only admission checks (no API reads).
 func ValidateNeo4j(obj runtime.Object) error {
-	neo4j, ok := obj.(*neo4jv1beta1.Neo4j)
+	neo4j, ok := obj.(*neo4jv1.Neo4j)
 	if !ok {
 		return fmt.Errorf("expected a Neo4j object, got %T", obj)
 	}
@@ -146,7 +146,7 @@ const (
 	maxSecondaryMembers int32 = 25
 )
 
-func validateScaleCaps(n *neo4jv1beta1.Neo4j) error {
+func validateScaleCaps(n *neo4jv1.Neo4j) error {
 	t := n.Spec.Topology
 	if t.Primaries != nil && t.Primaries.Members > maxPrimaryMembers {
 		return fmt.Errorf("topology.primaries.members %d exceeds maximum %d (NEO-014)", t.Primaries.Members, maxPrimaryMembers)
@@ -169,7 +169,7 @@ func validateScaleCaps(n *neo4jv1beta1.Neo4j) error {
 	return nil
 }
 
-func validateListenPorts(n *neo4jv1beta1.Neo4j) error {
+func validateListenPorts(n *neo4jv1.Neo4j) error {
 	if n.Spec.Connectivity == nil {
 		return nil
 	}
@@ -200,7 +200,7 @@ func validateListenPorts(n *neo4jv1beta1.Neo4j) error {
 	return nil
 }
 
-func checkServicePorts(prefix string, ports *neo4jv1beta1.ServicePortsSpec) error {
+func checkServicePorts(prefix string, ports *neo4jv1.ServicePortsSpec) error {
 	if ports == nil {
 		return nil
 	}

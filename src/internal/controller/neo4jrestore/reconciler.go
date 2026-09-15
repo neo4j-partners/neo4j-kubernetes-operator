@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
@@ -58,7 +58,7 @@ type RestoreReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 	// Connect builds an admin Bolt session to the target; nil → formation.Dial (tests inject a fake).
-	Connect func(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (intneo4j.Admin, error)
+	Connect func(ctx context.Context, neo4j *neo4jv1.Neo4j) (intneo4j.Admin, error)
 }
 
 func NewReconciler(mgr ctrl.Manager) *RestoreReconciler {
@@ -76,7 +76,7 @@ func NewReconciler(mgr ctrl.Manager) *RestoreReconciler {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var restore neo4jv1beta1.Neo4jRestore
+	var restore neo4jv1.Neo4jRestore
 	if err := r.Get(ctx, req.NamespacedName, &restore); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -85,11 +85,11 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Immutable record: a terminal run never re-seeds (GitOps re-apply safe).
-	if restore.Status.Phase == neo4jv1beta1.RunPhaseSucceeded || restore.Status.Phase == neo4jv1beta1.RunPhaseFailed {
+	if restore.Status.Phase == neo4jv1.RunPhaseSucceeded || restore.Status.Phase == neo4jv1.RunPhaseFailed {
 		return ctrl.Result{}, nil
 	}
 
-	var neo4j neo4jv1beta1.Neo4j
+	var neo4j neo4jv1.Neo4j
 	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Neo4jRef.Name, Namespace: restore.Namespace}, &neo4j); err != nil {
 		if apierrors.IsNotFound(err) {
 			return r.retryable(ctx, &restore, oracle.ReasonRestoreTargetNotFound,
@@ -98,7 +98,7 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	if neo4j.Spec.Edition != neo4jv1beta1.EditionEnterprise {
+	if neo4j.Spec.Edition != neo4jv1.EditionEnterprise {
 		return r.fail(ctx, &restore, oracle.ReasonRestoreEditionUnsupported,
 			"restore requires Enterprise edition; target is "+string(neo4j.Spec.Edition))
 	}
@@ -115,13 +115,13 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	connect := r.Connect
 	if connect == nil {
-		connect = func(ctx context.Context, n *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		connect = func(ctx context.Context, n *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return formation.Dial(ctx, r.Client, r.Recorder, n)
 		}
 	}
 
 	// Already seeding — only poll for online, never re-issue.
-	if restore.Status.Phase == neo4jv1beta1.RunPhaseRunning {
+	if restore.Status.Phase == neo4jv1.RunPhaseRunning {
 		admin, err := connect(ctx, &neo4j)
 		if err != nil {
 			return r.retryable(ctx, &restore, oracle.ReasonRestoreBoltUnavailable, err.Error())
@@ -148,7 +148,7 @@ func (r *RestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // issueSeeds runs the existence/overwrite/forceOffline gate and issues one seed-from-URI
 // statement per requested database, then flips the record to Running for poll to finish.
-func (r *RestoreReconciler) issueSeeds(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j, admin intneo4j.Admin, seedFor map[string]string) (ctrl.Result, error) {
+func (r *RestoreReconciler) issueSeeds(ctx context.Context, restore *neo4jv1.Neo4jRestore, neo4j *neo4jv1.Neo4j, admin intneo4j.Admin, seedFor map[string]string) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4jrestore")
 
 	states, err := admin.ShowDatabases(ctx)
@@ -161,7 +161,7 @@ func (r *RestoreReconciler) issueSeeds(ctx context.Context, restore *neo4jv1beta
 	}
 
 	primaries, secondaries := topology(neo4j)
-	dbStatuses := make([]neo4jv1beta1.RestoreDatabaseStatus, 0, len(restore.Spec.Databases))
+	dbStatuses := make([]neo4jv1.RestoreDatabaseStatus, 0, len(restore.Spec.Databases))
 	for _, db := range restore.Spec.Databases {
 		seedURI := seedFor[db]
 		switch {
@@ -182,14 +182,14 @@ func (r *RestoreReconciler) issueSeeds(ctx context.Context, restore *neo4jv1beta
 				return r.seedErr(ctx, restore, db, err)
 			}
 		}
-		dbStatuses = append(dbStatuses, neo4jv1beta1.RestoreDatabaseStatus{
-			Name: db, Phase: neo4jv1beta1.RunPhaseRunning, Message: "seeding from " + seedURI,
+		dbStatuses = append(dbStatuses, neo4jv1.RestoreDatabaseStatus{
+			Name: db, Phase: neo4jv1.RunPhaseRunning, Message: "seeding from " + seedURI,
 		})
 	}
 
 	log.Info("seed statements issued", "databases", len(dbStatuses))
 	restore.Status.Databases = dbStatuses
-	restore.Status.Phase = neo4jv1beta1.RunPhaseRunning
+	restore.Status.Phase = neo4jv1.RunPhaseRunning
 	restore.Status.Reason = ""
 	restore.Status.Message = ""
 	setCondition(restore, oracle.ConditionRestoreReady, metav1.ConditionFalse, oracle.ReasonRestoreInProgress,
@@ -203,7 +203,7 @@ func (r *RestoreReconciler) issueSeeds(ctx context.Context, restore *neo4jv1beta
 // poll reads SHOW DATABASES and declares Succeeded once every requested database is online. When
 // spec.restoreMetadata is set it first drives a post-seed metadata Job to a terminal state (the
 // databases are already online; only users/roles/privileges remain to reapply).
-func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j, admin intneo4j.Admin) (ctrl.Result, error) {
+func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1.Neo4jRestore, neo4j *neo4jv1.Neo4j, admin intneo4j.Admin) (ctrl.Result, error) {
 	states, err := admin.ShowDatabases(ctx)
 	if err != nil {
 		return r.retryable(ctx, restore, oracle.ReasonRestoreBoltUnavailable, "SHOW DATABASES: "+err.Error())
@@ -213,17 +213,17 @@ func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4
 		online[s.Name] = s.Online
 	}
 	allOnline := true
-	dbStatuses := make([]neo4jv1beta1.RestoreDatabaseStatus, 0, len(restore.Spec.Databases))
+	dbStatuses := make([]neo4jv1.RestoreDatabaseStatus, 0, len(restore.Spec.Databases))
 	for _, db := range restore.Spec.Databases {
-		phase := neo4jv1beta1.RunPhaseRunning
+		phase := neo4jv1.RunPhaseRunning
 		msg := "seeding"
 		if online[db] {
-			phase = neo4jv1beta1.RunPhaseSucceeded
+			phase = neo4jv1.RunPhaseSucceeded
 			msg = "online"
 		} else {
 			allOnline = false
 		}
-		dbStatuses = append(dbStatuses, neo4jv1beta1.RestoreDatabaseStatus{Name: db, Phase: phase, Message: msg})
+		dbStatuses = append(dbStatuses, neo4jv1.RestoreDatabaseStatus{Name: db, Phase: phase, Message: msg})
 	}
 	restore.Status.Databases = dbStatuses
 	if !allOnline {
@@ -244,7 +244,7 @@ func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4
 		}
 	}
 
-	restore.Status.Phase = neo4jv1beta1.RunPhaseSucceeded
+	restore.Status.Phase = neo4jv1.RunPhaseSucceeded
 	restore.Status.Reason = ""
 	restore.Status.Message = ""
 	setCondition(restore, oracle.ConditionRestoreReady, metav1.ConditionTrue, oracle.ReasonRestoreSucceeded, "all databases online")
@@ -256,13 +256,13 @@ func (r *RestoreReconciler) poll(ctx context.Context, restore *neo4jv1beta1.Neo4
 // the caller may declare success. done=false means the caller must return res/err as-is: the Job is
 // still running (requeued) or the record was failed terminally. Supported only for a PVC-backed
 // source.backupRef; other sources fail with RestoreMetadataFailed.
-func (r *RestoreReconciler) ensureMetadata(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j) (done bool, res ctrl.Result, err error) {
+func (r *RestoreReconciler) ensureMetadata(ctx context.Context, restore *neo4jv1.Neo4jRestore, neo4j *neo4jv1.Neo4j) (done bool, res ctrl.Result, err error) {
 	if restore.Spec.Source.BackupRef == "" {
 		res, err = r.fail(ctx, restore, oracle.ReasonRestoreMetadataFailed,
 			"spec.restoreMetadata requires source.backupRef (a PVC-backed backup); a raw source.url carries no metadata script")
 		return false, res, err
 	}
-	var backup neo4jv1beta1.Neo4jBackup
+	var backup neo4jv1.Neo4jBackup
 	if e := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, &backup); e != nil {
 		if apierrors.IsNotFound(e) {
 			res, err = r.fail(ctx, restore, oracle.ReasonRestoreMetadataFailed, "source.backupRef "+restore.Spec.Source.BackupRef+" not found")
@@ -316,7 +316,7 @@ func (r *RestoreReconciler) ensureMetadata(ctx context.Context, restore *neo4jv1
 
 // metadataInputs resolves the backups claim and each database's recorded artifact path (the chain's
 // last link) for the metadata Job. Supported only for PVC-backed backups on one claim.
-func metadataInputs(restore *neo4jv1beta1.Neo4jRestore, backup *neo4jv1beta1.Neo4jBackup) (claim string, dbArtifacts map[string]string, reason *oracle.Reason, msg string) {
+func metadataInputs(restore *neo4jv1.Neo4jRestore, backup *neo4jv1.Neo4jBackup) (claim string, dbArtifacts map[string]string, reason *oracle.Reason, msg string) {
 	failR := oracle.ReasonRestoreMetadataFailed
 	dbArtifacts = map[string]string{}
 	for _, db := range restore.Spec.Databases {
@@ -342,7 +342,7 @@ func metadataInputs(restore *neo4jv1beta1.Neo4jRestore, backup *neo4jv1beta1.Neo
 }
 
 // metaProgress records the in-progress metadata condition and requeues without changing phase.
-func (r *RestoreReconciler) metaProgress(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, msg string) (ctrl.Result, error) {
+func (r *RestoreReconciler) metaProgress(ctx context.Context, restore *neo4jv1.Neo4jRestore, msg string) (ctrl.Result, error) {
 	restore.Status.Reason = oracle.ReasonRestoreMetadataApplying.String()
 	restore.Status.Message = msg
 	setCondition(restore, oracle.ConditionRestoreReady, metav1.ConditionFalse, oracle.ReasonRestoreMetadataApplying, msg)
@@ -366,7 +366,7 @@ func metaDetail(msg string) string {
 
 // resolveSeeds maps each requested database to a seedURI (ADR-015 §2 / BDR-014 §13). On a
 // terminal problem it returns a catalogued reason + message and a nil map.
-func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, neo4j *neo4jv1beta1.Neo4j) (map[string]string, *oracle.Reason, string) {
+func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1.Neo4jRestore, neo4j *neo4jv1.Neo4j) (map[string]string, *oracle.Reason, string) {
 	for _, db := range restore.Spec.Databases {
 		if db == "*" {
 			reason := oracle.ReasonRestoreSourceUnsupported
@@ -388,7 +388,7 @@ func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1be
 	}
 
 	// backupRef: resolve the succeeded Neo4jBackup and take its recorded artifact URIs.
-	var backup neo4jv1beta1.Neo4jBackup
+	var backup neo4jv1.Neo4jBackup
 	if err := r.Get(ctx, types.NamespacedName{Name: src.BackupRef, Namespace: restore.Namespace}, &backup); err != nil {
 		reason := oracle.ReasonRestoreSourceNotFound
 		if apierrors.IsNotFound(err) {
@@ -396,7 +396,7 @@ func (r *RestoreReconciler) resolveSeeds(ctx context.Context, restore *neo4jv1be
 		}
 		return nil, &reason, "reading backupRef: " + err.Error()
 	}
-	if backup.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if backup.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		reason := oracle.ReasonRestoreSourceNotFound
 		return nil, &reason, "backupRef " + src.BackupRef + " has not Succeeded (phase " + string(backup.Status.Phase) + ")"
 	}
@@ -423,7 +423,7 @@ const backupsMountPath = storage.BackupsMountPath
 
 // artifactFor finds the recorded artifact for a database (an exact match, or a "*" artifact
 // that stands for all databases).
-func artifactFor(backup *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.BackupArtifact, bool) {
+func artifactFor(backup *neo4jv1.Neo4jBackup, db string) (*neo4jv1.BackupArtifact, bool) {
 	for i := range backup.Status.Artifacts {
 		if a := &backup.Status.Artifacts[i]; a.Database == db || a.Database == "*" {
 			return a, true
@@ -440,7 +440,7 @@ func artifactFor(backup *neo4jv1beta1.Neo4jBackup, db string) (*neo4jv1beta1.Bac
 // artifact, so the recorded filename (Path, chain sub-dir included) is appended — otherwise Neo4j's
 // cloud seed provider rejects the directory with "provided uri does not point to a valid location".
 // When no filename was recorded (wildcard backup) the directory is passed through as a best effort.
-func seedURIFromArtifact(neo4j *neo4jv1beta1.Neo4j, a *neo4jv1beta1.BackupArtifact) (string, *oracle.Reason, string) {
+func seedURIFromArtifact(neo4j *neo4jv1.Neo4j, a *neo4jv1.BackupArtifact) (string, *oracle.Reason, string) {
 	if strings.HasPrefix(a.URI, "pvc://") {
 		claim := strings.TrimPrefix(a.URI, "pvc://")
 		if a.Path == "" {
@@ -468,13 +468,13 @@ func seedURIFromArtifact(neo4j *neo4jv1beta1.Neo4j, a *neo4jv1beta1.BackupArtifa
 }
 
 // mountsBackupsClaim is true when the target mounts claim as its storage.volumes.backups volume.
-func mountsBackupsClaim(neo4j *neo4jv1beta1.Neo4j, claim string) bool {
+func mountsBackupsClaim(neo4j *neo4jv1.Neo4j, claim string) bool {
 	s := neo4j.Spec.Storage
 	if s == nil || s.Volumes == nil || s.Volumes.Backups == nil {
 		return false
 	}
 	b := s.Volumes.Backups
-	return b.Mode == neo4jv1beta1.VolumeModeExisting && b.Existing != nil && b.Existing.ClaimName == claim
+	return b.Mode == neo4jv1.VolumeModeExisting && b.Existing != nil && b.Existing.ClaimName == claim
 }
 
 // validateSeedURI rejects schemes a Neo4j server cannot read as a seed (notably pvc://) and any
@@ -494,8 +494,8 @@ func validateSeedURI(uri string) (*oracle.Reason, string) {
 }
 
 // topology returns the CREATE DATABASE TOPOLOGY counts; (0,0) for standalone omits the clause.
-func topology(neo4j *neo4jv1beta1.Neo4j) (primaries, secondaries int64) {
-	if neo4j.Spec.Topology.Mode != neo4jv1beta1.TopologyModeCluster {
+func topology(neo4j *neo4jv1.Neo4j) (primaries, secondaries int64) {
+	if neo4j.Spec.Topology.Mode != neo4jv1.TopologyModeCluster {
 		return 0, 0
 	}
 	ctx := render.ClientServiceContext(neo4j)
@@ -503,7 +503,7 @@ func topology(neo4j *neo4jv1beta1.Neo4j) (primaries, secondaries int64) {
 }
 
 // seedErr classifies a Bolt statement failure as retryable (leader moved, etc.) or terminal.
-func (r *RestoreReconciler) seedErr(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, db string, err error) (ctrl.Result, error) {
+func (r *RestoreReconciler) seedErr(ctx context.Context, restore *neo4jv1.Neo4jRestore, db string, err error) (ctrl.Result, error) {
 	if isRetryableBolt(err) {
 		return r.retryable(ctx, restore, oracle.ReasonRestoreBoltUnavailable, "database "+db+": "+err.Error())
 	}
@@ -520,8 +520,8 @@ func isRetryableBolt(err error) bool {
 		strings.Contains(s, "Required topology")
 }
 
-func (r *RestoreReconciler) fail(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, reason oracle.Reason, msg string) (ctrl.Result, error) {
-	restore.Status.Phase = neo4jv1beta1.RunPhaseFailed
+func (r *RestoreReconciler) fail(ctx context.Context, restore *neo4jv1.Neo4jRestore, reason oracle.Reason, msg string) (ctrl.Result, error) {
+	restore.Status.Phase = neo4jv1.RunPhaseFailed
 	restore.Status.Reason = reason.String()
 	restore.Status.Message = msg
 	setCondition(restore, oracle.ConditionRestoreReady, metav1.ConditionFalse, reason, msg)
@@ -531,9 +531,9 @@ func (r *RestoreReconciler) fail(ctx context.Context, restore *neo4jv1beta1.Neo4
 	return ctrl.Result{}, r.writeStatus(ctx, restore)
 }
 
-func (r *RestoreReconciler) retryable(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, reason oracle.Reason, msg string) (ctrl.Result, error) {
+func (r *RestoreReconciler) retryable(ctx context.Context, restore *neo4jv1.Neo4jRestore, reason oracle.Reason, msg string) (ctrl.Result, error) {
 	if restore.Status.Phase == "" {
-		restore.Status.Phase = neo4jv1beta1.RunPhasePending
+		restore.Status.Phase = neo4jv1.RunPhasePending
 	}
 	restore.Status.Reason = reason.String()
 	restore.Status.Message = msg
@@ -544,7 +544,7 @@ func (r *RestoreReconciler) retryable(ctx context.Context, restore *neo4jv1beta1
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func (r *RestoreReconciler) writeStatus(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
+func (r *RestoreReconciler) writeStatus(ctx context.Context, restore *neo4jv1.Neo4jRestore) error {
 	restore.Status.ObservedGeneration = restore.Generation
 	if err := r.Status().Update(ctx, restore); err != nil {
 		if apierrors.IsConflict(err) {
@@ -555,7 +555,7 @@ func (r *RestoreReconciler) writeStatus(ctx context.Context, restore *neo4jv1bet
 	return nil
 }
 
-func setCondition(restore *neo4jv1beta1.Neo4jRestore, ctype oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
+func setCondition(restore *neo4jv1.Neo4jRestore, ctype oracle.Condition, status metav1.ConditionStatus, reason oracle.Reason, message string) {
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
 		Type:               ctype.String(),
 		Status:             status,
@@ -568,7 +568,7 @@ func setCondition(restore *neo4jv1beta1.Neo4jRestore, ctype oracle.Condition, st
 
 func (r *RestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&neo4jv1beta1.Neo4jRestore{}).
+		For(&neo4jv1.Neo4jRestore{}).
 		Owns(&batchv1.Job{}).
 		Complete(r)
 }

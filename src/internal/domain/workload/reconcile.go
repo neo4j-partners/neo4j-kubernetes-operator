@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -42,7 +42,7 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 	return &Reconciler{Client: c, Scheme: scheme}
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	if err := renderwl.ValidateSecurity(neo4j); err != nil {
 		log.Error(err, "workload security validation failed")
@@ -199,7 +199,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	return shared.Done()
 }
 
-func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1.Neo4j, baseCtx render.Context) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	if !renderwl.PDBEnabled(neo4j) {
 		log.V(1).Info("poddisruptionbudget disabled, ensure absent")
@@ -223,7 +223,7 @@ func (r *Reconciler) reconcilePDB(ctx context.Context, neo4j *neo4jv1beta1.Neo4j
 	return shared.Done()
 }
 
-func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1.Neo4j, baseCtx render.Context) shared.StepResult {
 	pdb := &policyv1.PodDisruptionBudget{}
 	key := types.NamespacedName{Name: renderwl.PDBName(baseCtx), Namespace: neo4j.Namespace}
 	if err := r.Client.Get(ctx, key, pdb); err != nil {
@@ -244,7 +244,7 @@ func (r *Reconciler) deletePDBIfPresent(ctx context.Context, neo4j *neo4jv1beta1
 	return shared.Done()
 }
 
-func (r *Reconciler) reconcileNetworkPolicy(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+func (r *Reconciler) reconcileNetworkPolicy(ctx context.Context, neo4j *neo4jv1.Neo4j, baseCtx render.Context) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	if !renderwl.NetworkPolicyEnabled(neo4j) {
 		log.V(1).Info("networkpolicy disabled, ensure absent")
@@ -265,7 +265,7 @@ func (r *Reconciler) reconcileNetworkPolicy(ctx context.Context, neo4j *neo4jv1b
 	return shared.Done()
 }
 
-func (r *Reconciler) deleteNetworkPolicyIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+func (r *Reconciler) deleteNetworkPolicyIfPresent(ctx context.Context, neo4j *neo4jv1.Neo4j, baseCtx render.Context) shared.StepResult {
 	np := &networkingv1.NetworkPolicy{}
 	key := types.NamespacedName{Name: renderwl.NetworkPolicyName(baseCtx), Namespace: neo4j.Namespace}
 	if err := r.Client.Get(ctx, key, np); err != nil {
@@ -286,7 +286,7 @@ func (r *Reconciler) deleteNetworkPolicyIfPresent(ctx context.Context, neo4j *ne
 	return shared.Done()
 }
 
-func (r *Reconciler) ensurePluginLicenseSecrets(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) error {
+func (r *Reconciler) ensurePluginLicenseSecrets(ctx context.Context, neo4j *neo4jv1.Neo4j) error {
 	if neo4j.Spec.PluginDefinitions == nil {
 		return nil
 	}
@@ -311,7 +311,7 @@ func (r *Reconciler) ensurePluginLicenseSecrets(ctx context.Context, neo4j *neo4
 	return nil
 }
 
-func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, ctxRender render.Context) (string, error) {
+func (r *Reconciler) ensureAuthSecret(ctx context.Context, neo4j *neo4jv1.Neo4j, ctxRender render.Context) (string, error) {
 	log := ctrllog.FromContext(ctx)
 	secretName := ctxRender.AuthSecretName()
 	var existing corev1.Secret
@@ -355,9 +355,9 @@ func (r *Reconciler) ensureReferencedAuthSecret(ctx context.Context, ctxRender r
 	return rendersecrets.RequireUsableAuthValue(&secret)
 }
 
-func (r *Reconciler) recordCredentials(neo4j *neo4jv1beta1.Neo4j, secretName string, generated bool) {
+func (r *Reconciler) recordCredentials(neo4j *neo4jv1.Neo4j, secretName string, generated bool) {
 	if neo4j.Status.Credentials == nil {
-		neo4j.Status.Credentials = &neo4jv1beta1.CredentialsStatus{}
+		neo4j.Status.Credentials = &neo4jv1.CredentialsStatus{}
 	}
 	neo4j.Status.Credentials.SecretName = secretName
 	neo4j.Status.Credentials.Generated = generated
@@ -396,7 +396,7 @@ func randomPassword(n int) (string, error) {
 	return string(out), nil
 }
 
-func (r *Reconciler) tlsChecksum(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) string {
+func (r *Reconciler) tlsChecksum(ctx context.Context, neo4j *neo4jv1.Neo4j) string {
 	keys := rendertrust.MountedSecretKeys(neo4j)
 	if len(keys) == 0 {
 		return ""

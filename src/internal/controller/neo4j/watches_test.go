@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 )
@@ -21,21 +21,21 @@ func TestMapSecretToNeo4jEnqueuesMountingCR(t *testing.T) {
 	if err := scheme.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	cr := &neo4jv1beta1.Neo4j{
+	cr := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod-cm", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Trust: &neo4jv1beta1.TrustSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				CertManager: &neo4jv1beta1.CertManagerSpec{
+				CertManager: &neo4jv1.CertManagerSpec{
 					Enabled:   true,
-					IssuerRef: &neo4jv1beta1.IssuerRef{Name: "corp-ca"},
+					IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"},
 				},
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{SecretName: "prod-cm-bolt-tls"},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{SecretName: "prod-cm-bolt-tls"},
 				},
 			},
 		},
@@ -78,7 +78,7 @@ func watchScheme(t *testing.T) *runtime.Scheme {
 	if err := scheme.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -95,7 +95,7 @@ func storageClaim(name, instance string) *corev1.PersistentVolumeClaim {
 // A Dynamic claim is created by the StatefulSet controller, so the instance label is the only
 // thing tying it back to a CR. It must not take a List to find that out.
 func TestMapPVCToNeo4jFollowsOperandLabels(t *testing.T) {
-	cr := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"}}
+	cr := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"}}
 	c := fake.NewClientBuilder().WithScheme(watchScheme(t)).WithObjects(cr).Build()
 	r := &Neo4jReconciler{Client: c}
 
@@ -123,20 +123,20 @@ func TestMapPVCToNeo4jFollowsOperandLabels(t *testing.T) {
 // that binds it can only be found by name. Pods cannot start on an unbound claim, so no
 // StatefulSet event will arrive to cover for a missing bind notification here.
 func TestMapPVCToNeo4jFindsClaimBoundByName(t *testing.T) {
-	byo := &neo4jv1beta1.Neo4j{
+	byo := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "byo", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:     neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "warm-restore"},
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:     neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "warm-restore"},
 					},
 				},
 			},
 		},
 	}
-	dynamic := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}}
+	dynamic := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}}
 	c := fake.NewClientBuilder().WithScheme(watchScheme(t)).WithObjects(byo, dynamic).Build()
 	r := &Neo4jReconciler{Client: c}
 

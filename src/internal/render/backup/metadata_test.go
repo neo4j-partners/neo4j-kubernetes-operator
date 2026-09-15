@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestMetadataJob(t *testing.T) {
@@ -74,12 +74,12 @@ func TestMetadataJobBoltTLSUsesEncryptedScheme(t *testing.T) {
 	// (neo4j+ssc) so the users/roles/privileges are not sent in cleartext — a plaintext neo4j://
 	// dial would be refused by the listener anyway.
 	neo4j := testNeo4j()
-	neo4j.Spec.Trust = &neo4jv1beta1.TrustSpec{
+	neo4j.Spec.Trust = &neo4jv1.TrustSpec{
 		Enabled: true,
-		Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-			Bolt: &neo4jv1beta1.TLSPolicySpec{
-				PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-key"},
-				PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-cert"},
+		Certificates: &neo4jv1.TrustCertificatesSpec{
+			Bolt: &neo4jv1.TLSPolicySpec{
+				PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-key"},
+				PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-cert"},
 			},
 		},
 	}

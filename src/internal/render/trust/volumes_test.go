@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -146,9 +146,9 @@ func TestValidateStandaloneTrust(t *testing.T) {
 	}
 
 	withCluster := standaloneWithBoltTrust()
-	withCluster.Spec.Trust.Certificates.Cluster = &neo4jv1beta1.TLSPolicySpec{
-		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-key"},
-		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-cert"},
+	withCluster.Spec.Trust.Certificates.Cluster = &neo4jv1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "cluster-key"},
+		PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "cluster-cert"},
 	}
 	if err := ValidateClusterShape(withCluster); err == nil {
 		t.Fatal("expected cluster policy rejected on standalone")
@@ -158,19 +158,19 @@ func TestValidateStandaloneTrust(t *testing.T) {
 func TestValidateHTTPSShapeRequiresBolt(t *testing.T) {
 	httpsPort := int32(7473)
 	neo4j := clusterWithTrust()
-	neo4j.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{
-		Listeners: &neo4jv1beta1.ConnectivityListenersSpec{HTTPS: &httpsPort},
+	neo4j.Spec.Connectivity = &neo4jv1.ConnectivitySpec{
+		Listeners: &neo4jv1.ConnectivityListenersSpec{HTTPS: &httpsPort},
 	}
-	neo4j.Spec.Trust.Certificates.HTTPS = &neo4jv1beta1.TLSPolicySpec{
-		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-key"},
-		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-cert"},
+	neo4j.Spec.Trust.Certificates.HTTPS = &neo4jv1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "https-key"},
+		PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "https-cert"},
 	}
 	if err := ValidateHTTPSShape(neo4j); err == nil {
 		t.Fatal("expected missing bolt certs error")
 	}
-	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1beta1.TLSPolicySpec{
-		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-key"},
-		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-cert"},
+	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-key"},
+		PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-cert"},
 	}
 	if err := ValidateHTTPSShape(neo4j); err != nil {
 		t.Fatal(err)
@@ -218,21 +218,21 @@ func TestRequiredSecretKeysCustomSubPath(t *testing.T) {
 	}
 }
 
-func clusterWithTrust() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func clusterWithTrust() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
-			Trust: &neo4jv1beta1.TrustSpec{
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Cluster: &neo4jv1beta1.TLSPolicySpec{
-						PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-key"},
-						PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "cluster-cert"},
-						TrustedCerts: &neo4jv1beta1.TLSTrustedCertsSpec{
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Cluster: &neo4jv1.TLSPolicySpec{
+						PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "cluster-key"},
+						PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "cluster-cert"},
+						TrustedCerts: &neo4jv1.TLSTrustedCertsSpec{
 							Sources: []corev1.VolumeProjection{{
 								Secret: &corev1.SecretProjection{
 									LocalObjectReference: corev1.LocalObjectReference{Name: "cluster-ca"},
@@ -247,17 +247,17 @@ func clusterWithTrust() *neo4jv1beta1.Neo4j {
 	}
 }
 
-func standaloneWithBoltTrust() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func standaloneWithBoltTrust() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Trust: &neo4jv1beta1.TrustSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{
-						PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-key", SubPath: "private.key"},
-						PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-cert", SubPath: "public.crt"},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{
+						PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "dev-bolt-key", SubPath: "private.key"},
+						PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "dev-bolt-cert", SubPath: "public.crt"},
 						ClientAuth:        "None",
 					},
 				},
@@ -266,20 +266,20 @@ func standaloneWithBoltTrust() *neo4jv1beta1.Neo4j {
 	}
 }
 
-func clusterWithTrustAndConnectors() *neo4jv1beta1.Neo4j {
+func clusterWithTrustAndConnectors() *neo4jv1.Neo4j {
 	neo4j := clusterWithTrust()
 	httpsPort := int32(7473)
-	neo4j.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{
-		Listeners: &neo4jv1beta1.ConnectivityListenersSpec{HTTPS: &httpsPort},
+	neo4j.Spec.Connectivity = &neo4jv1.ConnectivitySpec{
+		Listeners: &neo4jv1.ConnectivityListenersSpec{HTTPS: &httpsPort},
 	}
-	neo4j.Spec.Trust.Certificates.HTTPS = &neo4jv1beta1.TLSPolicySpec{
-		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-key", SubPath: "private.key"},
-		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "https-cert", SubPath: "public.crt"},
+	neo4j.Spec.Trust.Certificates.HTTPS = &neo4jv1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "https-key", SubPath: "private.key"},
+		PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "https-cert", SubPath: "public.crt"},
 		ClientAuth:        "None",
 	}
-	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1beta1.TLSPolicySpec{
-		PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-key", SubPath: "private.key"},
-		PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "bolt-cert", SubPath: "public.crt"},
+	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1.TLSPolicySpec{
+		PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-key", SubPath: "private.key"},
+		PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "bolt-cert", SubPath: "public.crt"},
 		ClientAuth:        "None",
 	}
 	return neo4j

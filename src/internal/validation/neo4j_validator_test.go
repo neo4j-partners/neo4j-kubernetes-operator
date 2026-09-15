@@ -7,22 +7,22 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
-func validStandalone() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func validStandalone() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -39,7 +39,7 @@ func TestValidateNeo4jOK(t *testing.T) {
 func TestValidateNeo4jRejectsPrivileged(t *testing.T) {
 	n := validStandalone()
 	priv := true
-	n.Spec.Security = &neo4jv1beta1.SecuritySpec{
+	n.Spec.Security = &neo4jv1.SecuritySpec{
 		ContainerSecurityContext: &corev1.SecurityContext{Privileged: &priv},
 	}
 	err := ValidateNeo4j(n)
@@ -50,8 +50,8 @@ func TestValidateNeo4jRejectsPrivileged(t *testing.T) {
 
 func TestValidateUpdateSkipsSpecOnDelete(t *testing.T) {
 	n := validStandalone()
-	n.Spec.Security = &neo4jv1beta1.SecuritySpec{
-		NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{Enabled: true},
+	n.Spec.Security = &neo4jv1.SecuritySpec{
+		NetworkPolicy: &neo4jv1.NetworkPolicySpec{Enabled: true},
 	}
 	now := metav1.Now()
 	n.DeletionTimestamp = &now
@@ -66,9 +66,9 @@ func TestValidateMinimumMembersImmutable(t *testing.T) {
 	v := &Neo4jValidator{}
 	three, five := int32(3), int32(5)
 	old := validStandalone()
-	old.Spec.Topology = neo4jv1beta1.TopologySpec{
-		Mode:           neo4jv1beta1.TopologyModeCluster,
-		Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 5},
+	old.Spec.Topology = neo4jv1.TopologySpec{
+		Mode:           neo4jv1.TopologyModeCluster,
+		Primaries:      &neo4jv1.PrimariesSpec{Members: 5},
 		MinimumMembers: &five,
 	}
 	updated := old.DeepCopy()
@@ -91,9 +91,9 @@ func TestValidateCreateRejectsGateAbovePool(t *testing.T) {
 	v := &Neo4jValidator{}
 	five := int32(5)
 	n := validStandalone()
-	n.Spec.Topology = neo4jv1beta1.TopologySpec{
-		Mode:           neo4jv1beta1.TopologyModeCluster,
-		Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
+	n.Spec.Topology = neo4jv1.TopologySpec{
+		Mode:           neo4jv1.TopologyModeCluster,
+		Primaries:      &neo4jv1.PrimariesSpec{Members: 3},
 		MinimumMembers: &five,
 	}
 	if _, err := v.ValidateCreate(t.Context(), n); err == nil ||
@@ -104,9 +104,9 @@ func TestValidateCreateRejectsGateAbovePool(t *testing.T) {
 
 func TestValidateRejectsOversizedCluster(t *testing.T) {
 	n := validStandalone()
-	n.Spec.Topology = neo4jv1beta1.TopologySpec{
-		Mode:      neo4jv1beta1.TopologyModeCluster,
-		Primaries: &neo4jv1beta1.PrimariesSpec{Members: 99},
+	n.Spec.Topology = neo4jv1.TopologySpec{
+		Mode:      neo4jv1.TopologyModeCluster,
+		Primaries: &neo4jv1.PrimariesSpec{Members: 99},
 	}
 	err := ValidateNeo4j(n)
 	if err == nil || !strings.Contains(err.Error(), "primaries.members") {
@@ -117,8 +117,8 @@ func TestValidateRejectsOversizedCluster(t *testing.T) {
 func TestValidateRejectsInvalidListenPort(t *testing.T) {
 	n := validStandalone()
 	bad := int32(0)
-	n.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{
-		Listeners: &neo4jv1beta1.ConnectivityListenersSpec{Bolt: &bad},
+	n.Spec.Connectivity = &neo4jv1.ConnectivitySpec{
+		Listeners: &neo4jv1.ConnectivityListenersSpec{Bolt: &bad},
 	}
 	err := ValidateNeo4j(n)
 	if err == nil || !strings.Contains(err.Error(), "port") {
@@ -128,7 +128,7 @@ func TestValidateRejectsInvalidListenPort(t *testing.T) {
 
 func TestValidateNeo4jRejectsHostPath(t *testing.T) {
 	n := validStandalone()
-	n.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+	n.Spec.Storage.AdditionalMounts = []neo4jv1.AdditionalMount{{
 		Name:      "host",
 		MountPath: "/host",
 		Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{

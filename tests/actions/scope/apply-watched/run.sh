@@ -23,7 +23,7 @@ for ns in "${watched_list[@]}"; do
 
   log "Applying Neo4j CR ${CR} into watched namespace ${ns} (operator should reconcile it)"
   kubectl apply -n "${ns}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: ${CR}

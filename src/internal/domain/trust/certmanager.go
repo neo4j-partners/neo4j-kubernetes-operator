@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
@@ -28,7 +28,7 @@ const issuanceRequeue = 10 * time.Second
 
 // reconcileCertificates applies one cert-manager Certificate per active TLS policy and
 // prunes Certificates for policies that are no longer configured (BDR-006).
-func (r *Reconciler) reconcileCertificates(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) reconcileCertificates(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 
 	desired := rendertrust.Certificates(neo4j, rendersecrets.WithMountableLabel(nil))
@@ -43,7 +43,7 @@ func (r *Reconciler) reconcileCertificates(ctx context.Context, neo4j *neo4jv1be
 	return r.pruneCertificates(ctx, neo4j, keep)
 }
 
-func (r *Reconciler) applyCertificate(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, pc rendertrust.PolicyCertificate) error {
+func (r *Reconciler) applyCertificate(ctx context.Context, neo4j *neo4jv1.Neo4j, pc rendertrust.PolicyCertificate) error {
 	cert := &unstructured.Unstructured{}
 	cert.SetGroupVersionKind(rendertrust.CertificateGVK)
 	cert.SetName(pc.Object.GetName())
@@ -75,7 +75,7 @@ func (r *Reconciler) applyCertificate(ctx context.Context, neo4j *neo4jv1beta1.N
 
 // pruneCertificates deletes operator-owned Certificates that are no longer desired, so
 // disabling a policy stops its renewals instead of leaving a live certificate behind.
-func (r *Reconciler) pruneCertificates(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, keep map[string]struct{}) shared.StepResult {
+func (r *Reconciler) pruneCertificates(ctx context.Context, neo4j *neo4jv1.Neo4j, keep map[string]struct{}) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 
 	list := &unstructured.UnstructuredList{}
@@ -112,7 +112,7 @@ func (r *Reconciler) pruneCertificates(ctx context.Context, neo4j *neo4jv1beta1.
 
 // awaitIssuedSecrets requeues until cert-manager has published usable key material.
 // A missing Secret is expected on first reconcile, so it requeues rather than failing.
-func (r *Reconciler) awaitIssuedSecrets(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) awaitIssuedSecrets(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	for _, need := range rendertrust.ProvisionedSecretKeys(neo4j) {
 		var secret corev1.Secret

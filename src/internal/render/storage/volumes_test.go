@@ -8,24 +8,24 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 func TestApplyDynamicDataAndShareLogs(t *testing.T) {
-	shareFrom := neo4jv1beta1.ShareFromData
-	neo4j := &neo4jv1beta1.Neo4j{
+	shareFrom := neo4jv1.ShareFromData
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
-					Logs: &neo4jv1beta1.AuxiliaryVolumeSpec{
-						Mode:      neo4jv1beta1.VolumeModeShare,
+					Logs: &neo4jv1.AuxiliaryVolumeSpec{
+						Mode:      neo4jv1.VolumeModeShare,
 						ShareFrom: &shareFrom,
 					},
 				},
@@ -54,19 +54,19 @@ func TestApplyDynamicDataAndShareLogs(t *testing.T) {
 }
 
 func TestApplySharePlugins(t *testing.T) {
-	shareFrom := neo4jv1beta1.ShareFromData
-	neo4j := &neo4jv1beta1.Neo4j{
+	shareFrom := neo4jv1.ShareFromData
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
-					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{
-						Mode:      neo4jv1beta1.VolumeModeShare,
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{
+						Mode:      neo4jv1.VolumeModeShare,
 						ShareFrom: &shareFrom,
 					},
 				},
@@ -86,15 +86,15 @@ func TestApplySharePlugins(t *testing.T) {
 }
 
 func TestApplyExistingClaimName(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode: neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "my-data-pvc"},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode: neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "my-data-pvc"},
 					},
 				},
 			},
@@ -126,14 +126,14 @@ func TestApplyExistingClaimName(t *testing.T) {
 // the exported contract (BackupsMountPath + BackupsSubPath) that render/backup writes to and the
 // restore controller seeds from. If this drifts, the round-trip breaks with "seed not found".
 func TestBackupsMountUsesRoundTripContract(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
-					Backups: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeExisting, Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "bk"}},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data:    neo4jv1.DataVolumeSpec{Mode: neo4jv1.VolumeModeDynamic, Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "1Gi"}},
+					Backups: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeExisting, Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "bk"}},
 				},
 			},
 		},
@@ -154,12 +154,12 @@ func TestBackupsMountUsesRoundTripContract(t *testing.T) {
 	}
 }
 
-func baseStorage() *neo4jv1beta1.StorageSpec {
-	return &neo4jv1beta1.StorageSpec{
-		Volumes: &neo4jv1beta1.VolumesSpec{
-			Data: neo4jv1beta1.DataVolumeSpec{
-				Mode:    neo4jv1beta1.VolumeModeDynamic,
-				Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"},
+func baseStorage() *neo4jv1.StorageSpec {
+	return &neo4jv1.StorageSpec{
+		Volumes: &neo4jv1.VolumesSpec{
+			Data: neo4jv1.DataVolumeSpec{
+				Mode:    neo4jv1.VolumeModeDynamic,
+				Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "1Gi"},
 			},
 		},
 	}
@@ -170,7 +170,7 @@ func TestValidateRejectsReservedDynamicLabels(t *testing.T) {
 	s.Volumes.Data.Dynamic.Labels = map[string]string{
 		"app.kubernetes.io/instance": "victim",
 	}
-	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}})
 	if err == nil || !strings.Contains(err.Error(), "reserved") {
 		t.Fatalf("got %v", err)
 	}
@@ -179,26 +179,26 @@ func TestValidateRejectsReservedDynamicLabels(t *testing.T) {
 func TestValidateRejectsOversizedDynamicPVC(t *testing.T) {
 	s := baseStorage()
 	s.Volumes.Data.Dynamic.Size = "500Ti"
-	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}})
 	if err == nil || !strings.Contains(err.Error(), "16Ti") {
 		t.Fatalf("got %v", err)
 	}
 	s.Volumes.Data.Dynamic.Size = "16Ti"
-	if err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}}); err != nil {
+	if err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDynamicPVCKeepsOperatorIdentityLabels(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode: neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode: neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{
 							Size: "1Gi",
 							Labels: map[string]string{
 								"team":                       "platform",
@@ -223,23 +223,23 @@ func TestDynamicPVCKeepsOperatorIdentityLabels(t *testing.T) {
 func TestValidateRejectsWorldReadableSecretMode(t *testing.T) {
 	mode := int32(0o777)
 	s := baseStorage()
-	s.SecretMounts = map[string]neo4jv1beta1.SecretMountSpec{
+	s.SecretMounts = map[string]neo4jv1.SecretMountSpec{
 		"creds": {
 			SecretName:  "my-creds",
 			MountPath:   "/var/secrets/creds",
-			Items:       []neo4jv1beta1.SecretKeyToPath{{Key: "token", Path: "token"}},
+			Items:       []neo4jv1.SecretKeyToPath{{Key: "token", Path: "token"}},
 			DefaultMode: &mode,
 		},
 	}
-	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}})
 	if err == nil || !strings.Contains(err.Error(), "0440") {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestValidateRejectsHostPathAdditionalMount(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: baseStorage()}}
-	neo4j.Spec.Storage.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+	neo4j := &neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: baseStorage()}}
+	neo4j.Spec.Storage.AdditionalMounts = []neo4jv1.AdditionalMount{{
 		Name:      "host",
 		MountPath: "/host",
 		Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{
@@ -264,21 +264,21 @@ func TestValidateRejectsReservedAdditionalMount(t *testing.T) {
 	}
 	for _, tc := range cases {
 		s := baseStorage()
-		s.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+		s.AdditionalMounts = []neo4jv1.AdditionalMount{{
 			Name: tc.name, MountPath: tc.mount,
 			Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		}}
-		err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+		err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}})
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s@%s: got %v want substring %q", tc.name, tc.mount, err, tc.want)
 		}
 	}
 	s := baseStorage()
-	s.AdditionalMounts = []neo4jv1beta1.AdditionalMount{
+	s.AdditionalMounts = []neo4jv1.AdditionalMount{
 		{Name: "a", MountPath: "/ok1", Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
 		{Name: "a", MountPath: "/ok2", Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
 	}
-	err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}})
+	err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}})
 	if err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("dup: got %v", err)
 	}
@@ -286,23 +286,23 @@ func TestValidateRejectsReservedAdditionalMount(t *testing.T) {
 
 func TestValidateAllowsNonReservedAdditionalMount(t *testing.T) {
 	s := baseStorage()
-	s.AdditionalMounts = []neo4jv1beta1.AdditionalMount{{
+	s.AdditionalMounts = []neo4jv1.AdditionalMount{{
 		Name: "extra-data", MountPath: "/extra-data",
 		Volume: corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}}
-	if err := Validate(&neo4jv1beta1.Neo4j{Spec: neo4jv1beta1.Neo4jSpec{Storage: s}}); err != nil {
+	if err := Validate(&neo4jv1.Neo4j{Spec: neo4jv1.Neo4jSpec{Storage: s}}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestValidateRejectsVolumeClaimTemplatePVBind(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode: neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode: neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{
 							VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
 								VolumeName: "pv-from-another-ns",
 								AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
@@ -331,13 +331,13 @@ func TestValidateRejectsVolumeClaimTemplatePVBind(t *testing.T) {
 }
 
 func TestValidateExistingOneOf(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode: neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode: neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{
 							ClaimName: "a",
 							Volume:    &corev1.Volume{Name: "x"},
 						},
@@ -352,27 +352,27 @@ func TestValidateExistingOneOf(t *testing.T) {
 }
 
 func TestApplySecretAndAdditionalMounts(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
-				AdditionalMounts: []neo4jv1beta1.AdditionalMount{{
+				AdditionalMounts: []neo4jv1.AdditionalMount{{
 					Name:      "extra",
 					MountPath: "/extra",
 					Volume:    corev1.Volume{VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 				}},
-				SecretMounts: map[string]neo4jv1beta1.SecretMountSpec{
+				SecretMounts: map[string]neo4jv1.SecretMountSpec{
 					"creds": {
 						SecretName: "my-creds",
 						MountPath:  "/var/secrets/creds",
-						Items:      []neo4jv1beta1.SecretKeyToPath{{Key: "token", Path: "token"}},
+						Items:      []neo4jv1.SecretKeyToPath{{Key: "token", Path: "token"}},
 					},
 				},
 			},

@@ -7,7 +7,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // Decodes every shipped example strictly and runs the Go-side validation over it. A field name that
@@ -37,7 +37,7 @@ func TestExamplesDecodeAndValidate(t *testing.T) {
 		if kind.Kind != "Neo4j" {
 			continue // supporting manifests: Secret, ResourceQuota, PersistentVolumeClaim
 		}
-		var cr neo4jv1beta1.Neo4j
+		var cr neo4jv1.Neo4j
 		if err := yaml.UnmarshalStrict(raw, &cr); err != nil {
 			t.Errorf("%s: decode: %v", p, err)
 			continue

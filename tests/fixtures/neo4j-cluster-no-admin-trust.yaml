@@ -2,7 +2,7 @@
 # The operator drives formation, scale-out and scale-in over an admin Bolt session, so this cluster
 # could never be operated — CEL refuses it at admission (TLS-011, NEO-004) instead of letting it
 # settle on ClusterFormed=False/BoltUnavailable.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

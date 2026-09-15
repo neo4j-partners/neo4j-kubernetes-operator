@@ -13,7 +13,7 @@ Save this as `dev.yaml`. It is the smallest manifest the operator accepts: an En
 an explicit licence acceptance, a topology mode, a data volume, and a password strategy.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestLoggingDefaultsOmitConfigMaps(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
 	}
 	ctx := render.StandaloneContext(neo4j)
@@ -25,10 +25,10 @@ func TestLoggingDefaultsOmitConfigMaps(t *testing.T) {
 func TestLoggingCustomXML(t *testing.T) {
 	serverXML := `<?xml version="1.0"?><Configuration status="ERROR"></Configuration>`
 	userXML := `<?xml version="1.0"?><Configuration status="WARN"></Configuration>`
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Logging: &neo4jv1beta1.LoggingSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Logging: &neo4jv1.LoggingSpec{
 				ServerLogsXml: serverXML,
 				UserLogsXml:   userXML,
 			},
@@ -55,15 +55,15 @@ func TestLoggingCustomXML(t *testing.T) {
 }
 
 func TestLoggingConfigMapRef(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Logging: &neo4jv1beta1.LoggingSpec{
-				ServerLogsConfigMapRef: &neo4jv1beta1.LoggingConfigMapRef{
+		Spec: neo4jv1.Neo4jSpec{
+			Logging: &neo4jv1.LoggingSpec{
+				ServerLogsConfigMapRef: &neo4jv1.LoggingConfigMapRef{
 					Name: "my-server-logs",
 					Key:  "custom-server.xml",
 				},
-				UserLogsConfigMapRef: &neo4jv1beta1.LoggingConfigMapRef{Name: "my-user-logs"},
+				UserLogsConfigMapRef: &neo4jv1.LoggingConfigMapRef{Name: "my-user-logs"},
 			},
 		},
 	}
@@ -84,11 +84,11 @@ func TestLoggingConfigMapRef(t *testing.T) {
 }
 
 func TestValidateLoggingXOR(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Logging: &neo4jv1beta1.LoggingSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Logging: &neo4jv1.LoggingSpec{
 				ServerLogsXml: "<Configuration/>",
-				ServerLogsConfigMapRef: &neo4jv1beta1.LoggingConfigMapRef{Name: "x"},
+				ServerLogsConfigMapRef: &neo4jv1.LoggingConfigMapRef{Name: "x"},
 			},
 		},
 	}

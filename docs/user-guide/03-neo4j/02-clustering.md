@@ -5,7 +5,7 @@ A cluster is several Neo4j servers organised in pools. Primaries hold the quorum
 read pool for query fan-out and an analytics pool for Graph Data Science and Bloom workloads.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod

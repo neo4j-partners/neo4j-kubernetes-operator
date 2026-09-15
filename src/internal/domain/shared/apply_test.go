@@ -11,15 +11,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestApplyRefusesAdoptUnowned(t *testing.T) {
 	s := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(s)
+	_ = neo4jv1.AddToScheme(s)
 	_ = corev1.AddToScheme(s)
 
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "payments-worker", Namespace: "team", UID: "cr-uid"},
 	}
 	foreign := &corev1.ServiceAccount{
@@ -46,10 +46,10 @@ func TestApplyRefusesAdoptUnowned(t *testing.T) {
 
 func TestApplyUpdatesOwned(t *testing.T) {
 	s := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(s)
+	_ = neo4jv1.AddToScheme(s)
 	_ = corev1.AddToScheme(s)
 
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default", UID: "cr-uid"},
 	}
 	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"}}
@@ -77,10 +77,10 @@ func TestApplyUpdatesOwned(t *testing.T) {
 
 func TestApplyCreatesMissing(t *testing.T) {
 	s := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(s)
+	_ = neo4jv1.AddToScheme(s)
 	_ = corev1.AddToScheme(s)
 
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default", UID: "cr-uid"},
 	}
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(neo4j).Build()

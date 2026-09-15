@@ -82,7 +82,7 @@ The database lifecycle is **not** a reconciled Kubernetes object. The default `n
 
 ```yaml
 # Post-install task CR — imperative, run-once, records status; does NOT reconcile existence
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jDatabaseTask          # working name — final naming in CRD spec
 metadata:
   name: create-orders

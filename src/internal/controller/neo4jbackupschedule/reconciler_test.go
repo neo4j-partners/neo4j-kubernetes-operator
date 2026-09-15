@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 var (
@@ -32,30 +32,30 @@ func scheme(t *testing.T) *runtime.Scheme {
 	if err := clientgoscheme.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
 	return s
 }
 
-func enterpriseNeo4j() *neo4jv1beta1.Neo4j {
-	return &neo4jv1beta1.Neo4j{
+func enterpriseNeo4j() *neo4jv1.Neo4j {
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
-		Spec:       neo4jv1beta1.Neo4jSpec{Edition: neo4jv1beta1.EditionEnterprise},
+		Spec:       neo4jv1.Neo4jSpec{Edition: neo4jv1.EditionEnterprise},
 	}
 }
 
-func scheduleCR(mut func(*neo4jv1beta1.Neo4jBackupSchedule)) *neo4jv1beta1.Neo4jBackupSchedule {
-	s := &neo4jv1beta1.Neo4jBackupSchedule{
+func scheduleCR(mut func(*neo4jv1.Neo4jBackupSchedule)) *neo4jv1.Neo4jBackupSchedule {
+	s := &neo4jv1.Neo4jBackupSchedule{
 		ObjectMeta: metav1.ObjectMeta{Name: "sch", Namespace: "ns", CreationTimestamp: metav1.NewTime(creation)},
-		Spec: neo4jv1beta1.Neo4jBackupScheduleSpec{
-			Neo4jRef: neo4jv1beta1.Neo4jRef{Name: "g"},
-			Full:     neo4jv1beta1.FullCadence{Schedule: "* * * * *"},
-			BackupTemplate: neo4jv1beta1.BackupTemplate{
+		Spec: neo4jv1.Neo4jBackupScheduleSpec{
+			Neo4jRef: neo4jv1.Neo4jRef{Name: "g"},
+			Full:     neo4jv1.FullCadence{Schedule: "* * * * *"},
+			BackupTemplate: neo4jv1.BackupTemplate{
 				Databases: []string{"neo4j"},
-				Destination: neo4jv1beta1.BackupDestination{
-					Type: neo4jv1beta1.BackupDestinationPVC,
-					PVC:  &neo4jv1beta1.BackupPVC{ClaimName: "backups"},
+				Destination: neo4jv1.BackupDestination{
+					Type: neo4jv1.BackupDestinationPVC,
+					PVC:  &neo4jv1.BackupPVC{ClaimName: "backups"},
 				},
 			},
 		},
@@ -70,7 +70,7 @@ func newReconciler(t *testing.T, objs ...client.Object) (*ScheduleReconciler, cl
 	t.Helper()
 	s := scheme(t)
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackupSchedule{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jBackupSchedule{}).Build()
 	return &ScheduleReconciler{
 		Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16),
 		Now: func() time.Time { return testNow },
@@ -81,18 +81,18 @@ func req() ctrl.Request {
 	return ctrl.Request{NamespacedName: types.NamespacedName{Name: "sch", Namespace: "ns"}}
 }
 
-func listBackups(t *testing.T, c client.Client) []neo4jv1beta1.Neo4jBackup {
+func listBackups(t *testing.T, c client.Client) []neo4jv1.Neo4jBackup {
 	t.Helper()
-	var l neo4jv1beta1.Neo4jBackupList
+	var l neo4jv1.Neo4jBackupList
 	if err := c.List(context.Background(), &l, client.InNamespace("ns")); err != nil {
 		t.Fatalf("list backups: %v", err)
 	}
 	return l.Items
 }
 
-func getSchedule(t *testing.T, c client.Client) *neo4jv1beta1.Neo4jBackupSchedule {
+func getSchedule(t *testing.T, c client.Client) *neo4jv1.Neo4jBackupSchedule {
 	t.Helper()
-	var s neo4jv1beta1.Neo4jBackupSchedule
+	var s neo4jv1.Neo4jBackupSchedule
 	if err := c.Get(context.Background(), req().NamespacedName, &s); err != nil {
 		t.Fatalf("get schedule: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestReconcileEmitsFullAndTracksChain(t *testing.T) {
 		t.Fatalf("emitted %d backups, want 1", len(backups))
 	}
 	b := backups[0]
-	if b.Spec.Type != neo4jv1beta1.BackupTypeFull {
+	if b.Spec.Type != neo4jv1.BackupTypeFull {
 		t.Errorf("type = %q, want Full", b.Spec.Type)
 	}
 	if b.Name != "sch-20260902-1200-f" {
@@ -145,7 +145,7 @@ func TestReconcileEmitsFullAndTracksChain(t *testing.T) {
 }
 
 func TestReconcileSuspendEmitsNothing(t *testing.T) {
-	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.Suspend = true
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
@@ -166,8 +166,8 @@ func TestReconcileSuspendEmitsNothing(t *testing.T) {
 func TestReconcileIncrementalAttachesToCurrentChain(t *testing.T) {
 	// The chain's full has already Succeeded, so the differential is allowed to attach.
 	full := succeededFull("sch-existing-f", "sch-existing")
-	r, c := newReconciler(t, enterpriseNeo4j(), full, scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
-		s.Spec.Incremental = &neo4jv1beta1.IncrementalCadence{Schedule: "* * * * *"}
+	r, c := newReconciler(t, enterpriseNeo4j(), full, scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
+		s.Spec.Incremental = &neo4jv1.IncrementalCadence{Schedule: "* * * * *"}
 		// A full already anchored a chain and just ran, so only the incremental is due now.
 		fullTime := metav1.NewTime(time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC))
 		s.Spec.Full.Schedule = "0 0 1 1 *" // yearly — not due now
@@ -179,9 +179,9 @@ func TestReconcileIncrementalAttachesToCurrentChain(t *testing.T) {
 	}
 	// One incremental in addition to the pre-seeded full fixture.
 	all := listBackups(t, c)
-	var inc *neo4jv1beta1.Neo4jBackup
+	var inc *neo4jv1.Neo4jBackup
 	for i := range all {
-		if all[i].Spec.Type == neo4jv1beta1.BackupTypeIncremental {
+		if all[i].Spec.Type == neo4jv1.BackupTypeIncremental {
 			inc = &all[i]
 		}
 	}
@@ -197,9 +197,9 @@ func TestReconcileIncrementalHeldUntilFullSucceeds(t *testing.T) {
 	// The chain's full exists but is still Running — a differential now would race it and fail, so
 	// the schedule must hold (emit nothing) until the full Succeeds.
 	full := succeededFull("sch-existing-f", "sch-existing")
-	full.Status.Phase = neo4jv1beta1.RunPhaseRunning
-	r, c := newReconciler(t, enterpriseNeo4j(), full, scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
-		s.Spec.Incremental = &neo4jv1beta1.IncrementalCadence{Schedule: "* * * * *"}
+	full.Status.Phase = neo4jv1.RunPhaseRunning
+	r, c := newReconciler(t, enterpriseNeo4j(), full, scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
+		s.Spec.Incremental = &neo4jv1.IncrementalCadence{Schedule: "* * * * *"}
 		fullTime := metav1.NewTime(time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC))
 		s.Spec.Full.Schedule = "0 0 1 1 *"
 		s.Status.CurrentChain = "sch-existing"
@@ -209,16 +209,16 @@ func TestReconcileIncrementalHeldUntilFullSucceeds(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 	for _, b := range listBackups(t, c) {
-		if b.Spec.Type == neo4jv1beta1.BackupTypeIncremental {
+		if b.Spec.Type == neo4jv1.BackupTypeIncremental {
 			t.Fatalf("incremental emitted while chain full still Running: %s", b.Name)
 		}
 	}
 }
 
 func TestReconcileIncrementalSkippedWithoutChain(t *testing.T) {
-	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.Full.Schedule = "0 0 1 1 *" // yearly — no full yet, so no chain
-		s.Spec.Incremental = &neo4jv1beta1.IncrementalCadence{Schedule: "* * * * *"}
+		s.Spec.Incremental = &neo4jv1.IncrementalCadence{Schedule: "* * * * *"}
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -229,7 +229,7 @@ func TestReconcileIncrementalSkippedWithoutChain(t *testing.T) {
 }
 
 func TestReconcileInvalidCronFails(t *testing.T) {
-	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.Full.Schedule = "not a cron"
 	}))
 	res, err := r.Reconcile(context.Background(), req())
@@ -245,7 +245,7 @@ func TestReconcileInvalidCronFails(t *testing.T) {
 }
 
 func TestReconcileNotDueRequeues(t *testing.T) {
-	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	r, c := newReconciler(t, enterpriseNeo4j(), scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.Full.Schedule = "0 0 1 1 *" // yearly, far off
 	}))
 	res, err := r.Reconcile(context.Background(), req())
@@ -277,42 +277,42 @@ func TestReconcileIdempotentWithinTick(t *testing.T) {
 
 // --- retention pruning (full.retention, BDR-014 §10) ---
 
-func pvcDest() neo4jv1beta1.BackupDestination {
-	return neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}}
+func pvcDest() neo4jv1.BackupDestination {
+	return neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationPVC, PVC: &neo4jv1.BackupPVC{ClaimName: "backups"}}
 }
 
-func s3Dest() neo4jv1beta1.BackupDestination {
-	return neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/prod/"}
+func s3Dest() neo4jv1.BackupDestination {
+	return neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, URL: "s3://b/prod/"}
 }
 
 // chainBackup builds a Succeeded Neo4jBackup stamped with a schedule's chain labels. paths become
 // recorded artifacts (empty paths are skipped, as pvcArtifacts does).
 // succeededFull is a chain's anchoring full backup in the Succeeded phase, named <chain>-f so the
 // reconciler's chainFullReady Get resolves it.
-func succeededFull(name, chain string) *neo4jv1beta1.Neo4jBackup {
+func succeededFull(name, chain string) *neo4jv1.Neo4jBackup {
 	b := chainBackup(name, chain, testNow, pvcDest())
 	return &b
 }
 
-func chainBackup(name, chain string, created time.Time, dest neo4jv1beta1.BackupDestination, paths ...string) neo4jv1beta1.Neo4jBackup {
-	arts := make([]neo4jv1beta1.BackupArtifact, 0, len(paths))
+func chainBackup(name, chain string, created time.Time, dest neo4jv1.BackupDestination, paths ...string) neo4jv1.Neo4jBackup {
+	arts := make([]neo4jv1.BackupArtifact, 0, len(paths))
 	for _, p := range paths {
-		arts = append(arts, neo4jv1beta1.BackupArtifact{Database: "neo4j", Path: p})
+		arts = append(arts, neo4jv1.BackupArtifact{Database: "neo4j", Path: p})
 	}
-	return neo4jv1beta1.Neo4jBackup{
+	return neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         "ns",
 			CreationTimestamp: metav1.NewTime(created),
 			Labels:            map[string]string{LabelSchedule: "sch", LabelChain: chain, LabelBackupType: "Full"},
 		},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
 			Destination: dest,
-			Type:        neo4jv1beta1.BackupTypeFull,
+			Type:        neo4jv1.BackupTypeFull,
 		},
-		Status: neo4jv1beta1.Neo4jBackupStatus{Phase: neo4jv1beta1.RunPhaseSucceeded, Chain: chain, Artifacts: arts},
+		Status: neo4jv1.Neo4jBackupStatus{Phase: neo4jv1.RunPhaseSucceeded, Chain: chain, Artifacts: arts},
 	}
 }
 
@@ -332,14 +332,14 @@ func hasEvent(r *ScheduleReconciler, reason string) bool {
 
 func TestExpiredChainsKeepLast(t *testing.T) {
 	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
-	items := []neo4jv1beta1.Neo4jBackup{
+	items := []neo4jv1.Neo4jBackup{
 		chainBackup("c1-f", "c1", base, pvcDest(), "a.backup"),
 		chainBackup("c2-f", "c2", base.Add(time.Minute), pvcDest(), "b.backup"),
 		chainBackup("c3-f", "c3", base.Add(2*time.Minute), pvcDest(), "c.backup"),
 	}
 	keep := int32(2)
 	// keepLast=2 with c3 active keeps c3 (current) + c2; c1 expires.
-	got := expiredChains(groupChains(items), &neo4jv1beta1.BackupRetention{KeepLast: &keep}, "c3", base)
+	got := expiredChains(groupChains(items), &neo4jv1.BackupRetention{KeepLast: &keep}, "c3", base)
 	if len(got) != 1 || got[0] != "c1" {
 		t.Fatalf("expired = %v, want [c1]", got)
 	}
@@ -347,13 +347,13 @@ func TestExpiredChainsKeepLast(t *testing.T) {
 
 func TestExpiredChainsKeepDays(t *testing.T) {
 	now := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
-	items := []neo4jv1beta1.Neo4jBackup{
+	items := []neo4jv1.Neo4jBackup{
 		chainBackup("old-f", "old", now.Add(-72*time.Hour), pvcDest(), "a.backup"),
 		chainBackup("mid-f", "mid", now.Add(-36*time.Hour), pvcDest(), "b.backup"),
 		chainBackup("new-f", "new", now.Add(-1*time.Hour), pvcDest(), "c.backup"),
 	}
 	keep := int32(2) // keep chains younger than 2 days
-	got := expiredChains(groupChains(items), &neo4jv1beta1.BackupRetention{KeepDays: &keep}, "new", now)
+	got := expiredChains(groupChains(items), &neo4jv1.BackupRetention{KeepDays: &keep}, "new", now)
 	if len(got) != 1 || got[0] != "old" {
 		t.Fatalf("expired = %v, want [old] (mid is 1.5d; new is current)", got)
 	}
@@ -361,13 +361,13 @@ func TestExpiredChainsKeepDays(t *testing.T) {
 
 func TestExpiredChainsNeverPrunesCurrent(t *testing.T) {
 	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
-	items := []neo4jv1beta1.Neo4jBackup{
+	items := []neo4jv1.Neo4jBackup{
 		chainBackup("c1-f", "c1", base, pvcDest(), "a.backup"),
 		chainBackup("c2-f", "c2", base.Add(time.Minute), pvcDest(), "b.backup"),
 	}
 	keep := int32(1)
 	// c1 is the oldest but is the active chain — it must survive even under keepLast=1.
-	got := expiredChains(groupChains(items), &neo4jv1beta1.BackupRetention{KeepLast: &keep}, "c1", base)
+	got := expiredChains(groupChains(items), &neo4jv1.BackupRetention{KeepLast: &keep}, "c1", base)
 	for _, id := range got {
 		if id == "c1" {
 			t.Fatalf("active chain c1 must never be pruned; got %v", got)
@@ -381,12 +381,12 @@ func TestExpiredChainsNeverPrunesCurrent(t *testing.T) {
 func TestPvcArtifactsAndObjectStoreDetection(t *testing.T) {
 	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
 	p := chainBackup("p1", "c", base, pvcDest(), "x.backup", "y.backup")
-	claim, files, os := pvcArtifacts([]*neo4jv1beta1.Neo4jBackup{&p})
+	claim, files, os := pvcArtifacts([]*neo4jv1.Neo4jBackup{&p})
 	if os || claim != "backups" || len(files) != 2 {
 		t.Fatalf("pvcArtifacts = (%q, %v, %v); want (backups, [x y], false)", claim, files, os)
 	}
 	s := chainBackup("s1", "c", base, s3Dest())
-	if _, _, os := pvcArtifacts([]*neo4jv1beta1.Neo4jBackup{&s}); !os {
+	if _, _, os := pvcArtifacts([]*neo4jv1.Neo4jBackup{&s}); !os {
 		t.Error("object-store backup must report objectStore=true")
 	}
 }
@@ -394,8 +394,8 @@ func TestPvcArtifactsAndObjectStoreDetection(t *testing.T) {
 func TestReconcilePrunesExpiredPVCChainViaJob(t *testing.T) {
 	keep := int32(1)
 	old := chainBackup("old-f", "old", creation.Add(-time.Hour), pvcDest(), "neo4j-old.backup")
-	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
-		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
+	sched := scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
+		s.Spec.Full.Retention = &neo4jv1.BackupRetention{KeepLast: &keep}
 	})
 	r, c := newReconciler(t, enterpriseNeo4j(), sched, &old)
 
@@ -409,7 +409,7 @@ func TestReconcilePrunesExpiredPVCChainViaJob(t *testing.T) {
 		t.Fatalf("expected prune Job prune-old: %v", err)
 	}
 	// …and the records survive until it completes, so no file is ever orphaned.
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err != nil {
 		t.Fatalf("old backup must not be deleted before the prune Job completes: %v", err)
 	}
 	if res.RequeueAfter <= 0 || res.RequeueAfter > 15*time.Second {
@@ -419,18 +419,18 @@ func TestReconcilePrunesExpiredPVCChainViaJob(t *testing.T) {
 
 // s3ChainWithURI is an expired object-store chain backup whose recorded artifact carries the chain
 // folder (status.artifacts[].uri) — what the rclone prune Job purges.
-func s3ChainWithURI(name, chain, uri string, created time.Time) *neo4jv1beta1.Neo4jBackup {
+func s3ChainWithURI(name, chain, uri string, created time.Time) *neo4jv1.Neo4jBackup {
 	b := chainBackup(name, chain, created, s3Dest())
-	b.Status.Artifacts = []neo4jv1beta1.BackupArtifact{{Database: "neo4j", URI: uri}}
+	b.Status.Artifacts = []neo4jv1.BackupArtifact{{Database: "neo4j", URI: uri}}
 	return &b
 }
 
 func TestReconcilePruneObjectStoreChainViaRcloneJob(t *testing.T) {
 	keep := int32(1)
 	old := s3ChainWithURI("old-f", "old", "s3://b/prod/old/", creation.Add(-time.Hour))
-	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	sched := scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.BackupTemplate.Destination = s3Dest()
-		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
+		s.Spec.Full.Retention = &neo4jv1.BackupRetention{KeepLast: &keep}
 	})
 	r, c := newReconciler(t, enterpriseNeo4j(), sched, old)
 
@@ -449,7 +449,7 @@ func TestReconcilePruneObjectStoreChainViaRcloneJob(t *testing.T) {
 		t.Errorf("prune Job must rclone-purge the chain prefix; script = %q", script)
 	}
 	// …and the records survive until it completes, so no object is ever orphaned.
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err != nil {
 		t.Fatalf("object-store chain record must survive until the prune Job completes: %v", err)
 	}
 	if res.RequeueAfter <= 0 || res.RequeueAfter > 15*time.Second {
@@ -460,16 +460,16 @@ func TestReconcilePruneObjectStoreChainViaRcloneJob(t *testing.T) {
 func TestReconcilePruneObjectStoreDeletesRecordsWhenJobCompletes(t *testing.T) {
 	keep := int32(1)
 	old := s3ChainWithURI("old-f", "old", "s3://b/prod/old/", creation.Add(-time.Hour))
-	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	sched := scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.BackupTemplate.Destination = s3Dest()
-		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
+		s.Spec.Full.Retention = &neo4jv1.BackupRetention{KeepLast: &keep}
 	})
 	r, c := newReconciler(t, enterpriseNeo4j(), sched, old, completeJob("prune-old"))
 
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err == nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-f", Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err == nil {
 		t.Error("object-store chain record must be deleted once the prune Job completed")
 	}
 	if !hasEvent(r, "SchedulePruned") {
@@ -479,17 +479,17 @@ func TestReconcilePruneObjectStoreDeletesRecordsWhenJobCompletes(t *testing.T) {
 
 // --- aggregate compaction (aggregate.enabled, BDR-014 §10) ---
 
-func chainInc(name, chain string, created time.Time, dest neo4jv1beta1.BackupDestination, paths ...string) neo4jv1beta1.Neo4jBackup {
+func chainInc(name, chain string, created time.Time, dest neo4jv1.BackupDestination, paths ...string) neo4jv1.Neo4jBackup {
 	b := chainBackup(name, chain, created, dest, paths...)
-	b.Spec.Type = neo4jv1beta1.BackupTypeIncremental
+	b.Spec.Type = neo4jv1.BackupTypeIncremental
 	b.Labels[LabelBackupType] = "Incremental"
 	return b
 }
 
-func chainAgg(name, chain, source string, created time.Time, dest neo4jv1beta1.BackupDestination, phase neo4jv1beta1.RunPhase, paths ...string) neo4jv1beta1.Neo4jBackup {
+func chainAgg(name, chain, source string, created time.Time, dest neo4jv1.BackupDestination, phase neo4jv1.RunPhase, paths ...string) neo4jv1.Neo4jBackup {
 	b := chainBackup(name, chain, created, dest, paths...)
-	b.Spec.Type = neo4jv1beta1.BackupTypeAggregate
-	b.Spec.Source = &neo4jv1beta1.BackupSource{BackupRef: source}
+	b.Spec.Type = neo4jv1.BackupTypeAggregate
+	b.Spec.Source = &neo4jv1.BackupSource{BackupRef: source}
 	b.Labels[LabelBackupType] = "Aggregate"
 	b.Status.Phase = phase
 	return b
@@ -503,7 +503,7 @@ func completeJob(name string) *batchv1.Job {
 			Namespace: "ns",
 			// Controlled by the schedule (UID "" matches the fixture) so Apply adopts it (NEO-002).
 			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: "neo4j.com/v1beta1", Kind: "Neo4jBackupSchedule", Name: "sch", Controller: &controlled,
+				APIVersion: "neo4j.com/v1", Kind: "Neo4jBackupSchedule", Name: "sch", Controller: &controlled,
 			}},
 		},
 		Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
@@ -514,10 +514,10 @@ func completeJob(name string) *batchv1.Job {
 
 // aggregateSchedule is a schedule with the yearly full/incremental crons (nothing emits during the
 // test) and aggregate compaction enabled, pinned to an active chain so closed chains can compact.
-func aggregateSchedule() *neo4jv1beta1.Neo4jBackupSchedule {
-	return scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+func aggregateSchedule() *neo4jv1.Neo4jBackupSchedule {
+	return scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.Full.Schedule = "0 0 1 1 *"
-		s.Spec.Aggregate = &neo4jv1beta1.AggregateCadence{Enabled: true}
+		s.Spec.Aggregate = &neo4jv1.AggregateCadence{Enabled: true}
 		s.Status.CurrentChain = "cur"
 	})
 }
@@ -532,9 +532,9 @@ func TestReconcileCompactionEmitsAggregateForQuiescedChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	var agg *neo4jv1beta1.Neo4jBackup
+	var agg *neo4jv1.Neo4jBackup
 	for _, b := range listBackups(t, c) {
-		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+		if b.Spec.Type == neo4jv1.BackupTypeAggregate {
 			bb := b
 			agg = &bb
 		}
@@ -564,7 +564,7 @@ func TestReconcileCompactionSkipsLoneFull(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 	for _, b := range listBackups(t, c) {
-		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+		if b.Spec.Type == neo4jv1.BackupTypeAggregate {
 			t.Fatalf("aggregate emitted for a lone full: %s", b.Name)
 		}
 	}
@@ -575,13 +575,13 @@ func TestReconcileCompactionHeldUntilChainQuiesces(t *testing.T) {
 	t0 := creation.Add(-10 * time.Minute)
 	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
 	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
-	inc.Status.Phase = neo4jv1beta1.RunPhaseRunning
+	inc.Status.Phase = neo4jv1.RunPhaseRunning
 	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc)
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	for _, b := range listBackups(t, c) {
-		if b.Spec.Type == neo4jv1beta1.BackupTypeAggregate {
+		if b.Spec.Type == neo4jv1.BackupTypeAggregate {
 			t.Fatalf("aggregate emitted before the chain quiesced: %s", b.Name)
 		}
 	}
@@ -591,7 +591,7 @@ func TestReconcileCompactionPrunesLinksAfterAggregateSucceeds(t *testing.T) {
 	t0 := creation.Add(-10 * time.Minute)
 	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
 	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
-	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), pvcDest(), neo4jv1beta1.RunPhaseSucceeded, "old/neo4j-agg.backup")
+	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), pvcDest(), neo4jv1.RunPhaseSucceeded, "old/neo4j-agg.backup")
 	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc, &agg)
 
 	res, err := r.Reconcile(context.Background(), req())
@@ -613,7 +613,7 @@ func TestReconcileCompactionPrunesLinksAfterAggregateSucceeds(t *testing.T) {
 	}
 	// Records survive until the Job completes (files-before-records), and the aggregate is kept.
 	for _, name := range []string{"old-f", "old-1-i", "old-agg"} {
-		if err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+		if err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err != nil {
 			t.Fatalf("%s must survive until the compaction Job completes: %v", name, err)
 		}
 	}
@@ -626,7 +626,7 @@ func TestReconcileCompactionCompletesKeepingRecoveredFull(t *testing.T) {
 	t0 := creation.Add(-10 * time.Minute)
 	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
 	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
-	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), pvcDest(), neo4jv1beta1.RunPhaseSucceeded, "old/neo4j-agg.backup")
+	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), pvcDest(), neo4jv1.RunPhaseSucceeded, "old/neo4j-agg.backup")
 	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc, &agg, completeJob("compact-old"))
 
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
@@ -634,13 +634,13 @@ func TestReconcileCompactionCompletesKeepingRecoveredFull(t *testing.T) {
 	}
 	// Links are gone…
 	for _, name := range []string{"old-f", "old-1-i"} {
-		err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{})
+		err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1.Neo4jBackup{})
 		if err == nil {
 			t.Errorf("link %s must be deleted once the compaction Job completed", name)
 		}
 	}
 	// …the recovered full is kept.
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err != nil {
 		t.Fatalf("recovered full old-agg must be kept: %v", err)
 	}
 	if !hasEvent(r, "ScheduleCompacted") {
@@ -655,7 +655,7 @@ func TestReconcileCompactionObjectStoreDeletesRecords(t *testing.T) {
 	t0 := creation.Add(-10 * time.Minute)
 	full := chainBackup("old-f", "old", t0, s3Dest())
 	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), s3Dest())
-	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), s3Dest(), neo4jv1beta1.RunPhaseSucceeded)
+	agg := chainAgg("old-agg", "old", "old-1-i", t0.Add(2*time.Minute), s3Dest(), neo4jv1.RunPhaseSucceeded)
 	r, c := newReconciler(t, enterpriseNeo4j(), aggregateSchedule(), &full, &inc, &agg)
 
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
@@ -667,11 +667,11 @@ func TestReconcileCompactionObjectStoreDeletesRecords(t *testing.T) {
 	}
 	// Link records gone, recovered full kept.
 	for _, name := range []string{"old-f", "old-1-i"} {
-		if err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err == nil {
+		if err := c.Get(context.Background(), types.NamespacedName{Name: name, Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err == nil {
 			t.Errorf("link %s record must be deleted for object-store compaction", name)
 		}
 	}
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1beta1.Neo4jBackup{}); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "old-agg", Namespace: "ns"}, &neo4jv1.Neo4jBackup{}); err != nil {
 		t.Fatalf("recovered full old-agg must be kept: %v", err)
 	}
 	if !hasEvent(r, "ScheduleCompacted") {
@@ -684,7 +684,7 @@ func TestReconcileCompactionDisabledIsNoop(t *testing.T) {
 	t0 := creation.Add(-10 * time.Minute)
 	full := chainBackup("old-f", "old", t0, pvcDest(), "old/neo4j-f.backup")
 	inc := chainInc("old-1-i", "old", t0.Add(time.Minute), pvcDest(), "old/neo4j-i.backup")
-	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
+	sched := scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
 		s.Spec.Full.Schedule = "0 0 1 1 *"
 		s.Status.CurrentChain = "cur"
 	})
@@ -701,9 +701,9 @@ func TestExpiryDropsCompactedChainWholesale(t *testing.T) {
 	// A compacted chain is just its recovered full; when it expires, expiry must delete that
 	// aggregate record and its file (aggregate-aware retention, for free via grouping).
 	keep := int32(1)
-	agg := chainAgg("old-agg", "old", "old-1-i", creation.Add(-time.Hour), pvcDest(), neo4jv1beta1.RunPhaseSucceeded, "old/neo4j-agg.backup")
-	sched := scheduleCR(func(s *neo4jv1beta1.Neo4jBackupSchedule) {
-		s.Spec.Full.Retention = &neo4jv1beta1.BackupRetention{KeepLast: &keep}
+	agg := chainAgg("old-agg", "old", "old-1-i", creation.Add(-time.Hour), pvcDest(), neo4jv1.RunPhaseSucceeded, "old/neo4j-agg.backup")
+	sched := scheduleCR(func(s *neo4jv1.Neo4jBackupSchedule) {
+		s.Spec.Full.Retention = &neo4jv1.BackupRetention{KeepLast: &keep}
 	})
 	r, c := newReconciler(t, enterpriseNeo4j(), sched, &agg)
 

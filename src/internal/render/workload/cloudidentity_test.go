@@ -6,17 +6,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
-func backupIdentityNeo4j(wi *neo4jv1beta1.WorkloadIdentity) *neo4jv1beta1.Neo4j {
-	n := &neo4jv1beta1.Neo4j{
+func backupIdentityNeo4j(wi *neo4jv1.WorkloadIdentity) *neo4jv1.Neo4j {
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "team"},
-		Spec:       neo4jv1beta1.Neo4jSpec{Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone}},
+		Spec:       neo4jv1.Neo4jSpec{Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone}},
 	}
 	if wi != nil {
-		n.Spec.Security = &neo4jv1beta1.SecuritySpec{CloudIdentity: &neo4jv1beta1.CloudIdentity{WorkloadIdentity: wi}}
+		n.Spec.Security = &neo4jv1.SecuritySpec{CloudIdentity: &neo4jv1.CloudIdentity{WorkloadIdentity: wi}}
 	}
 	return n
 }
@@ -28,8 +28,8 @@ func TestBackupServiceAccountName(t *testing.T) {
 }
 
 func TestBackupServiceAccountCarriesWorkloadIdentityAnnotations(t *testing.T) {
-	n := backupIdentityNeo4j(&neo4jv1beta1.WorkloadIdentity{
-		Provider:    neo4jv1beta1.CloudProviderAWS,
+	n := backupIdentityNeo4j(&neo4jv1.WorkloadIdentity{
+		Provider:    neo4jv1.CloudProviderAWS,
 		Annotations: map[string]string{"eks.amazonaws.com/role-arn": "arn:aws:iam::123:role/neo4j-s3"},
 	})
 	sa := BackupServiceAccount(render.StandaloneContext(n))
@@ -50,12 +50,12 @@ func TestBackupServiceAccountNoAnnotationsWithoutOptIn(t *testing.T) {
 
 func TestApplyBackupPodIdentitySetsServiceAccountAndAzureLabel(t *testing.T) {
 	// Azure is the only provider needing the pod label; AWS/GCP get the SA but no label.
-	for provider, wantLabel := range map[neo4jv1beta1.CloudWorkloadIdentityProvider]bool{
-		neo4jv1beta1.CloudProviderAzure: true,
-		neo4jv1beta1.CloudProviderAWS:   false,
-		neo4jv1beta1.CloudProviderGCP:   false,
+	for provider, wantLabel := range map[neo4jv1.CloudWorkloadIdentityProvider]bool{
+		neo4jv1.CloudProviderAzure: true,
+		neo4jv1.CloudProviderAWS:   false,
+		neo4jv1.CloudProviderGCP:   false,
 	} {
-		n := backupIdentityNeo4j(&neo4jv1beta1.WorkloadIdentity{Provider: provider})
+		n := backupIdentityNeo4j(&neo4jv1.WorkloadIdentity{Provider: provider})
 		tmpl := &corev1.PodTemplateSpec{}
 		ApplyBackupPodIdentity(n, tmpl)
 		if tmpl.Spec.ServiceAccountName != "prod-backup" {
@@ -85,7 +85,7 @@ func serverPodTemplate() *corev1.PodTemplateSpec {
 
 func TestApplyWorkloadPodIdentityStaticKeyProjectsEnv(t *testing.T) {
 	n := backupIdentityNeo4j(nil)
-	n.Spec.Security = &neo4jv1beta1.SecuritySpec{CloudIdentity: &neo4jv1beta1.CloudIdentity{StaticKeySecret: "neo4j-cloud-creds"}}
+	n.Spec.Security = &neo4jv1.SecuritySpec{CloudIdentity: &neo4jv1.CloudIdentity{StaticKeySecret: "neo4j-cloud-creds"}}
 	tmpl := serverPodTemplate()
 	ApplyWorkloadPodIdentity(n, tmpl)
 	env := tmpl.Spec.Containers[0].EnvFrom
@@ -98,7 +98,7 @@ func TestApplyWorkloadPodIdentityStaticKeyProjectsEnv(t *testing.T) {
 }
 
 func TestApplyWorkloadPodIdentityAzureLabelOnly(t *testing.T) {
-	n := backupIdentityNeo4j(&neo4jv1beta1.WorkloadIdentity{Provider: neo4jv1beta1.CloudProviderAzure})
+	n := backupIdentityNeo4j(&neo4jv1.WorkloadIdentity{Provider: neo4jv1.CloudProviderAzure})
 	tmpl := serverPodTemplate()
 	ApplyWorkloadPodIdentity(n, tmpl)
 	if tmpl.Labels[azureWorkloadIdentityUseLabel] != "true" {
@@ -118,8 +118,8 @@ func TestApplyWorkloadPodIdentityNoOptInNoOp(t *testing.T) {
 }
 
 func TestOperandServiceAccountCarriesWorkloadIdentityAnnotations(t *testing.T) {
-	n := backupIdentityNeo4j(&neo4jv1beta1.WorkloadIdentity{
-		Provider:    neo4jv1beta1.CloudProviderGCP,
+	n := backupIdentityNeo4j(&neo4jv1.WorkloadIdentity{
+		Provider:    neo4jv1.CloudProviderGCP,
 		Annotations: map[string]string{"iam.gke.io/gcp-service-account": "neo4j@proj.iam.gserviceaccount.com"},
 	})
 	sa := OperandServiceAccount(render.StandaloneContext(n))

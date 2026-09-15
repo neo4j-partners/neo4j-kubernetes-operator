@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestCertificatesDisabledWithoutCertManager(t *testing.T) {
@@ -150,7 +150,7 @@ func TestCertManagerMountsAndSecretKeys(t *testing.T) {
 // reconcile deadlocks: it cannot exist until the operator has created the Certificate.
 func TestTrustedCertsOnIssuedSecretAreNotUserRequired(t *testing.T) {
 	neo4j := clusterWithCertManager()
-	neo4j.Spec.Trust.Certificates.Cluster.TrustedCerts = &neo4jv1beta1.TLSTrustedCertsSpec{
+	neo4j.Spec.Trust.Certificates.Cluster.TrustedCerts = &neo4jv1.TLSTrustedCertsSpec{
 		Sources: []corev1.VolumeProjection{{
 			Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "prod-cluster-tls-secret"},
@@ -217,7 +217,7 @@ func TestClientAuthOptionalRequiresTrustedCerts(t *testing.T) {
 		t.Fatalf("expected TLS-004 error for clientAuth Optional, got %v", err)
 	}
 
-	neo4j.Spec.Trust.Certificates.Bolt.TrustedCerts = &neo4jv1beta1.TLSTrustedCertsSpec{
+	neo4j.Spec.Trust.Certificates.Bolt.TrustedCerts = &neo4jv1.TLSTrustedCertsSpec{
 		Sources: clusterWithTrust().Spec.Trust.Certificates.Cluster.TrustedCerts.Sources,
 	}
 	if err := Validate(neo4j); err != nil {
@@ -225,11 +225,11 @@ func TestClientAuthOptionalRequiresTrustedCerts(t *testing.T) {
 	}
 }
 
-func clusterWithCertManager() *neo4jv1beta1.Neo4j {
+func clusterWithCertManager() *neo4jv1.Neo4j {
 	neo4j := clusterWithTrust()
-	neo4j.Spec.Trust.CertManager = &neo4jv1beta1.CertManagerSpec{
+	neo4j.Spec.Trust.CertManager = &neo4jv1.CertManagerSpec{
 		Enabled:             true,
-		IssuerRef:           &neo4jv1beta1.IssuerRef{Name: "corp-ca"},
+		IssuerRef:           &neo4jv1.IssuerRef{Name: "corp-ca"},
 		IncludeIngressHosts: true,
 		DNSNames:            []string{"bolt.prod.example.com"},
 	}
@@ -237,11 +237,11 @@ func clusterWithCertManager() *neo4jv1beta1.Neo4j {
 	neo4j.Spec.Trust.Certificates.Cluster.PrivateKey = nil
 	neo4j.Spec.Trust.Certificates.Cluster.PublicCertificate = nil
 	neo4j.Spec.Trust.Certificates.Cluster.SecretName = "prod-cluster-tls-secret"
-	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1beta1.TLSPolicySpec{SecretName: "prod-bolt-tls-secret"}
-	neo4j.Spec.Connectivity = &neo4jv1beta1.ConnectivitySpec{
-		Ingress: &neo4jv1beta1.IngressSpec{
+	neo4j.Spec.Trust.Certificates.Bolt = &neo4jv1.TLSPolicySpec{SecretName: "prod-bolt-tls-secret"}
+	neo4j.Spec.Connectivity = &neo4jv1.ConnectivitySpec{
+		Ingress: &neo4jv1.IngressSpec{
 			Enabled: true,
-			Rules:   []neo4jv1beta1.IngressRuleSpec{{Host: "neo4j.example.com"}},
+			Rules:   []neo4jv1.IngressRuleSpec{{Host: "neo4j.example.com"}},
 		},
 	}
 	return neo4j

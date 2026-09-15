@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // MaxDynamicVolumeSize is the V1 ceiling on Dynamic PVC requests (NEO-014).
@@ -43,7 +43,7 @@ var reservedVolumeNames = map[string]struct{}{
 }
 
 // Validate checks storage modes and Existing oneOf shapes (BDR-005).
-func Validate(neo4j *neo4jv1beta1.Neo4j) error {
+func Validate(neo4j *neo4jv1.Neo4j) error {
 	if neo4j.Spec.Storage == nil || neo4j.Spec.Storage.Volumes == nil {
 		return fmt.Errorf("spec.storage.volumes is required")
 	}
@@ -113,9 +113,9 @@ func rejectReservedLabelKeys(field string, labels map[string]string) error {
 	return nil
 }
 
-func validateData(data *neo4jv1beta1.DataVolumeSpec) error {
+func validateData(data *neo4jv1.DataVolumeSpec) error {
 	switch data.Mode {
-	case neo4jv1beta1.VolumeModeDynamic:
+	case neo4jv1.VolumeModeDynamic:
 		if data.Dynamic == nil || data.Dynamic.Size == "" {
 			return fmt.Errorf("storage.volumes.data.dynamic.size is required when mode is Dynamic")
 		}
@@ -123,27 +123,27 @@ func validateData(data *neo4jv1beta1.DataVolumeSpec) error {
 			return err
 		}
 		return rejectReservedLabelKeys("storage.volumes.data.dynamic.labels", data.Dynamic.Labels)
-	case neo4jv1beta1.VolumeModeExisting:
+	case neo4jv1.VolumeModeExisting:
 		return validateExisting("data", data.Existing)
-	case neo4jv1beta1.VolumeModeShare:
+	case neo4jv1.VolumeModeShare:
 		return fmt.Errorf("storage.volumes.data.mode cannot be Share")
 	default:
 		return fmt.Errorf("storage.volumes.data.mode %q is unsupported", data.Mode)
 	}
 }
 
-func validateAux(name string, aux *neo4jv1beta1.AuxiliaryVolumeSpec) error {
+func validateAux(name string, aux *neo4jv1.AuxiliaryVolumeSpec) error {
 	mode := aux.Mode
 	if mode == "" {
-		mode = neo4jv1beta1.VolumeModeShare
+		mode = neo4jv1.VolumeModeShare
 	}
 	switch mode {
-	case neo4jv1beta1.VolumeModeShare:
-		if aux.ShareFrom != nil && *aux.ShareFrom != neo4jv1beta1.ShareFromData {
+	case neo4jv1.VolumeModeShare:
+		if aux.ShareFrom != nil && *aux.ShareFrom != neo4jv1.ShareFromData {
 			return fmt.Errorf("storage.volumes.%s.shareFrom must be data", name)
 		}
 		return nil
-	case neo4jv1beta1.VolumeModeDynamic:
+	case neo4jv1.VolumeModeDynamic:
 		if aux.Dynamic == nil || aux.Dynamic.Size == "" {
 			return fmt.Errorf("storage.volumes.%s.dynamic.size is required when mode is Dynamic", name)
 		}
@@ -151,14 +151,14 @@ func validateAux(name string, aux *neo4jv1beta1.AuxiliaryVolumeSpec) error {
 			return err
 		}
 		return rejectReservedLabelKeys(fmt.Sprintf("storage.volumes.%s.dynamic.labels", name), aux.Dynamic.Labels)
-	case neo4jv1beta1.VolumeModeExisting:
+	case neo4jv1.VolumeModeExisting:
 		return validateExisting(name, aux.Existing)
 	default:
 		return fmt.Errorf("storage.volumes.%s.mode %q is unsupported", name, mode)
 	}
 }
 
-func validateExisting(role string, existing *neo4jv1beta1.ExistingVolumeSpec) error {
+func validateExisting(role string, existing *neo4jv1.ExistingVolumeSpec) error {
 	if existing == nil {
 		return fmt.Errorf("storage.volumes.%s.existing is required when mode is Existing", role)
 	}

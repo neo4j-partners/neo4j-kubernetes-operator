@@ -70,7 +70,7 @@ Deploy a Standalone `Neo4j` resource. The manifest is explained field by field i
 
 ```bash
 kubectl apply -f - <<'EOF'
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

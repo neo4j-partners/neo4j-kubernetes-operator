@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 )
@@ -25,7 +25,7 @@ const readTailAddress = "prod-read-1.default.svc.cluster.local:7687"
 // readScaleIn is the reported topology mid-scale-in: one primary, a read pool declared at 1 while
 // its StatefulSet still runs 2, and the neo4j database already back to what the pools can host.
 type readScaleIn struct {
-	neo4j    *neo4jv1beta1.Neo4j
+	neo4j    *neo4jv1.Neo4j
 	r        *Reconciler
 	admin    *fakeAdmin
 	recorder *record.FakeRecorder
@@ -38,14 +38,14 @@ type readScaleIn struct {
 func newReadScaleIn(t *testing.T, tail intneo4j.Server, dbs ...intneo4j.DatabaseTopology) readScaleIn {
 	t.Helper()
 	neo4j := testClusterCR(1)
-	neo4j.Spec.Topology.Secondaries = &neo4jv1beta1.SecondariesSpec{
-		Read: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
+	neo4j.Spec.Topology.Secondaries = &neo4jv1.SecondariesSpec{
+		Read: &neo4jv1.SecondaryPoolSpec{Members: 1},
 	}
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	one, two := int32(1), int32(2)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 			Spec: appsv1.StatefulSetSpec{Replicas: &one}},
@@ -81,7 +81,7 @@ func newReadScaleIn(t *testing.T, tail intneo4j.Server, dbs ...intneo4j.Database
 		r: &Reconciler{
 			Client:   c,
 			Recorder: recorder,
-			Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+			Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 				return admin, nil
 			},
 		},
@@ -116,7 +116,7 @@ func (f readScaleIn) tailStillRegistered(t *testing.T) bool {
 }
 
 // drainCondition is ServersPendingDrain, the single condition a scale-in reports through.
-func drainCondition(t *testing.T, neo4j *neo4jv1beta1.Neo4j) *metav1.Condition {
+func drainCondition(t *testing.T, neo4j *neo4jv1.Neo4j) *metav1.Condition {
 	t.Helper()
 	c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionServersPendingDrain.String())
 	if c == nil {
@@ -195,10 +195,10 @@ func TestScaleInDropsDrainedSecondaryHostingOnlyAComposite(t *testing.T) {
 func TestScaleInDoesNotDropPrimaryOnHostingEvidence(t *testing.T) {
 	neo4j := testClusterCR(1)
 	scheme := runtime.NewScheme()
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	two := int32(2)
-	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1beta1.Neo4j{}).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
 		neo4j.DeepCopy(),
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"},
 			Spec: appsv1.StatefulSetSpec{Replicas: &two}},
@@ -217,7 +217,7 @@ func TestScaleInDoesNotDropPrimaryOnHostingEvidence(t *testing.T) {
 	}
 	r := &Reconciler{
 		Client: c,
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 			return admin, nil
 		},
 	}

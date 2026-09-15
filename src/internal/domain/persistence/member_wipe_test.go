@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -24,22 +24,22 @@ func TestOrdinalForSTS(t *testing.T) {
 	}
 }
 
-func dynamicNeo4j(whenScaled neo4jv1beta1.VolumeClaimRetentionPolicyType) *neo4jv1beta1.Neo4j {
-	n := &neo4jv1beta1.Neo4j{
+func dynamicNeo4j(whenScaled neo4jv1.VolumeClaimRetentionPolicyType) *neo4jv1.Neo4j {
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "namespaced", Namespace: "restricted"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
 		},
 	}
 	if whenScaled != "" {
-		n.Spec.Storage.VolumeClaimRetention = &neo4jv1beta1.VolumeClaimRetentionPolicySpec{
+		n.Spec.Storage.VolumeClaimRetention = &neo4jv1.VolumeClaimRetentionPolicySpec{
 			WhenScaled: whenScaled,
 		}
 	}
@@ -49,7 +49,7 @@ func dynamicNeo4j(whenScaled neo4jv1beta1.VolumeClaimRetentionPolicyType) *neo4j
 func TestWipeStaleMemberPVCsRequiresWhenScaledDelete(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	labels := map[string]string{
 		render.LabelInstance:  "namespaced",
@@ -82,7 +82,7 @@ func TestWipeStaleMemberPVCsRequiresWhenScaledDelete(t *testing.T) {
 
 	// Explicit Delete — wipe ordinals >= 3.
 	cDelete := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
-	if err := WipeStaleMemberPVCs(t.Context(), cDelete, dynamicNeo4j(neo4jv1beta1.VolumeClaimRetentionDelete), render.PoolPrimary, 3); err != nil {
+	if err := WipeStaleMemberPVCs(t.Context(), cDelete, dynamicNeo4j(neo4jv1.VolumeClaimRetentionDelete), render.PoolPrimary, 3); err != nil {
 		t.Fatal(err)
 	}
 	var leftDelete corev1.PersistentVolumeClaimList
@@ -95,7 +95,7 @@ func TestWipeStaleMemberPVCsRequiresWhenScaledDelete(t *testing.T) {
 func TestRecycleMemberStoreHealsUnderRetain(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = neo4jv1.AddToScheme(scheme)
 
 	labels := map[string]string{
 		render.LabelInstance:  "namespaced",

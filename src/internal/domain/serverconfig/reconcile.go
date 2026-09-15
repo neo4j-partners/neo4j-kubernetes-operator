@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
@@ -26,7 +26,7 @@ func New(c client.Client, scheme *runtime.Scheme) *Reconciler {
 	return &Reconciler{Client: c, Scheme: scheme}
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	if err := rendercfg.ValidateConfig(neo4j); err != nil {
 		log.Error(err, "serverconfig validation failed")
@@ -68,7 +68,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) s
 	return shared.Done()
 }
 
-func (r *Reconciler) reconcileLoggingConfigMaps(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, baseCtx render.Context) shared.StepResult {
+func (r *Reconciler) reconcileLoggingConfigMaps(ctx context.Context, neo4j *neo4jv1.Neo4j, baseCtx render.Context) shared.StepResult {
 	if desired := rendercfg.ServerLogsConfigMap(baseCtx); desired != nil {
 		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace}}
 		if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, cm, func() error {
@@ -96,7 +96,7 @@ func (r *Reconciler) reconcileLoggingConfigMaps(ctx context.Context, neo4j *neo4
 	return shared.Done()
 }
 
-func (r *Reconciler) deleteConfigMapIfPresent(ctx context.Context, neo4j *neo4jv1beta1.Neo4j, name string) error {
+func (r *Reconciler) deleteConfigMapIfPresent(ctx context.Context, neo4j *neo4jv1.Neo4j, name string) error {
 	cm := &corev1.ConfigMap{}
 	key := client.ObjectKey{Namespace: neo4j.Namespace, Name: name}
 	if err := r.Client.Get(ctx, key, cm); err != nil {

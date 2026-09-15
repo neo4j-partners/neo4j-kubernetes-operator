@@ -5,7 +5,7 @@
 #   chain; an ad-hoc Aggregate keeps the original links (it never deletes your data).
 # Prerequisites: bk-full + bk-incr Succeeded.
 # Apply: kubectl apply -f examples/backup/04-backup-aggregate.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: bk-aggregate

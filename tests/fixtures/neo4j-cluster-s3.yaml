@@ -7,7 +7,7 @@
 # contract). No backups volume: the artifact lives in MinIO, reachable by every pod over the
 # in-cluster endpoint — which is why object storage (not a PVC) is the node-count-agnostic cluster
 # restore path (a file: seed would need an RWX backups volume on all members).
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

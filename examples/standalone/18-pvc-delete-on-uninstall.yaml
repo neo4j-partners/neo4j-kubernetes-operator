@@ -4,7 +4,7 @@
 # Apply: kubectl apply -f examples/standalone/18-pvc-delete-on-uninstall.yaml
 # Delete: kubectl delete neo4j lab-ephemeral -n default  # STS + Dynamic PVCs go away
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: lab-ephemeral

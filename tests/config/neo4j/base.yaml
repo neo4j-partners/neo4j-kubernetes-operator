@@ -1,6 +1,6 @@
-# Neo4j workload base — neo4j.com/v1beta1 Standalone
+# Neo4j workload base — neo4j.com/v1 Standalone
 
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 
 defaults:

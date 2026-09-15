@@ -76,7 +76,7 @@ into StatefulSets, Services, ConfigMaps, Secrets and PersistentVolumeClaims, kee
 with the spec, and reports what it did through status conditions and Kubernetes Events.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

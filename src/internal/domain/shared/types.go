@@ -6,7 +6,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // StepResult is returned by each domain reconcile step.
@@ -32,5 +32,5 @@ func Failed(err error) StepResult {
 
 // Reconciler is implemented by each domain package in the ADR-003 pipeline.
 type Reconciler interface {
-	Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) StepResult
+	Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) StepResult
 }

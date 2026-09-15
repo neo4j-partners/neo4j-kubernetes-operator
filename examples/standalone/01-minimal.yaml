@@ -2,7 +2,7 @@
 # Prerequisites: none.
 # Apply: kubectl apply -f examples/standalone/01-minimal.yaml
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-minimal

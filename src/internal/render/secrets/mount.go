@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
@@ -35,7 +35,7 @@ var (
 
 // ValidateSpec checks CR-only mount policy (no API reads): trustedCert projection
 // allowlist and required items for secret mounts (NEO-005 §1, §3).
-func ValidateSpec(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateSpec(neo4j *neo4jv1.Neo4j) error {
 	if err := validateTrustedCertSources(neo4j); err != nil {
 		return err
 	}
@@ -49,12 +49,12 @@ func ValidateSpec(neo4j *neo4jv1beta1.Neo4j) error {
 	return nil
 }
 
-func validateTrustedCertSources(neo4j *neo4jv1beta1.Neo4j) error {
+func validateTrustedCertSources(neo4j *neo4jv1.Neo4j) error {
 	if neo4j.Spec.Trust == nil || neo4j.Spec.Trust.Certificates == nil {
 		return nil
 	}
 	certs := neo4j.Spec.Trust.Certificates
-	for _, p := range []*neo4jv1beta1.TLSPolicySpec{certs.Bolt, certs.HTTPS, certs.Cluster} {
+	for _, p := range []*neo4jv1.TLSPolicySpec{certs.Bolt, certs.HTTPS, certs.Cluster} {
 		if p == nil || p.TrustedCerts == nil {
 			continue
 		}
@@ -98,7 +98,7 @@ func validateTrustedCertSources(neo4j *neo4jv1beta1.Neo4j) error {
 
 // ReferencedMountSecrets returns Secret names the CR asks the operator to mount
 // (excludes Secrets the operator itself creates for generatePassword).
-func ReferencedMountSecrets(neo4j *neo4jv1beta1.Neo4j) []string {
+func ReferencedMountSecrets(neo4j *neo4jv1.Neo4j) []string {
 	seen := map[string]struct{}{}
 	var names []string
 	add := func(n string) {
@@ -138,7 +138,7 @@ func ReferencedMountSecrets(neo4j *neo4jv1beta1.Neo4j) []string {
 
 // EnsureMountable verifies each referenced mount Secret exists and carries MountableLabel.
 // BYO auth Secrets (passwordSecretRef) must also be delegated to this CR (ADD-01).
-func EnsureMountable(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j) error {
+func EnsureMountable(ctx context.Context, c client.Client, neo4j *neo4jv1.Neo4j) error {
 	authRef := ""
 	if neo4j.Spec.Auth != nil && neo4j.Spec.Auth.PasswordSecretRef != nil {
 		authRef = neo4j.Spec.Auth.PasswordSecretRef.Name
@@ -177,7 +177,7 @@ func RequireMountable(secret *corev1.Secret) error {
 
 // RequireAuthSecretDelegated fails unless the Secret is operator-managed for this CR
 // or the namespace owner labeled it AllowedForLabel=<neo4j.Name> (ADD-01).
-func RequireAuthSecretDelegated(secret *corev1.Secret, neo4j *neo4jv1beta1.Neo4j) error {
+func RequireAuthSecretDelegated(secret *corev1.Secret, neo4j *neo4jv1.Neo4j) error {
 	if secret.Labels != nil {
 		if secret.Labels[render.LabelManagedBy] == render.ManagedByValue &&
 			secret.Labels[render.LabelInstance] == neo4j.Name {

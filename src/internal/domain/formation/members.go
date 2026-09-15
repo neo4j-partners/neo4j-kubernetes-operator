@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -18,7 +18,7 @@ type Member struct {
 }
 
 // DesiredMembers returns every pool ordinal 0..members-1 from the CR.
-func DesiredMembers(neo4j *neo4jv1beta1.Neo4j) []Member {
+func DesiredMembers(neo4j *neo4jv1.Neo4j) []Member {
 	var out []Member
 	for _, pool := range render.ActivePools(neo4j) {
 		ctx := render.ContextForPool(neo4j, pool)
@@ -32,7 +32,7 @@ func DesiredMembers(neo4j *neo4jv1beta1.Neo4j) []Member {
 }
 
 // TailMembers returns ordinals [desired .. currentReplicas-1] for a pool (scale-in candidates).
-func TailMembers(neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, currentReplicas int32) []Member {
+func TailMembers(neo4j *neo4jv1.Neo4j, pool render.PoolID, currentReplicas int32) []Member {
 	ctx := render.ContextForPool(neo4j, pool)
 	desired := ctx.PoolReplicas()
 	if currentReplicas <= desired {
@@ -72,7 +72,7 @@ func modeConstraint(pool render.PoolID) string {
 // ParseDrainOK reads operator-owned status.drainOK (ADD-02).
 // Entries are ignored unless DrainOKGeneration matches metadata.generation, so a
 // stale confirmation cannot authorize a newer scale-in intent. CR annotations are never trusted.
-func ParseDrainOK(neo4j *neo4jv1beta1.Neo4j) map[string]int32 {
+func ParseDrainOK(neo4j *neo4jv1.Neo4j) map[string]int32 {
 	out := map[string]int32{}
 	if neo4j.Status.DrainOKGeneration != neo4j.Generation {
 		return out
@@ -84,7 +84,7 @@ func ParseDrainOK(neo4j *neo4jv1beta1.Neo4j) map[string]int32 {
 }
 
 // SetDrainOK writes or clears one pool entry in status.drainOK (mutates neo4j.Status).
-func SetDrainOK(neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, replicas int32, clear bool) {
+func SetDrainOK(neo4j *neo4jv1.Neo4j, pool render.PoolID, replicas int32, clear bool) {
 	m := map[string]int32{}
 	for k, v := range neo4j.Status.DrainOK {
 		m[k] = v
@@ -105,7 +105,7 @@ func SetDrainOK(neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, replicas int32, c
 }
 
 // PrimaryReplicasCap is the primary-pool ceiling while system has a single primary.
-func PrimaryReplicasCap(neo4j *neo4jv1beta1.Neo4j) (int32, bool) {
+func PrimaryReplicasCap(neo4j *neo4jv1.Neo4j) (int32, bool) {
 	if neo4j.Status.PrimaryReplicasCap == nil {
 		return 0, false
 	}
@@ -117,7 +117,7 @@ func PrimaryReplicasCap(neo4j *neo4jv1beta1.Neo4j) (int32, bool) {
 }
 
 // SetPrimaryReplicasCap writes or clears status.primaryReplicasCap.
-func SetPrimaryReplicasCap(neo4j *neo4jv1beta1.Neo4j, replicas int32, clear bool) {
+func SetPrimaryReplicasCap(neo4j *neo4jv1.Neo4j, replicas int32, clear bool) {
 	if clear {
 		neo4j.Status.PrimaryReplicasCap = nil
 		return
@@ -129,7 +129,7 @@ func SetPrimaryReplicasCap(neo4j *neo4jv1beta1.Neo4j, replicas int32, clear bool
 // EffectiveReplicas returns STS replicas to apply: scale-up immediately (unless primary
 // cap — single system primary cannot grow via ENABLE alone); scale-down only after
 // operator-owned status.drainOK (ADD-02).
-func EffectiveReplicas(neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, desired, currentSpec int32) int32 {
+func EffectiveReplicas(neo4j *neo4jv1.Neo4j, pool render.PoolID, desired, currentSpec int32) int32 {
 	if desired >= currentSpec {
 		if pool == render.PoolPrimary {
 			if cap, ok := PrimaryReplicasCap(neo4j); ok && desired > cap {
@@ -150,7 +150,7 @@ func EffectiveReplicas(neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, desired, c
 // AdminBoltURI is the operator's system-DB admin entrypoint.
 // Must use neo4j:// so the driver routes writes to the system LEADER — bolt:// to any
 // member (including primary-0) fails with Neo.ClientError.Cluster.NotALeader.
-func AdminBoltURI(neo4j *neo4jv1beta1.Neo4j) string {
+func AdminBoltURI(neo4j *neo4jv1.Neo4j) string {
 	return strings.Replace(ClientBoltURI(neo4j), "bolt://", "neo4j://", 1)
 }
 
@@ -158,14 +158,14 @@ func AdminBoltURI(neo4j *neo4jv1beta1.Neo4j) string {
 // Host is the short Service DNS name only — never CR connectivity.clusterDomain.
 // That field is for Neo4j-advertised FQDNs / CLUSTER_DOMAIN; feeding it into the
 // operator dial would let a CR author redirect admin credentials (ADD-01).
-func ClientBoltURI(neo4j *neo4jv1beta1.Neo4j) string {
+func ClientBoltURI(neo4j *neo4jv1.Neo4j) string {
 	ctx := render.ClientServiceContext(neo4j)
 	host := fmt.Sprintf("%s.%s.svc", ctx.ClientServiceName(), ctx.Namespace())
 	return "bolt://" + host + ":7687"
 }
 
 // BoltTLSEnabled is true when bolt certificates are configured.
-func BoltTLSEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+func BoltTLSEnabled(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j.Spec.Trust != nil && neo4j.Spec.Trust.Enabled &&
 		neo4j.Spec.Trust.Certificates != nil && neo4j.Spec.Trust.Certificates.Bolt != nil
 }

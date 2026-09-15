@@ -7,16 +7,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 func TestValidateSecurityRejectsPrivileged(t *testing.T) {
 	priv := true
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
 				ContainerSecurityContext: &corev1.SecurityContext{Privileged: &priv},
 			},
 		},
@@ -29,10 +29,10 @@ func TestValidateSecurityRejectsPrivileged(t *testing.T) {
 
 func TestValidateSecurityRejectsHostRootUser(t *testing.T) {
 	uid := int64(0)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
 				PodSecurityContext: &corev1.PodSecurityContext{RunAsUser: &uid},
 			},
 		},
@@ -43,10 +43,10 @@ func TestValidateSecurityRejectsHostRootUser(t *testing.T) {
 }
 
 func TestValidateSecurityRejectsDangerousCapability(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
 				ContainerSecurityContext: &corev1.SecurityContext{
 					Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"SYS_ADMIN"}},
 				},
@@ -59,7 +59,7 @@ func TestValidateSecurityRejectsDangerousCapability(t *testing.T) {
 }
 
 func TestValidateSecurityRejectsDefaultName(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
+	neo4j := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
 	if err := ValidateSecurity(neo4j); err == nil || !strings.Contains(err.Error(), "default") {
 		t.Fatalf("got %v", err)
 	}
@@ -71,11 +71,11 @@ func TestValidateSecurityRejectsCloudIAMAnnotations(t *testing.T) {
 		"iam.gke.io/gcp-service-account",
 		"azure.workload.identity/client-id",
 	} {
-		neo4j := &neo4jv1beta1.Neo4j{
+		neo4j := &neo4jv1.Neo4j{
 			ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-			Spec: neo4jv1beta1.Neo4jSpec{
-				Security: &neo4jv1beta1.SecuritySpec{
-					ServiceAccount: &neo4jv1beta1.ServiceAccountSpec{
+			Spec: neo4jv1.Neo4jSpec{
+				Security: &neo4jv1.SecuritySpec{
+					ServiceAccount: &neo4jv1.ServiceAccountSpec{
 						Annotations: map[string]string{key: "x"},
 					},
 				},
@@ -90,18 +90,18 @@ func TestValidateSecurityRejectsCloudIAMAnnotations(t *testing.T) {
 
 func TestValidateSecurityAcceptsCloudIdentityWorkloadIdentity(t *testing.T) {
 	// The typed opt-in is what relaxes NEO-002: a WI binding that matches its provider is accepted.
-	cases := map[neo4jv1beta1.CloudWorkloadIdentityProvider]string{
-		neo4jv1beta1.CloudProviderAWS:   "eks.amazonaws.com/role-arn",
-		neo4jv1beta1.CloudProviderGCP:   "iam.gke.io/gcp-service-account",
-		neo4jv1beta1.CloudProviderAzure: "azure.workload.identity/client-id",
+	cases := map[neo4jv1.CloudWorkloadIdentityProvider]string{
+		neo4jv1.CloudProviderAWS:   "eks.amazonaws.com/role-arn",
+		neo4jv1.CloudProviderGCP:   "iam.gke.io/gcp-service-account",
+		neo4jv1.CloudProviderAzure: "azure.workload.identity/client-id",
 	}
 	for provider, key := range cases {
-		neo4j := &neo4jv1beta1.Neo4j{
+		neo4j := &neo4jv1.Neo4j{
 			ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-			Spec: neo4jv1beta1.Neo4jSpec{
-				Security: &neo4jv1beta1.SecuritySpec{
-					CloudIdentity: &neo4jv1beta1.CloudIdentity{
-						WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{
+			Spec: neo4jv1.Neo4jSpec{
+				Security: &neo4jv1.SecuritySpec{
+					CloudIdentity: &neo4jv1.CloudIdentity{
+						WorkloadIdentity: &neo4jv1.WorkloadIdentity{
 							Provider:    provider,
 							Annotations: map[string]string{key: "x"},
 						},
@@ -117,13 +117,13 @@ func TestValidateSecurityAcceptsCloudIdentityWorkloadIdentity(t *testing.T) {
 
 func TestValidateSecurityRejectsCloudIdentityProviderMismatch(t *testing.T) {
 	// An Azure client-id under provider=aws is neither the right binding nor allowlisted for AWS.
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
-				CloudIdentity: &neo4jv1beta1.CloudIdentity{
-					WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{
-						Provider:    neo4jv1beta1.CloudProviderAWS,
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
+				CloudIdentity: &neo4jv1.CloudIdentity{
+					WorkloadIdentity: &neo4jv1.WorkloadIdentity{
+						Provider:    neo4jv1.CloudProviderAWS,
 						Annotations: map[string]string{"azure.workload.identity/client-id": "x"},
 					},
 				},
@@ -136,13 +136,13 @@ func TestValidateSecurityRejectsCloudIdentityProviderMismatch(t *testing.T) {
 }
 
 func TestValidateSecurityRejectsCloudIdentityArbitraryAnnotation(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
-				CloudIdentity: &neo4jv1beta1.CloudIdentity{
-					WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{
-						Provider:    neo4jv1beta1.CloudProviderGCP,
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
+				CloudIdentity: &neo4jv1.CloudIdentity{
+					WorkloadIdentity: &neo4jv1.WorkloadIdentity{
+						Provider:    neo4jv1.CloudProviderGCP,
 						Annotations: map[string]string{"example.com/note": "x"},
 					},
 				},
@@ -157,11 +157,11 @@ func TestValidateSecurityRejectsCloudIdentityArbitraryAnnotation(t *testing.T) {
 func TestContainerSecurityContextMergesOverDefaults(t *testing.T) {
 	uid := int64(1000)
 	priv := true // would be rejected by Validate; merge must still force false
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Security: &neo4jv1beta1.SecuritySpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Security: &neo4jv1.SecuritySpec{
 				ContainerSecurityContext: &corev1.SecurityContext{
 					RunAsUser:  &uid,
 					Privileged: &priv,

@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackupschedule"
 	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
 )
@@ -27,33 +27,33 @@ func scheme(t *testing.T) *runtime.Scheme {
 	if err := clientgoscheme.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
 	return s
 }
 
-func enterpriseNeo4j() *neo4jv1beta1.Neo4j {
+func enterpriseNeo4j() *neo4jv1.Neo4j {
 	port := int32(6362)
-	return &neo4jv1beta1.Neo4j{
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:      neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:      neo4jv1.EditionEnterprise,
 			Version:      "2025.01.0",
-			Topology:     neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{Listeners: &neo4jv1beta1.ConnectivityListenersSpec{Backup: &port}},
+			Topology:     neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Connectivity: &neo4jv1.ConnectivitySpec{Listeners: &neo4jv1.ConnectivityListenersSpec{Backup: &port}},
 		},
 	}
 }
 
-func backupCR() *neo4jv1beta1.Neo4jBackup {
-	return &neo4jv1beta1.Neo4jBackup{
+func backupCR() *neo4jv1.Neo4jBackup {
+	return &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"*"},
-			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/p/"},
-			Type:        neo4jv1beta1.BackupTypeAuto,
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, URL: "s3://b/p/"},
+			Type:        neo4jv1.BackupTypeAuto,
 		},
 	}
 }
@@ -62,7 +62,7 @@ func newReconciler(t *testing.T, objs ...client.Object) (*BackupReconciler, clie
 	t.Helper()
 	s := scheme(t)
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jBackup{}).Build()
 	return &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}, c
 }
 
@@ -70,9 +70,9 @@ func req() ctrl.Request {
 	return ctrl.Request{NamespacedName: types.NamespacedName{Name: "nb", Namespace: "ns"}}
 }
 
-func getBackup(t *testing.T, c client.Client) *neo4jv1beta1.Neo4jBackup {
+func getBackup(t *testing.T, c client.Client) *neo4jv1.Neo4jBackup {
 	t.Helper()
-	var b neo4jv1beta1.Neo4jBackup
+	var b neo4jv1.Neo4jBackup
 	if err := c.Get(t.Context(), req().NamespacedName, &b); err != nil {
 		t.Fatalf("get backup: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestReconcileCreatesJobAndRuns(t *testing.T) {
 	if err := c.Get(t.Context(), types.NamespacedName{Name: renderbackup.JobName(backupCR()), Namespace: "ns"}, &job); err != nil {
 		t.Fatalf("expected Job created: %v", err)
 	}
-	if p := getBackup(t, c).Status.Phase; p != neo4jv1beta1.RunPhaseRunning {
+	if p := getBackup(t, c).Status.Phase; p != neo4jv1.RunPhaseRunning {
 		t.Errorf("phase = %q, want Running", p)
 	}
 }
@@ -107,7 +107,7 @@ func TestReconcileTargetNotFoundIsRetryable(t *testing.T) {
 		t.Error("expected requeue when target missing")
 	}
 	b := getBackup(t, c)
-	if b.Status.Phase != neo4jv1beta1.RunPhasePending {
+	if b.Status.Phase != neo4jv1.RunPhasePending {
 		t.Errorf("phase = %q, want Pending", b.Status.Phase)
 	}
 	if b.Status.Reason != "BackupTargetNotFound" {
@@ -117,13 +117,13 @@ func TestReconcileTargetNotFoundIsRetryable(t *testing.T) {
 
 func TestReconcileCommunityFailsTerminally(t *testing.T) {
 	n := enterpriseNeo4j()
-	n.Spec.Edition = neo4jv1beta1.EditionCommunity
+	n.Spec.Edition = neo4jv1.EditionCommunity
 	r, c := newReconciler(t, n, backupCR())
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	b := getBackup(t, c)
-	if b.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+	if b.Status.Phase != neo4jv1.RunPhaseFailed {
 		t.Errorf("phase = %q, want Failed", b.Status.Phase)
 	}
 	if b.Status.Reason != "BackupEditionUnsupported" {
@@ -163,14 +163,14 @@ func TestReconcileFailedJobSurfacesPodMessage(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(s).
 		WithObjects(enterpriseNeo4j(), backup, job, pod).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jBackup{}).Build()
 	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
 
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getBackup(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed {
 		t.Fatalf("phase = %q, want Failed", got.Status.Phase)
 	}
 	if got.Status.Message != realMsg {
@@ -180,13 +180,13 @@ func TestReconcileFailedJobSurfacesPodMessage(t *testing.T) {
 
 func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 	s := scheme(t)
-	backup := &neo4jv1beta1.Neo4jBackup{
+	backup := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
-			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "bk"}},
-			Type:        neo4jv1beta1.BackupTypeFull,
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationPVC, PVC: &neo4jv1.BackupPVC{ClaimName: "bk"}},
+			Type:        neo4jv1.BackupTypeFull,
 		},
 	}
 	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup, "")
@@ -209,14 +209,14 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(s).
 		WithObjects(enterpriseNeo4j(), backup, job, pod).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jBackup{}).Build()
 	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
 
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getBackup(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if got.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		t.Fatalf("phase = %q, want Succeeded", got.Status.Phase)
 	}
 	if len(got.Status.Artifacts) != 1 || got.Status.Artifacts[0].Path != realName {
@@ -227,31 +227,31 @@ func TestReconcilePVCBackupRecordsArtifactPath(t *testing.T) {
 	}
 }
 
-func aggregateSource(name, chain, uri, path string) *neo4jv1beta1.Neo4jBackup {
-	return &neo4jv1beta1.Neo4jBackup{
+func aggregateSource(name, chain, uri, path string) *neo4jv1.Neo4jBackup {
+	return &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
-			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
-			Type:        neo4jv1beta1.BackupTypeIncremental,
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationPVC, PVC: &neo4jv1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1.BackupTypeIncremental,
 		},
-		Status: neo4jv1beta1.Neo4jBackupStatus{
-			Phase: neo4jv1beta1.RunPhaseSucceeded, Chain: chain,
-			Artifacts: []neo4jv1beta1.BackupArtifact{{Database: "neo4j", Type: neo4jv1beta1.BackupTypeIncremental, URI: uri, Path: path}},
+		Status: neo4jv1.Neo4jBackupStatus{
+			Phase: neo4jv1.RunPhaseSucceeded, Chain: chain,
+			Artifacts: []neo4jv1.BackupArtifact{{Database: "neo4j", Type: neo4jv1.BackupTypeIncremental, URI: uri, Path: path}},
 		},
 	}
 }
 
-func aggregateCR(ref string) *neo4jv1beta1.Neo4jBackup {
-	return &neo4jv1beta1.Neo4jBackup{
+func aggregateCR(ref string) *neo4jv1.Neo4jBackup {
+	return &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
-			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
-			Type:        neo4jv1beta1.BackupTypeAggregate,
-			Source:      &neo4jv1beta1.BackupSource{BackupRef: ref},
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationPVC, PVC: &neo4jv1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1.BackupTypeAggregate,
+			Source:      &neo4jv1.BackupSource{BackupRef: ref},
 		},
 	}
 }
@@ -283,21 +283,21 @@ func TestReconcileAggregateProducesRecoveredFull(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(s).
 		WithObjects(enterpriseNeo4j(), src, agg, job, pod).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jBackup{}).Build()
 	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
 
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getBackup(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if got.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		t.Fatalf("phase = %q, want Succeeded", got.Status.Phase)
 	}
 	if len(got.Status.Artifacts) != 1 {
 		t.Fatalf("artifacts = %+v, want 1 recovered full", got.Status.Artifacts)
 	}
 	a := got.Status.Artifacts[0]
-	if a.Type != neo4jv1beta1.BackupTypeFull {
+	if a.Type != neo4jv1.BackupTypeFull {
 		t.Errorf("recovered artifact Type = %q, want Full (it seeds like a standalone full)", a.Type)
 	}
 	if a.Path != recovered || a.URI != "pvc://backups" || a.SizeBytes != 8192 {
@@ -318,7 +318,7 @@ func TestReconcileAggregateSourceNotFoundIsRetryable(t *testing.T) {
 		t.Error("expected requeue while the aggregate source is not yet present")
 	}
 	got := getBackup(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhasePending || got.Status.Reason != "BackupSourceNotFound" {
+	if got.Status.Phase != neo4jv1.RunPhasePending || got.Status.Reason != "BackupSourceNotFound" {
 		t.Errorf("status = phase %q reason %q, want Pending/BackupSourceNotFound", got.Status.Phase, got.Status.Reason)
 	}
 	var job batchv1.Job
@@ -333,16 +333,16 @@ func TestReconcileAggregateSourceNotFoundIsRetryable(t *testing.T) {
 func TestReconcileAggregateObjectStoreSource(t *testing.T) {
 	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
 	agg := aggregateCR("chain-last")
-	agg.Spec.Destination = neo4jv1beta1.BackupDestination{
-		Type:        neo4jv1beta1.BackupDestinationS3,
+	agg.Spec.Destination = neo4jv1.BackupDestination{
+		Type:        neo4jv1.BackupDestinationS3,
 		URL:         "s3://b/p/",
-		Credentials: &neo4jv1beta1.BackupCredentials{SecretName: "creds"},
+		Credentials: &neo4jv1.BackupCredentials{SecretName: "creds"},
 	}
 	r, c := newReconciler(t, enterpriseNeo4j(), src, agg)
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	if got := getBackup(t, c); got.Status.Phase == neo4jv1beta1.RunPhaseFailed {
+	if got := getBackup(t, c); got.Status.Phase == neo4jv1.RunPhaseFailed {
 		t.Fatalf("status = phase %q reason %q, want the object-store aggregate Job to be created", got.Status.Phase, got.Status.Reason)
 	}
 	var job batchv1.Job
@@ -371,10 +371,10 @@ func TestReconcileAggregateObjectStoreCompactionDeletesOldChain(t *testing.T) {
 	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
 	agg := aggregateCR("chain-last")
 	agg.Labels = map[string]string{neo4jbackupschedule.LabelChain: "sch-0100"}
-	agg.Spec.Destination = neo4jv1beta1.BackupDestination{
-		Type:        neo4jv1beta1.BackupDestinationS3,
+	agg.Spec.Destination = neo4jv1.BackupDestination{
+		Type:        neo4jv1.BackupDestinationS3,
 		URL:         "s3://b/p/",
-		Credentials: &neo4jv1beta1.BackupCredentials{SecretName: "creds"},
+		Credentials: &neo4jv1.BackupCredentials{SecretName: "creds"},
 	}
 	r, c := newReconciler(t, enterpriseNeo4j(), src, agg)
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
@@ -392,8 +392,8 @@ func TestReconcileAggregateObjectStoreCompactionDeletesOldChain(t *testing.T) {
 func TestReconcileAggregateMixedStoresUnsupported(t *testing.T) {
 	src := aggregateSource("chain-last", "sch-0100", "s3://b/p/", "")
 	src.Spec.Databases = []string{"neo4j", "extra"}
-	src.Status.Artifacts = append(src.Status.Artifacts, neo4jv1beta1.BackupArtifact{
-		Database: "extra", Type: neo4jv1beta1.BackupTypeIncremental, URI: "pvc://backups", Path: "sch-0100/extra.backup",
+	src.Status.Artifacts = append(src.Status.Artifacts, neo4jv1.BackupArtifact{
+		Database: "extra", Type: neo4jv1.BackupTypeIncremental, URI: "pvc://backups", Path: "sch-0100/extra.backup",
 	})
 	agg := aggregateCR("chain-last")
 	agg.Spec.Databases = []string{"neo4j", "extra"}
@@ -402,22 +402,22 @@ func TestReconcileAggregateMixedStoresUnsupported(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getBackup(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "BackupSourceUnsupported" {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed || got.Status.Reason != "BackupSourceUnsupported" {
 		t.Errorf("status = phase %q reason %q, want Failed/BackupSourceUnsupported", got.Status.Phase, got.Status.Reason)
 	}
 }
 
 func TestReconcileScheduleLabelledBackupUsesChainSubDir(t *testing.T) {
-	backup := &neo4jv1beta1.Neo4jBackup{
+	backup := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "nb", Namespace: "ns",
 			Labels: map[string]string{neo4jbackupschedule.LabelChain: "sch-20260903-0100"},
 		},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
-			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationPVC, PVC: &neo4jv1beta1.BackupPVC{ClaimName: "backups"}},
-			Type:        neo4jv1beta1.BackupTypeFull,
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationPVC, PVC: &neo4jv1.BackupPVC{ClaimName: "backups"}},
+			Type:        neo4jv1.BackupTypeFull,
 		},
 	}
 	r, c := newReconciler(t, enterpriseNeo4j(), backup)
@@ -440,9 +440,9 @@ func TestChainSubDir(t *testing.T) {
 	// Only a schedule's chain label isolates into a sub-dir; an ad-hoc backup (no label) writes flat
 	// to the url/claim its author gave. A wildcard PVC backup has no recordable path (its filename
 	// script keys off named dbs), so it stays flat even when labelled.
-	mk := func(typ neo4jv1beta1.BackupDestinationType, dbs []string, chain string) *neo4jv1beta1.Neo4jBackup {
-		b := &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef: neo4jv1beta1.Neo4jRef{Name: "g"}, Databases: dbs,
+	mk := func(typ neo4jv1.BackupDestinationType, dbs []string, chain string) *neo4jv1.Neo4jBackup {
+		b := &neo4jv1.Neo4jBackup{Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef: neo4jv1.Neo4jRef{Name: "g"}, Databases: dbs,
 		}}
 		b.Spec.Destination.Type = typ
 		if chain != "" {
@@ -452,16 +452,16 @@ func TestChainSubDir(t *testing.T) {
 	}
 	cases := []struct {
 		name string
-		b    *neo4jv1beta1.Neo4jBackup
+		b    *neo4jv1.Neo4jBackup
 		want string
 	}{
-		{"object-store scheduled uses label", mk(neo4jv1beta1.BackupDestinationS3, []string{"*"}, "sch-1"), "sch-1"},
-		{"object-store ad-hoc stays flat", mk(neo4jv1beta1.BackupDestinationS3, []string{"neo4j"}, ""), ""},
-		{"object-store ad-hoc wildcard stays flat", mk(neo4jv1beta1.BackupDestinationS3, []string{"*"}, ""), ""},
-		{"pvc scheduled wildcard stays flat", mk(neo4jv1beta1.BackupDestinationPVC, []string{"*"}, "sch-1"), ""},
-		{"pvc scheduled named uses label", mk(neo4jv1beta1.BackupDestinationPVC, []string{"neo4j"}, "sch-1"), "sch-1"},
-		{"pvc ad-hoc named stays flat", mk(neo4jv1beta1.BackupDestinationPVC, []string{"neo4j"}, ""), ""},
-		{"pvc ad-hoc wildcard stays flat", mk(neo4jv1beta1.BackupDestinationPVC, []string{"*"}, ""), ""},
+		{"object-store scheduled uses label", mk(neo4jv1.BackupDestinationS3, []string{"*"}, "sch-1"), "sch-1"},
+		{"object-store ad-hoc stays flat", mk(neo4jv1.BackupDestinationS3, []string{"neo4j"}, ""), ""},
+		{"object-store ad-hoc wildcard stays flat", mk(neo4jv1.BackupDestinationS3, []string{"*"}, ""), ""},
+		{"pvc scheduled wildcard stays flat", mk(neo4jv1.BackupDestinationPVC, []string{"*"}, "sch-1"), ""},
+		{"pvc scheduled named uses label", mk(neo4jv1.BackupDestinationPVC, []string{"neo4j"}, "sch-1"), "sch-1"},
+		{"pvc ad-hoc named stays flat", mk(neo4jv1.BackupDestinationPVC, []string{"neo4j"}, ""), ""},
+		{"pvc ad-hoc wildcard stays flat", mk(neo4jv1.BackupDestinationPVC, []string{"*"}, ""), ""},
 	}
 	for _, tc := range cases {
 		if got := chainSubDir(tc.b); got != tc.want {
@@ -474,13 +474,13 @@ func TestArtifactsForObjectStore(t *testing.T) {
 	// A scheduled backup records the per-chain folder the Job wrote to; an ad-hoc backup records the
 	// url as given (trailing slash normalized) — both so restore-by-backupRef and aggregate point
 	// --from-path at the exact prefix.
-	b := &neo4jv1beta1.Neo4jBackup{
+	b := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{neo4jbackupschedule.LabelChain: "sch-1"}},
-		Spec: neo4jv1beta1.Neo4jBackupSpec{
-			Neo4jRef:    neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
 			Databases:   []string{"neo4j"},
-			Destination: neo4jv1beta1.BackupDestination{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://bucket/prod"},
-			Type:        neo4jv1beta1.BackupTypeFull,
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, URL: "s3://bucket/prod"},
+			Type:        neo4jv1.BackupTypeFull,
 		},
 	}
 	if got := artifactsFor(b, nil); got[0].URI != "s3://bucket/prod/sch-1/" {
@@ -508,14 +508,14 @@ func TestReconcileMirrorsJobCompletion(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(s).
 		WithObjects(enterpriseNeo4j(), backup, job).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jBackup{}).Build()
 	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
 
 	if _, err := r.Reconcile(t.Context(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getBackup(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if got.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		t.Errorf("phase = %q, want Succeeded", got.Status.Phase)
 	}
 	// Ad-hoc backup (no schedule label): no chain grouping and the artifact is the url as given, so

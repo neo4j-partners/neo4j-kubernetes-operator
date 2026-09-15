@@ -4,7 +4,7 @@
 #   (creates Secrets dev-tls-bolt-cluster-key / -cert / -ca in namespace "default")
 # Apply: kubectl apply -f examples/standalone/08-tls-bolt-only.yaml
 # Related README: ../README.md#tls--auth--plugin-prerequisites
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-tls-bolt

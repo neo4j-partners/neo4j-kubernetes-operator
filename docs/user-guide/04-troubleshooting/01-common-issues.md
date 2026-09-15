@@ -29,7 +29,7 @@ kubectl apply --server-side --force-conflicts -f config/crd/bases/neo4j.com_neo4
 
 ## CRD not found when applying Neo4j
 
-**Symptom:** `no matches for kind "Neo4j" in version "neo4j.com/v1beta1"`
+**Symptom:** `no matches for kind "Neo4j" in version "neo4j.com/v1"`
 
 **Fix:** Install the CRD first, as described in
 [Install the CRD](../02-operator-installation/03-install.md#install-the-crd):

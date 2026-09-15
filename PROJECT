@@ -16,6 +16,6 @@ resources:
   domain: neo4j.com
   group: neo4j
   kind: Neo4j
-  path: github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1
-  version: v1beta1
+  path: github.com/neo4j/neo4j-kubernetes-operator/src/api/v1
+  version: v1
 version: "3"

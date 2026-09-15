@@ -14,7 +14,7 @@
 # Apply: kubectl apply -f examples/standalone/25-cloud-identity.yaml
 # Test on Azure (end-to-end backup with Workload Identity): ../backup/azure-blob.md
 # Related README: ../README.md#standalone · user guide ../../docs/user-guide/03-neo4j/10-backup-restore.md
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: cloud-identity
@@ -64,7 +64,7 @@ spec:
 # Back up to an object store with this identity — omit destination.credentials to use the workload
 # identity above (the "<name>-backup" SA); set destination.credentials for a per-backup static Secret:
 #
-#   apiVersion: neo4j.com/v1beta1
+#   apiVersion: neo4j.com/v1
 #   kind: Neo4jBackup
 #   metadata: { name: bk-s3 }
 #   spec:

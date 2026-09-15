@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestNEO4JPluginsEnv(t *testing.T) {
@@ -39,8 +39,8 @@ func TestAssigned(t *testing.T) {
 }
 
 func TestValidateRejectsUnknownPlugin(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{Plugins: []string{"apoc-extended"}},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{Plugins: []string{"apoc-extended"}},
 	}
 	err := Validate(neo4j)
 	if err == nil || !strings.Contains(err.Error(), "catalog") {
@@ -49,10 +49,10 @@ func TestValidateRejectsUnknownPlugin(t *testing.T) {
 }
 
 func TestValidateRejectsVersionPin(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
 			Plugins: []string{"apoc"},
-			PluginDefinitions: map[string]neo4jv1beta1.PluginDefinitionSpec{
+			PluginDefinitions: map[string]neo4jv1.PluginDefinitionSpec{
 				"apoc": {Version: "5.26.0"},
 			},
 		},
@@ -64,11 +64,11 @@ func TestValidateRejectsVersionPin(t *testing.T) {
 }
 
 func TestSkipNetworkFetchExistingVolume(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeExisting},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeExisting},
 				},
 			},
 		},
@@ -76,7 +76,7 @@ func TestSkipNetworkFetchExistingVolume(t *testing.T) {
 	if !SkipNetworkFetch(neo4j) {
 		t.Fatal("Existing plugins volume should skip NEO4J_PLUGINS fetch")
 	}
-	neo4j.Spec.Storage.Volumes.Plugins.Mode = neo4jv1beta1.VolumeModeShare
+	neo4j.Spec.Storage.Volumes.Plugins.Mode = neo4jv1.VolumeModeShare
 	if SkipNetworkFetch(neo4j) {
 		t.Fatal("Share still downloads on first start")
 	}

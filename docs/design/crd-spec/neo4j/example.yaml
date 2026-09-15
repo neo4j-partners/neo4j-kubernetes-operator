@@ -1,6 +1,6 @@
 # Minimal valid V1 manifest — Standalone (BDR-002 + BDR-004 Option E)
 # Copy to config/samples/ during implementation.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

@@ -4,22 +4,22 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestClusterNeo4jConfInjected(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{
 					Members: 3,
 				},
 			},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
+			Connectivity: &neo4jv1.ConnectivitySpec{
 				ClusterDomain: "cluster.local",
 			},
 		},
@@ -66,12 +66,12 @@ func TestSystemBootstrapGateIsScaleInvariant(t *testing.T) {
 		members int32
 		want    string
 	}{{1, "1"}, {3, "3"}, {5, "3"}, {7, "3"}} {
-		neo4j := &neo4jv1beta1.Neo4j{
+		neo4j := &neo4jv1.Neo4j{
 			ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-			Spec: neo4jv1beta1.Neo4jSpec{
-				Topology: neo4jv1beta1.TopologySpec{
-					Mode:      neo4jv1beta1.TopologyModeCluster,
-					Primaries: &neo4jv1beta1.PrimariesSpec{Members: tc.members},
+			Spec: neo4jv1.Neo4jSpec{
+				Topology: neo4jv1.TopologySpec{
+					Mode:      neo4jv1.TopologyModeCluster,
+					Primaries: &neo4jv1.PrimariesSpec{Members: tc.members},
 				},
 			},
 		}
@@ -87,12 +87,12 @@ func TestSystemBootstrapGateIsScaleInvariant(t *testing.T) {
 func TestUserBootstrapGateOverridesDerivedAndSurvivesScaleIn(t *testing.T) {
 	key := "dbms.cluster.minimum_initial_system_primaries_count"
 	gate := int32(5)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:           neo4jv1beta1.TopologyModeCluster,
-				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 5},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:           neo4jv1.TopologyModeCluster,
+				Primaries:      &neo4jv1.PrimariesSpec{Members: 5},
 				MinimumMembers: &gate,
 			},
 		},
@@ -114,12 +114,12 @@ func TestUserBootstrapGateOverridesDerivedAndSurvivesScaleIn(t *testing.T) {
 // An even gate is legal: Neo4j accepts any integer >= 1, and a two-server cluster needs 2.
 func TestEvenBootstrapGateIsRendered(t *testing.T) {
 	gate := int32(2)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:           neo4jv1beta1.TopologyModeCluster,
-				Primaries:      &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:           neo4jv1.TopologyModeCluster,
+				Primaries:      &neo4jv1.PrimariesSpec{Members: 3},
 				MinimumMembers: &gate,
 			},
 		},
@@ -133,12 +133,12 @@ func TestEvenBootstrapGateIsRendered(t *testing.T) {
 // The same cluster scaled 3 → 5 → 3 must render byte-identical config, so the checksum never moves.
 func TestScalingDoesNotChangeConfigChecksum(t *testing.T) {
 	def := int32(3)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:                  neo4jv1beta1.TopologyModeCluster,
-				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:                  neo4jv1.TopologyModeCluster,
+				Primaries:             &neo4jv1.PrimariesSpec{Members: 3},
 				DefaultPrimariesCount: &def,
 			},
 		},
@@ -160,14 +160,14 @@ func TestScalingDoesNotChangeConfigChecksum(t *testing.T) {
 // restart bought nothing, and on a single-primary cluster it took the whole DBMS down each time
 // somebody scaled a read pool.
 func TestSecondaryScalingDoesNotChangeConfigChecksum(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 1},
-				Secondaries: &neo4jv1beta1.SecondariesSpec{
-					Read: &neo4jv1beta1.SecondaryPoolSpec{Members: 1},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 1},
+				Secondaries: &neo4jv1.SecondariesSpec{
+					Read: &neo4jv1.SecondaryPoolSpec{Members: 1},
 				},
 			},
 		},
@@ -200,12 +200,12 @@ func TestSecondaryScalingDoesNotChangeConfigChecksum(t *testing.T) {
 
 func TestDefaultPrimariesCountDrivesDefaultDBTopology(t *testing.T) {
 	def := int32(3)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:                  neo4jv1beta1.TopologyModeCluster,
-				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:                  neo4jv1.TopologyModeCluster,
+				Primaries:             &neo4jv1.PrimariesSpec{Members: 3},
 				DefaultPrimariesCount: &def,
 			},
 		},
@@ -221,12 +221,12 @@ func TestDefaultPrimariesCountDrivesDefaultDBTopology(t *testing.T) {
 
 func TestDefaultPrimariesCountClampedToPrimaries(t *testing.T) {
 	def := int32(5)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:                  neo4jv1beta1.TopologyModeCluster,
-				Primaries:             &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:                  neo4jv1.TopologyModeCluster,
+				Primaries:             &neo4jv1.PrimariesSpec{Members: 3},
 				DefaultPrimariesCount: &def,
 			},
 		},
@@ -239,15 +239,15 @@ func TestDefaultPrimariesCountClampedToPrimaries(t *testing.T) {
 
 
 func TestReadPoolCannotBootstrapAsPrimary(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
-				Secondaries: &neo4jv1beta1.SecondariesSpec{
-					Analytics: &neo4jv1beta1.SecondaryPoolSpec{Members: 1, Plugins: []string{"gds"}},
-					Read:      &neo4jv1beta1.SecondaryPoolSpec{Members: 1, Plugins: []string{"apoc"}},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
+				Secondaries: &neo4jv1.SecondariesSpec{
+					Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1, Plugins: []string{"gds"}},
+					Read:      &neo4jv1.SecondaryPoolSpec{Members: 1, Plugins: []string{"apoc"}},
 				},
 			},
 		},
@@ -267,10 +267,10 @@ func TestReadPoolCannotBootstrapAsPrimary(t *testing.T) {
 }
 
 func TestStandaloneNeo4jConfInjectedK8sDefaults(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	data := ConfigMap(render.StandaloneContext(neo4j)).Data
@@ -292,18 +292,18 @@ func TestListenerConfKeysHTTPSBackupMetrics(t *testing.T) {
 	https := int32(7473)
 	backup := int32(6362)
 	metrics := int32(2004)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Features: &neo4jv1beta1.FeaturesSpec{
-				Backup: &neo4jv1beta1.BackupFeatureSpec{Enabled: true},
-				Monitoring: &neo4jv1beta1.MonitoringFeaturesSpec{
-					Prometheus: &neo4jv1beta1.PrometheusMonitoringSpec{Enabled: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Features: &neo4jv1.FeaturesSpec{
+				Backup: &neo4jv1.BackupFeatureSpec{Enabled: true},
+				Monitoring: &neo4jv1.MonitoringFeaturesSpec{
+					Prometheus: &neo4jv1.PrometheusMonitoringSpec{Enabled: true},
 				},
 			},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{
 					HTTPS:   &https,
 					Backup:  &backup,
 					Metrics: &metrics,
@@ -327,10 +327,10 @@ func TestListenerConfKeysHTTPSBackupMetrics(t *testing.T) {
 }
 
 func TestPluginConfKeysAPOC(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Plugins:  []string{"apoc"},
 		},
 	}
@@ -350,14 +350,14 @@ func TestPluginConfKeysAPOC(t *testing.T) {
 }
 
 func TestPluginConfKeysPluginsVolumeOnly(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
-					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeShare},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data:    neo4jv1.DataVolumeSpec{Mode: neo4jv1.VolumeModeDynamic, Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "1Gi"}},
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeShare},
 				},
 			},
 		},
@@ -372,15 +372,15 @@ func TestPluginConfKeysPluginsVolumeOnly(t *testing.T) {
 }
 
 func TestPluginConfKeysAPOCWithPluginsVolume(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Plugins:  []string{"apoc"},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
-					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeShare},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data:    neo4jv1.DataVolumeSpec{Mode: neo4jv1.VolumeModeDynamic, Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "1Gi"}},
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeShare},
 				},
 			},
 		},
@@ -395,12 +395,12 @@ func TestPluginConfKeysAPOCWithPluginsVolume(t *testing.T) {
 }
 
 func TestUserNeo4jConfigOverridesPluginDefaults(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Plugins:  []string{"apoc"},
-			Config: &neo4jv1beta1.ConfigSpec{
+			Config: &neo4jv1.ConfigSpec{
 				Neo4j: map[string]string{
 					"dbms.security.procedures.unrestricted": "apoc.algo.aStar",
 					"dbms.security.procedures.allowlist":    "apoc.algo.aStar",
@@ -424,19 +424,19 @@ func TestUserNeo4jConfigOverridesPluginDefaults(t *testing.T) {
 // file:/backups/<artifact> (ADR-015 round-trip). Absent the volume, the key is not set.
 func TestSeedProviderDefaultFollowsBackupsVolume(t *testing.T) {
 	const key = "dbms.databases.seed_from_uri_providers"
-	backups := func() *neo4jv1beta1.StorageSpec {
-		return &neo4jv1beta1.StorageSpec{
-			Volumes: &neo4jv1beta1.VolumesSpec{
-				Data:    neo4jv1beta1.DataVolumeSpec{Mode: neo4jv1beta1.VolumeModeDynamic, Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "1Gi"}},
-				Backups: &neo4jv1beta1.AuxiliaryVolumeSpec{Mode: neo4jv1beta1.VolumeModeExisting, Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "bk"}},
+	backups := func() *neo4jv1.StorageSpec {
+		return &neo4jv1.StorageSpec{
+			Volumes: &neo4jv1.VolumesSpec{
+				Data:    neo4jv1.DataVolumeSpec{Mode: neo4jv1.VolumeModeDynamic, Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "1Gi"}},
+				Backups: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeExisting, Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "bk"}},
 			},
 		}
 	}
 
-	with := &neo4jv1beta1.Neo4j{
+	with := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Storage:  backups(),
 		},
 	}
@@ -444,10 +444,10 @@ func TestSeedProviderDefaultFollowsBackupsVolume(t *testing.T) {
 		t.Fatalf("%s = %q, want FileSeedProvider,CloudSeedProvider when backups volume mounted", key, got)
 	}
 
-	without := &neo4jv1beta1.Neo4j{
+	without := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	if _, ok := ConfigMap(render.StandaloneContext(without)).Data[key]; ok {
@@ -456,7 +456,7 @@ func TestSeedProviderDefaultFollowsBackupsVolume(t *testing.T) {
 
 	// User override wins (defaults layer).
 	override := with.DeepCopy()
-	override.Spec.Config = &neo4jv1beta1.ConfigSpec{Neo4j: map[string]string{key: "S3SeedProvider"}}
+	override.Spec.Config = &neo4jv1.ConfigSpec{Neo4j: map[string]string{key: "S3SeedProvider"}}
 	if got := ConfigMap(render.StandaloneContext(override)).Data[key]; got != "S3SeedProvider" {
 		t.Fatalf("%s = %q, want user override S3SeedProvider", key, got)
 	}
@@ -466,13 +466,13 @@ func TestSeedProviderDefaultFollowsBackupsVolume(t *testing.T) {
 // (azb:/s3:/gs:) can seed — otherwise Neo4j rejects the URI as "not a valid location" (ADR-016).
 func TestSeedProviderCloudEnabledByCloudIdentity(t *testing.T) {
 	const key = "dbms.databases.seed_from_uri_providers"
-	n := &neo4jv1beta1.Neo4j{
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Security: &neo4jv1beta1.SecuritySpec{
-				CloudIdentity: &neo4jv1beta1.CloudIdentity{
-					WorkloadIdentity: &neo4jv1beta1.WorkloadIdentity{Provider: neo4jv1beta1.CloudProviderAzure},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Security: &neo4jv1.SecuritySpec{
+				CloudIdentity: &neo4jv1.CloudIdentity{
+					WorkloadIdentity: &neo4jv1.WorkloadIdentity{Provider: neo4jv1.CloudProviderAzure},
 				},
 			},
 		},
@@ -483,10 +483,10 @@ func TestSeedProviderCloudEnabledByCloudIdentity(t *testing.T) {
 }
 
 func TestNeo4jConfDataHasNoNeo4jConfBlobKey(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	for k := range ConfigMap(render.StandaloneContext(neo4j)).Data {

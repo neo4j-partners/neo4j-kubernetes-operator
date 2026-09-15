@@ -31,7 +31,7 @@ use S3; swap the `destination` block and identity for Azure/GCS as in their runb
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: ${NEO4J}
@@ -77,7 +77,7 @@ The `Neo4jBackup` is exactly the Standalone one; the operator runs it against a 
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata: { name: bk-cluster }
 spec:
@@ -102,7 +102,7 @@ kubectl -n "$NS" exec ${NEO4J}-primary-0 -c neo4j -- \
   cypher-shell -a neo4j://localhost:7687 -u neo4j -p "$PW" "MATCH (n:Item) DELETE n;"
 
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata: { name: rst-cluster }
 spec:

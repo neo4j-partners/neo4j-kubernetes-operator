@@ -12,14 +12,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
 // certManagerConfigured is true when the CR has a trust.certManager block at all,
 // enabled or not — the signal that Certificates may need applying or pruning.
-func certManagerConfigured(neo4j *neo4jv1beta1.Neo4j) bool {
+func certManagerConfigured(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j.Spec.Trust != nil && neo4j.Spec.Trust.CertManager != nil
 }
 
@@ -42,7 +42,7 @@ func OwnedTypes() []client.Object {
 	return []client.Object{cert}
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) shared.StepResult {
+func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared.StepResult {
 	log := ctrllog.FromContext(ctx)
 	if err := rendertrust.Validate(neo4j); err != nil {
 		log.Error(err, "trust validation failed")

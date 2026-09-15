@@ -3,21 +3,21 @@ package workload
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func TestPodDisruptionBudgetClusterDefaults(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
-			PodDisruptionBudget: &neo4jv1beta1.PodDisruptionBudgetSpec{Enabled: true},
+			PodDisruptionBudget: &neo4jv1.PodDisruptionBudgetSpec{Enabled: true},
 		},
 	}
 	if !PDBEnabled(neo4j) {
@@ -41,14 +41,14 @@ func TestPodDisruptionBudgetClusterDefaults(t *testing.T) {
 
 func TestPodDisruptionBudgetMinAvailableOverride(t *testing.T) {
 	min := intstr.FromInt32(3)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 5},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 5},
 			},
-			PodDisruptionBudget: &neo4jv1beta1.PodDisruptionBudgetSpec{
+			PodDisruptionBudget: &neo4jv1.PodDisruptionBudgetSpec{
 				Enabled:      true,
 				MinAvailable: &min,
 			},
@@ -61,11 +61,11 @@ func TestPodDisruptionBudgetMinAvailableOverride(t *testing.T) {
 }
 
 func TestPodDisruptionBudgetStandaloneDefault(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology:            neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			PodDisruptionBudget: &neo4jv1beta1.PodDisruptionBudgetSpec{Enabled: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology:            neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			PodDisruptionBudget: &neo4jv1.PodDisruptionBudgetSpec{Enabled: true},
 		},
 	}
 	pdb := PodDisruptionBudget(render.StandaloneContext(neo4j))
@@ -76,13 +76,13 @@ func TestPodDisruptionBudgetStandaloneDefault(t *testing.T) {
 
 func TestValidatePDBRejectsUnsatisfiable(t *testing.T) {
 	min := intstr.FromInt32(3)
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
-			PodDisruptionBudget: &neo4jv1beta1.PodDisruptionBudgetSpec{
+			PodDisruptionBudget: &neo4jv1.PodDisruptionBudgetSpec{
 				Enabled:      true,
 				MinAvailable: &min,
 			},

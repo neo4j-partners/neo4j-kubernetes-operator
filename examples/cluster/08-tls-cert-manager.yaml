@@ -82,7 +82,7 @@
 # Cleanup: kubectl delete -f examples/cluster/08-tls-cert-manager.yaml   # then delete the PVCs:
 #          kubectl delete pvc -l app.kubernetes.io/instance=prod-cm
 # Related README: ../README.md#tls--auth--plugin-prerequisites
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod-cm

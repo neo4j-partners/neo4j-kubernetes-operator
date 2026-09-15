@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	neo4jctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4j"
 	neo4jbackupctrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackup"
 	neo4jschedulectrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jbackupschedule"
@@ -48,7 +48,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(neo4jv1beta1.AddToScheme(scheme))
+	utilruntime.Must(neo4jv1.AddToScheme(scheme))
 }
 
 func main() {
@@ -182,7 +182,7 @@ func main() {
 
 	if enableWebhooks {
 		if err := ctrl.NewWebhookManagedBy(mgr).
-			For(&neo4jv1beta1.Neo4j{}).
+			For(&neo4jv1.Neo4j{}).
 			WithValidator(&validation.Neo4jValidator{Client: mgr.GetClient()}).
 			Complete(); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Neo4j")

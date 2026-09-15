@@ -3,19 +3,19 @@ package connectivity
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestMemberInternalsService(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
 		},
 	}
@@ -53,12 +53,12 @@ func TestMemberInternalsService(t *testing.T) {
 }
 
 func TestClusterMemberServicesCount(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
 		},
 	}
@@ -70,16 +70,16 @@ func TestClusterMemberServicesCount(t *testing.T) {
 
 func TestClientServiceHonorsExposeAndFacadePorts(t *testing.T) {
 	httpFacade := int32(80)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Service: &neo4jv1beta1.ConnectivityServiceSpec{
-					Type:        neo4jv1beta1.ServiceType("LoadBalancer"),
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Service: &neo4jv1.ConnectivityServiceSpec{
+					Type:        neo4jv1.ServiceType("LoadBalancer"),
 					Expose:      []string{"bolt", "http"},
 					Annotations: map[string]string{"service.beta.kubernetes.io/aws-load-balancer-type": "nlb"},
-					Ports: &neo4jv1beta1.ServicePortsSpec{
+					Ports: &neo4jv1.ServicePortsSpec{
 						HTTP: &httpFacade,
 					},
 					LoadBalancerSourceRanges: []string{"10.0.0.0/8"},
@@ -110,12 +110,12 @@ func TestClientServiceHonorsExposeAndFacadePorts(t *testing.T) {
 }
 
 func TestClientServiceExposeBoltOnly(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Service: &neo4jv1beta1.ConnectivityServiceSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Service: &neo4jv1.ConnectivityServiceSpec{
 					Expose: []string{"bolt"},
 				},
 			},
@@ -130,18 +130,18 @@ func TestClientServiceExposeBoltOnly(t *testing.T) {
 func TestAdminServiceCreatedWithBackupAndMetrics(t *testing.T) {
 	backup := int32(6362)
 	metrics := int32(2004)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Features: &neo4jv1beta1.FeaturesSpec{
-				Backup: &neo4jv1beta1.BackupFeatureSpec{Enabled: true},
-				Monitoring: &neo4jv1beta1.MonitoringFeaturesSpec{
-					Prometheus: &neo4jv1beta1.PrometheusMonitoringSpec{Enabled: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Features: &neo4jv1.FeaturesSpec{
+				Backup: &neo4jv1.BackupFeatureSpec{Enabled: true},
+				Monitoring: &neo4jv1.MonitoringFeaturesSpec{
+					Prometheus: &neo4jv1.PrometheusMonitoringSpec{Enabled: true},
 				},
 			},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{
 					Backup:  &backup,
 					Metrics: &metrics,
 				},
@@ -171,12 +171,12 @@ func TestAdminServiceCreatedWithBackupAndMetrics(t *testing.T) {
 }
 
 func TestAdminServiceForClusterMode(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
 		},
 	}

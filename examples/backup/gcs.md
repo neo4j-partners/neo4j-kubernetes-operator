@@ -76,7 +76,7 @@ The operator stamps `iam.gke.io/gcp-service-account` onto **both** the `${NEO4J}
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: ${NEO4J}
@@ -121,7 +121,7 @@ kubectl -n "$NS" exec ${NEO4J}-server-0 -c neo4j -- \
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata: { name: bk-gcs }
 spec:
@@ -151,7 +151,7 @@ kubectl -n "$NS" exec ${NEO4J}-server-0 -c neo4j -- \
   cypher-shell -u neo4j -p "$PW" "MATCH (n:Item) DELETE n;"
 
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata: { name: rst-gcs }
 spec:
@@ -177,7 +177,7 @@ same GSA) purges whole expired chain prefixes. Demo-fast crons let you watch it 
 
 ```bash
 cat <<YAML | kubectl apply -n "$NS" -f -
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackupSchedule
 metadata: { name: sched-gcs }
 spec:

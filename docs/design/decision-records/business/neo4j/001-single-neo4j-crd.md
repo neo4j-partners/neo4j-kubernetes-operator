@@ -234,7 +234,7 @@ Option E maximises **implementation uniformity** (one code path) at the cost of 
 We will expose **one CRD**:
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 spec:
   topology:

@@ -4,7 +4,7 @@
 # Prerequisites: none.
 # Apply: kubectl apply -f examples/cluster/10-config-jvm.yaml
 # Related README: ../README.md#cluster
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod-jvm

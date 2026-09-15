@@ -3,7 +3,7 @@
 # Prerequisites: an AKS cluster (or any cluster with a "managed-csi" StorageClass).
 # Apply: kubectl apply -f examples/standalone/03-storage-storageclass.yaml
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-storageclass

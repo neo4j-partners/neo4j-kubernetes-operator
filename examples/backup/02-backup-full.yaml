@@ -2,7 +2,7 @@
 #   A Full anchors a new backup chain. Watch it: kubectl get neo4jbackup bk-full -w
 # Prerequisites: examples/backup/01-neo4j-pvc-destination.yaml applied and Ready.
 # Apply: kubectl apply -f examples/backup/02-backup-full.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: bk-full

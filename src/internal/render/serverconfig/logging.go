@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -136,7 +136,7 @@ func loggingNeo4jConfKeys(ctx render.Context) map[string]string {
 }
 
 // ValidateLogging rejects inline+ref on the same side (defense in depth beside CEL).
-func ValidateLogging(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateLogging(neo4j *neo4jv1.Neo4j) error {
 	if neo4j.Spec.Logging == nil {
 		return nil
 	}

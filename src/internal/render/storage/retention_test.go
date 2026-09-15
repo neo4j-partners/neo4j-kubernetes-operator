@@ -5,11 +5,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestRetentionPolicyDefaultsRetain(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{}
+	neo4j := &neo4jv1.Neo4j{}
 	p := RetentionPolicy(neo4j)
 	if p.WhenDeleted != appsv1.RetainPersistentVolumeClaimRetentionPolicyType ||
 		p.WhenScaled != appsv1.RetainPersistentVolumeClaimRetentionPolicyType {
@@ -24,12 +24,12 @@ func TestRetentionPolicyDefaultsRetain(t *testing.T) {
 }
 
 func TestRetentionPolicyDelete(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				VolumeClaimRetention: &neo4jv1beta1.VolumeClaimRetentionPolicySpec{
-					WhenDeleted: neo4jv1beta1.VolumeClaimRetentionDelete,
-					WhenScaled:  neo4jv1beta1.VolumeClaimRetentionDelete,
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				VolumeClaimRetention: &neo4jv1.VolumeClaimRetentionPolicySpec{
+					WhenDeleted: neo4jv1.VolumeClaimRetentionDelete,
+					WhenScaled:  neo4jv1.VolumeClaimRetentionDelete,
 				},
 			},
 		},
@@ -55,13 +55,13 @@ func TestRetentionPolicyDelete(t *testing.T) {
 }
 
 func TestPinWhenDeletedIgnoresLateDelete(t *testing.T) {
-	retain := neo4jv1beta1.VolumeClaimRetentionRetain
-	neo4j := &neo4jv1beta1.Neo4j{
-		Status: neo4jv1beta1.Neo4jStatus{VolumeClaimRetentionWhenDeleted: &retain},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				VolumeClaimRetention: &neo4jv1beta1.VolumeClaimRetentionPolicySpec{
-					WhenDeleted: neo4jv1beta1.VolumeClaimRetentionDelete,
+	retain := neo4jv1.VolumeClaimRetentionRetain
+	neo4j := &neo4jv1.Neo4j{
+		Status: neo4jv1.Neo4jStatus{VolumeClaimRetentionWhenDeleted: &retain},
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				VolumeClaimRetention: &neo4jv1.VolumeClaimRetentionPolicySpec{
+					WhenDeleted: neo4jv1.VolumeClaimRetentionDelete,
 				},
 			},
 		},
@@ -79,17 +79,17 @@ func TestPinWhenDeletedIgnoresLateDelete(t *testing.T) {
 }
 
 func TestProtectedClaimNames(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:     neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "keep-me"},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:     neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "keep-me"},
 					},
-					Logs: &neo4jv1beta1.AuxiliaryVolumeSpec{
-						Mode:     neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: "keep-logs"},
+					Logs: &neo4jv1.AuxiliaryVolumeSpec{
+						Mode:     neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "keep-logs"},
 					},
 				},
 			},

@@ -1,7 +1,7 @@
 # Cluster mode with a single primary and a read pool — the topology a secondary resize is drained
 # on, and the one the reported scale-in hang was found on. Mirrors examples/cluster/02-lab-single-
 # primary.yaml plus a read pool; the primary pool never moves in this case, only the read pool.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

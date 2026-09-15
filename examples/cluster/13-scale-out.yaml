@@ -28,7 +28,7 @@
 # Prerequisites: none (or apply after examples/cluster/01-minimal-3-primaries.yaml; note
 #   different metadata.name). Enterprise image + license accept required.
 # Apply: kubectl apply -f examples/cluster/13-scale-out.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod-scale

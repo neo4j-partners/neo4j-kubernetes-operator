@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,12 +17,12 @@ func sameNamespaceClients() []networkingv1.NetworkPolicyPeer {
 }
 
 func TestNetworkPolicyStandaloneClientPorts(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Security: &neo4jv1beta1.SecuritySpec{
-				NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Security: &neo4jv1.SecuritySpec{
+				NetworkPolicy: &neo4jv1.NetworkPolicySpec{
 					Enabled:     true,
 					IngressFrom: sameNamespaceClients(),
 				},
@@ -58,15 +58,15 @@ func TestNetworkPolicyStandaloneClientPorts(t *testing.T) {
 }
 
 func TestNetworkPolicyClusterAddsInternalPorts(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode:      neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{Members: 3},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 			},
-			Security: &neo4jv1beta1.SecuritySpec{
-				NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{
+			Security: &neo4jv1.SecuritySpec{
+				NetworkPolicy: &neo4jv1.NetworkPolicySpec{
 					Enabled:     true,
 					IngressFrom: sameNamespaceClients(),
 				},
@@ -95,10 +95,10 @@ func TestNetworkPolicyClusterAddsInternalPorts(t *testing.T) {
 }
 
 func TestValidateNetworkPolicyRequiresIngressFrom(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
-				NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{Enabled: true},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
+				NetworkPolicy: &neo4jv1.NetworkPolicySpec{Enabled: true},
 			},
 		},
 	}
@@ -109,10 +109,10 @@ func TestValidateNetworkPolicyRequiresIngressFrom(t *testing.T) {
 }
 
 func TestValidateNetworkPolicyRejectsAllowAllCIDR(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Security: &neo4jv1beta1.SecuritySpec{
-				NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Security: &neo4jv1.SecuritySpec{
+				NetworkPolicy: &neo4jv1.NetworkPolicySpec{
 					Enabled: true,
 					IngressFrom: []networkingv1.NetworkPolicyPeer{{
 						IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"},
@@ -128,20 +128,20 @@ func TestValidateNetworkPolicyRejectsAllowAllCIDR(t *testing.T) {
 }
 
 func TestNetworkPolicySplitsBackupFrom(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Features: &neo4jv1beta1.FeaturesSpec{
-				Backup: &neo4jv1beta1.BackupFeatureSpec{Enabled: true},
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Features: &neo4jv1.FeaturesSpec{
+				Backup: &neo4jv1.BackupFeatureSpec{Enabled: true},
 			},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{
 					Backup: ptrInt32(6362),
 				},
 			},
-			Security: &neo4jv1beta1.SecuritySpec{
-				NetworkPolicy: &neo4jv1beta1.NetworkPolicySpec{
+			Security: &neo4jv1.SecuritySpec{
+				NetworkPolicy: &neo4jv1.NetworkPolicySpec{
 					Enabled: true,
 					IngressFrom: []networkingv1.NetworkPolicyPeer{{
 						PodSelector: &metav1.LabelSelector{

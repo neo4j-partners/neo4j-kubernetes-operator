@@ -71,7 +71,7 @@ wait_backup() {
 log "Writing probe #1, then a Full Neo4jBackup ${FULL} → ${S3_URL}"
 probe "e2e-s3-1"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: ${FULL}
@@ -91,7 +91,7 @@ wait_backup "${FULL}"
 log "Writing probe #2, then an Incremental Neo4jBackup ${INC} → ${S3_URL} (same url)"
 probe "e2e-s3-2"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: ${INC}
@@ -119,7 +119,7 @@ log "Flat layout OK — full+inc both recorded at ${S3_URL}"
 
 log "Taking an Aggregate Neo4jBackup ${AGG} (source.backupRef=${INC}) → ${S3_URL}"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackup
 metadata:
   name: ${AGG}
@@ -151,7 +151,7 @@ probe "e2e-s3-post"
 
 log "Applying Neo4jRestore ${RESTORE_NAME} (backupRef=${AGG}, overwrite ${TARGET_DB})"
 kubectl apply -n "${NEO4J_NAMESPACE}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRestore
 metadata:
   name: ${RESTORE_NAME}

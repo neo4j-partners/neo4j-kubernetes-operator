@@ -18,7 +18,7 @@ spec:
     requests:
       storage: 5Gi
 ---
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

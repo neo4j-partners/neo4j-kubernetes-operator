@@ -7,16 +7,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestStandaloneContextNaming(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	ctx := StandaloneContext(neo4j)
@@ -38,26 +38,26 @@ func TestStandaloneContextNaming(t *testing.T) {
 func TestImageRef(t *testing.T) {
 	tests := []struct {
 		name     string
-		edition  neo4jv1beta1.Edition
+		edition  neo4jv1.Edition
 		version  string
 		repo     string
 		wantRef  string
 	}{
 		{
 			name:    "enterprise appends suffix",
-			edition: neo4jv1beta1.EditionEnterprise,
+			edition: neo4jv1.EditionEnterprise,
 			version: "2026.05.0",
 			wantRef: "neo4j:2026.05.0-enterprise",
 		},
 		{
 			name:    "enterprise does not double suffix",
-			edition: neo4jv1beta1.EditionEnterprise,
+			edition: neo4jv1.EditionEnterprise,
 			version: "2026.05.0-enterprise",
 			wantRef: "neo4j:2026.05.0-enterprise",
 		},
 		{
 			name:    "custom repository",
-			edition: neo4jv1beta1.EditionEnterprise,
+			edition: neo4jv1.EditionEnterprise,
 			version: "2026.05.0",
 			repo:    "registry.example.com/neo4j",
 			wantRef: "registry.example.com/neo4j:2026.05.0-enterprise",
@@ -65,7 +65,7 @@ func TestImageRef(t *testing.T) {
 		{
 			// The unsuffixed tag IS the Community image on Docker Hub.
 			name:    "community keeps the bare tag",
-			edition: neo4jv1beta1.EditionCommunity,
+			edition: neo4jv1.EditionCommunity,
 			version: "2026.05.0",
 			wantRef: "neo4j:2026.05.0",
 		},
@@ -73,14 +73,14 @@ func TestImageRef(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spec := neo4jv1beta1.Neo4jSpec{
+			spec := neo4jv1.Neo4jSpec{
 				Edition: tt.edition,
 				Version: tt.version,
 			}
 			if tt.repo != "" {
-				spec.Image = &neo4jv1beta1.ImageSpec{Repository: tt.repo}
+				spec.Image = &neo4jv1.ImageSpec{Repository: tt.repo}
 			}
-			ctx := StandaloneContext(&neo4jv1beta1.Neo4j{
+			ctx := StandaloneContext(&neo4jv1.Neo4j{
 				ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
 				Spec:       spec,
 			})
@@ -93,12 +93,12 @@ func TestImageRef(t *testing.T) {
 
 func TestImageRefDigest(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("ab", 32)
-	ctx := StandaloneContext(&neo4jv1beta1.Neo4j{
+	ctx := StandaloneContext(&neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: "2026.05.0",
-			Image: &neo4jv1beta1.ImageSpec{
+			Image: &neo4jv1.ImageSpec{
 				Repository: "neo4j",
 				Digest:     digest,
 			},
@@ -111,25 +111,25 @@ func TestImageRefDigest(t *testing.T) {
 }
 
 func TestImageTag(t *testing.T) {
-	if got := imageTag("2026.05.0", neo4jv1beta1.EditionEnterprise); got != "2026.05.0-enterprise" {
+	if got := imageTag("2026.05.0", neo4jv1.EditionEnterprise); got != "2026.05.0-enterprise" {
 		t.Fatalf("imageTag enterprise = %q", got)
 	}
-	if got := imageTag("2026.05.0-enterprise", neo4jv1beta1.EditionEnterprise); got != "2026.05.0-enterprise" {
+	if got := imageTag("2026.05.0-enterprise", neo4jv1.EditionEnterprise); got != "2026.05.0-enterprise" {
 		t.Fatalf("imageTag no double suffix = %q", got)
 	}
-	if got := imageTag("2026.05.0", neo4jv1beta1.EditionCommunity); got != "2026.05.0" {
+	if got := imageTag("2026.05.0", neo4jv1.EditionCommunity); got != "2026.05.0" {
 		t.Fatalf("imageTag community = %q", got)
 	}
 }
 
 // Community has no license to accept and no NEO4J_EDITION to declare: the image carries its own.
 func TestCommunityLicensingEnvIsEmpty(t *testing.T) {
-	ctx := StandaloneContext(&neo4jv1beta1.Neo4j{
+	ctx := StandaloneContext(&neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionCommunity,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionCommunity,
 			Version:  "2026.05.0",
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	})
 	if ctx.EnterpriseEdition() {

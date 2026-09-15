@@ -24,7 +24,7 @@ kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
 log "Applying Neo4j CR ${CR} into unwatched namespace ${NS}"
 kubectl apply -n "${NS}" -f - <<EOF
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: ${CR}

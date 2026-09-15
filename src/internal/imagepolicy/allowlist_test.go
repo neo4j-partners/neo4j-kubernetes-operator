@@ -4,16 +4,16 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestValidateDefaultAllowsOfficialNeo4j(t *testing.T) {
 	SetAllowedRepositories("")
-	neo4j := &neo4jv1beta1.Neo4j{}
+	neo4j := &neo4jv1.Neo4j{}
 	if err := Validate(neo4j); err != nil {
 		t.Fatal(err)
 	}
-	neo4j.Spec.Image = &neo4jv1beta1.ImageSpec{Repository: "docker.io/neo4j"}
+	neo4j.Spec.Image = &neo4jv1.ImageSpec{Repository: "docker.io/neo4j"}
 	if err := Validate(neo4j); err != nil {
 		t.Fatal(err)
 	}
@@ -21,9 +21,9 @@ func TestValidateDefaultAllowsOfficialNeo4j(t *testing.T) {
 
 func TestValidateRejectsForeignRegistry(t *testing.T) {
 	SetAllowedRepositories("")
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Image: &neo4jv1beta1.ImageSpec{Repository: "attacker.example.com/neo4j-but-worse"},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Image: &neo4jv1.ImageSpec{Repository: "attacker.example.com/neo4j-but-worse"},
 		},
 	}
 	err := Validate(neo4j)
@@ -35,9 +35,9 @@ func TestValidateRejectsForeignRegistry(t *testing.T) {
 func TestValidateAllowsConfiguredMirror(t *testing.T) {
 	SetAllowedRepositories("neo4j,myacr.azurecr.io/neo4j")
 	defer SetAllowedRepositories("")
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Image: &neo4jv1beta1.ImageSpec{Repository: "myacr.azurecr.io/neo4j"},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Image: &neo4jv1.ImageSpec{Repository: "myacr.azurecr.io/neo4j"},
 		},
 	}
 	if err := Validate(neo4j); err != nil {
@@ -48,9 +48,9 @@ func TestValidateAllowsConfiguredMirror(t *testing.T) {
 func TestValidateRejectsNeo4jPrefixSpoof(t *testing.T) {
 	SetAllowedRepositories("neo4j")
 	defer SetAllowedRepositories("")
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Image: &neo4jv1beta1.ImageSpec{Repository: "neo4j.attacker.com/evil"},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Image: &neo4jv1.ImageSpec{Repository: "neo4j.attacker.com/evil"},
 		},
 	}
 	if err := Validate(neo4j); err == nil {
@@ -60,9 +60,9 @@ func TestValidateRejectsNeo4jPrefixSpoof(t *testing.T) {
 
 func TestValidateDigest(t *testing.T) {
 	SetAllowedRepositories("")
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Image: &neo4jv1beta1.ImageSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Image: &neo4jv1.ImageSpec{
 				Repository: "neo4j",
 				Digest:     "sha256:not-hex",
 			},
@@ -80,9 +80,9 @@ func TestValidateDigest(t *testing.T) {
 func TestAllowAllStar(t *testing.T) {
 	SetAllowedRepositories("*")
 	defer SetAllowedRepositories("")
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Image: &neo4jv1beta1.ImageSpec{Repository: "anywhere.io/x"},
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Image: &neo4jv1.ImageSpec{Repository: "anywhere.io/x"},
 		},
 	}
 	if err := Validate(neo4j); err != nil {

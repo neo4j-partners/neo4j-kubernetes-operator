@@ -166,7 +166,7 @@ Domain-aligned model: deployment mode **and** Neo4j role counts. Helm mapped **i
 - **`analyticsSecondaries`** — analytics / GDS secondaries (Helm `analytics.type: secondary`); distinct from causal-cluster read scaling.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: orders

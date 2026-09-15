@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
@@ -98,19 +98,19 @@ func scheme(t *testing.T) *runtime.Scheme {
 	if err := clientgoscheme.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
 	return s
 }
 
-func readyNeo4j() *neo4jv1beta1.Neo4j {
-	n := &neo4jv1beta1.Neo4j{
+func readyNeo4j() *neo4jv1.Neo4j {
+	n := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2025.01.0",
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	meta.SetStatusCondition(&n.Status.Conditions, metav1.Condition{
@@ -120,13 +120,13 @@ func readyNeo4j() *neo4jv1beta1.Neo4j {
 	return n
 }
 
-func restoreCR(mut func(*neo4jv1beta1.Neo4jRestore)) *neo4jv1beta1.Neo4jRestore {
-	r := &neo4jv1beta1.Neo4jRestore{
+func restoreCR(mut func(*neo4jv1.Neo4jRestore)) *neo4jv1.Neo4jRestore {
+	r := &neo4jv1.Neo4jRestore{
 		ObjectMeta: metav1.ObjectMeta{Name: "nr", Namespace: "ns"},
-		Spec: neo4jv1beta1.Neo4jRestoreSpec{
-			Neo4jRef:  neo4jv1beta1.Neo4jRef{Name: "g"},
+		Spec: neo4jv1.Neo4jRestoreSpec{
+			Neo4jRef:  neo4jv1.Neo4jRef{Name: "g"},
 			Databases: []string{"neo4j"},
-			Source:    neo4jv1beta1.RestoreSource{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/p/neo4j"},
+			Source:    neo4jv1.RestoreSource{Type: neo4jv1.BackupDestinationS3, URL: "s3://b/p/neo4j"},
 		},
 	}
 	if mut != nil {
@@ -139,10 +139,10 @@ func newReconciler(t *testing.T, admin intneo4j.Admin, objs ...client.Object) (*
 	t.Helper()
 	s := scheme(t)
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jRestore{}).Build()
+		WithStatusSubresource(&neo4jv1.Neo4jRestore{}).Build()
 	r := &RestoreReconciler{
 		Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16),
-		Connect: func(context.Context, *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) { return admin, nil },
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) { return admin, nil },
 	}
 	return r, c
 }
@@ -151,9 +151,9 @@ func req() ctrl.Request {
 	return ctrl.Request{NamespacedName: types.NamespacedName{Name: "nr", Namespace: "ns"}}
 }
 
-func getRestore(t *testing.T, c client.Client) *neo4jv1beta1.Neo4jRestore {
+func getRestore(t *testing.T, c client.Client) *neo4jv1.Neo4jRestore {
 	t.Helper()
-	var r neo4jv1beta1.Neo4jRestore
+	var r neo4jv1.Neo4jRestore
 	if err := c.Get(context.Background(), req().NamespacedName, &r); err != nil {
 		t.Fatalf("get restore: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestRestoreSeedsFreshDatabaseThenSucceeds(t *testing.T) {
 	if got := admin.seededWith["neo4j"]; got != "s3://b/p/neo4j" {
 		t.Errorf("seedURI = %q, want s3://b/p/neo4j", got)
 	}
-	if p := getRestore(t, c).Status.Phase; p != neo4jv1beta1.RunPhaseRunning {
+	if p := getRestore(t, c).Status.Phase; p != neo4jv1.RunPhaseRunning {
 		t.Errorf("phase = %q, want Running", p)
 	}
 
@@ -185,7 +185,7 @@ func TestRestoreSeedsFreshDatabaseThenSucceeds(t *testing.T) {
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile 2: %v", err)
 	}
-	if p := getRestore(t, c).Status.Phase; p != neo4jv1beta1.RunPhaseSucceeded {
+	if p := getRestore(t, c).Status.Phase; p != neo4jv1.RunPhaseSucceeded {
 		t.Errorf("phase = %q, want Succeeded", p)
 	}
 }
@@ -197,7 +197,7 @@ func TestRestoreExistingWithoutOverwriteFails(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getRestore(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed {
 		t.Errorf("phase = %q, want Failed", got.Status.Phase)
 	}
 	if got.Status.Reason != "RestoreDatabaseExists" {
@@ -210,7 +210,7 @@ func TestRestoreExistingWithoutOverwriteFails(t *testing.T) {
 
 func TestRestoreOverwriteReplaces(t *testing.T) {
 	admin := newFakeAdmin(map[string]bool{"neo4j": true})
-	r, _ := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+	r, _ := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1.Neo4jRestore) {
 		r.Spec.Overwrite = true
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
@@ -226,7 +226,7 @@ func TestRestoreOverwriteReplaces(t *testing.T) {
 
 func TestRestoreForceOfflineStopsBeforeReplace(t *testing.T) {
 	admin := newFakeAdmin(map[string]bool{"neo4j": true})
-	r, _ := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
+	r, _ := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1.Neo4jRestore) {
 		r.Spec.Overwrite = true
 		r.Spec.ForceOffline = true
 	}))
@@ -253,7 +253,7 @@ func TestRestoreNotReadyIsRetryable(t *testing.T) {
 		t.Error("expected requeue while target not Ready")
 	}
 	got := getRestore(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhasePending {
+	if got.Status.Phase != neo4jv1.RunPhasePending {
 		t.Errorf("phase = %q, want Pending", got.Status.Phase)
 	}
 	if got.Status.Reason != "RestoreBeforeFormation" {
@@ -263,13 +263,13 @@ func TestRestoreNotReadyIsRetryable(t *testing.T) {
 
 func TestRestoreCommunityFailsTerminally(t *testing.T) {
 	n := readyNeo4j()
-	n.Spec.Edition = neo4jv1beta1.EditionCommunity
+	n.Spec.Edition = neo4jv1.EditionCommunity
 	r, c := newReconciler(t, newFakeAdmin(nil), n, restoreCR(nil))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getRestore(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed {
 		t.Errorf("phase = %q, want Failed", got.Status.Phase)
 	}
 	if got.Status.Reason != "RestoreEditionUnsupported" {
@@ -278,18 +278,18 @@ func TestRestoreCommunityFailsTerminally(t *testing.T) {
 }
 
 func TestRestoreBackupRefResolvesArtifactURI(t *testing.T) {
-	backup := &neo4jv1beta1.Neo4jBackup{
+	backup := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Status: neo4jv1beta1.Neo4jBackupStatus{
-			Phase: neo4jv1beta1.RunPhaseSucceeded,
-			Artifacts: []neo4jv1beta1.BackupArtifact{
+		Status: neo4jv1.Neo4jBackupStatus{
+			Phase: neo4jv1.RunPhaseSucceeded,
+			Artifacts: []neo4jv1.BackupArtifact{
 				{Database: "neo4j", URI: "s3://b/p/"},
 			},
 		},
 	}
 	admin := newFakeAdmin(nil)
-	r, _ := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+	r, _ := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1.RestoreSource{BackupRef: "nb"}
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -303,18 +303,18 @@ func TestRestoreBackupRefResolvesArtifactURI(t *testing.T) {
 // as Path; the seed must point at the artifact (dir + filename), not the directory, or Neo4j's cloud
 // seed provider rejects it as "not a valid location" (the Azure Workload Identity restore bug).
 func TestRestoreBackupRefObjectStoreAppendsArtifactFilename(t *testing.T) {
-	backup := &neo4jv1beta1.Neo4jBackup{
+	backup := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Status: neo4jv1beta1.Neo4jBackupStatus{
-			Phase: neo4jv1beta1.RunPhaseSucceeded,
-			Artifacts: []neo4jv1beta1.BackupArtifact{
+		Status: neo4jv1.Neo4jBackupStatus{
+			Phase: neo4jv1.RunPhaseSucceeded,
+			Artifacts: []neo4jv1.BackupArtifact{
 				{Database: "neo4j", URI: "azb://acct/container/neo4j/", Path: "neo4j-2026-09-07.backup"},
 			},
 		},
 	}
 	admin := newFakeAdmin(nil)
-	r, _ := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+	r, _ := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1.RestoreSource{BackupRef: "nb"}
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -325,25 +325,25 @@ func TestRestoreBackupRefObjectStoreAppendsArtifactFilename(t *testing.T) {
 	}
 }
 
-func backupsVolumeNeo4j(claim string) *neo4jv1beta1.Neo4j {
+func backupsVolumeNeo4j(claim string) *neo4jv1.Neo4j {
 	n := readyNeo4j()
-	n.Spec.Storage = &neo4jv1beta1.StorageSpec{
-		Volumes: &neo4jv1beta1.VolumesSpec{
-			Backups: &neo4jv1beta1.AuxiliaryVolumeSpec{
-				Mode:     neo4jv1beta1.VolumeModeExisting,
-				Existing: &neo4jv1beta1.ExistingVolumeSpec{ClaimName: claim},
+	n.Spec.Storage = &neo4jv1.StorageSpec{
+		Volumes: &neo4jv1.VolumesSpec{
+			Backups: &neo4jv1.AuxiliaryVolumeSpec{
+				Mode:     neo4jv1.VolumeModeExisting,
+				Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: claim},
 			},
 		},
 	}
 	return n
 }
 
-func pvcBackup(path string) *neo4jv1beta1.Neo4jBackup {
-	return &neo4jv1beta1.Neo4jBackup{
+func pvcBackup(path string) *neo4jv1.Neo4jBackup {
+	return &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Status: neo4jv1beta1.Neo4jBackupStatus{
-			Phase:     neo4jv1beta1.RunPhaseSucceeded,
-			Artifacts: []neo4jv1beta1.BackupArtifact{{Database: "neo4j", URI: "pvc://bk", Path: path}},
+		Status: neo4jv1.Neo4jBackupStatus{
+			Phase:     neo4jv1.RunPhaseSucceeded,
+			Artifacts: []neo4jv1.BackupArtifact{{Database: "neo4j", URI: "pvc://bk", Path: path}},
 		},
 	}
 }
@@ -351,8 +351,8 @@ func pvcBackup(path string) *neo4jv1beta1.Neo4jBackup {
 func TestRestoreBackupRefPVCMountedSeedsFileURI(t *testing.T) {
 	admin := newFakeAdmin(nil)
 	r, _ := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"),
-		restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-			r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+		restoreCR(func(r *neo4jv1.Neo4jRestore) {
+			r.Spec.Source = neo4jv1.RestoreSource{BackupRef: "nb"}
 		}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -366,14 +366,14 @@ func TestRestoreBackupRefPVCNotMountedUnsupported(t *testing.T) {
 	admin := newFakeAdmin(nil)
 	// Target does NOT mount claim "bk" as its backups volume -> not server-readable.
 	r, c := newReconciler(t, admin, readyNeo4j(), pvcBackup("neo4j.latest.backup"),
-		restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-			r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+		restoreCR(func(r *neo4jv1.Neo4jRestore) {
+			r.Spec.Source = neo4jv1.RestoreSource{BackupRef: "nb"}
 		}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getRestore(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreSourceUnsupported" {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed || got.Status.Reason != "RestoreSourceUnsupported" {
 		t.Errorf("want Failed/RestoreSourceUnsupported, got %q/%q", got.Status.Phase, got.Status.Reason)
 	}
 	if len(admin.created) != 0 {
@@ -382,22 +382,22 @@ func TestRestoreBackupRefPVCNotMountedUnsupported(t *testing.T) {
 }
 
 func TestRestoreBackupRefPVCArtifactUnsupported(t *testing.T) {
-	backup := &neo4jv1beta1.Neo4jBackup{
+	backup := &neo4jv1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
-		Status: neo4jv1beta1.Neo4jBackupStatus{
-			Phase:     neo4jv1beta1.RunPhaseSucceeded,
-			Artifacts: []neo4jv1beta1.BackupArtifact{{Database: "neo4j", URI: "pvc://claim"}},
+		Status: neo4jv1.Neo4jBackupStatus{
+			Phase:     neo4jv1.RunPhaseSucceeded,
+			Artifacts: []neo4jv1.BackupArtifact{{Database: "neo4j", URI: "pvc://claim"}},
 		},
 	}
 	admin := newFakeAdmin(nil)
-	r, c := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+	r, c := newReconciler(t, admin, readyNeo4j(), backup, restoreCR(func(r *neo4jv1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1.RestoreSource{BackupRef: "nb"}
 	}))
 	if _, err := r.Reconcile(context.Background(), req()); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	got := getRestore(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed {
 		t.Errorf("phase = %q, want Failed", got.Status.Phase)
 	}
 	if got.Status.Reason != "RestoreSourceUnsupported" {
@@ -410,7 +410,7 @@ func TestRestoreBackupRefPVCArtifactUnsupported(t *testing.T) {
 
 // metadataJob builds the post-seed metadata Job controlled by restore, in the given terminal state
 // (neither flag → still running).
-func metadataJob(t *testing.T, restore *neo4jv1beta1.Neo4jRestore, complete, failed bool) *batchv1.Job {
+func metadataJob(t *testing.T, restore *neo4jv1.Neo4jRestore, complete, failed bool) *batchv1.Job {
 	t.Helper()
 	j := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: renderbackup.MetadataJobName(restore), Namespace: "ns"}}
 	if err := controllerutil.SetControllerReference(restore, j, scheme(t)); err != nil {
@@ -425,7 +425,7 @@ func metadataJob(t *testing.T, restore *neo4jv1beta1.Neo4jRestore, complete, fai
 	return j
 }
 
-func metadataPod(restore *neo4jv1beta1.Neo4jRestore, message string) *corev1.Pod {
+func metadataPod(restore *neo4jv1.Neo4jRestore, message string) *corev1.Pod {
 	name := renderbackup.MetadataJobName(restore)
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name + "-x", Namespace: "ns", Labels: map[string]string{"job-name": name}},
@@ -436,9 +436,9 @@ func metadataPod(restore *neo4jv1beta1.Neo4jRestore, message string) *corev1.Pod
 	}
 }
 
-func metadataRestore() *neo4jv1beta1.Neo4jRestore {
-	return restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-		r.Spec.Source = neo4jv1beta1.RestoreSource{BackupRef: "nb"}
+func metadataRestore() *neo4jv1.Neo4jRestore {
+	return restoreCR(func(r *neo4jv1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1.RestoreSource{BackupRef: "nb"}
 		r.Spec.RestoreMetadata = true
 	})
 }
@@ -464,14 +464,14 @@ func sawEvent(t *testing.T, r *RestoreReconciler, reason string) bool {
 
 // drive runs Reconcile until the record is terminal or a step budget is exhausted (seed pass then
 // poll/metadata passes). Returns the final record.
-func drive(t *testing.T, r *RestoreReconciler, c client.Client) *neo4jv1beta1.Neo4jRestore {
+func drive(t *testing.T, r *RestoreReconciler, c client.Client) *neo4jv1.Neo4jRestore {
 	t.Helper()
 	for i := 0; i < 5; i++ {
 		if _, err := r.Reconcile(context.Background(), req()); err != nil {
 			t.Fatalf("reconcile %d: %v", i, err)
 		}
 		got := getRestore(t, c)
-		if got.Status.Phase == neo4jv1beta1.RunPhaseSucceeded || got.Status.Phase == neo4jv1beta1.RunPhaseFailed {
+		if got.Status.Phase == neo4jv1.RunPhaseSucceeded || got.Status.Phase == neo4jv1.RunPhaseFailed {
 			return got
 		}
 	}
@@ -486,7 +486,7 @@ func TestRestoreMetadataAppliesThenSucceeds(t *testing.T) {
 	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job, pod)
 
 	got := drive(t, r, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if got.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		t.Fatalf("phase = %q/%q, want Succeeded", got.Status.Phase, got.Status.Reason)
 	}
 	if sawEvent(t, r, "RestoreMetadataConflict") {
@@ -502,7 +502,7 @@ func TestRestoreMetadataConflictWarnsButSucceeds(t *testing.T) {
 	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job, pod)
 
 	got := drive(t, r, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseSucceeded {
+	if got.Status.Phase != neo4jv1.RunPhaseSucceeded {
 		t.Fatalf("phase = %q/%q, want Succeeded (conflicts warn, not fail)", got.Status.Phase, got.Status.Reason)
 	}
 	if !sawEvent(t, r, "RestoreMetadataConflict") {
@@ -518,7 +518,7 @@ func TestRestoreMetadataJobFailedFails(t *testing.T) {
 	r, c := newReconciler(t, admin, backupsVolumeNeo4j("bk"), pvcBackup("neo4j.latest.backup"), restore, job, pod)
 
 	got := drive(t, r, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreMetadataFailed" {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed || got.Status.Reason != "RestoreMetadataFailed" {
 		t.Fatalf("want Failed/RestoreMetadataFailed, got %q/%q", got.Status.Phase, got.Status.Reason)
 	}
 	if got.Status.Message != "could not connect to system database" {
@@ -544,7 +544,7 @@ func TestRestoreMetadataJobRunningRequeues(t *testing.T) {
 		t.Error("expected requeue while the metadata Job runs")
 	}
 	got := getRestore(t, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseRunning || got.Status.Reason != "RestoreMetadataApplying" {
+	if got.Status.Phase != neo4jv1.RunPhaseRunning || got.Status.Reason != "RestoreMetadataApplying" {
 		t.Errorf("want Running/RestoreMetadataApplying, got %q/%q", got.Status.Phase, got.Status.Reason)
 	}
 }
@@ -552,12 +552,12 @@ func TestRestoreMetadataJobRunningRequeues(t *testing.T) {
 func TestRestoreMetadataRawURLUnsupported(t *testing.T) {
 	admin := newFakeAdmin(nil)
 	// A raw url source carries no metadata script; restoreMetadata is unsupported there.
-	r, c := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1beta1.Neo4jRestore) {
-		r.Spec.Source = neo4jv1beta1.RestoreSource{Type: neo4jv1beta1.BackupDestinationS3, URL: "s3://b/p/neo4j"}
+	r, c := newReconciler(t, admin, readyNeo4j(), restoreCR(func(r *neo4jv1.Neo4jRestore) {
+		r.Spec.Source = neo4jv1.RestoreSource{Type: neo4jv1.BackupDestinationS3, URL: "s3://b/p/neo4j"}
 		r.Spec.RestoreMetadata = true
 	}))
 	got := drive(t, r, c)
-	if got.Status.Phase != neo4jv1beta1.RunPhaseFailed || got.Status.Reason != "RestoreMetadataFailed" {
+	if got.Status.Phase != neo4jv1.RunPhaseFailed || got.Status.Reason != "RestoreMetadataFailed" {
 		t.Errorf("want Failed/RestoreMetadataFailed, got %q/%q", got.Status.Phase, got.Status.Reason)
 	}
 }

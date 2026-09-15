@@ -5,7 +5,7 @@
 # Apply: kubectl apply -f examples/standalone/20-logging-configmap-ref.yaml
 # Note: editing ConfigMap data does not auto-roll pods; bump the CR or restart the STS.
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: lab-logging-cm

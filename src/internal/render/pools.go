@@ -1,14 +1,14 @@
 package render
 
-import neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+import neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 
 // IsClusterMode reports whether the CR targets clustered Neo4j (BDR-002).
-func IsClusterMode(neo4j *neo4jv1beta1.Neo4j) bool {
-	return neo4j.Spec.Topology.Mode == neo4jv1beta1.TopologyModeCluster
+func IsClusterMode(neo4j *neo4jv1.Neo4j) bool {
+	return neo4j.Spec.Topology.Mode == neo4jv1.TopologyModeCluster
 }
 
 // ActivePools returns workload pools that should be reconciled for the current topology.
-func ActivePools(neo4j *neo4jv1beta1.Neo4j) []PoolID {
+func ActivePools(neo4j *neo4jv1.Neo4j) []PoolID {
 	if !IsClusterMode(neo4j) {
 		return []PoolID{PoolServer}
 	}
@@ -26,12 +26,12 @@ func ActivePools(neo4j *neo4jv1beta1.Neo4j) []PoolID {
 }
 
 // ContextForPool builds a render context for the given pool.
-func ContextForPool(neo4j *neo4jv1beta1.Neo4j, pool PoolID) Context {
+func ContextForPool(neo4j *neo4jv1.Neo4j, pool PoolID) Context {
 	return NewContext(neo4j, pool)
 }
 
 // ClientServiceContext returns the pool context used for the north-south client Service.
-func ClientServiceContext(neo4j *neo4jv1beta1.Neo4j) Context {
+func ClientServiceContext(neo4j *neo4jv1.Neo4j) Context {
 	if IsClusterMode(neo4j) {
 		return NewContext(neo4j, PoolPrimary)
 	}

@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -19,7 +19,7 @@ var allowedCapabilityAdds = map[corev1.Capability]struct{}{
 // operand StatefulSet (NEO-001): privileged containers, hostPath volumes are checked
 // in storage.Validate; here we cover security contexts. Also NEO-002: reserved CR
 // names and cloud workload-identity annotations on the operand ServiceAccount.
-func ValidateSecurity(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateSecurity(neo4j *neo4jv1.Neo4j) error {
 	if neo4j.Name == "default" {
 		return fmt.Errorf("metadata.name %q is not allowed (would collide with the namespace default ServiceAccount)", neo4j.Name)
 	}
@@ -38,7 +38,7 @@ func ValidateSecurity(neo4j *neo4jv1beta1.Neo4j) error {
 	return validateCloudIdentity(neo4j.Spec.Security.CloudIdentity)
 }
 
-func validateServiceAccountSpec(sa *neo4jv1beta1.ServiceAccountSpec) error {
+func validateServiceAccountSpec(sa *neo4jv1.ServiceAccountSpec) error {
 	if sa == nil {
 		return nil
 	}
@@ -56,7 +56,7 @@ func validateServiceAccountSpec(sa *neo4jv1beta1.ServiceAccountSpec) error {
 // relaxes NEO-002, so its provider must be set and every annotation must be a recognised binding for
 // that provider — a mismatched or arbitrary key is rejected. Static-key Secrets carry no IAM
 // annotations, so nothing to check here (CEL enforces the staticKeySecret/workloadIdentity XOR).
-func validateCloudIdentity(ci *neo4jv1beta1.CloudIdentity) error {
+func validateCloudIdentity(ci *neo4jv1.CloudIdentity) error {
 	if ci == nil || ci.WorkloadIdentity == nil {
 		return nil
 	}
@@ -74,8 +74,8 @@ func validateCloudIdentity(ci *neo4jv1beta1.CloudIdentity) error {
 
 // isCloudWorkloadIdentityAnnotation matches keys that bind a K8s SA to cloud IAM (any provider).
 func isCloudWorkloadIdentityAnnotation(key string) bool {
-	for _, p := range []neo4jv1beta1.CloudWorkloadIdentityProvider{
-		neo4jv1beta1.CloudProviderAWS, neo4jv1beta1.CloudProviderGCP, neo4jv1beta1.CloudProviderAzure,
+	for _, p := range []neo4jv1.CloudWorkloadIdentityProvider{
+		neo4jv1.CloudProviderAWS, neo4jv1.CloudProviderGCP, neo4jv1.CloudProviderAzure,
 	} {
 		if workloadIdentityAnnotationForProvider(key, p) {
 			return true
@@ -87,13 +87,13 @@ func isCloudWorkloadIdentityAnnotation(key string) bool {
 // workloadIdentityAnnotationForProvider reports whether key is a workload-identity SA binding for the
 // given provider: eks.amazonaws.com/* (AWS, incl. role-arn and audience), iam.gke.io/* (GCP), or
 // azure.workload.identity/* (Azure, incl. client-id).
-func workloadIdentityAnnotationForProvider(key string, p neo4jv1beta1.CloudWorkloadIdentityProvider) bool {
+func workloadIdentityAnnotationForProvider(key string, p neo4jv1.CloudWorkloadIdentityProvider) bool {
 	switch p {
-	case neo4jv1beta1.CloudProviderAWS:
+	case neo4jv1.CloudProviderAWS:
 		return strings.HasPrefix(key, "eks.amazonaws.com/")
-	case neo4jv1beta1.CloudProviderGCP:
+	case neo4jv1.CloudProviderGCP:
 		return strings.HasPrefix(key, "iam.gke.io/")
-	case neo4jv1beta1.CloudProviderAzure:
+	case neo4jv1.CloudProviderAzure:
 		return strings.HasPrefix(key, "azure.workload.identity/")
 	default:
 		return false

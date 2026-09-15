@@ -3,7 +3,7 @@ package workload
 import (
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	appsv1 "k8s.io/api/apps/v1"
@@ -14,18 +14,18 @@ import (
 
 func TestStandaloneStatefulSet(t *testing.T) {
 	size := "10Gi"
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: size},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: size},
 					},
 				},
 			},
@@ -124,12 +124,12 @@ func TestStandaloneStatefulSet(t *testing.T) {
 // The community image ships under GPLv3 and declares its own edition, so neither licensing variable
 // belongs in the pod. Passing NEO4J_EDITION=COMMUNITY_K8S would also invent a value Helm never emits.
 func TestCommunityStatefulSetOmitsLicensingEnv(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionCommunity,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionCommunity,
 			Version:  "2026.05.0",
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
@@ -145,18 +145,18 @@ func TestCommunityStatefulSetOmitsLicensingEnv(t *testing.T) {
 }
 
 func TestStandaloneStatefulSetEvalLicense(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptEval},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptEval},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -176,33 +176,33 @@ func TestStandaloneStatefulSetEvalLicense(t *testing.T) {
 }
 
 func TestClusterPoolStatefulSet(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: "2026.05.0",
-			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeCluster,
-				Primaries: &neo4jv1beta1.PrimariesSpec{
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{
 					Members: 3,
 					Plugins: []string{"apoc"},
 				},
-				Secondaries: &neo4jv1beta1.SecondariesSpec{
-					Analytics: &neo4jv1beta1.SecondaryPoolSpec{
+				Secondaries: &neo4jv1.SecondariesSpec{
+					Analytics: &neo4jv1.SecondaryPoolSpec{
 						Members: 1,
 						Plugins: []string{"gds"},
 					},
 				},
 			},
-			PluginDefinitions: map[string]neo4jv1beta1.PluginDefinitionSpec{
+			PluginDefinitions: map[string]neo4jv1.PluginDefinitionSpec{
 				"gds": {LicenseSecretRef: "gds-license"},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -281,19 +281,19 @@ func TestClusterPoolStatefulSet(t *testing.T) {
 }
 
 func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Plugins:  []string{"apoc", "gds"},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -326,23 +326,23 @@ func TestStandaloneStatefulSetNEO4JPlugins(t *testing.T) {
 }
 
 func TestExistingPluginsVolumeOmitsNEO4JPlugins(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Plugins:  []string{"apoc"},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
-					Plugins: &neo4jv1beta1.AuxiliaryVolumeSpec{
-						Mode: neo4jv1beta1.VolumeModeExisting,
-						Existing: &neo4jv1beta1.ExistingVolumeSpec{
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{
+						Mode: neo4jv1.VolumeModeExisting,
+						Existing: &neo4jv1.ExistingVolumeSpec{
 							ClaimName: "preseeded-plugins",
 						},
 					},
@@ -362,25 +362,25 @@ func TestStandaloneContainerPortsIncludeOptionalListeners(t *testing.T) {
 	https := int32(7473)
 	backup := int32(6362)
 	metrics := int32(2004)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Connectivity: &neo4jv1beta1.ConnectivitySpec{
-				Listeners: &neo4jv1beta1.ConnectivityListenersSpec{
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Connectivity: &neo4jv1.ConnectivitySpec{
+				Listeners: &neo4jv1.ConnectivityListenersSpec{
 					HTTPS:   &https,
 					Backup:  &backup,
 					Metrics: &metrics,
 				},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -400,12 +400,12 @@ func TestStandaloneContainerPortsIncludeOptionalListeners(t *testing.T) {
 }
 
 func TestOperandServiceAccountAnnotations(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Security: &neo4jv1beta1.SecuritySpec{
-				ServiceAccount: &neo4jv1beta1.ServiceAccountSpec{
+		Spec: neo4jv1.Neo4jSpec{
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Security: &neo4jv1.SecuritySpec{
+				ServiceAccount: &neo4jv1.ServiceAccountSpec{
 					Annotations: map[string]string{
 						"example.com/owner": "payments",
 					},
@@ -421,14 +421,14 @@ func TestOperandServiceAccountAnnotations(t *testing.T) {
 
 func TestSecurityContextOverrides(t *testing.T) {
 	uid := int64(1000)
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Security: &neo4jv1beta1.SecuritySpec{
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Security: &neo4jv1.SecuritySpec{
 				PodSecurityContext: &corev1.PodSecurityContext{RunAsUser: &uid, FSGroup: &uid},
 				ContainerSecurityContext: &corev1.SecurityContext{
 					RunAsUser: &uid,
@@ -438,11 +438,11 @@ func TestSecurityContextOverrides(t *testing.T) {
 					},
 				},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -468,21 +468,21 @@ func TestSecurityContextOverrides(t *testing.T) {
 }
 
 func TestImagePullSecrets(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Image: &neo4jv1beta1.ImageSpec{
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Image: &neo4jv1.ImageSpec{
 				PullSecrets: []string{"my-registry-secret", "", "other-secret"},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -496,22 +496,22 @@ func TestImagePullSecrets(t *testing.T) {
 }
 
 func TestStatefulSetCustomLoggingMounts(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Logging: &neo4jv1beta1.LoggingSpec{
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Logging: &neo4jv1.LoggingSpec{
 				ServerLogsXml: "<Configuration/>",
 				UserLogsXml:   "<Configuration/>",
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -533,21 +533,21 @@ func TestStatefulSetCustomLoggingMounts(t *testing.T) {
 }
 
 func TestStatefulSetLoggingConfigMapRefMounts(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
-			Logging: &neo4jv1beta1.LoggingSpec{
-				ServerLogsConfigMapRef: &neo4jv1beta1.LoggingConfigMapRef{Name: "ext-server-logs", Key: "slog.xml"},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			Logging: &neo4jv1.LoggingSpec{
+				ServerLogsConfigMapRef: &neo4jv1.LoggingConfigMapRef{Name: "ext-server-logs", Key: "slog.xml"},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -571,13 +571,13 @@ func TestStatefulSetLoggingConfigMapRefMounts(t *testing.T) {
 }
 
 func TestStatefulSetAppliesResources(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -588,11 +588,11 @@ func TestStatefulSetAppliesResources(t *testing.T) {
 					corev1.ResourceMemory: resource.MustParse("2Gi"),
 				},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
@@ -610,13 +610,13 @@ func TestStatefulSetAppliesResources(t *testing.T) {
 // Omitting spec.resources must still yield a bounded container so a Neo4j pod can never run unbounded
 // and starve its node (NEO-014).
 func TestStatefulSetDefaultsResourcesWhenOmitted(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 		},
 	}
 	c := StandaloneStatefulSet(render.StandaloneContext(neo4j)).Spec.Template.Spec.Containers[0]
@@ -630,13 +630,13 @@ func TestStatefulSetDefaultsResourcesWhenOmitted(t *testing.T) {
 
 // A user request above the default limit must raise the defaulted limit, never emit request>limit.
 func TestStatefulSetDefaultLimitNeverBelowRequest(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
+	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition:  neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
 			Version:  "2026.05.0",
-			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
 			// Only a large memory request; the limit is left to the operator default (4Gi).
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},

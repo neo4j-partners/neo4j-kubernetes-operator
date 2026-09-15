@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -28,7 +28,7 @@ var CertificateGVK = schema.GroupVersionKind{
 // CertificateName is the owned Certificate for one SSL policy. It is not the target
 // Secret name — that stays user-chosen via certificates.{policy}.secretName so the
 // Secret can be referenced from outside the CR.
-func CertificateName(neo4j *neo4jv1beta1.Neo4j, policy string) string {
+func CertificateName(neo4j *neo4jv1.Neo4j, policy string) string {
 	return neo4j.Name + "-" + policy + "-tls"
 }
 
@@ -44,7 +44,7 @@ type PolicyCertificate struct {
 // secretLabels are stamped onto the issued Secret via secretTemplate so the mount-policy
 // opt-in (NEO-005) holds for Secrets the operator provisions, exactly as it does for
 // operator-generated auth Secrets.
-func Certificates(neo4j *neo4jv1beta1.Neo4j, secretLabels map[string]string) []PolicyCertificate {
+func Certificates(neo4j *neo4jv1.Neo4j, secretLabels map[string]string) []PolicyCertificate {
 	if !CertManagerEnabled(neo4j) {
 		return nil
 	}
@@ -63,9 +63,9 @@ func Certificates(neo4j *neo4jv1beta1.Neo4j, secretLabels map[string]string) []P
 }
 
 func certificateFor(
-	neo4j *neo4jv1beta1.Neo4j,
+	neo4j *neo4jv1.Neo4j,
 	def tlsPolicy,
-	spec *neo4jv1beta1.TLSPolicySpec,
+	spec *neo4jv1.TLSPolicySpec,
 	mat Material,
 	secretLabels map[string]string,
 ) *unstructured.Unstructured {
@@ -114,7 +114,7 @@ func usagesFor(def tlsPolicy) []string {
 // dnsNamesFor assembles the SANs for one policy. These must match the names that are
 // actually dialed, or verification fails: the client Service for callers and the
 // per-member Service FQDNs the operator writes into server.*.advertised_address.
-func dnsNamesFor(neo4j *neo4jv1beta1.Neo4j, def tlsPolicy, spec *neo4jv1beta1.TLSPolicySpec) []string {
+func dnsNamesFor(neo4j *neo4jv1.Neo4j, def tlsPolicy, spec *neo4jv1.TLSPolicySpec) []string {
 	names := &stringSet{seen: map[string]struct{}{}}
 
 	for _, n := range inClusterNames(neo4j, def) {
@@ -142,7 +142,7 @@ func dnsNamesFor(neo4j *neo4jv1beta1.Neo4j, def tlsPolicy, spec *neo4jv1beta1.TL
 // listed individually rather than covered by a namespace wildcard, so a certificate
 // never validates a host outside this deployment. Scaling changes the Certificate spec
 // and cert-manager reissues.
-func inClusterNames(neo4j *neo4jv1beta1.Neo4j, def tlsPolicy) []string {
+func inClusterNames(neo4j *neo4jv1.Neo4j, def tlsPolicy) []string {
 	clientCtx := render.ClientServiceContext(neo4j)
 	ns := clientCtx.Namespace()
 	domain := clientCtx.ClusterDomain()
@@ -168,7 +168,7 @@ func inClusterNames(neo4j *neo4jv1beta1.Neo4j, def tlsPolicy) []string {
 	return names.out
 }
 
-func forEachMember(neo4j *neo4jv1beta1.Neo4j, fn func(ctx render.Context, podName string)) {
+func forEachMember(neo4j *neo4jv1.Neo4j, fn func(ctx render.Context, podName string)) {
 	for _, pool := range render.ActivePools(neo4j) {
 		ctx := render.ContextForPool(neo4j, pool)
 		replicas := ctx.PoolReplicas()
@@ -181,7 +181,7 @@ func forEachMember(neo4j *neo4jv1beta1.Neo4j, fn func(ctx render.Context, podNam
 // ingressHosts lists non-empty hosts from operator-managed Ingress rules. Hosts are a
 // read-only input for Certificate SANs (BDR-006) — the operator does not manage Ingress
 // TLS Secrets.
-func ingressHosts(neo4j *neo4jv1beta1.Neo4j) []string {
+func ingressHosts(neo4j *neo4jv1.Neo4j) []string {
 	if neo4j.Spec.Connectivity == nil || neo4j.Spec.Connectivity.Ingress == nil {
 		return nil
 	}

@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -24,7 +24,7 @@ const (
 // tlsPolicy is one Neo4j SSL framework policy (Helm ssl.{name} parity).
 type tlsPolicy struct {
 	name string
-	get  func(*neo4jv1beta1.TrustCertificatesSpec) *neo4jv1beta1.TLSPolicySpec
+	get  func(*neo4jv1.TrustCertificatesSpec) *neo4jv1.TLSPolicySpec
 	// clusterOnly: mount/conf only when topology.mode is Cluster (TLS-003).
 	clusterOnly bool
 	// forceClientAuth: if non-empty, always emit this client_auth (cluster → REQUIRE).
@@ -40,36 +40,36 @@ type tlsPolicy struct {
 var tlsPolicies = []tlsPolicy{
 	{
 		name:            "cluster",
-		get:             func(c *neo4jv1beta1.TrustCertificatesSpec) *neo4jv1beta1.TLSPolicySpec { return c.Cluster },
+		get:             func(c *neo4jv1.TrustCertificatesSpec) *neo4jv1.TLSPolicySpec { return c.Cluster },
 		clusterOnly:     true,
 		forceClientAuth: "REQUIRE",
 	},
 	{
 		name:            "https",
-		get:             func(c *neo4jv1beta1.TrustCertificatesSpec) *neo4jv1beta1.TLSPolicySpec { return c.HTTPS },
+		get:             func(c *neo4jv1.TrustCertificatesSpec) *neo4jv1.TLSPolicySpec { return c.HTTPS },
 		certManagerSANs: true,
 	},
 	{
 		name:            "bolt",
-		get:             func(c *neo4jv1beta1.TrustCertificatesSpec) *neo4jv1beta1.TLSPolicySpec { return c.Bolt },
+		get:             func(c *neo4jv1.TrustCertificatesSpec) *neo4jv1.TLSPolicySpec { return c.Bolt },
 		setBoltTLSLevel: true,
 		certManagerSANs: true,
 	},
 }
 
 // TrustEnabled reports whether TLS material should be applied.
-func TrustEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+func TrustEnabled(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j != nil && neo4j.Spec.Trust != nil && neo4j.Spec.Trust.Enabled
 }
 
-func certificates(neo4j *neo4jv1beta1.Neo4j) *neo4jv1beta1.TrustCertificatesSpec {
+func certificates(neo4j *neo4jv1.Neo4j) *neo4jv1.TrustCertificatesSpec {
 	if !TrustEnabled(neo4j) {
 		return nil
 	}
 	return neo4j.Spec.Trust.Certificates
 }
 
-func policyOf(neo4j *neo4jv1beta1.Neo4j, name string) *neo4jv1beta1.TLSPolicySpec {
+func policyOf(neo4j *neo4jv1.Neo4j, name string) *neo4jv1.TLSPolicySpec {
 	c := certificates(neo4j)
 	if c == nil {
 		return nil
@@ -84,7 +84,7 @@ func policyOf(neo4j *neo4jv1beta1.Neo4j, name string) *neo4jv1beta1.TLSPolicySpe
 
 // CertManagerEnabled reports whether the operator provisions cert-manager Certificates
 // instead of consuming user-supplied Secrets (BDR-006; default false).
-func CertManagerEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+func CertManagerEnabled(neo4j *neo4jv1.Neo4j) bool {
 	return TrustEnabled(neo4j) &&
 		neo4j.Spec.Trust.CertManager != nil && neo4j.Spec.Trust.CertManager.Enabled
 }
@@ -105,11 +105,11 @@ type Material struct {
 }
 
 // PolicyMaterial resolves the named policy's certificate material, if any is configured.
-func PolicyMaterial(neo4j *neo4jv1beta1.Neo4j, policy string) (Material, bool) {
+func PolicyMaterial(neo4j *neo4jv1.Neo4j, policy string) (Material, bool) {
 	return materialOf(neo4j, policyOf(neo4j, policy))
 }
 
-func materialOf(neo4j *neo4jv1beta1.Neo4j, p *neo4jv1beta1.TLSPolicySpec) (Material, bool) {
+func materialOf(neo4j *neo4jv1.Neo4j, p *neo4jv1.TLSPolicySpec) (Material, bool) {
 	if p == nil {
 		return Material{}, false
 	}
@@ -144,12 +144,12 @@ func subPathOr(subPath, def string) string {
 	return def
 }
 
-func materialPresent(neo4j *neo4jv1beta1.Neo4j, p *neo4jv1beta1.TLSPolicySpec) bool {
+func materialPresent(neo4j *neo4jv1.Neo4j, p *neo4jv1.TLSPolicySpec) bool {
 	_, ok := materialOf(neo4j, p)
 	return ok
 }
 
-func policyActive(neo4j *neo4jv1beta1.Neo4j, def tlsPolicy) (*neo4jv1beta1.TLSPolicySpec, Material, bool) {
+func policyActive(neo4j *neo4jv1.Neo4j, def tlsPolicy) (*neo4jv1.TLSPolicySpec, Material, bool) {
 	c := certificates(neo4j)
 	if c == nil {
 		return nil, Material{}, false
@@ -179,7 +179,7 @@ func AppendVolumes(ctx render.Context, container *corev1.Container, podSpec *cor
 	}
 }
 
-func appendPolicyVolumes(policy string, spec *neo4jv1beta1.TLSPolicySpec, mat Material, container *corev1.Container, podSpec *corev1.PodSpec) {
+func appendPolicyVolumes(policy string, spec *neo4jv1.TLSPolicySpec, mat Material, container *corev1.Container, podSpec *corev1.PodSpec) {
 	mode := secretVolumeMode
 	certVol := policy + "-cert"
 	keyVol := policy + "-key"
@@ -294,7 +294,7 @@ func Neo4jConfKeys(ctx render.Context) map[string]string {
 	return keys
 }
 
-func clientAuthValue(auth neo4jv1beta1.TLSClientAuth) string {
+func clientAuthValue(auth neo4jv1.TLSClientAuth) string {
 	switch auth {
 	case "Require":
 		return "REQUIRE"
@@ -310,9 +310,9 @@ func clientAuthValue(auth neo4jv1beta1.TLSClientAuth) string {
 // requireTrustedIfMTLS enforces TLS-004. Optional is included deliberately: it still
 // accepts client certificates, so without a CA bundle to verify them against every
 // presented certificate is rejected — a silently broken mTLS setup.
-func requireTrustedIfMTLS(policy string, p *neo4jv1beta1.TLSPolicySpec) error {
-	if p.ClientAuth != neo4jv1beta1.TLSClientAuth("Require") &&
-		p.ClientAuth != neo4jv1beta1.TLSClientAuth("Optional") {
+func requireTrustedIfMTLS(policy string, p *neo4jv1.TLSPolicySpec) error {
+	if p.ClientAuth != neo4jv1.TLSClientAuth("Require") &&
+		p.ClientAuth != neo4jv1.TLSClientAuth("Optional") {
 		return nil
 	}
 	if p.TrustedCerts == nil || len(p.TrustedCerts.Sources) == 0 {
@@ -322,7 +322,7 @@ func requireTrustedIfMTLS(policy string, p *neo4jv1beta1.TLSPolicySpec) error {
 	return nil
 }
 
-func requireMaterial(neo4j *neo4jv1beta1.Neo4j, policy string, p *neo4jv1beta1.TLSPolicySpec) error {
+func requireMaterial(neo4j *neo4jv1.Neo4j, policy string, p *neo4jv1.TLSPolicySpec) error {
 	if !materialPresent(neo4j, p) {
 		if CertManagerEnabled(neo4j) {
 			return fmt.Errorf("trust.certificates.%s requires secretName when trust.certManager.enabled (TLS-002c)", policy)
@@ -333,7 +333,7 @@ func requireMaterial(neo4j *neo4jv1beta1.Neo4j, policy string, p *neo4jv1beta1.T
 }
 
 // Validate runs all trust shape checks (cluster / https / bolt coupling, cert-manager).
-func Validate(neo4j *neo4jv1beta1.Neo4j) error {
+func Validate(neo4j *neo4jv1.Neo4j) error {
 	if err := ValidateHTTPSShape(neo4j); err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func Validate(neo4j *neo4jv1beta1.Neo4j) error {
 
 // validateCertManager re-checks TLS-001 and TLS-007 outside CEL so the coupling still
 // holds when the operator runs against a CRD that predates those rules.
-func validateCertManager(neo4j *neo4jv1beta1.Neo4j) error {
+func validateCertManager(neo4j *neo4jv1.Neo4j) error {
 	if !CertManagerEnabled(neo4j) {
 		return nil
 	}
@@ -363,7 +363,7 @@ func validateCertManager(neo4j *neo4jv1beta1.Neo4j) error {
 }
 
 // ValidateClusterShape validates cluster TLS when mode is Cluster, or Standalone bolt/https-only trust.
-func ValidateClusterShape(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateClusterShape(neo4j *neo4jv1.Neo4j) error {
 	if !TrustEnabled(neo4j) {
 		return nil
 	}
@@ -374,14 +374,14 @@ func ValidateClusterShape(neo4j *neo4jv1beta1.Neo4j) error {
 	if err := requireMaterial(neo4j, "cluster", p); err != nil {
 		return err
 	}
-	if p.ClientAuth == neo4jv1beta1.TLSClientAuth("None") {
+	if p.ClientAuth == neo4jv1.TLSClientAuth("None") {
 		return fmt.Errorf("trust.certificates.cluster.clientAuth cannot be None (cluster mTLS requires Require)")
 	}
 	return nil
 }
 
 // Standalone: no cluster policy; require bolt and/or https material.
-func validateStandaloneShape(neo4j *neo4jv1beta1.Neo4j) error {
+func validateStandaloneShape(neo4j *neo4jv1.Neo4j) error {
 	if policyOf(neo4j, "cluster") != nil {
 		return fmt.Errorf("trust.certificates.cluster is only valid when topology.mode is Cluster")
 	}
@@ -406,7 +406,7 @@ func validateStandaloneShape(neo4j *neo4jv1beta1.Neo4j) error {
 // ValidateHTTPSShape enforces TLS-LISTENER-001 and TLS-LISTENER-007: listeners.https
 // requires https material, plus bolt material because Browser is served over HTTPS and
 // browsers block its plaintext WebSocket to Bolt as mixed content.
-func ValidateHTTPSShape(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateHTTPSShape(neo4j *neo4jv1.Neo4j) error {
 	ctx := render.Context{Neo4j: neo4j}
 	if !ctx.HTTPSEnabled() {
 		return nil
@@ -424,7 +424,7 @@ func ValidateHTTPSShape(neo4j *neo4jv1beta1.Neo4j) error {
 }
 
 // ValidateBoltShape validates bolt material when the bolt block is present.
-func ValidateBoltShape(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateBoltShape(neo4j *neo4jv1.Neo4j) error {
 	p := policyOf(neo4j, "bolt")
 	if p == nil {
 		return nil
@@ -433,7 +433,7 @@ func ValidateBoltShape(neo4j *neo4jv1beta1.Neo4j) error {
 }
 
 // BoltTLSEnabled is true when bolt material is present (server.bolt.tls_level REQUIRED).
-func BoltTLSEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+func BoltTLSEnabled(neo4j *neo4jv1.Neo4j) bool {
 	return materialPresent(neo4j, policyOf(neo4j, "bolt"))
 }
 
@@ -465,7 +465,7 @@ func (s *secretKeySet) add(secret, key string) {
 // ca.crt next to the leaf — must be treated as pending issuance rather than user input, or
 // the first reconcile deadlocks: the Secret cannot exist until the operator has created the
 // Certificate, which happens after the up-front mount checks.
-func provisionedSecretNames(neo4j *neo4jv1beta1.Neo4j) map[string]struct{} {
+func provisionedSecretNames(neo4j *neo4jv1.Neo4j) map[string]struct{} {
 	if !CertManagerEnabled(neo4j) {
 		return nil
 	}
@@ -483,7 +483,7 @@ func provisionedSecretNames(neo4j *neo4jv1beta1.Neo4j) map[string]struct{} {
 
 // collectSecretKeys walks active policies and splits every referenced Secret data key into
 // the ones the user must supply and the ones cert-manager will publish.
-func collectSecretKeys(neo4j *neo4jv1beta1.Neo4j) (user, provisioned []SecretKeyNeed) {
+func collectSecretKeys(neo4j *neo4jv1.Neo4j) (user, provisioned []SecretKeyNeed) {
 	if !TrustEnabled(neo4j) {
 		return nil, nil
 	}
@@ -521,14 +521,14 @@ func collectSecretKeys(neo4j *neo4jv1beta1.Neo4j) (user, provisioned []SecretKey
 }
 
 // RequiredSecretKeys lists Secret data keys the user must supply for active policies.
-func RequiredSecretKeys(neo4j *neo4jv1beta1.Neo4j) []SecretKeyNeed {
+func RequiredSecretKeys(neo4j *neo4jv1.Neo4j) []SecretKeyNeed {
 	user, _ := collectSecretKeys(neo4j)
 	return user
 }
 
 // ProvisionedSecretKeys lists the Secret data keys cert-manager must publish before the
 // pods can mount TLS material. Absence means issuance is pending, not invalid input.
-func ProvisionedSecretKeys(neo4j *neo4jv1beta1.Neo4j) []SecretKeyNeed {
+func ProvisionedSecretKeys(neo4j *neo4jv1.Neo4j) []SecretKeyNeed {
 	_, provisioned := collectSecretKeys(neo4j)
 	return provisioned
 }
@@ -536,7 +536,7 @@ func ProvisionedSecretKeys(neo4j *neo4jv1beta1.Neo4j) []SecretKeyNeed {
 // BYOSecretNames returns the user-supplied Secret names enabled policies reference.
 // cert-manager target Secrets are omitted: the operator creates them via a Certificate,
 // so they are neither user-authored nor present on the first reconcile.
-func BYOSecretNames(neo4j *neo4jv1beta1.Neo4j) []string {
+func BYOSecretNames(neo4j *neo4jv1.Neo4j) []string {
 	if !TrustEnabled(neo4j) {
 		return nil
 	}

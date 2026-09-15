@@ -4,7 +4,7 @@
 #   kubectl apply -f examples/storage/10-secret-mounts-secret.yaml
 #   (and a cluster with StorageClass "managed-csi", e.g. AKS)
 # Apply: kubectl apply -f examples/storage/11-full.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-storage-full

@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 )
@@ -21,7 +21,7 @@ import (
 // Returns pending=true while STS/PVCs still exist.
 // ADD-04: only delete objects labeled as ours and (for STS) controlled by this Neo4j CR —
 // app.kubernetes.io/instance alone is a shared Helm label and must not select foreign workloads.
-func WipeOnUninstall(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j) (pending bool, err error) {
+func WipeOnUninstall(ctx context.Context, c client.Client, neo4j *neo4jv1.Neo4j) (pending bool, err error) {
 	if !renderstorage.DeleteDataOnUninstall(neo4j) {
 		return false, nil
 	}

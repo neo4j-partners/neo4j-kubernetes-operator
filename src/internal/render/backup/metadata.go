@@ -25,7 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/workload"
@@ -37,7 +37,7 @@ const metaScratchMountPath = "/tmp/neo4j-meta"
 
 // MetadataJobName is the deterministic Job name for a Neo4jRestore's post-seed metadata apply
 // (owner-referenced by the restore).
-func MetadataJobName(restore *neo4jv1beta1.Neo4jRestore) string { return restore.Name + "-metadata" }
+func MetadataJobName(restore *neo4jv1.Neo4jRestore) string { return restore.Name + "-metadata" }
 
 // MetadataJob builds the run-to-completion Job (named jobName, owner-referenced by the caller) that
 // reapplies the backed-up users, roles, and privileges after a seed-from-URI restore (which carries
@@ -55,14 +55,14 @@ func MetadataJobName(restore *neo4jv1beta1.Neo4jRestore) string { return restore
 // database fails the Job (→ RestoreMetadataFailed). Only after the probe succeeds does it apply the
 // scripts with `cypher-shell --fail-at-end`; statement errors there (a role/user already exists) are
 // recorded as warnings and the Job still exits 0, so the restore Succeeds with a Warning event.
-func MetadataJob(neo4j *neo4jv1beta1.Neo4j, jobName, claim string, dbArtifacts map[string]string) (*batchv1.Job, error) {
+func MetadataJob(neo4j *neo4jv1.Neo4j, jobName, claim string, dbArtifacts map[string]string) (*batchv1.Job, error) {
 	ctx := render.ClientServiceContext(neo4j)
 
 	// Mount the backups claim read-side at the same sub-path the backup Job wrote to, so
 	// <toPath>/<dbArtifacts[db]> resolves the recorded artifact.
-	toPath, volumes, mounts, err := destination(neo4jv1beta1.BackupDestination{
-		Type: neo4jv1beta1.BackupDestinationPVC,
-		PVC:  &neo4jv1beta1.BackupPVC{ClaimName: claim},
+	toPath, volumes, mounts, err := destination(neo4jv1.BackupDestination{
+		Type: neo4jv1.BackupDestinationPVC,
+		PVC:  &neo4jv1.BackupPVC{ClaimName: claim},
 	}, "")
 	if err != nil {
 		return nil, err

@@ -5,7 +5,7 @@ development, for single-instance production where the cost of a cluster is not j
 anything where you can tolerate the restart window of a single member.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

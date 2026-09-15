@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -21,7 +21,7 @@ import (
 // controllers (e.g. Neo4jRestore) that need admin Bolt but do not own the formation loop call
 // this instead of duplicating the dial. Unlike the Reconciler's own path it emits any TLS
 // warning directly on recorder (no advisory memo) — a restore is one-shot, not a hot loop.
-func Dial(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1beta1.Neo4j) (intneo4j.Admin, error) {
+func Dial(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1.Neo4j) (intneo4j.Admin, error) {
 	ctxRender := render.ClientServiceContext(neo4j)
 	var secret corev1.Secret
 	key := types.NamespacedName{Name: ctxRender.AuthSecretName(), Namespace: ctxRender.Namespace()}
@@ -44,7 +44,7 @@ func Dial(ctx context.Context, c client.Client, recorder record.EventRecorder, n
 
 // dialOpts builds NEO-004 connect options without the Reconciler's advisory memo. It reuses
 // loadBoltRootCAs (verified TLS) and the same insecure/refuse fallbacks.
-func dialOpts(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1beta1.Neo4j) (intneo4j.ConnectOpts, error) {
+func dialOpts(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1.Neo4j) (intneo4j.ConnectOpts, error) {
 	if BoltTLSEnabled(neo4j) {
 		pool, err := loadBoltRootCAs(ctx, c, neo4j)
 		if err != nil {

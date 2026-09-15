@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
@@ -29,7 +29,7 @@ func (r *Neo4jReconciler) mapSecretToNeo4j(ctx context.Context, obj client.Objec
 	if secret.Labels == nil || secret.Labels[rendersecrets.MountableLabel] != rendersecrets.MountableLabelValue {
 		return nil
 	}
-	var list neo4jv1beta1.Neo4jList
+	var list neo4jv1.Neo4jList
 	if err := r.List(ctx, &list, client.InNamespace(secret.Namespace)); err != nil {
 		return nil
 	}
@@ -67,7 +67,7 @@ func (r *Neo4jReconciler) mapPVCToNeo4j(ctx context.Context, obj client.Object) 
 	}
 	// Unlabelled: possibly a claim some CR binds by name. Costs one cached List, and only on the
 	// claims the label path already rejected.
-	var list neo4jv1beta1.Neo4jList
+	var list neo4jv1.Neo4jList
 	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
 		return nil
 	}
@@ -86,7 +86,7 @@ func (r *Neo4jReconciler) mapPVCToNeo4j(ctx context.Context, obj client.Object) 
 
 // crUsesClaim reports whether the CR binds this claim by name. ProtectedClaimNames is exactly the
 // Existing.claimName set, which is the same set as "claims the operator never renders".
-func crUsesClaim(neo4j *neo4jv1beta1.Neo4j, name string) bool {
+func crUsesClaim(neo4j *neo4jv1.Neo4j, name string) bool {
 	_, ok := renderstorage.ProtectedClaimNames(neo4j)[name]
 	return ok
 }
@@ -118,7 +118,7 @@ func pvcStatusChanged() predicate.Predicate {
 	}
 }
 
-func crMountsSecret(neo4j *neo4jv1beta1.Neo4j, name string) bool {
+func crMountsSecret(neo4j *neo4jv1.Neo4j, name string) bool {
 	if rendertrust.ReferencesSecret(neo4j, name) {
 		return true
 	}

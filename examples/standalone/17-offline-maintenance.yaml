@@ -6,7 +6,7 @@
 # Pod stays Running but NotReady (Bolt readiness fails). Exec in to work on /data:
 #   kubectl exec -it statefulset/dev-offline-server -- bash
 # Resume: set maintenance.offlineMode: false (or remove maintenance) and re-apply.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-offline

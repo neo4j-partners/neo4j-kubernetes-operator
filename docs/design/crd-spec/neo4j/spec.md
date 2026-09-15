@@ -713,7 +713,7 @@ Full maintenance jobs (`NEO-2-017`) deferred to V2.
 ### Production HA cluster
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: prod

@@ -8,17 +8,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestValidateSpecRejectsServiceAccountToken(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Trust: &neo4jv1beta1.TrustSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{
-						TrustedCerts: &neo4jv1beta1.TLSTrustedCertsSpec{
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{
+						TrustedCerts: &neo4jv1.TLSTrustedCertsSpec{
 							Sources: []corev1.VolumeProjection{{
 								ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token"},
 							}},
@@ -35,10 +35,10 @@ func TestValidateSpecRejectsServiceAccountToken(t *testing.T) {
 }
 
 func TestValidateSpecRequiresSecretMountItems(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Storage: &neo4jv1beta1.StorageSpec{
-				SecretMounts: map[string]neo4jv1beta1.SecretMountSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Storage: &neo4jv1.StorageSpec{
+				SecretMounts: map[string]neo4jv1.SecretMountSpec{
 					"creds": {SecretName: "my-creds", MountPath: "/var/secrets/creds"},
 				},
 			},
@@ -67,7 +67,7 @@ func TestRequireMountable(t *testing.T) {
 }
 
 func TestRequireAuthSecretDelegated(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "orders"}}
+	neo4j := &neo4jv1.Neo4j{ObjectMeta: metav1.ObjectMeta{Name: "orders"}}
 	s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "orders-auth"}}
 	if err := RequireAuthSecretDelegated(s, neo4j); err == nil {
 		t.Fatal("expected rejection without labels")
@@ -98,13 +98,13 @@ func TestRequireAuthSecretDelegated(t *testing.T) {
 }
 
 func TestValidateSpecAllowsSecretAndConfigMapWithItems(t *testing.T) {
-	neo4j := &neo4jv1beta1.Neo4j{
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Trust: &neo4jv1beta1.TrustSpec{
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{
-						TrustedCerts: &neo4jv1beta1.TLSTrustedCertsSpec{
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{
+						TrustedCerts: &neo4jv1.TLSTrustedCertsSpec{
 							Sources: []corev1.VolumeProjection{
 								{Secret: &corev1.SecretProjection{
 									LocalObjectReference: corev1.LocalObjectReference{Name: "ca"},
@@ -119,12 +119,12 @@ func TestValidateSpecAllowsSecretAndConfigMapWithItems(t *testing.T) {
 					},
 				},
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				SecretMounts: map[string]neo4jv1beta1.SecretMountSpec{
+			Storage: &neo4jv1.StorageSpec{
+				SecretMounts: map[string]neo4jv1.SecretMountSpec{
 					"creds": {
 						SecretName: "my-creds",
 						MountPath:  "/var/secrets/creds",
-						Items:      []neo4jv1beta1.SecretKeyToPath{{Key: "token", Path: "token"}},
+						Items:      []neo4jv1.SecretKeyToPath{{Key: "token", Path: "token"}},
 					},
 				},
 			},

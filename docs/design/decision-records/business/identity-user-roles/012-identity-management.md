@@ -63,7 +63,7 @@ Users configure `dbms.security.*` and run Cypher out-of-band. No identity CRDs.
 From [`20-operator-proposal.md`](../../../00-discovery/20-operator-proposal.md) §3.6: users reference role **names**; roles are pre-created in Neo4j or via config.
 
 ```yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jUser
 metadata:
   name: app-reader
@@ -90,7 +90,7 @@ Three CRDs matching reference PRD F-14..F-16. Operator executes ordered Cypher; 
 
 ```yaml
 # Role — inline privileges optional
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jRole
 metadata:
   name: app-reader-role
@@ -105,7 +105,7 @@ spec:
 
 ---
 # Grant — statements array + whenNotMatched policy
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jGrant
 metadata:
   name: app-reader-grants
@@ -121,7 +121,7 @@ spec:
 
 ---
 # User — password in Secret; role names
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jUser
 metadata:
   name: app-reader

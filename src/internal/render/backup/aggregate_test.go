@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestAggregateJob(t *testing.T) {
@@ -79,7 +79,7 @@ func TestAggregateJobObjectStore(t *testing.T) {
 	job, err := AggregateJob(testNeo4j(), "agg-obj", AggregateInputs{
 		ObjectURL:   "s3://bkt/backups/neo4j/",
 		Databases:   []string{"neo4j", "customers"},
-		Credentials: &neo4jv1beta1.BackupCredentials{SecretName: "s3-creds"},
+		Credentials: &neo4jv1.BackupCredentials{SecretName: "s3-creds"},
 	})
 	if err != nil {
 		t.Fatalf("AggregateJob: %v", err)

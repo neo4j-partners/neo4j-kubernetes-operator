@@ -2,7 +2,7 @@
 # so CEL refuses it in every topology mode rather than accepting a promise it cannot keep
 # (NEO-3-007-MULTI-01). Standalone is the discriminating case: the rule used to be guarded by
 # topology.mode == Cluster, which let this exact manifest through and ignored the field.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

@@ -11,7 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 )
@@ -157,11 +157,11 @@ const (
 // Duplicates reports every value this package dropped while rendering the server config:
 // JVM arguments colliding on the same flag (NEO-3-003-JVM-01) and neo4j.conf keys colliding
 // across the defaults / plugin / user / injected layers (BDR-008). Empty when nothing collides.
-func Duplicates(neo4j *neo4jv1beta1.Neo4j) []render.Duplicate {
+func Duplicates(neo4j *neo4jv1.Neo4j) []render.Duplicate {
 	if neo4j == nil {
 		return nil
 	}
-	var jvm *neo4jv1beta1.JVMSpec
+	var jvm *neo4jv1.JVMSpec
 	if neo4j.Spec.Config != nil {
 		jvm = neo4j.Spec.Config.JVM
 	}
@@ -183,7 +183,7 @@ func Duplicates(neo4j *neo4jv1beta1.Neo4j) []render.Duplicate {
 }
 
 func renderJVMConf(ctx render.Context) string {
-	var jvm *neo4jv1beta1.JVMSpec
+	var jvm *neo4jv1.JVMSpec
 	if ctx.Neo4j.Spec.Config != nil {
 		jvm = ctx.Neo4j.Spec.Config.JVM
 	}
@@ -196,7 +196,7 @@ func renderJVMConf(ctx render.Context) string {
 
 // mergeJVMArgs merges Neo4j defaults with additionalArguments (user wins, in place) and
 // reports every argument dropped on the way.
-func mergeJVMArgs(jvm *neo4jv1beta1.JVMSpec) ([]string, []render.Duplicate) {
+func mergeJVMArgs(jvm *neo4jv1.JVMSpec) ([]string, []render.Duplicate) {
 	// CRD / Helm default: useDefaults is true when unset.
 	useDefaults := jvm == nil || jvm.UseDefaults == nil || *jvm.UseDefaults
 	var args []string
@@ -312,7 +312,7 @@ var configKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // ValidateConfig rejects config that enables shell/JVM injection or line-smuggling (NEO-006).
 // Operator-owned expand-commands remain in rendered defaults; user values must not contain them.
-func ValidateConfig(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateConfig(neo4j *neo4jv1.Neo4j) error {
 	if neo4j == nil {
 		return nil
 	}

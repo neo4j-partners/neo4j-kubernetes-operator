@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 func TestPruneJob(t *testing.T) {
@@ -90,10 +90,10 @@ func TestPruneScriptFlatFilesLeaveRootAlone(t *testing.T) {
 }
 
 func TestObjectStorePruneJob(t *testing.T) {
-	dest := neo4jv1beta1.BackupDestination{
-		Type:        neo4jv1beta1.BackupDestinationS3,
+	dest := neo4jv1.BackupDestination{
+		Type:        neo4jv1.BackupDestinationS3,
 		URL:         "s3://bkt/prod/",
-		Credentials: &neo4jv1beta1.BackupCredentials{SecretName: "s3-creds"},
+		Credentials: &neo4jv1.BackupCredentials{SecretName: "s3-creds"},
 	}
 	job, err := ObjectStorePruneJob(testNeo4j(), PruneJobName("old"), "", dest, "s3://bkt/prod/old-chain/")
 	if err != nil {
@@ -131,25 +131,25 @@ func TestObjectStorePruneJob(t *testing.T) {
 func TestObjectStorePruneScriptPerProvider(t *testing.T) {
 	cases := []struct {
 		name     string
-		dest     neo4jv1beta1.BackupDestinationType
+		dest     neo4jv1.BackupDestinationType
 		url      string
 		wantAny  []string
 		wantFail bool
 	}{
-		{"s3", neo4jv1beta1.BackupDestinationS3, "s3://bkt/p/old/",
+		{"s3", neo4jv1.BackupDestinationS3, "s3://bkt/p/old/",
 			[]string{"RCLONE_S3_ENV_AUTH=true", "AWS_ENDPOINT_URL_S3", ":s3:bkt/p/old"}, false},
-		{"gcs", neo4jv1beta1.BackupDestinationGCS, "gs://bkt/p/old/",
+		{"gcs", neo4jv1.BackupDestinationGCS, "gs://bkt/p/old/",
 			[]string{"RCLONE_GCS_ENV_AUTH=true", ":gcs:bkt/p/old"}, false},
-		{"azure", neo4jv1beta1.BackupDestinationAzure, "azb://acct/cont/p/old/",
+		{"azure", neo4jv1.BackupDestinationAzure, "azb://acct/cont/p/old/",
 			[]string{"RCLONE_AZUREBLOB_ACCOUNT='acct'", ":azureblob:cont/p/old"}, false},
 		// Guards: never purge a bucket/container root, and reject malformed azure urls.
-		{"s3 root", neo4jv1beta1.BackupDestinationS3, "s3://bkt/", nil, true},
-		{"azure no container", neo4jv1beta1.BackupDestinationAzure, "azb://acct", nil, true},
-		{"pvc unsupported", neo4jv1beta1.BackupDestinationPVC, "", nil, true},
+		{"s3 root", neo4jv1.BackupDestinationS3, "s3://bkt/", nil, true},
+		{"azure no container", neo4jv1.BackupDestinationAzure, "azb://acct", nil, true},
+		{"pvc unsupported", neo4jv1.BackupDestinationPVC, "", nil, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := objectStorePruneScript(neo4jv1beta1.BackupDestination{Type: tc.dest}, tc.url)
+			got, err := objectStorePruneScript(neo4jv1.BackupDestination{Type: tc.dest}, tc.url)
 			if tc.wantFail {
 				if err == nil {
 					t.Fatalf("want error for %s url %q; got script %q", tc.dest, tc.url, got)

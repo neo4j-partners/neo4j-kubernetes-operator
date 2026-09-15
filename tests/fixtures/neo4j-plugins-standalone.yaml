@@ -10,7 +10,7 @@
 # not Cypher procedures, and needs a real license to run — nothing a bolt query can prove on a runner.
 #
 # Only `name: __CR_NAME__` and the storage placeholders are substituted by the harness.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

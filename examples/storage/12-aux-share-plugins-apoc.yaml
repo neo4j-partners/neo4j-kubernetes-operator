@@ -13,7 +13,7 @@
 #   kubectl get secret dev-storage-plugins-apoc-auth -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d; echo
 #   kubectl exec -it sts/dev-storage-plugins-apoc-server -- cypher-shell -u neo4j -p '<pw>' \
 #     "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc' RETURN name LIMIT 5"
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-storage-plugins-apoc

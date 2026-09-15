@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"sort"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // ChecksumAnnotation is stamped on the pod template so a rotated leaf certificate
@@ -15,14 +15,14 @@ const ChecksumAnnotation = "neo4j.com/tls-checksum"
 
 // MountedSecretKeys is every Secret data key an active policy mounts — BYO and
 // cert-manager alike.
-func MountedSecretKeys(neo4j *neo4jv1beta1.Neo4j) []SecretKeyNeed {
+func MountedSecretKeys(neo4j *neo4jv1.Neo4j) []SecretKeyNeed {
 	user, provisioned := collectSecretKeys(neo4j)
 	out := make([]SecretKeyNeed, 0, len(user)+len(provisioned))
 	return append(append(out, user...), provisioned...)
 }
 
 // ReferencesSecret reports whether an active TLS policy mounts data from name.
-func ReferencesSecret(neo4j *neo4jv1beta1.Neo4j, name string) bool {
+func ReferencesSecret(neo4j *neo4jv1.Neo4j, name string) bool {
 	if name == "" {
 		return false
 	}

@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 )
@@ -20,7 +20,7 @@ import (
 // Needed after scale-in when whenScaled=Delete: Dropped server IDs cannot be
 // re-enabled, so stores must not remount on the next scale-out.
 // No-op when volumeClaimRetention.whenScaled is Retain (default) — NEO-007.
-func WipeStaleMemberPVCs(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, keep int32) error {
+func WipeStaleMemberPVCs(ctx context.Context, c client.Client, neo4j *neo4jv1.Neo4j, pool render.PoolID, keep int32) error {
 	if !hasDynamicData(neo4j) || !renderstorage.DeleteDataOnScale(neo4j) {
 		return nil
 	}
@@ -53,7 +53,7 @@ func WipeStaleMemberPVCs(ctx context.Context, c client.Client, neo4j *neo4jv1bet
 // terminal SHOW SERVERS) — a heal, not scale-in wipe. Allowed under whenScaled:Retain
 // (NEO-007): Retain means "don't wipe on scale-in"; a Dropped store cannot rejoin, so
 // recycling that ordinal is recovery, not a false promise of reversible scale.
-func RecycleMemberStore(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j, pool render.PoolID, ordinal int32, podName string) error {
+func RecycleMemberStore(ctx context.Context, c client.Client, neo4j *neo4jv1.Neo4j, pool render.PoolID, ordinal int32, podName string) error {
 	var pod corev1.Pod
 	key := types.NamespacedName{Name: podName, Namespace: neo4j.Namespace}
 	if err := c.Get(ctx, key, &pod); err == nil {
@@ -93,10 +93,10 @@ func RecycleMemberStore(ctx context.Context, c client.Client, neo4j *neo4jv1beta
 	return nil
 }
 
-func hasDynamicData(neo4j *neo4jv1beta1.Neo4j) bool {
+func hasDynamicData(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j.Spec.Storage != nil &&
 		neo4j.Spec.Storage.Volumes != nil &&
-		neo4j.Spec.Storage.Volumes.Data.Mode == neo4jv1beta1.VolumeModeDynamic
+		neo4j.Spec.Storage.Volumes.Data.Mode == neo4jv1.VolumeModeDynamic
 }
 
 // ordinalForSTS parses "{volume}-{stsName}-{ordinal}" (stsName may contain hyphens).

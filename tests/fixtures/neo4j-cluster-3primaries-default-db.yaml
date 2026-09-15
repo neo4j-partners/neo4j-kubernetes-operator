@@ -2,7 +2,7 @@
 # default (1), i.e. an HA DBMS whose default database lives on a single primary.
 # Identical to examples/cluster/01-minimal-3-primaries.yaml, which is what a user gets
 # when the field is omitted.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

@@ -151,7 +151,7 @@ field in [Your first Neo4j](first-neo4j.md).
 
 ```bash
 kubectl apply -f - <<'EOF'
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev

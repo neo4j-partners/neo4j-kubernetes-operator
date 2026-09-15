@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 const (
@@ -40,17 +40,17 @@ const (
 
 // Context carries Neo4j CR metadata for deterministic child object names (ADR-005).
 type Context struct {
-	Neo4j *neo4jv1beta1.Neo4j
+	Neo4j *neo4jv1.Neo4j
 	Pool  PoolID
 }
 
 // NewContext builds a render context for the given pool.
-func NewContext(neo4j *neo4jv1beta1.Neo4j, pool PoolID) Context {
+func NewContext(neo4j *neo4jv1.Neo4j, pool PoolID) Context {
 	return Context{Neo4j: neo4j, Pool: pool}
 }
 
 // StandaloneContext returns the render context for a Standalone deployment.
-func StandaloneContext(neo4j *neo4jv1beta1.Neo4j) Context {
+func StandaloneContext(neo4j *neo4jv1.Neo4j) Context {
 	return NewContext(neo4j, PoolServer)
 }
 
@@ -256,11 +256,11 @@ func (c Context) ImageRef() string {
 	return repo + ":" + imageTag(c.Neo4j.Spec.Version, c.Neo4j.Spec.Edition)
 }
 
-func imageTag(version string, edition neo4jv1beta1.Edition) string {
+func imageTag(version string, edition neo4jv1.Edition) string {
 	if version == "" {
 		return version
 	}
-	if edition == neo4jv1beta1.EditionEnterprise && !strings.HasSuffix(version, "-enterprise") {
+	if edition == neo4jv1.EditionEnterprise && !strings.HasSuffix(version, "-enterprise") {
 		return version + "-enterprise"
 	}
 	return version
@@ -269,7 +269,7 @@ func imageTag(version string, edition neo4jv1beta1.Edition) string {
 // EnterpriseEdition reports whether the resource runs Enterprise, which gates both the image tag
 // suffix and the licensing environment the community image neither needs nor understands.
 func (c Context) EnterpriseEdition() bool {
-	return c.Neo4j.Spec.Edition == neo4jv1beta1.EditionEnterprise
+	return c.Neo4j.Spec.Edition == neo4jv1.EditionEnterprise
 }
 
 // LicenseAcceptEnv returns NEO4J_ACCEPT_LICENSE_AGREEMENT (yes | eval) from spec.license.accept,
@@ -391,7 +391,7 @@ func (c Context) DataStorageClassName() string {
 
 // PoolPluginIDs returns catalog plugin ids assigned to the current pool (BDR-004).
 func (c Context) PoolPluginIDs() []string {
-	if c.Neo4j.Spec.Topology.Mode == neo4jv1beta1.TopologyModeStandalone {
+	if c.Neo4j.Spec.Topology.Mode == neo4jv1.TopologyModeStandalone {
 		return c.Neo4j.Spec.Plugins
 	}
 	switch c.Pool {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
 
 // DefaultAllowedRepositories is used when the operator flag/env is unset (NEO-012).
@@ -66,7 +66,7 @@ func AllowedRepositories() []string {
 }
 
 // Validate checks spec.image.repository against the operator allowlist and digest shape (NEO-012).
-func Validate(neo4j *neo4jv1beta1.Neo4j) error {
+func Validate(neo4j *neo4jv1.Neo4j) error {
 	repo := "neo4j"
 	var digest string
 	if neo4j.Spec.Image != nil {

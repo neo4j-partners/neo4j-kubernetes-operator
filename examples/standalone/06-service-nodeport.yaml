@@ -2,7 +2,7 @@
 # Prerequisites: none (works on kind via the mapped host port range).
 # Apply: kubectl apply -f examples/standalone/06-service-nodeport.yaml
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-nodeport

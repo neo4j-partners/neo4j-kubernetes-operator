@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
@@ -87,37 +87,37 @@ func workloadScheme(t *testing.T) *runtime.Scheme {
 	if err := scheme.AddToScheme(s); err != nil {
 		t.Fatalf("core scheme: %v", err)
 	}
-	if err := neo4jv1beta1.AddToScheme(s); err != nil {
+	if err := neo4jv1.AddToScheme(s); err != nil {
 		t.Fatalf("neo4j scheme: %v", err)
 	}
 	return s
 }
 
-func standaloneWithBolt(t *testing.T) *neo4jv1beta1.Neo4j {
+func standaloneWithBolt(t *testing.T) *neo4jv1.Neo4j {
 	t.Helper()
-	return &neo4jv1beta1.Neo4j{
+	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jSpec{
-			Edition: neo4jv1beta1.EditionEnterprise,
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
 			Version: "2026.05.0",
-			License: &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
-			Topology: neo4jv1beta1.TopologySpec{
-				Mode: neo4jv1beta1.TopologyModeStandalone,
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{
+				Mode: neo4jv1.TopologyModeStandalone,
 			},
-			Storage: &neo4jv1beta1.StorageSpec{
-				Volumes: &neo4jv1beta1.VolumesSpec{
-					Data: neo4jv1beta1.DataVolumeSpec{
-						Mode:    neo4jv1beta1.VolumeModeDynamic,
-						Dynamic: &neo4jv1beta1.DynamicVolumeSpec{Size: "10Gi"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					Data: neo4jv1.DataVolumeSpec{
+						Mode:    neo4jv1.VolumeModeDynamic,
+						Dynamic: &neo4jv1.DynamicVolumeSpec{Size: "10Gi"},
 					},
 				},
 			},
-			Trust: &neo4jv1beta1.TrustSpec{
+			Trust: &neo4jv1.TrustSpec{
 				Enabled: true,
-				Certificates: &neo4jv1beta1.TrustCertificatesSpec{
-					Bolt: &neo4jv1beta1.TLSPolicySpec{
-						PrivateKey:        &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-key", SubPath: "private.key"},
-						PublicCertificate: &neo4jv1beta1.TLSSecretKeyRef{SecretName: "dev-bolt-cert", SubPath: "public.crt"},
+				Certificates: &neo4jv1.TrustCertificatesSpec{
+					Bolt: &neo4jv1.TLSPolicySpec{
+						PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "dev-bolt-key", SubPath: "private.key"},
+						PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "dev-bolt-cert", SubPath: "public.crt"},
 					},
 				},
 			},
@@ -136,7 +136,7 @@ func tlsSecret(name, key string, value []byte) *corev1.Secret {
 	}
 }
 
-func mustSTS(t *testing.T, c client.Client, neo4j *neo4jv1beta1.Neo4j) *appsv1.StatefulSet {
+func mustSTS(t *testing.T, c client.Client, neo4j *neo4jv1.Neo4j) *appsv1.StatefulSet {
 	t.Helper()
 	sts := &appsv1.StatefulSet{}
 	if err := c.Get(t.Context(), client.ObjectKey{Name: neo4j.Name + "-server", Namespace: neo4j.Namespace}, sts); err != nil {

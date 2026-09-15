@@ -4,7 +4,7 @@
 # fresh database from it over a credential-free file: URI (ADR-015). Applied by deploy/neo4j;
 # restore/seed runs only after the workload is Ready. __CR_NAME__/__DATA_SIZE__/__STORAGE_CLASS__
 # are substituted by the harness (same placeholders as the other fixtures).
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

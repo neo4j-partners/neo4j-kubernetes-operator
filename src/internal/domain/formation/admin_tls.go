@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
@@ -17,7 +17,7 @@ import (
 
 // adminConnectOpts builds NEO-004 dial options: verified TLS when bolt material exists,
 // else trust.insecureAdminConnection for explicit plaintext (Warning event).
-func (r *Reconciler) adminConnectOpts(ctx context.Context, neo4j *neo4jv1beta1.Neo4j) (intneo4j.ConnectOpts, error) {
+func (r *Reconciler) adminConnectOpts(ctx context.Context, neo4j *neo4jv1.Neo4j) (intneo4j.ConnectOpts, error) {
 	if BoltTLSEnabled(neo4j) {
 		pool, err := loadBoltRootCAs(ctx, r.Client, neo4j)
 		if err != nil {
@@ -37,7 +37,7 @@ func (r *Reconciler) adminConnectOpts(ctx context.Context, neo4j *neo4jv1beta1.N
 	return intneo4j.ConnectOpts{}, fmt.Errorf("%s", msg)
 }
 
-func loadBoltRootCAs(ctx context.Context, c client.Client, neo4j *neo4jv1beta1.Neo4j) (*x509.CertPool, error) {
+func loadBoltRootCAs(ctx context.Context, c client.Client, neo4j *neo4jv1.Neo4j) (*x509.CertPool, error) {
 	bolt := neo4j.Spec.Trust.Certificates.Bolt
 	pool := x509.NewCertPool()
 	added := 0

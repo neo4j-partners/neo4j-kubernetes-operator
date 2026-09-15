@@ -2,7 +2,7 @@
 #   Memory limit should match request (Neo4j heap stability).
 # Apply: kubectl apply -f examples/standalone/21-resources.yaml
 # Related README: ../README.md#standalone
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: dev-resources

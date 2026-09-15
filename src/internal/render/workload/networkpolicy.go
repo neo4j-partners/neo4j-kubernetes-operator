@@ -9,12 +9,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	neo4jv1beta1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1beta1"
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
 // NetworkPolicyEnabled is true when spec.security.networkPolicy.enabled.
-func NetworkPolicyEnabled(neo4j *neo4jv1beta1.Neo4j) bool {
+func NetworkPolicyEnabled(neo4j *neo4jv1.Neo4j) bool {
 	return neo4j.Spec.Security != nil &&
 		neo4j.Spec.Security.NetworkPolicy != nil &&
 		neo4j.Spec.Security.NetworkPolicy.Enabled
@@ -27,7 +27,7 @@ func NetworkPolicyName(ctx render.Context) string {
 
 // ValidateNetworkPolicy rejects enabled policies without real ingress peers (NEO-010).
 // Empty From on client ports would allow every pod in the cluster — that is no longer accepted.
-func ValidateNetworkPolicy(neo4j *neo4jv1beta1.Neo4j) error {
+func ValidateNetworkPolicy(neo4j *neo4jv1.Neo4j) error {
 	if !NetworkPolicyEnabled(neo4j) {
 		return nil
 	}

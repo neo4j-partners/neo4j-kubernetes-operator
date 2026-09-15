@@ -9,7 +9,7 @@
 #   full: "0 2 * * *" (02:00 daily) and incremental: "0 * * * *" (hourly).
 # Prerequisites: examples/backup/01-neo4j-pvc-destination.yaml applied and Ready.
 # Apply: kubectl apply -f examples/backup/06-schedule.yaml
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4jBackupSchedule
 metadata:
   name: sched-demo

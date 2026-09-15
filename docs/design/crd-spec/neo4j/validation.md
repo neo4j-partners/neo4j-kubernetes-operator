@@ -1,6 +1,6 @@
 # `Neo4j` — validation rules
 
-**API**: `neo4j.com/v1beta1`  
+**API**: `neo4j.com/v1`  
 **Sources**: [BDR-002](../../decision-records/business/neo4j/002-neo4j-crd-topology.md) · [BDR-004](../../decision-records/business/neo4j/004-neo4j-plugin-topology.md) (**Option E — accepted**) · [BDR-009](../../decision-records/business/neo4j/009-scale-pool-ordinal-semantics.md) (**Option B — accepted**) · [BDR-010](../../decision-records/business/neo4j/010-neo4j-features-catalog.md) (**Option C — accepted**) · [ADR-001](../../decision-records/architecture/001-crd-validation-process.md) · [`spec.md`](spec.md)
 
 **Mechanisms**:
