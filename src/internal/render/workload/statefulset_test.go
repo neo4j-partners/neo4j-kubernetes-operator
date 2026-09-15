@@ -606,3 +606,47 @@ func TestStatefulSetAppliesResources(t *testing.T) {
 		t.Fatalf("memory limit = %q", got)
 	}
 }
+
+// Omitting spec.resources must still yield a bounded container so a Neo4j pod can never run unbounded
+// and starve its node (NEO-014).
+func TestStatefulSetDefaultsResourcesWhenOmitted(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+		},
+	}
+	c := StandaloneStatefulSet(render.StandaloneContext(neo4j)).Spec.Template.Spec.Containers[0]
+	if c.Resources.Limits.Cpu().IsZero() || c.Resources.Limits.Memory().IsZero() {
+		t.Fatalf("omitted spec.resources must default cpu+memory limits, got %#v", c.Resources.Limits)
+	}
+	if c.Resources.Requests.Cpu().IsZero() || c.Resources.Requests.Memory().IsZero() {
+		t.Fatalf("omitted spec.resources must default cpu+memory requests, got %#v", c.Resources.Requests)
+	}
+}
+
+// A user request above the default limit must raise the defaulted limit, never emit request>limit.
+func TestStatefulSetDefaultLimitNeverBelowRequest(t *testing.T) {
+	neo4j := &neo4jv1beta1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jSpec{
+			Edition:  neo4jv1beta1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  &neo4jv1beta1.LicenseSpec{Accept: neo4jv1beta1.LicenseAcceptYes},
+			Topology: neo4jv1beta1.TopologySpec{Mode: neo4jv1beta1.TopologyModeStandalone},
+			// Only a large memory request; the limit is left to the operator default (4Gi).
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
+			},
+		},
+	}
+	c := StandaloneStatefulSet(render.StandaloneContext(neo4j)).Spec.Template.Spec.Containers[0]
+	memReq := c.Resources.Requests.Memory()
+	memLim := c.Resources.Limits.Memory()
+	if memLim.Cmp(*memReq) < 0 {
+		t.Fatalf("memory limit %s must not be below request %s", memLim.String(), memReq.String())
+	}
+}

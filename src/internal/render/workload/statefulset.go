@@ -5,6 +5,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -40,7 +41,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		ImagePullPolicy: pullPolicy,
 		Ports:           neo4jContainerPorts(ctx),
 		Env:             neo4jContainerEnv(ctx),
-		Resources:       *ctx.Neo4j.Spec.Resources.DeepCopy(),
+		Resources:       withDefaultResources(ctx.Neo4j.Spec.Resources),
 		SecurityContext: containerSecurityContext(ctx),
 		VolumeMounts: []corev1.VolumeMount{
 			// Helm mounts projected config fragments at /config/neo4j.conf (directory).
@@ -173,6 +174,46 @@ func appendLoggingVolumes(ctx render.Context, container *corev1.Container, volum
 				},
 			},
 		})
+	}
+}
+
+// Operator defaults that bound an omitted spec.resources so a Neo4j container can never run unbounded
+// and starve its node (NEO-014, CWE-770/CWE-400). Users still override any field via spec.resources.
+// ponytail: fixed defaults, not workload-aware — set spec.resources for large or memory-heavy instances.
+var (
+	defaultCPURequest    = resource.MustParse("500m")
+	defaultMemoryRequest = resource.MustParse("2Gi")
+	defaultCPULimit      = resource.MustParse("2")
+	defaultMemoryLimit   = resource.MustParse("4Gi")
+)
+
+// withDefaultResources fills only the requests/limits the user left unset, so partial overrides work
+// and an omitted spec.resources still yields a bounded container (NEO-014).
+func withDefaultResources(rr corev1.ResourceRequirements) corev1.ResourceRequirements {
+	out := *rr.DeepCopy()
+	if out.Requests == nil {
+		out.Requests = corev1.ResourceList{}
+	}
+	if out.Limits == nil {
+		out.Limits = corev1.ResourceList{}
+	}
+	defaultResource(out.Requests, out.Limits, corev1.ResourceCPU, defaultCPURequest, defaultCPULimit)
+	defaultResource(out.Requests, out.Limits, corev1.ResourceMemory, defaultMemoryRequest, defaultMemoryLimit)
+	return out
+}
+
+// defaultResource fills a missing request/limit for one resource. A defaulted limit is raised to the
+// request when the user set a request above our default, so we never emit an invalid request>limit pod.
+func defaultResource(requests, limits corev1.ResourceList, name corev1.ResourceName, reqDefault, limDefault resource.Quantity) {
+	if _, ok := requests[name]; !ok {
+		requests[name] = reqDefault.DeepCopy()
+	}
+	if _, ok := limits[name]; !ok {
+		lim := limDefault.DeepCopy()
+		if req := requests[name]; lim.Cmp(req) < 0 {
+			lim = req.DeepCopy()
+		}
+		limits[name] = lim
 	}
 }
 

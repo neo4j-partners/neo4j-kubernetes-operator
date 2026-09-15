@@ -1241,8 +1241,10 @@ spec:
                     type: object
                 type: object
               resources:
-                description: Resources sets CPU and memory requests and limits for
-                  the Neo4j container.
+                description: |-
+                  Resources sets CPU and memory requests and limits for the Neo4j container. Any field left unset
+                  is defaulted by the operator so the container is always bounded (NEO-014): requests 500m/2Gi,
+                  limits 2/4Gi. Set explicit values for large or memory-heavy instances.
                 properties:
                   claims:
                     description: |-
