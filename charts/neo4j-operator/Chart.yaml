@@ -2,8 +2,8 @@ apiVersion: v2
 name: neo4j-operator
 description: Neo4j Kubernetes Operator controller (CRDs, RBAC, Deployment)
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.0.0
+appVersion: "1.0.0"
 # Oldest release still supported upstream. The CRD's validation rules need an API server that
 # compiles them, including the CEL quantity library used to block a volume shrink.
 kubeVersion: ">= 1.35.0-0"

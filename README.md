@@ -21,7 +21,7 @@ On a Kubernetes cluster you already have, installing means applying the CRD and 
 `VERSION` is the tag of the [latest release](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases) without its leading `v`:
 
 ```bash
-VERSION=1.0.0-rc1
+VERSION=1.0.0
 
 # 1. The CRD
 kubectl apply --server-side --force-conflicts \

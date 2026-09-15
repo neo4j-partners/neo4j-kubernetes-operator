@@ -1,6 +1,6 @@
 name: Release
 
-# Cut a public release from a semver tag (e.g. v0.1.0):
+# Cut a public release from a semver tag (e.g. v1.0.0):
 #   - operator image  -> ghcr.io/<owner>/neo4j-kubernetes-operator:<version>
 #                        (manifest index: linux/amd64 + linux/arm64)
 #   - Helm chart (OCI) -> oci://ghcr.io/<owner>/charts/neo4j-operator:<version>
@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to cut (e.g. v0.1.0)"
+        description: "Release tag to cut (e.g. v1.0.0)"
         required: true
 
 concurrency:

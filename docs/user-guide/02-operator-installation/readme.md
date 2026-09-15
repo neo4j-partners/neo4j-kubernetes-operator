@@ -27,7 +27,7 @@ and the CRD as a downloadable asset. Take the version from the
 leading `v`:
 
 ```bash
-VERSION=1.0.0-rc1
+VERSION=1.0.0
 
 # 1. The CRD, server-side. Not part of the chart — see below.
 kubectl apply --server-side --force-conflicts \

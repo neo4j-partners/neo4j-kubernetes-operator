@@ -14,7 +14,7 @@ limit that a client-side `kubectl apply -f` relies on, so the plain form fails w
 error. Apply the release asset — `VERSION` is the release tag without its leading `v`:
 
 ```bash
-VERSION=1.0.0-rc1
+VERSION=1.0.0
 
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
@@ -84,7 +84,7 @@ Same chart as the published one, read from your working tree, with your image an
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace \
   --set image.repository=myregistry.example.com/neo4j-operator \
-  --set image.tag=0.1.0 \
+  --set image.tag=1.0.0 \
   --set 'watchNamespaces={default,team-a}'
 ```
 

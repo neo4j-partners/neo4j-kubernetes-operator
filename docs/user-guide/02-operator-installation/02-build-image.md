@@ -77,8 +77,8 @@ minikube image load neo4j-operator:local
 Tag for the registry and push. Nothing here is specific to this operator:
 
 ```bash
-docker tag neo4j-operator:local myregistry.example.com/neo4j-operator:0.1.0
-docker push myregistry.example.com/neo4j-operator:0.1.0
+docker tag neo4j-operator:local myregistry.example.com/neo4j-operator:1.0.0
+docker push myregistry.example.com/neo4j-operator:1.0.0
 ```
 
 For a private registry, create a pull Secret in `neo4j-operator-system` and reference it from the
@@ -100,7 +100,7 @@ export ACR_NAME=neo4joperatoracr   # globally unique, alphanumeric only
 az acr create --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --sku Basic
 az acr login --name "$ACR_NAME"
 
-export IMG="${ACR_NAME}.azurecr.io/neo4j-operator:0.1.0"
+export IMG="${ACR_NAME}.azurecr.io/neo4j-operator:1.0.0"
 make docker-build IMG="$IMG" DOCKER_PLATFORM=linux/amd64
 docker push "$IMG"
 
@@ -128,7 +128,7 @@ gcloud artifacts repositories create "$AR_REPO" \
   --repository-format=docker --location "$REGION"
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
-export IMG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/neo4j-operator:0.1.0"
+export IMG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/neo4j-operator:1.0.0"
 make docker-build IMG="$IMG" DOCKER_PLATFORM=linux/amd64
 docker push "$IMG"
 ```
@@ -164,7 +164,7 @@ aws ecr create-repository --repository-name "$ECR_REPO" --region "$REGION"
 aws ecr get-login-password --region "$REGION" \
   | docker login --username AWS --password-stdin "$ECR_HOST"
 
-export IMG="${ECR_HOST}/${ECR_REPO}:0.1.0"
+export IMG="${ECR_HOST}/${ECR_REPO}:1.0.0"
 make docker-build IMG="$IMG" DOCKER_PLATFORM=linux/amd64
 docker push "$IMG"
 ```
@@ -198,7 +198,7 @@ Copy it with [crane](https://github.com/google/go-containerregistry/tree/main/cm
 index covering `linux/amd64` and `linux/arm64`, and these copy it whole:
 
 ```bash
-VERSION=1.0.0-rc1
+VERSION=1.0.0
 SRC=ghcr.io/neo4j-partners/neo4j-kubernetes-operator:${VERSION}
 DST=myregistry.example.com/neo4j-operator:${VERSION}
 
@@ -224,10 +224,10 @@ two mechanisms, and only the first one is a supported input.
 
 ```bash
 helm upgrade --install neo4j-operator \
-  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version 1.0.0-rc1 \
+  oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version 1.0.0 \
   --namespace neo4j-operator-system --create-namespace \
   --set image.repository=myregistry.example.com/neo4j-operator \
-  --set image.tag=0.1.0
+  --set image.tag=1.0.0
 ```
 
 `--version` selects the chart, `image.*` selects what it runs; the two are independent, so a chart
@@ -249,7 +249,7 @@ stands, whatever you passed to the build. Change the one line that decides it, i
 ```yaml
       containers:
       - name: manager
-        image: myregistry.example.com/neo4j-operator:0.1.0   # was controller:latest
+        image: myregistry.example.com/neo4j-operator:1.0.0   # was controller:latest
         imagePullPolicy: IfNotPresent                        # Never on kind
 ```
 
@@ -260,7 +260,7 @@ cat >> config/manager/kustomization.yaml <<'EOF'
 images:
 - name: controller
   newName: myregistry.example.com/neo4j-operator
-  newTag: 0.1.0
+  newTag: 1.0.0
 EOF
 
 kubectl apply -k config/manager
