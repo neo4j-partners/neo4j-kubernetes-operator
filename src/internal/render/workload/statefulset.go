@@ -41,7 +41,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		ImagePullPolicy: pullPolicy,
 		Ports:           neo4jContainerPorts(ctx),
 		Env:             neo4jContainerEnv(ctx),
-		Resources:       withDefaultResources(ctx.Neo4j.Spec.Resources),
+		Resources:       withDefaultResources(ctx.PoolResources()),
 		SecurityContext: containerSecurityContext(ctx),
 		VolumeMounts: []corev1.VolumeMount{
 			// Helm mounts projected config fragments at /config/neo4j.conf (directory).
@@ -206,7 +206,14 @@ func withDefaultResources(rr corev1.ResourceRequirements) corev1.ResourceRequire
 // request when the user set a request above our default, so we never emit an invalid request>limit pod.
 func defaultResource(requests, limits corev1.ResourceList, name corev1.ResourceName, reqDefault, limDefault resource.Quantity) {
 	if _, ok := requests[name]; !ok {
-		requests[name] = reqDefault.DeepCopy()
+		req := reqDefault.DeepCopy()
+		// A user limit below our default request would leave the defaulted request above it — an
+		// invalid request>limit container that never schedules. Clamp the request we are inventing
+		// down to the user's limit so the defaulted container is always valid (NEO-014).
+		if lim, ok := limits[name]; ok && req.Cmp(lim) > 0 {
+			req = lim.DeepCopy()
+		}
+		requests[name] = req
 	}
 	if _, ok := limits[name]; !ok {
 		lim := limDefault.DeepCopy()

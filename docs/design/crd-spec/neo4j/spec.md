@@ -136,7 +136,12 @@ pluginDefinitions:
 | `secondaries.<pool>.members` | int32 | conditional | — | Required ≥ 1 when pool block is present and non-zero. Maximum 25 (NEO-014). |
 | `secondaries.<pool>.plugins` | []string | no | `[]` | Plugin ids for every pod in that pool. |
 
-**SecondaryPool** (`analytics` | `read` only): `{ members, plugins? }`.
+**SecondaryPool** (`analytics` | `read` only): `{ members, plugins?, resources? }`.
+
+Each pool (`primaries`, `secondaries.analytics`, `secondaries.read`) accepts an optional `resources`
+block (standard Kubernetes `ResourceRequirements`) that **replaces** `spec.resources` for that pool;
+unset requests/limits are filled from the operator defaults (NEO-014). Omit it to inherit
+`spec.resources`. See [`spec.resources`](#specresources).
 
 **Removed (do not implement):** `secondaries[]` list with `name` field; `secondaries[].serverRole`.
 

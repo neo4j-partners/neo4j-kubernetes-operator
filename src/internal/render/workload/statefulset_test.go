@@ -650,3 +650,77 @@ func TestStatefulSetDefaultLimitNeverBelowRequest(t *testing.T) {
 		t.Fatalf("memory limit %s must not be below request %s", memLim.String(), memReq.String())
 	}
 }
+
+// The mirror of the never-below-request case: a user limit below the operator's default request
+// must not leave the defaulted request above it, or the container is invalid (request>limit) and
+// never schedules. The webhook validates only the user's input, so this can only be caught here.
+func TestStatefulSetDefaultRequestNeverAboveUserLimit(t *testing.T) {
+	neo4j := &neo4jv1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+		Spec: neo4jv1.Neo4jSpec{
+			Edition:  neo4jv1.EditionEnterprise,
+			Version:  "2026.05.0",
+			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+			// Only a small CPU limit, below the 500m default request; the request is left to the operator.
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")},
+			},
+		},
+	}
+	c := StandaloneStatefulSet(render.StandaloneContext(neo4j)).Spec.Template.Spec.Containers[0]
+	cpuReq := c.Resources.Requests.Cpu()
+	cpuLim := c.Resources.Limits.Cpu()
+	if cpuReq.Cmp(*cpuLim) > 0 {
+		t.Fatalf("cpu request %s must not exceed user-set limit %s", cpuReq.String(), cpuLim.String())
+	}
+}
+
+// Resource defaulting runs per pool (NEO-014): a pool with neither a pool-level override nor a
+// global spec.resources must still render bounded, and a pool-level override must be honoured with
+// any unset request/limit filled from the operator defaults — including raising a defaulted CPU
+// limit to a user request that sits above it, so an override never emits request>limit.
+func TestClusterPoolDefaultsAndOverridesResources(t *testing.T) {
+	neo4j := &neo4jv1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
+			Version: "2026.05.0",
+			License: &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
+			// No global spec.resources: the primary pool must fall back to the operator defaults.
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
+				Secondaries: &neo4jv1.SecondariesSpec{
+					// CPU request above the default CPU limit (2); memory left to the defaults.
+					Analytics: &neo4jv1.SecondaryPoolSpec{
+						Members: 1,
+						Resources: &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4")},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Primary: no override and no global block, yet still bounded on cpu+memory requests and limits.
+	primary := PoolStatefulSet(render.ContextForPool(neo4j, render.PoolPrimary)).Spec.Template.Spec.Containers[0]
+	if primary.Resources.Requests.Cpu().IsZero() || primary.Resources.Requests.Memory().IsZero() ||
+		primary.Resources.Limits.Cpu().IsZero() || primary.Resources.Limits.Memory().IsZero() {
+		t.Fatalf("primary pool must default cpu+memory requests and limits, got %#v", primary.Resources)
+	}
+
+	// Analytics: the override request wins, and the defaulted CPU limit is raised to it.
+	analytics := PoolStatefulSet(render.ContextForPool(neo4j, render.PoolAnalytics)).Spec.Template.Spec.Containers[0]
+	if got := analytics.Resources.Requests.Cpu().String(); got != "4" {
+		t.Fatalf("analytics cpu request = %q, want 4 (pool override)", got)
+	}
+	if cpuReq, cpuLim := analytics.Resources.Requests.Cpu(), analytics.Resources.Limits.Cpu(); cpuLim.Cmp(*cpuReq) < 0 {
+		t.Fatalf("analytics cpu limit %s must not be below overridden request %s", cpuLim.String(), cpuReq.String())
+	}
+	// The override omitted memory, so the pool must still get the operator memory defaults.
+	if analytics.Resources.Requests.Memory().IsZero() || analytics.Resources.Limits.Memory().IsZero() {
+		t.Fatalf("analytics pool must default memory when the override omits it, got %#v", analytics.Resources)
+	}
+}

@@ -227,6 +227,21 @@ kubectl wait --for=condition=Ready "neo4j/${NEO4J_CR_NAME}" \
   -n "${NEO4J_NAMESPACE}" --timeout=300s >/dev/null 2>&1 \
   || { storage_dump "grow"; die "the CR did not return to Ready after the grow"; }
 
+# The condition flip is a synchronous Status().Update, but the Event rides client-go's async
+# broadcaster and lands a beat later — so poll for it rather than sampling the instant PVCBound
+# appears. The old double-fire (fixed in a5bd0e5) used to spread two writes across the requeue
+# burst and mask this; with the completion now pinned to one Event per generation there is a single
+# async write to catch. The trailing grace lets a would-be duplicate land, so an over-count still
+# fails rather than being hidden by breaking on first sight.
+log "Waiting for ${COMPLETED_REASON} to be recorded (async Event broadcaster)"
+deadline=$((SECONDS + 60))
+completed=0
+while [[ "${SECONDS}" -lt "${deadline}" ]]; do
+  completed="$(storage_event_count "${COMPLETED_REASON}")"
+  [[ "${completed}" -ge $((BASELINE_COMPLETED + 1)) ]] && break
+  sleep 3
+done
+sleep 5
 completed="$(storage_event_count "${COMPLETED_REASON}")"
 [[ "${completed}" -eq $((BASELINE_COMPLETED + 1)) ]] \
   || { storage_dump "grow"; die "${COMPLETED_REASON} recorded ${completed} time(s), expected exactly $((BASELINE_COMPLETED + 1)) — the completion Event is edge-triggered and a level-triggered one would spend the object's Event budget"; }

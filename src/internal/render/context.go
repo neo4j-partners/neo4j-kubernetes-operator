@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -412,6 +413,32 @@ func (c Context) PoolPluginIDs() []string {
 		}
 	}
 	return nil
+}
+
+// PoolResources returns the resource requirements for the current pool: a per-pool override when
+// set on the pool, otherwise the global spec.resources. Replace semantics, matching how probe
+// overrides work — withDefaultResources still fills any unset request/limit from the operator
+// defaults (NEO-014).
+func (c Context) PoolResources() corev1.ResourceRequirements {
+	var override *corev1.ResourceRequirements
+	switch c.Pool {
+	case PoolPrimary:
+		if p := c.Neo4j.Spec.Topology.Primaries; p != nil {
+			override = p.Resources
+		}
+	case PoolAnalytics:
+		if s := c.Neo4j.Spec.Topology.Secondaries; s != nil && s.Analytics != nil {
+			override = s.Analytics.Resources
+		}
+	case PoolRead:
+		if s := c.Neo4j.Spec.Topology.Secondaries; s != nil && s.Read != nil {
+			override = s.Read.Resources
+		}
+	}
+	if override != nil {
+		return *override
+	}
+	return c.Neo4j.Spec.Resources
 }
 
 // OfflineModeEnabled is true when spec.maintenance.offlineMode is set (NEO-3-017-MNT-01).
