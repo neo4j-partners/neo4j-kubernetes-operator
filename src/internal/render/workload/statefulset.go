@@ -41,7 +41,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 		ImagePullPolicy: pullPolicy,
 		Ports:           neo4jContainerPorts(ctx),
 		Env:             neo4jContainerEnv(ctx),
-		Resources:       withDefaultResources(ctx.Neo4j.Spec.Resources),
+		Resources:       withDefaultResources(ctx.PoolResources()),
 		SecurityContext: containerSecurityContext(ctx),
 		VolumeMounts: []corev1.VolumeMount{
 			// Helm mounts projected config fragments at /config/neo4j.conf (directory).

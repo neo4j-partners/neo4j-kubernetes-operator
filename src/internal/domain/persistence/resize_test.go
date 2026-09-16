@@ -186,6 +186,40 @@ func TestClaimsBehindCapacity(t *testing.T) {
 	}
 }
 
+func countEvents(rec *record.FakeRecorder) int {
+	n := 0
+	for {
+		select {
+		case <-rec.Events:
+			n++
+		default:
+			return n
+		}
+	}
+}
+
+// A racy requeue can read the StorageReady condition as StorageResizing a second time before the
+// PVCBound write lands, so the edge fires twice. The Advisory memo keeps the completion to one Event
+// per generation, and a generation bump (a fresh grow) re-arms it.
+func TestReportResizeCompletedIsIdempotentPerGeneration(t *testing.T) {
+	r, rec := newReconciler(t)
+	neo4j := sizedNeo4j("10Gi")
+	neo4j.UID = "uid-1"
+	neo4j.Generation = 2
+
+	r.reportResizeCompleted(neo4j, true, nil)
+	r.reportResizeCompleted(neo4j, true, nil) // stale requeue, same generation
+	if got := countEvents(rec); got != 1 {
+		t.Fatalf("events in one generation = %d, want exactly 1", got)
+	}
+
+	neo4j.Generation = 3 // a later grow bumps generation
+	r.reportResizeCompleted(neo4j, true, nil)
+	if got := countEvents(rec); got != 1 {
+		t.Fatalf("events after generation bump = %d, want 1", got)
+	}
+}
+
 // The completion Event is edge-triggered off the condition the previous pass published. Emitting on
 // level would fire every pass and spend the object's Event budget.
 func TestReportResizeCompleted(t *testing.T) {
