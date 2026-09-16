@@ -147,11 +147,18 @@ func (r *Reconciler) claimsBehindCapacity(ctx context.Context, neo4j *neo4jv1.Ne
 // read from the condition the previous pass published, the only durable memory the operator keeps
 // of "a grow was in flight": emitting on level instead would fire every pass and spend the object's
 // Event budget (internal/events).
+//
+// The edge alone is racy: the StorageReady condition is written later in the pipeline, so a requeue
+// that fetches the object from a cache still holding StorageResizing sees wasResizing=true a second
+// time and fires again (client-go then aggregates the two into one Event with count=2). Routing
+// through the Advisory memo pins it to one Event per generation; a grow changes spec.storage size,
+// which bumps generation and re-arms it. ponytail: a manual PVC grow that never touched the CR does
+// not bump generation, so a repeat completion in the same generation is suppressed — out of scope.
 func (r *Reconciler) reportResizeCompleted(neo4j *neo4jv1.Neo4j, wasResizing bool, behind []string) {
 	if !wasResizing || len(behind) > 0 || r.Recorder == nil {
 		return
 	}
-	r.Recorder.Event(neo4j, corev1.EventTypeNormal, oracle.ReasonStorageResizeCompleted.String(),
+	r.advisories.Emit(r.Recorder, neo4j, corev1.EventTypeNormal, oracle.ReasonStorageResizeCompleted,
 		fmt.Sprintf("every volume reached the size the spec asks for (%s)", desiredSizeSummary(neo4j)))
 }
 
