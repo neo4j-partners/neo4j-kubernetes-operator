@@ -629,6 +629,10 @@ type SecondaryPoolSpec struct {
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
 	Plugins []string `json:"plugins,omitempty"`
+	// Resources overrides spec.resources for this pool's Neo4j container. When set it replaces the
+	// global block entirely; unset requests/limits are filled from the operator defaults (NEO-014).
+	// Leave unset to inherit spec.resources.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // SecondariesSpec holds fixed V1 secondary pools analytics and read.
@@ -645,6 +649,10 @@ type PrimariesSpec struct {
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:items:Enum=apoc;gds;bloom
 	Plugins []string `json:"plugins,omitempty"`
+	// Resources overrides spec.resources for this pool's Neo4j container. When set it replaces the
+	// global block entirely; unset requests/limits are filled from the operator defaults (NEO-014).
+	// Leave unset to inherit spec.resources.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // TopologySpec defines deployment mode and cluster composition (BDR-002).

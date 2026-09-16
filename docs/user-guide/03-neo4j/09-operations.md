@@ -32,6 +32,36 @@ pod in the guaranteed QoS class and takes eviction pressure out of the picture.
 
 Example: [`examples/standalone/21-resources.yaml`](../../../examples/standalone/21-resources.yaml).
 
+### Per-pool sizing in a cluster
+
+`spec.resources` applies to every pool. When a pool needs a different profile — analytics nodes
+running GDS/Bloom are the usual case — set `resources` on that pool to override it:
+
+```yaml
+spec:
+  resources:                 # applies to primaries and read by default
+    requests: { cpu: "2", memory: 8Gi }
+    limits:   { cpu: "4", memory: 8Gi }
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    secondaries:
+      analytics:
+        members: 1
+        plugins: [gds]
+        resources:           # overrides spec.resources for the analytics pool only
+          requests: { cpu: "8", memory: 32Gi }
+          limits:   { cpu: "8", memory: 32Gi }
+      read:
+        members: 2
+```
+
+A pool `resources` block **replaces** `spec.resources` for that pool rather than merging with it,
+the same way a probe override replaces the default probe. Any request or limit left unset in the
+winning block is still filled from the operator defaults (NEO-014), so the container is always
+bounded. Pools without their own block inherit `spec.resources`.
+
 ## Placing pods
 
 ```yaml

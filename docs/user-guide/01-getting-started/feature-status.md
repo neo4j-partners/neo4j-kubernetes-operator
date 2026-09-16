@@ -98,7 +98,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Capability | Status | Where |
 |------------|--------|-------|
 | Scheduling — node selectors, tolerations, anti-affinity presets, spread constraints | Implemented | [Operations](../03-neo4j/09-operations.md#placing-pods) |
-| Resource requests and limits | Implemented | [Operations](../03-neo4j/09-operations.md#sizing-the-container) |
+| Resource requests and limits, global or per pool | Implemented | [Operations](../03-neo4j/09-operations.md#sizing-the-container) |
 | Default probes, and per-probe overrides | Verified | [Operations](../03-neo4j/09-operations.md#probes) |
 | Pod disruption budget | Implemented | [Operations](../03-neo4j/09-operations.md#pod-disruption-budget) |
 | Offline maintenance mode | Implemented | [Operations](../03-neo4j/09-operations.md#offline-maintenance) |
