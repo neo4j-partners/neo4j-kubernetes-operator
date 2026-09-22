@@ -12,17 +12,18 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady PluginsReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady
 }
 
 oracle_reasons_for() {  # <condition>
   case "$1" in
-    Ready) printf '%s\n' AllMembersReady MembersNotReady TLSNotReady StorageNotReady OfflineMaintenance ReconcileError ;;
+    Ready) printf '%s\n' AllMembersReady MembersNotReady TLSNotReady StorageNotReady PluginsNotReady OfflineMaintenance ReconcileError ;;
     Reconciling) printf '%s\n' InProgress Completed Failed ;;
     Installed) printf '%s\n' ObjectsCreated Pending ;;
     Error) printf '%s\n' NoError ReconcileFailed SecretNotMountable SecretNotDelegated AuthSecretInvalid StorageTemplateDrift ;;
     StorageReady) printf '%s\n' PVCBound PVCPending StorageResizing StorageResizeFailed ;;
     TLSReady) printf '%s\n' TrustDisabled SecretsPresent SecretMissing CertificatePending ;;
+    PluginsReady) printf '%s\n' PluginsInstalled PluginDownloadFailed PluginVersionIncompatible PluginJarUnreadable ;;
     ClusterFormed) printf '%s\n' Formed EnablingServer BoltUnavailable BootstrapGateTooHigh ShowServersFailed UnsupportedSystemScaleUp WaitingSystemLeader WaitingQuorum UnsupportedSinglePrimary ;;
     ServersPendingDrain) printf '%s\n' UnsupportedSinglePrimary NoDrain ShrinkingTopology Draining AwaitingSTSShrink DrainTimeout ;;
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported BackupSourceNotFound BackupSourceUnsupported ;;
@@ -47,6 +48,7 @@ oracle_severity() {  # <reason>
     MembersNotReady) echo warn ;;
     TLSNotReady) echo warn ;;
     StorageNotReady) echo warn ;;
+    PluginsNotReady) echo warn ;;
     OfflineMaintenance) echo info ;;
     ReconcileError) echo error ;;
     InProgress) echo info ;;
@@ -68,6 +70,10 @@ oracle_severity() {  # <reason>
     SecretsPresent) echo info ;;
     SecretMissing) echo error ;;
     CertificatePending) echo warn ;;
+    PluginsInstalled) echo info ;;
+    PluginDownloadFailed) echo error ;;
+    PluginVersionIncompatible) echo error ;;
+    PluginJarUnreadable) echo error ;;
     Formed) echo info ;;
     EnablingServer) echo info ;;
     BoltUnavailable) echo warn ;;
@@ -126,7 +132,7 @@ oracle_severity() {  # <reason>
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|SecretMounted|StorageResizeCompleted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|SecretMounted|StorageResizeCompleted) return 0 ;;
     *) return 1 ;;
   esac
 }

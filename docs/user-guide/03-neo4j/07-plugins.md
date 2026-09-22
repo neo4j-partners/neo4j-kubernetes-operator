@@ -1,13 +1,56 @@
 # Plugins
 
-Three plugins are supported by name: `apoc`, `gds` for Graph Data Science, and `bloom`. Unknown
-ids are rejected. Declaring a catalog plugin sets `NEO4J_PLUGINS`, and the image entrypoint
-installs the JAR at container start.
+Six plugins are supported by name. Unknown ids are rejected. Declaring a catalog plugin sets
+`NEO4J_PLUGINS`, and the image entrypoint installs the JAR at container start.
 
-All three ship **inside the Enterprise image** — `apoc` in `/var/lib/neo4j/labs`, `gds` and
-`bloom` in `/var/lib/neo4j/products` — so the entrypoint copies them locally and no egress is
-involved. The Community image bundles `apoc` only: `gds` and `bloom` there fall back to a
-download from the Neo4j hosts, and the operator does not checksum a downloaded file (NEO-013).
+| Plugin | Where the JAR comes from | On `edition: community` |
+|---|---|---|
+| `apoc` | bundled in both images (`/var/lib/neo4j/labs`) | works |
+| `gds` (Graph Data Science) | bundled in Enterprise (`/var/lib/neo4j/products`) | **refused at apply** |
+| `bloom` | bundled in Enterprise | **refused at apply** |
+| `genai` | bundled in Enterprise | **refused at apply** |
+| `fleet-management` | bundled in Enterprise | **refused at apply** |
+| `apoc-extended` | **never bundled** — always downloaded | works, needs egress |
+
+A bundled plugin is a local file copy: no egress, nothing to checksum. The distinction matters
+because the entrypoint uses its bundled copy only when it finds the file, and downloads otherwise.
+The Community image has no `/var/lib/neo4j/products`, so the four Enterprise plugins would fall
+through to a download that cannot succeed — and it fails *without failing*, leaving a server that
+reports healthy with the plugin missing. The operator refuses that combination at apply instead:
+
+```
+bloom, fleet-management, genai and gds ship only in the enterprise image;
+set edition to enterprise or drop the plugin
+```
+
+`apoc-extended` is downloaded on both editions, so the edition is not what decides whether it
+works — the node needs egress. The operator does not checksum a downloaded file (NEO-013).
+
+## When an install does not happen
+
+The operator does not install plugins, so it reports what the entrypoint did. **Two of the three
+failures let Neo4j start anyway** — the entrypoint prints the error and carries on — which is why
+they get a condition of their own rather than showing up as an unhealthy member. `PluginsReady`
+holds `Ready` back, since the spec asked for the plugin:
+
+| `PluginsReady` reason | What happened | What to do |
+|---|---|---|
+| `PluginDownloadFailed` | The version index was unreachable. The message carries the URL the image tried | Give the node egress to it, or switch to a bundled plugin |
+| `PluginVersionIncompatible` | The plugin publishes no build for your `spec.version` — common on the newest Neo4j releases | Pin an older `spec.version`, or drop the plugin |
+| `PluginJarUnreadable` | The JAR landed but could not be read, so the container never started Neo4j | Check permissions and the mount on `storage.volumes.plugins` |
+
+```bash
+kubectl get neo4j my-db -o jsonpath='{.status.conditions[?(@.type=="PluginsReady")]}'
+```
+
+The check reads the first lines of the container's output, where the entrypoint reports. That
+evidence is rotated by the kubelet and lost when a pod is replaced, so a log the operator can no
+longer read is treated as a successful install rather than a failure — `PluginsReady` will not
+hold a CR back on evidence that no longer exists.
+
+A **rejected licence is not** reported by this condition. GDS says nothing about its licence while
+starting: the state is a query-time property, so check it yourself with `gds.isLicensed()` or
+`gds.license.state` (see [Verifying](#verifying)).
 
 The procedure sandbox stays on unless you opt in via `spec.config.neo4j`
 (`dbms.security.procedures.unrestricted`) — see [Licensed plugins](#licensed-plugins).

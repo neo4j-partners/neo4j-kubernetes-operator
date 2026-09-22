@@ -355,6 +355,62 @@ Options A and B are rejected. Options C, D, and F are rejected (split maps, inli
 6. **Field names:** `pluginDefinitions` (not split `PluginDefinition` CRD in V1).
 7. `neo4j/spec.md` and `validation.md` aligned to Option E.
 
+### The catalog, and where each plugin's JAR comes from
+
+The catalog is closed: an id the Neo4j image does not know makes its entrypoint `exit 1` before the
+server starts, so the operator refuses one first. It holds every id the image's own registry
+(`/startup/neo4j-plugins.json`) names.
+
+| Catalog id | `NEO4J_PLUGINS` name | JAR source |
+|---|---|---|
+| `apoc` | `apoc` | bundled in both images (`/var/lib/neo4j/labs`) |
+| `apoc-extended` | `apoc-extended` | **never bundled** — always downloaded |
+| `gds` | `graph-data-science` | bundled in enterprise only (`/var/lib/neo4j/products`) |
+| `bloom` | `bloom` | bundled in enterprise only |
+| `genai` | `genai` | bundled in enterprise only |
+| `fleet-management` | `fleet-management` | bundled in enterprise only |
+
+The source is not cosmetic. The entrypoint uses a bundled copy only when its glob matches a file
+and downloads otherwise, so the same id is a local copy on one edition and a network fetch on
+another. The community image has no `/var/lib/neo4j/products`, which makes the four
+enterprise-bundled ids fall through to a download that cannot succeed — and it fails without
+failing, leaving a server that reports healthy with the plugin missing. **Those four are refused at
+admission on `edition: community`**, by a CEL rule on `spec.plugins`; only `spec.plugins` needs it,
+since community implies Standalone, which forbids the per-pool lists.
+
+`apoc-extended` stays legal on both editions: it is downloaded either way, so the edition is not
+what decides whether it can work. Installing it needs egress from the node.
+
+### Reporting an install the operator did not perform
+
+The operator does not install plugins — `NEO4J_PLUGINS` makes the image entrypoint do it, before
+Neo4j starts — so it can only report what the entrypoint says. Three failures are possible, and
+**two of them are not fatal to the container**: the entrypoint prints the error, returns, and lets
+the server come up without the plugin.
+
+| What went wrong | Fatal | Reason |
+|---|---|---|
+| The version index was unreachable | no | `PluginDownloadFailed` |
+| No build exists for this Neo4j version | no | `PluginVersionIncompatible` |
+| The JAR is not readable where it landed | **yes** | `PluginJarUnreadable` |
+
+A new condition, **`PluginsReady`, carries these and gates `Ready`**. It needs to be its own
+condition precisely because the non-fatal pair leaves every member genuinely ready: no other part
+of the status has anything to report, and a CR that silently ignored `spec.plugins` would read as
+fully healthy. Gating `Ready` is the point — the spec asked for the plugin.
+
+Evidence is the container's opening output, read through `pods/log` (`get`, read-only). This is
+best-effort by construction: container logs are rotated by the kubelet and lost when a pod is
+replaced, so a log the operator cannot read reports as installed rather than as a failure.
+Refusing `Ready` on absent evidence would strand every CR whose pod outlived its log.
+
+**A rejected licence is deliberately not reported here.** Licence state is a query-time property,
+read with `gds.isLicensed()` or `gds.license.state`, rather than something the plugin announces —
+which is why the e2e suite asserts it over Bolt and not from a log. Probing
+`2026.07.1-enterprise` with deliberately invalid material printed nothing about the licence
+through install and startup. Surfacing it therefore needs the admin Bolt session, which is
+Cluster-only and opt-in today, so it cannot be observed the way the three above are.
+
 ---
 
 ## Consequences

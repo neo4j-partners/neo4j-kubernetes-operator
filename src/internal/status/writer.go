@@ -18,6 +18,7 @@ import (
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/podlog"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
@@ -27,6 +28,10 @@ import (
 // Writer updates Neo4j status from observed cluster state (ADR-004).
 type Writer struct {
 	Client client.Client
+	// PodLogs reads the container output that carries what the image entrypoint reported about
+	// plugin installation. Nil disables the PluginsReady check rather than failing it: the
+	// operator must not hold Ready back on evidence it cannot read (BDR-004).
+	PodLogs podlog.Reader
 }
 
 func NewWriter(c client.Client) *Writer {
@@ -113,6 +118,9 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1.Neo4j) erro
 	tlsReady, tlsReason, tlsMsg := w.observeTLSReady(ctx, neo4j)
 	setCondition(neo4j, oracle.ConditionTLSReady, boolCondition(tlsReady), tlsReason, tlsMsg)
 
+	pluginsReady, pluginsReason, pluginsMsg := w.observePluginsReady(ctx, neo4j)
+	setCondition(neo4j, oracle.ConditionPluginsReady, boolCondition(pluginsReady), pluginsReason, pluginsMsg)
+
 	setCondition(neo4j, oracle.ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
 	neo4j.Status.ServerSummary = &neo4jv1.ReplicaSummary{Servers: desired, Ready: ready}
 	setCondition(neo4j, oracle.ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
@@ -124,7 +132,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1.Neo4j) erro
 		drainPending = c.Status == metav1.ConditionTrue
 	}
 
-	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady
+	allReady := anySTSFound && ready == desired && desired > 0 && storageReady && tlsReady && pluginsReady
 	if render.IsClusterMode(neo4j) && allReady {
 		if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionClusterFormed.String()); c == nil || c.Status != metav1.ConditionTrue {
 			allReady = false
@@ -142,7 +150,7 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1.Neo4j) erro
 		setCondition(neo4j, oracle.ConditionReady, metav1.ConditionFalse, oracle.ReasonOfflineMaintenance,
 			"spec.maintenance.offlineMode is true; Neo4j process is not running")
 	} else {
-		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady, storageReady), readyMessage(ready, desired))
+		setCondition(neo4j, oracle.ConditionReady, boolCondition(allReady), readyReason(allReady, tlsReady, storageReady, pluginsReady), readyMessage(ready, desired))
 		if allReady {
 			neo4j.Status.Version = neo4j.Spec.Version
 		}
@@ -441,7 +449,7 @@ func installedReason(ok bool) oracle.Reason {
 // readyReason names what is holding Ready back, so the reason never contradicts the message: a
 // storage problem on a pool whose members are all up would otherwise read MembersNotReady next to
 // "1/1 servers ready".
-func readyReason(ok, tlsReady, storageReady bool) oracle.Reason {
+func readyReason(ok, tlsReady, storageReady, pluginsReady bool) oracle.Reason {
 	switch {
 	case ok:
 		return oracle.ReasonAllMembersReady
@@ -449,6 +457,8 @@ func readyReason(ok, tlsReady, storageReady bool) oracle.Reason {
 		return oracle.ReasonTLSNotReady
 	case !storageReady:
 		return oracle.ReasonStorageNotReady
+	case !pluginsReady:
+		return oracle.ReasonPluginsNotReady
 	default:
 		return oracle.ReasonMembersNotReady
 	}

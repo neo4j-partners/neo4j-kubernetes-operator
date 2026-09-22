@@ -26,6 +26,14 @@ rules:
   - patch
   - update
   - watch
+# Read-only, and only to report what the image entrypoint said about plugin installation: two of
+# its three failures let Neo4j start, so no object status carries them (BDR-004).
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:

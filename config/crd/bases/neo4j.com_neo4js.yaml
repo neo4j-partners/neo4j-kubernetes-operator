@@ -54,7 +54,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: Neo4jSpec defines the desired state of Neo4j.
+            description: |-
+              Neo4jSpec defines the desired state of Neo4j.
+              The community image has no /var/lib/neo4j/products, so the entrypoint falls through to a download
+              that cannot succeed — and it returns without failing, leaving a server that reports healthy with
+              the plugin missing. Only spec.plugins needs the rule: community implies Standalone, which forbids
+              the per-pool lists. Kept in step with plugins.EnterpriseOnlyIDs by a test (BDR-004).
             properties:
               auth:
                 description: Auth configures bootstrap credentials and optional LDAP
@@ -21331,6 +21336,10 @@ spec:
             - message: community edition supports topology.mode Standalone only (clustering
                 is an Enterprise feature)
               rule: self.edition != 'community' || self.topology.mode == 'Standalone'
+            - message: bloom, fleet-management, genai and gds ship only in the enterprise
+                image; set edition to enterprise or drop the plugin
+              rule: self.edition != 'community' || !has(self.plugins) || self.plugins.all(p,
+                p != 'bloom' && p != 'fleet-management' && p != 'genai' && p != 'gds')
             - message: 'Enterprise edition requires spec.license.accept: yes or eval'
               rule: self.edition != 'enterprise' || (has(self.license) && (self.license.accept
                 == 'yes' || self.license.accept == 'eval'))

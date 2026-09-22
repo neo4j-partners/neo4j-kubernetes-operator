@@ -173,6 +173,7 @@ projection of the same catalog: the [error reference](../../../user-guide/05-ref
 | `Error` | The last pipeline pass returned an error; the same reason is recorded as a Warning Event | Yes — `True` clears `Ready` |
 | `StorageReady` | Every claim the operator manages is Bound and serving the size the spec asks for | Yes — `False` holds `Ready` back |
 | `TLSReady` | Trust is disabled, or every required TLS Secret and key is present | Yes — `False` holds `Ready` back |
+| `PluginsReady` | No plugin is assigned, or every assigned plugin was installed by the image entrypoint and holds a licence it accepts | Yes — `False` holds `Ready` back |
 | `ClusterFormed` | Every desired server is enabled in the Neo4j cluster | Cluster mode — `False` holds `Ready` back |
 | `ServersPendingDrain` | A server dropped from the spec is still registered in Neo4j and waiting to be drained | Cluster mode — `True` holds `Ready` back |
 | `BackupReady` | At least one successful backup exists for this Neo4j instance | Yes — `False` holds `Ready` back |

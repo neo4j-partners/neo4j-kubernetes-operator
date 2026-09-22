@@ -28,6 +28,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/workload"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/podlog"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderconfig "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/status"
@@ -83,6 +84,9 @@ func NormalizeMaxConcurrentReconciles(n int) (int, error) {
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;secrets;configmaps;serviceaccounts;persistentvolumeclaims;endpoints;pods,verbs=get;list;watch;create;update;patch;delete
+// Read-only, and only to report what the image entrypoint said about plugin installation: two of
+// its three failures let the server start, so no object status carries them (BDR-004).
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
@@ -303,6 +307,16 @@ func (r *Neo4jReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 	c := mgr.GetClient()
 	scheme := mgr.GetScheme()
+	writer := status.NewWriter(c)
+	// Plugin installation happens in the image entrypoint, and two of its three failures let the
+	// server start anyway — so the only evidence is the container's own output, which needs a
+	// clientset (BDR-004). A reader we cannot build leaves the check disabled rather than
+	// stopping the manager: every other condition still reports.
+	if reader, err := podlog.New(mgr.GetConfig()); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "plugin installation will not be reported")
+	} else {
+		writer.PodLogs = reader
+	}
 	return &Neo4jReconciler{
 		Client:       c,
 		Scheme:       scheme,
@@ -313,6 +327,6 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		Workload:     workload.New(c, scheme),
 		Connectivity: connectivity.New(c, scheme),
 		Formation:    formation.New(c, scheme, mgr.GetEventRecorderFor("neo4j-controller")),
-		StatusWriter: status.NewWriter(c),
+		StatusWriter: writer,
 	}
 }
