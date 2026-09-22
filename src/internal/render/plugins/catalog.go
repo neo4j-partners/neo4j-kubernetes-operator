@@ -107,8 +107,14 @@ func Validate(neo4j *neo4jv1.Neo4j) error {
 		// The community image has no /var/lib/neo4j/products, so the entrypoint falls through to a
 		// download that cannot succeed — and it does so without failing, leaving a server that
 		// reports healthy with the plugin missing. Refused here instead (BDR-004).
-		if SourceOf(id) == BundledEnterprise && neo4j.Spec.Edition == neo4jv1.EditionCommunity {
-			return fmt.Errorf("plugin %q ships only in the enterprise image; set edition to enterprise or drop the plugin", id)
+		//
+		// Unless the JARs come from the user's own volume: SkipNetworkFetch leaves NEO4J_PLUGINS
+		// unset, so the image installs nothing and the edition decides nothing. That channel is
+		// how a free GDS build legitimately runs on community.
+		if SourceOf(id) == BundledEnterprise && neo4j.Spec.Edition == neo4jv1.EditionCommunity &&
+			!SkipNetworkFetch(neo4j) {
+			return fmt.Errorf("plugin %q ships only in the enterprise image; set edition to enterprise, "+
+				"supply the JAR through storage.volumes.plugins mode Existing, or drop the plugin", id)
 		}
 	}
 	for id, def := range neo4j.Spec.PluginDefinitions {

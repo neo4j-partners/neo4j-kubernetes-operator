@@ -6,10 +6,10 @@ Six plugins are supported by name. Unknown ids are rejected. Declaring a catalog
 | Plugin | Where the JAR comes from | On `edition: community` |
 |---|---|---|
 | `apoc` | bundled in both images (`/var/lib/neo4j/labs`) | works |
-| `gds` (Graph Data Science) | bundled in Enterprise (`/var/lib/neo4j/products`) | **refused at apply** |
-| `bloom` | bundled in Enterprise | **refused at apply** |
-| `genai` | bundled in Enterprise | **refused at apply** |
-| `fleet-management` | bundled in Enterprise | **refused at apply** |
+| `gds` (Graph Data Science) | bundled in Enterprise (`/var/lib/neo4j/products`) | refused, unless you supply the JAR |
+| `bloom` | bundled in Enterprise | refused, unless you supply the JAR |
+| `genai` | bundled in Enterprise | refused, unless you supply the JAR |
+| `fleet-management` | bundled in Enterprise | refused, unless you supply the JAR |
 | `apoc-extended` | **never bundled** — always downloaded | works, needs egress |
 
 A bundled plugin is a local file copy: no egress, nothing to checksum. The distinction matters
@@ -20,8 +20,16 @@ reports healthy with the plugin missing. The operator refuses that combination a
 
 ```
 bloom, fleet-management, genai and gds ship only in the enterprise image;
-set edition to enterprise or drop the plugin
+set edition to enterprise, supply the JAR through storage.volumes.plugins
+mode Existing, or drop the plugin
 ```
+
+**Bringing your own JAR lifts that restriction**, and is the third option the message names. Point
+`storage.volumes.plugins` at an `Existing` claim holding the JARs and the operator leaves
+`NEO4J_PLUGINS` unset entirely: the image installs nothing, so there is no bundled copy to be
+missing and the edition stops deciding anything. That is how a free GDS build runs on Community —
+see [Persisting plugins](#persisting-plugins). You own what lands on that volume, including the
+version and its compatibility with `spec.version`.
 
 `apoc-extended` is downloaded on both editions, so the edition is not what decides whether it
 works — the node needs egress. The operator does not checksum a downloaded file (NEO-013).

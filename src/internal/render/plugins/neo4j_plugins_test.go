@@ -148,6 +148,53 @@ func TestCELRuleListsEveryEnterpriseOnlyID(t *testing.T) {
 	}
 }
 
+// Supplying the JARs yourself is a supported channel, and it takes the edition out of the
+// question: SkipNetworkFetch leaves NEO4J_PLUGINS unset, so the image installs nothing and there
+// is no bundled copy to be missing. GDS publishes a free build that runs on community exactly this
+// way, so refusing it here would block a legitimate deployment.
+func TestValidateAllowsEnterprisePluginOnCommunityFromAnExistingVolume(t *testing.T) {
+	for _, id := range EnterpriseOnlyIDs() {
+		neo4j := &neo4jv1.Neo4j{
+			Spec: neo4jv1.Neo4jSpec{
+				Edition: neo4jv1.EditionCommunity,
+				Plugins: []string{id},
+				Storage: &neo4jv1.StorageSpec{
+					Volumes: &neo4jv1.VolumesSpec{
+						Plugins: &neo4jv1.AuxiliaryVolumeSpec{
+							Mode:     neo4jv1.VolumeModeExisting,
+							Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "my-jars"},
+						},
+					},
+				},
+			},
+		}
+		if err := Validate(neo4j); err != nil {
+			t.Errorf("%s on community from an Existing volume must be allowed: %v", id, err)
+		}
+	}
+}
+
+// The same spec without the volume must still be refused, or the escape above would be a hole
+// rather than a channel.
+func TestValidateStillRefusesEnterprisePluginOnCommunityWithoutTheVolume(t *testing.T) {
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionCommunity,
+			Plugins: []string{"gds"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					// Share, not Existing: the JARs are not supplied, so the image would have to
+					// find a bundled copy that community does not carry.
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeShare},
+				},
+			},
+		},
+	}
+	if err := Validate(neo4j); err == nil {
+		t.Fatal("a Share plugins volume supplies no JAR, so gds on community must stay refused")
+	}
+}
+
 func TestValidateAllowsEnterprisePluginOnEnterprise(t *testing.T) {
 	neo4j := &neo4jv1.Neo4j{
 		Spec: neo4jv1.Neo4jSpec{Edition: neo4jv1.EditionEnterprise, Plugins: []string{"gds", "bloom", "genai"}},

@@ -381,6 +381,17 @@ since community implies Standalone, which forbids the per-pool lists.
 `apoc-extended` stays legal on both editions: it is downloaded either way, so the edition is not
 what decides whether it can work. Installing it needs egress from the node.
 
+**An `Existing` plugins volume lifts the edition restriction, and has to.** Supplying the JARs on a
+claim leaves `NEO4J_PLUGINS` unset (`SkipNetworkFetch`), so the image installs nothing: there is no
+bundled copy to be missing and the edition decides nothing. This is not a loophole but a supported
+channel — GDS publishes a free build that runs on Neo4j Community exactly this way, and refusing it
+would block a legitimate deployment with no workaround left in the CRD. A `Share` plugins volume
+supplies no JAR, so it does not lift anything.
+
+The rule's escape clause is the only place in the CRD with a `has()` chain over three optional
+levels, where an erroring rule reads as a rejection. It is covered by an evaluation test against
+the generated rule, not only by the compile test.
+
 ### Reporting an install the operator did not perform
 
 The operator does not install plugins — `NEO4J_PLUGINS` makes the image entrypoint do it, before
