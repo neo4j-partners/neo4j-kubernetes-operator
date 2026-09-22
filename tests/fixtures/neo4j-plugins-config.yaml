@@ -6,7 +6,7 @@
 # The key is deliberately core-namespaced rather than apoc.*: SHOW SETTINGS does not
 # expose plugin-namespaced settings — that is precisely why apoc.conf exists — so an
 # apoc.* key here would be unobservable over bolt and the case could not prove the merge.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__

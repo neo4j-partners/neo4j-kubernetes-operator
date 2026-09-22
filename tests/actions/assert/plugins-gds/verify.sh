@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # assert/plugins-gds — BDR-004: GDS is callable with no licenceSecretRef. GDS Community runs
 # licence-free; the CEL rule that once demanded one was removed in 4a12e88, and
-# api/v1beta1/neo4j_validation_test.go asserts it stays removed. This pins the runtime half.
+# api/v1/neo4j_validation_test.go asserts it stays removed. This pins the runtime half.
 #
 # SHOW PROCEDURES rather than gds.version() — see assert/plugins-apoc for why.
 set -euo pipefail

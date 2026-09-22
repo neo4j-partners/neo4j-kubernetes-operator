@@ -2,7 +2,7 @@
 # entrypoint installs the JAR at container start from /var/lib/neo4j/labs, where the
 # Enterprise image already ships it — no network needed. No config.apoc here: apoc.conf
 # rendering is feature-config's job, this one is about the procedure being callable.
-apiVersion: neo4j.com/v1beta1
+apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
   name: __CR_NAME__
