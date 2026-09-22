@@ -41,6 +41,7 @@ Reasons that report a problem, a decision, or an operation in progress.
 | Ready | MembersNotReady | warn | condition | Fewer servers ready than desired; the message carries both counts |
 | Ready | TLSNotReady | warn | condition | Held back by TLSReady — trust material is missing or still being issued |
 | Ready | StorageNotReady | warn | condition | Held back by StorageReady — a claim is unbound, still growing, or smaller than the spec asks for. The members themselves may all be up, which is why this is not MembersNotReady |
+| Ready | PluginsNotReady | warn | condition | Held back by PluginsReady — a plugin the spec asks for is not on the server. The members are up and serving, so this is not MembersNotReady; the server simply does not have the plugin |
 | Ready | OfflineMaintenance | info | condition | `spec.maintenance.offlineMode` is true, so the Neo4j process is not running |
 | Ready | ReconcileError | error | condition | Ready cleared because reconcile failed |
 | Reconciling | Failed | error | condition | Reconciling stopped after failure |
@@ -55,6 +56,9 @@ Reasons that report a problem, a decision, or an operation in progress.
 | StorageReady | StorageResizeFailed | error | condition+event | A claim is still smaller than the spec asks for. The Event carries the API server's own words, most often a StorageClass with `allowVolumeExpansion: false`; nothing was changed and the old size still serves |
 | TLSReady | SecretMissing | error | condition | Required TLS/auth Secret is missing or incomplete |
 | TLSReady | CertificatePending | warn | condition | Waiting for cert-manager to issue the certificate into the operator-provisioned Secret |
+| PluginsReady | PluginDownloadFailed | error | condition | The entrypoint could not reach the plugin's version index, so the JAR was never fetched. Needs egress from the node; the message names the URL the image tried |
+| PluginsReady | PluginVersionIncompatible | error | condition | The plugin publishes no build for this Neo4j version, which happens on the newest Neo4j releases. Pin an older `spec.version` or drop the plugin |
+| PluginsReady | PluginJarUnreadable | error | condition | The JAR reached the plugins directory but is not readable, so the entrypoint exited and the container never started Neo4j. Usually a permission or mount problem on `storage.volumes.plugins` |
 | ClusterFormed | EnablingServer | info | condition | `ENABLE SERVER` in progress for a server that joined the pool |
 | ClusterFormed | BoltUnavailable | warn | condition | Cannot reach Bolt to form or align the cluster |
 | ClusterFormed | BootstrapGateTooHigh | error | condition | `topology.minimumMembers` asks for more primaries than the pool has, so the system database never bootstraps and Bolt never answers |
@@ -117,6 +121,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | StorageReady | PVCBound | info | condition | The data PVC is Bound |
 | TLSReady | TrustDisabled | info | condition | `trust.enabled` is false, so there is nothing to verify |
 | TLSReady | SecretsPresent | info | condition | Required TLS secrets and keys are present |
+| PluginsReady | PluginsInstalled | info | condition | Every assigned plugin is installed, or no plugin is assigned |
 | ClusterFormed | Formed | info | condition | All desired servers are enabled in the Neo4j cluster |
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
 | BackupReady | BackupSucceeded | info | condition | The backup Job completed and artifacts were written |

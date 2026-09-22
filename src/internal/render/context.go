@@ -26,6 +26,9 @@ const (
 	// ComponentStorage marks claims the operator renders, which is what tells them apart from a
 	// user's Existing.claimName PVC once both are sitting in the same namespace.
 	ComponentStorage = "storage"
+	// Neo4jContainerName is the single container in a member Pod. Named here because reading its
+	// log needs the same string the StatefulSet renders.
+	Neo4jContainerName = "neo4j"
 )
 
 // PoolID identifies a workload pool for naming and labels (ADR-005, BDR-009).

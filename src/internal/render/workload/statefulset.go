@@ -36,7 +36,7 @@ func PoolStatefulSet(ctx render.Context) *appsv1.StatefulSet {
 
 	configMode := configVolumeDefaultMode
 	container := corev1.Container{
-		Name:            "neo4j",
+		Name:            render.Neo4jContainerName,
 		Image:           ctx.ImageRef(),
 		ImagePullPolicy: pullPolicy,
 		Ports:           neo4jContainerPorts(ctx),

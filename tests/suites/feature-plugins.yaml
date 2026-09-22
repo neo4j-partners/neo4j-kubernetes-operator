@@ -1,23 +1,93 @@
 name: feature-plugins
-description: >
-  NEO-3-003-APOC-01 / BDR-004 plugin runtime — a plugin declared on spec.plugins is downloaded by the
-  Neo4j image and its procedures are actually callable over bolt, distinct from feature-config's
-  apoc-config case which only checks apoc.* keys render into apoc.conf. Runs on Standalone (the
-  cheapest topology): a single server with APOC + GDS assigned. Both answer their version function
-  without a license (GDS runs in Community form), and the operator opens
-  dbms.security.procedures.allowlist to exactly apoc.*/gds.*. Bloom is out of scope — it is an
-  unmanaged HTTP extension needing a real license, nothing a bolt query can prove on a runner.
-brief_ref: neo4j-plugins
+description: Plugin surface (spec.plugins / spec.pluginDefinitions) — runtime procedures, licence mounting, per-plugin config, and the manual-import channel
+brief_ref: neo4j-plugin-surface
 use_pipeline: neo4j-suite
 on_case_failure: continue
+
+# Runtime plugin behaviour (BDR-004). The unit tests already prove every render decision —
+# the NEO4J_PLUGINS string, the ConfigMap keys, the volume shapes — so every case here is
+# something only a real container can show: the JAR actually arrived, the procedure answers,
+# the licence file is where the code (not the doc) says it is.
+#
+# No clouds: key — nothing here has a platform-specific subject. The plugins ship in the
+# Enterprise image, storage is a plain Dynamic volume, and the one case that wants real licence
+# material degrades without it, so the suite is hermetic and should run on every platform.
+#
+# NOTE: the operator contains no install logic. It sets NEO4J_PLUGINS and the image entrypoint
+# installs the JAR at container start. All three V1 catalog plugins ship INSIDE the Enterprise
+# image — apoc in /var/lib/neo4j/labs, gds and bloom in /var/lib/neo4j/products — so no case
+# here needs outbound network.
+#
+# Standalone only: every catalog plugin is legal in spec.plugins, and staying on one topology
+# keeps NEO4J_POOL at its "server" default for every case.
+#
+# Licence material is optional. The licensed-plugins fixture takes its Secret bodies from the
+# LICENSE_GDS / LICENSE_BLOOM repository secrets when CI exports them, and a dummy otherwise, so
+# the suite still runs locally and on fork PRs — it just cannot prove acceptance there.
 pipeline:
   case_assert:
     - assert/{{assert}}
+  case_teardown:
+    - storage/cleanup-extra
 
 cases:
+  - id: apoc-runtime
+    comment: APOC assigned via spec.plugins — the JAR is installed at container start and apoc.version() answers over bolt.
+    fixture: tests/fixtures/neo4j-plugins-apoc.yaml
+    assert: plugins-apoc
+    expect: success
+    cr_name: plg-apoc
+
+  - id: gds-runtime
+    comment: GDS assigned without a licenceSecretRef — Community mode boots and gds.version() answers over bolt.
+    fixture: tests/fixtures/neo4j-plugins-gds.yaml
+    assert: plugins-gds
+    expect: success
+    cr_name: plg-gds
+
+  # From a94cc4f, which landed a feature-plugins suite on main while this branch was open. Kept
+  # as it was written: it boots both plugins on one CR and calls the version *functions*, where
+  # the two cases above assert registration via SHOW PROCEDURES — a procedure can be listed and
+  # still fail to execute, so this is the case that would catch that.
   - id: apoc-gds-runtime
     comment: BDR-004 — APOC + GDS assigned via spec.plugins; apoc.version()/gds.version() callable over bolt and the allowlist opened to both.
     fixture: tests/fixtures/neo4j-plugins-standalone.yaml
     assert: plugins-runtime
     expect: success
     cr_name: e2e-plugins
+
+  - id: procedure-allowlists
+    comment: Two plugins assigned — the generated procedure allowlists carry both patterns and are effective on the running server.
+    fixture: tests/fixtures/neo4j-plugins-apoc-gds.yaml
+    assert: plugins-allowlist
+    expect: success
+    cr_name: plg-allow
+
+  - id: licensed-plugins
+    comment: GDS and Bloom each with a licence Secret — both mounted at /licenses/<id>, both license_file settings effective, Bloom's server extension served at /bloom/, and both plugins accept the licence when CI supplies real material.
+    fixture: tests/fixtures/neo4j-plugins-licensed.yaml
+    assert: plugins-license
+    expect: success
+    cr_name: plg-lic
+
+  - id: plugin-config-runtime
+    comment: pluginDefinitions.apoc.config merges into neo4j.conf and the value is effective at runtime.
+    fixture: tests/fixtures/neo4j-plugins-config.yaml
+    assert: plugins-config
+    expect: success
+    cr_name: plg-cfg
+
+  - id: license-secret-unlabeled
+    comment: Licence Secret without the mountable opt-in label is refused at reconcile with Error/SecretNotMountable and nothing is deployed.
+    fixture: tests/fixtures/neo4j-plugins-unlabeled.yaml
+    neo4j_case: standalone-plugin-license-unlabeled
+    assert: reconcile-error
+    expect: success
+    cr_name: plg-nolbl
+
+  - id: import-volume
+    comment: Pre-created PVC mounted at /plugins with no spec.plugins entry — the manual-import channel, with NEO4J_PLUGINS left unset, and a JAR seeded onto the claim is loaded after a restart.
+    fixture: tests/fixtures/neo4j-plugins-import.yaml
+    assert: plugins-import
+    expect: success
+    cr_name: plg-imp

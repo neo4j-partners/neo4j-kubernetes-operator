@@ -220,6 +220,8 @@ var (
 		"Every claim the operator manages is Bound and serving the size the spec asks for")
 	ConditionTLSReady = declareCondition("TLSReady", GateFalseBlocks,
 		"Trust is disabled, or every required TLS Secret and key is present")
+	ConditionPluginsReady = declareCondition("PluginsReady", GateFalseBlocks,
+		"No plugin is assigned, or every assigned plugin was installed by the image entrypoint and holds a licence it accepts")
 	ConditionClusterFormed = declareCondition("ClusterFormed", GateClusterFalseBlocks,
 		"Every desired server is enabled in the Neo4j cluster")
 	ConditionServersPendingDrain = declareCondition("ServersPendingDrain", GateClusterTrueBlocks,
@@ -242,6 +244,8 @@ var (
 		on(ConditionReady, "Held back by TLSReady — trust material is missing or still being issued"))
 	ReasonStorageNotReady = declare("StorageNotReady", SeverityWarn, SurfaceCondition,
 		on(ConditionReady, "Held back by StorageReady — a claim is unbound, still growing, or smaller than the spec asks for. The members themselves may all be up, which is why this is not MembersNotReady"))
+	ReasonPluginsNotReady = declare("PluginsNotReady", SeverityWarn, SurfaceCondition,
+		on(ConditionReady, "Held back by PluginsReady — a plugin the spec asks for is not on the server. The members are up and serving, so this is not MembersNotReady; the server simply does not have the plugin"))
 	ReasonOfflineMaintenance = declare("OfflineMaintenance", SeverityInfo, SurfaceCondition,
 		on(ConditionReady, "`spec.maintenance.offlineMode` is true, so the Neo4j process is not running"))
 	ReasonReconcileError = declare("ReconcileError", SeverityError, SurfaceCondition,
@@ -305,6 +309,29 @@ var (
 	ReasonCertificatePending = declare("CertificatePending", SeverityWarn, SurfaceCondition,
 		on(ConditionTLSReady, "Waiting for cert-manager to issue the certificate into the operator-provisioned Secret"))
 )
+
+// PluginsReady — plugin installation, which the image entrypoint performs and the operator only
+// observes (BDR-004).
+//
+// Three of these four failures are not fatal to the container: the entrypoint prints the error,
+// returns, and lets Neo4j start without the plugin. That is why they need a condition of their own
+// — every member is genuinely ready, so nothing else in the status would report a problem.
+var (
+	ReasonPluginsInstalled = declareNominal("PluginsInstalled", SurfaceCondition,
+		on(ConditionPluginsReady, "Every assigned plugin is installed, or no plugin is assigned"))
+	ReasonPluginDownloadFailed = declare("PluginDownloadFailed", SeverityError, SurfaceCondition,
+		on(ConditionPluginsReady, "The entrypoint could not reach the plugin's version index, so the JAR was never fetched. Needs egress from the node; the message names the URL the image tried"))
+	ReasonPluginVersionIncompatible = declare("PluginVersionIncompatible", SeverityError, SurfaceCondition,
+		on(ConditionPluginsReady, "The plugin publishes no build for this Neo4j version, which happens on the newest Neo4j releases. Pin an older `spec.version` or drop the plugin"))
+	ReasonPluginJarUnreadable = declare("PluginJarUnreadable", SeverityError, SurfaceCondition,
+		on(ConditionPluginsReady, "The JAR reached the plugins directory but is not readable, so the entrypoint exited and the container never started Neo4j. Usually a permission or mount problem on `storage.volumes.plugins`"))
+)
+
+// A rejected plugin licence has no reason here on purpose: licence state is a query-time property,
+// read with gds.isLicensed() or gds.license.state, not something the plugin announces. Probing
+// 2026.07.1-enterprise with deliberately invalid material printed nothing about it through install
+// and startup. Reporting it therefore needs the admin Bolt session, which is Cluster-only and
+// opt-in today, so it cannot be observed from the container output the way the three above are.
 
 // ClusterFormed and ServersPendingDrain — cluster formation and scale-in (ADR-007).
 var (

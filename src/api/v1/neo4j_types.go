@@ -38,6 +38,15 @@ import (
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Cluster' || !has(self.plugins)",message="spec.plugins is not allowed when mode is Cluster"
 // +kubebuilder:validation:XValidation:rule="self.topology.mode != 'Standalone' || (!has(self.topology.primaries) && !has(self.topology.secondaries))",message="use spec.plugins in standalone mode"
 // +kubebuilder:validation:XValidation:rule="self.edition != 'community' || self.topology.mode == 'Standalone'",message="community edition supports topology.mode Standalone only (clustering is an Enterprise feature)"
+// The community image has no /var/lib/neo4j/products, so the entrypoint falls through to a download
+// that cannot succeed — and it returns without failing, leaving a server that reports healthy with
+// the plugin missing. Only spec.plugins needs the rule: community implies Standalone, which forbids
+// the per-pool lists.
+//
+// An Existing plugins volume is the escape, and has to be: it leaves NEO4J_PLUGINS unset, so the
+// image installs nothing and the edition decides nothing — which is how a free GDS build runs on
+// community. Kept in step with plugins.EnterpriseOnlyIDs by a test (BDR-004).
+// +kubebuilder:validation:XValidation:rule="self.edition != 'community' || !has(self.plugins) || (has(self.storage) && has(self.storage.volumes) && has(self.storage.volumes.plugins) && has(self.storage.volumes.plugins.mode) && self.storage.volumes.plugins.mode == 'Existing') || self.plugins.all(p, p != 'bloom' && p != 'fleet-management' && p != 'genai' && p != 'gds')",message="bloom, fleet-management, genai and gds ship only in the enterprise image; set edition to enterprise, supply the JAR through storage.volumes.plugins mode Existing, or drop the plugin"
 // +kubebuilder:validation:XValidation:rule="self.edition != 'enterprise' || (has(self.license) && (self.license.accept == 'yes' || self.license.accept == 'eval'))",message="Enterprise edition requires spec.license.accept: yes or eval"
 // +kubebuilder:validation:XValidation:rule="self.edition == 'enterprise' || !has(self.features) || !has(self.features.backup) || self.features.backup.enabled != true",message="features.backup requires Enterprise edition"
 // +kubebuilder:validation:XValidation:rule="self.edition == 'enterprise' || !has(self.features) || !has(self.features.monitoring) || !has(self.features.monitoring.prometheus) || self.features.monitoring.prometheus.enabled != true",message="features.monitoring.prometheus requires Enterprise edition (metrics are an Enterprise feature)"

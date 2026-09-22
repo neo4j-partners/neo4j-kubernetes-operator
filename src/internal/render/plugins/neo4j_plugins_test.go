@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,12 +41,166 @@ func TestAssigned(t *testing.T) {
 }
 
 func TestValidateRejectsUnknownPlugin(t *testing.T) {
+	// Anything the image's own registry does not name: the entrypoint exits 1 on it before Neo4j
+	// starts, so the operator has to refuse it first (NEO-013).
 	neo4j := &neo4jv1.Neo4j{
-		Spec: neo4jv1.Neo4jSpec{Plugins: []string{"apoc-extended"}},
+		Spec: neo4jv1.Neo4jSpec{Plugins: []string{"graph-algorithms"}},
 	}
 	err := Validate(neo4j)
 	if err == nil || !strings.Contains(err.Error(), "catalog") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// The catalog has to name the same plugins as /startup/neo4j-plugins.json, because an id the
+// image does not know is a crash and an id it knows but we omit is a plugin users cannot ask for.
+func TestCatalogCoversTheImageRegistry(t *testing.T) {
+	want := map[string]string{
+		"apoc":             "apoc",
+		"apoc-extended":    "apoc-extended",
+		"gds":              "graph-data-science",
+		"bloom":            "bloom",
+		"genai":            "genai",
+		"fleet-management": "fleet-management",
+	}
+	for id, imageName := range want {
+		if !Known(id) {
+			t.Errorf("catalog id %q is missing", id)
+			continue
+		}
+		if got := ImageName(id); got != imageName {
+			t.Errorf("ImageName(%q) = %q, want %q", id, got, imageName)
+		}
+	}
+	if got := len(CatalogIDs()); got != len(want) {
+		t.Errorf("catalog holds %d ids, want %d: %v", got, len(want), CatalogIDs())
+	}
+}
+
+// Only apoc is bundled in both images, and only apoc-extended is bundled in neither. The
+// difference is what decides whether an install needs egress, so it is worth pinning per id.
+func TestPluginSources(t *testing.T) {
+	cases := map[string]Source{
+		"apoc":             BundledAnyEdition,
+		"apoc-extended":    AlwaysDownloaded,
+		"gds":              BundledEnterprise,
+		"bloom":            BundledEnterprise,
+		"genai":            BundledEnterprise,
+		"fleet-management": BundledEnterprise,
+	}
+	for id, want := range cases {
+		if got := SourceOf(id); got != want {
+			t.Errorf("SourceOf(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+func TestValidateRejectsEnterprisePluginOnCommunity(t *testing.T) {
+	for _, id := range EnterpriseOnlyIDs() {
+		neo4j := &neo4jv1.Neo4j{
+			Spec: neo4jv1.Neo4jSpec{Edition: neo4jv1.EditionCommunity, Plugins: []string{id}},
+		}
+		err := Validate(neo4j)
+		if err == nil {
+			t.Errorf("%s on community must be refused: the entrypoint would fall through to a download that cannot succeed, without failing", id)
+			continue
+		}
+		if !strings.Contains(err.Error(), "enterprise") {
+			t.Errorf("%s: message must name the edition, got %v", id, err)
+		}
+	}
+}
+
+// apoc-extended is downloaded on both editions, so community is not a reason to refuse it.
+func TestValidateAllowsDownloadedPluginOnCommunity(t *testing.T) {
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{Edition: neo4jv1.EditionCommunity, Plugins: []string{"apoc", "apoc-extended"}},
+	}
+	if err := Validate(neo4j); err != nil {
+		t.Fatalf("apoc and apoc-extended are legal on community: %v", err)
+	}
+}
+
+// The CEL rule on Neo4jSpec has to spell the enterprise-only ids literally, since CEL cannot read
+// the Go catalog. This is the only thing holding the two lists together: adding a bundled
+// enterprise plugin here without touching the rule would leave it accepted at admission and
+// refused later in the pipeline, which reports far worse than a rejected apply.
+func TestCELRuleListsEveryEnterpriseOnlyID(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..",
+		"config", "crd", "bases", "neo4j.com_neo4js.yaml"))
+	if err != nil {
+		t.Skipf("generated CRD not available: %v", err)
+	}
+	// controller-gen wraps long rule strings, so compare on collapsed whitespace.
+	crd := strings.Join(strings.Fields(string(data)), " ")
+	for _, id := range EnterpriseOnlyIDs() {
+		if !strings.Contains(crd, "p != '"+id+"'") {
+			t.Errorf("CEL rule does not exclude %q on community — add it to the rule in api/v1/neo4j_types.go", id)
+		}
+	}
+	for _, id := range CatalogIDs() {
+		if SourceOf(id) == BundledEnterprise {
+			continue
+		}
+		if strings.Contains(crd, "p != '"+id+"'") {
+			t.Errorf("CEL rule excludes %q on community, but it is not enterprise-only", id)
+		}
+	}
+}
+
+// Supplying the JARs yourself is a supported channel, and it takes the edition out of the
+// question: SkipNetworkFetch leaves NEO4J_PLUGINS unset, so the image installs nothing and there
+// is no bundled copy to be missing. GDS publishes a free build that runs on community exactly this
+// way, so refusing it here would block a legitimate deployment.
+func TestValidateAllowsEnterprisePluginOnCommunityFromAnExistingVolume(t *testing.T) {
+	for _, id := range EnterpriseOnlyIDs() {
+		neo4j := &neo4jv1.Neo4j{
+			Spec: neo4jv1.Neo4jSpec{
+				Edition: neo4jv1.EditionCommunity,
+				Plugins: []string{id},
+				Storage: &neo4jv1.StorageSpec{
+					Volumes: &neo4jv1.VolumesSpec{
+						Plugins: &neo4jv1.AuxiliaryVolumeSpec{
+							Mode:     neo4jv1.VolumeModeExisting,
+							Existing: &neo4jv1.ExistingVolumeSpec{ClaimName: "my-jars"},
+						},
+					},
+				},
+			},
+		}
+		if err := Validate(neo4j); err != nil {
+			t.Errorf("%s on community from an Existing volume must be allowed: %v", id, err)
+		}
+	}
+}
+
+// The same spec without the volume must still be refused, or the escape above would be a hole
+// rather than a channel.
+func TestValidateStillRefusesEnterprisePluginOnCommunityWithoutTheVolume(t *testing.T) {
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionCommunity,
+			Plugins: []string{"gds"},
+			Storage: &neo4jv1.StorageSpec{
+				Volumes: &neo4jv1.VolumesSpec{
+					// Share, not Existing: the JARs are not supplied, so the image would have to
+					// find a bundled copy that community does not carry.
+					Plugins: &neo4jv1.AuxiliaryVolumeSpec{Mode: neo4jv1.VolumeModeShare},
+				},
+			},
+		},
+	}
+	if err := Validate(neo4j); err == nil {
+		t.Fatal("a Share plugins volume supplies no JAR, so gds on community must stay refused")
+	}
+}
+
+func TestValidateAllowsEnterprisePluginOnEnterprise(t *testing.T) {
+	neo4j := &neo4jv1.Neo4j{
+		Spec: neo4jv1.Neo4jSpec{Edition: neo4jv1.EditionEnterprise, Plugins: []string{"gds", "bloom", "genai"}},
+	}
+	if err := Validate(neo4j); err != nil {
+		t.Fatalf("unexpected refusal: %v", err)
 	}
 }
 
