@@ -29,9 +29,9 @@
 | `conditions` | `[]Condition` | Always | Kubernetes-standard conditions — primary automation surface. |
 | `observedGeneration` | int64 | Always | Last `metadata.generation` fully reconciled. |
 | `version` | string | When known | **Effective** Neo4j version on the workload (image / DBMS). During upgrade: reflects version **already running** on members; see `upgrade.targetVersion` for intent. |
-| `lastUpgradeTime` | `metav1.Time` | **Not written yet** | Timestamp when `upgrade.phase` last reached `Completed`. Audit / SRE. |
+| `lastUpgradeTime` | `metav1.Time` | When a version roll finishes | Stamped as `status.upgrade` is cleared. The finished record is this field plus `status.version`, not a `Completed` block left behind. |
 | `serverSummary` | `ReplicaSummary` | Always | Lightweight STS summary — cheap (no Bolt). Not `spec.topology.secondaries`. |
-| `upgrade` | `UpgradeStatus` | **Not written yet** | Rolling upgrade state machine (see below) — the schema is settled, the writer is not implemented. |
+| `upgrade` | `UpgradeStatus` | While `spec.version` differs from the running version and the pools have not converged | Rolling upgrade in flight (see below). Cleared when the roll finishes. |
 | `members` | `[]MemberStatus` | **Not written yet** | Per-server summary (pool, plugins, K8s + Neo4j server state). |
 | `diagnostics` | `DiagnosticsStatus` | **Not written yet** | Deep observability — needs the Bolt collector, which does not exist. |
 | `endpoints` | `EndpointsStatus` | When Services exist | Client URIs + connection examples. |
@@ -75,47 +75,47 @@ leaves the enum; still open.
 
 **Not top-level phases:** `Upgrading`, `Scaling`, `Restoring` — tracked in `status.upgrade`, domain conditions, or day-2 CRD status (`Neo4jRestore`).
 
-While `upgrade.phase != Completed` and `upgrade.phase != ""`, `status.phase` remains `Running` — never a dedicated `Upgrading` phase at top level. It stays `Running` even while members are not ready, because a rolling update makes them not ready one at a time by design and no cheap signal separates that from a member failing on its own; `Ready=False` and its reason report the health throughout.
+While a version change is in flight, `status.phase` remains `Running` — never a dedicated `Upgrading` phase at top level. It stays `Running` even while members are not ready, because a rolling update makes them not ready one at a time by design and no cheap signal separates that from a member failing on its own; `Ready=False` and its reason report the health throughout.
 
 ---
 
 ## `status.upgrade`
 
-Dedicated state machine for `spec.version` changes. Survives operator restart via `currentPartition` (StatefulSet rolling update partition).
+Written while `spec.version` differs from the version that is running and the pools have not converged. Derived from the pool StatefulSets: a member counts as upgraded only when its pod is on the new image and Ready. A nil block means nothing is in flight.
+
+`currentPartition` is on the schema and is not written. Each pool is an ordinary StatefulSet rolling update, one pod at a time. The field is reserved for a later per-member pace.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `phase` | string | `""` \| `Staging` \| `Rolling` \| `Stabilizing` \| `Verifying` \| `Completed` \| `Failed` |
+| `phase` | string | `Rolling` \| `Stabilizing` \| `Verifying` \| `Failed`. `Staging` and `Completed` are schema values the writer does not publish. |
 | `targetVersion` | string | `spec.version` being rolled out. |
-| `previousVersion` | string | Version before this upgrade started. |
-| `currentPartition` | int32 | STS partition cursor — resume point after operator restart. |
-| `stepStartTime` | `metav1.Time` | Start of current `phase` step. |
+| `previousVersion` | string | `status.version` when the change was accepted — the version still running. |
+| `currentPartition` | int32 | Not written. |
+| `stepStartTime` | `metav1.Time` | Start of the current step. Restarts only when another member becomes Ready on the new image. |
 | `progress` | `UpgradeProgress` | `{ total, upgraded, pending }` server counts. |
-| `lastError` | string | Last failure message; empty when healthy. |
+| `lastError` | string | Set when `phase` is `Failed`. |
 
 ### Upgrade phases
 
 | Phase | Meaning |
 |-------|---------|
-| `Staging` | Preflight — image pull, plugin compatibility, PDB / maintenance checks. |
-| `Rolling` | Partitioned rolling pod restarts (`currentPartition` advances). |
-| `Stabilizing` | Waiting for Neo4j process + cluster membership after last restart. |
-| `Verifying` | Post-upgrade checks — `SHOW SERVERS`, version alignment, optional smoke query. |
-| `Completed` | All members on `targetVersion`; `lastUpgradeTime` updated. |
-| `Failed` | Irrecoverable — `Error=True`, `lastError` set; manual intervention. |
+| `Rolling` | At least one member is not yet Ready on the new image. |
+| `Stabilizing` | Every member that has been given the new image is created; not all are Ready. |
+| `Verifying` | Every member is on the new image and Ready. The cluster-formed check still has to pass before `status.version` advances. |
+| `Failed` | No member has become Ready on the new image for longer than the startup probe plus the termination grace period. `lastError` names the budget. `status.version` stays on the version that is running. |
+
+On success the block is removed and `status.lastUpgradeTime` is stamped. `status.version` advances to `spec.version` in that same pass.
 
 ```yaml
 upgrade:
   phase: Rolling
-  targetVersion: "2026.05.0"
-  previousVersion: "5.26.0"
-  currentPartition: 2
-  stepStartTime: "2026-06-22T14:30:00Z"
+  targetVersion: "2026.07.1"
+  previousVersion: "2026.05.0"
+  stepStartTime: "2026-09-24T10:30:00Z"
   progress:
-    total: 3
-    upgraded: 1
-    pending: 1
-  lastError: ""
+    total: 5
+    upgraded: 2
+    pending: 3
 ```
 
 ---

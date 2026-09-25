@@ -185,13 +185,32 @@ precise signal that your change has been processed.
 
 ## Version changes
 
-`spec.version` selects the image tag at install time. Changing it later is **not orchestrated**: there
-is no upgrade state machine, no version-compatibility check, no pause between members. The pods will
-roll onto the new image, which for a Neo4j version change is not a safe way to upgrade a database.
+`spec.version` is the Neo4j image tag. Changing it on a running resource rolls that deployment onto
+the new version. Take a backup first: Neo4j does not support downgrade, and patching the field back
+after a member has started the new binary does not undo the store.
 
-Until upgrades are implemented, treat the version as fixed for the lifetime of a deployment. To move
-versions, take a backup, create a resource at the target version, and load the data. The status fields
-`status.upgrade` and `status.lastUpgradeTime` exist for the future implementation and stay empty.
+```bash
+kubectl patch neo4j prod -n default --type merge -p '{"spec":{"version":"2026.07.1"}}'
+kubectl get neo4j prod -n default -w
+```
+
+A downgrade is refused with `VersionDowngradeRefused`. `VersionUpgradeRefused` covers a change the
+operator will not roll out: a jump from a 5.x release older than 5.26 straight into the 2025–2026
+line, a digest pin (`spec.image.digest`), offline maintenance, or plugin JARs on an `Existing`
+volume. The message names which. `status.version` and the pod images stay on the version that is
+running. Both reasons are in the [error reference](../05-reference/errors.md).
+
+On a cluster with a read or analytics pool, those pools reach the new image and finish rolling
+before any primary pod template changes. Within a pool, pods restart one at a time. Standalone has
+one pod, so the roll is an outage.
+
+`status.version` stays on the version that is still running until the roll finishes. While it is in
+flight, `status.upgrade` reports the phase, the target, the previous version and how many members
+are up. When it finishes, that block is cleared and `status.lastUpgradeTime` is set. `status.phase`
+stays `Running`. A member that never becomes Ready — an image that cannot be pulled, a server that
+never starts — ends in `status.upgrade.phase: Failed` with `lastError` set, after the startup probe
+plus the termination grace period has passed with no further member Ready on the new image. The
+defaults are `1000 × 5s` plus `3600s`.
 
 ## Offline maintenance
 

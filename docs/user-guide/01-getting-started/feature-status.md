@@ -106,7 +106,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 | Status conditions and Kubernetes Events | Verified | [Errors](../05-reference/errors.md) |
 | Prometheus metrics and ServiceMonitor | Implemented | [Monitoring](../03-neo4j/08-monitoring.md) |
 | Backup and restore | Implemented | [Backup and restore](../03-neo4j/10-backup-restore.md) — `Neo4jBackup`, `Neo4jBackupSchedule`, `Neo4jRestore` |
-| Neo4j version upgrades | Planned | `spec.version` is honoured at install; changing it is not orchestrated |
+| Neo4j version upgrades | Verified | [Operations](../03-neo4j/09-operations.md#version-changes) — `spec.version` rolls the running deployment; a downgrade and an unsupported path are refused |
 | CSV, JMX and Graphite metrics | Not decided | Fields exist under `spec.features.monitoring`; only Prometheus is wired |
 
 Cluster-wide watch is not a gap: it is refused on purpose, as explained in

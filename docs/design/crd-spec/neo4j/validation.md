@@ -166,9 +166,9 @@ them would produce a pod that crash-loops rather than a rejected resource.
 
 | ID | Rule | Severity | Mechanism | Message |
 |----|------|----------|-----------|---------|
-| VER-001 | `version` required, semver-compatible Neo4j tag | Error | CEL | `spec.version` is required |
-| VER-002 | Downgrade `version` blocked | Error | Webhook | Neo4j version downgrade is not supported |
-| VER-003 | `version` change triggers upgrade preflight | — | Reconciler | (no admission block; preflight in domain) |
+| VER-001 | `version` required | Error | CEL | `spec.version` is required |
+| VER-002 | Downgrade `version` blocked | Error | Reconciler | Neo4j version downgrade is not supported (`VersionDowngradeRefused`) |
+| VER-003 | `version` change triggers upgrade preflight | — | Reconciler | A forward change is refused (`VersionUpgradeRefused`) when it skips the 5.26 LTS checkpoint, when `spec.image.digest` is set, when offline maintenance is on, or when `storage.volumes.plugins` is `Existing`. No admission block |
 
 ---
 
