@@ -157,7 +157,7 @@ The honest framing: C does not satisfy R2. Kubernetes readiness is a weaker gate
 
 **VER-002 is a blanket downgrade refusal with no carve-out** (R4). Recovery from a failed upgrade is restoring a pre-upgrade backup, not reverting the version. It is enforced in the webhook *and* the reconciler, extending the [ADR-001](001-crd-validation-process.md) table: the validating webhook ships disabled by default, so a webhook-only rule protects almost nobody. It is deliberately not CEL — a root-level rule keeps evaluating on the finalizer-removal update, so a rule false for an already-persisted object would make the resource impossible to delete.
 
-**Preflight enforces the path rules** (R5, R6), not merely "newer than current". `spec.version` is CalVer with an optional fourth `LTS` component, so the comparison parses CalVer, not SemVer — VER-001's "semver-compatible tag" wording in `validation.md` needs correcting with it.
+**Preflight enforces the path rules** (R5, R6), not merely "newer than current". `spec.version` is CalVer with an optional fourth `LTS` component, so the comparison parses CalVer, not SemVer. VER-001 is only the required-field CEL; the path rules are VER-003, enforced in the reconciler.
 
 ### Implementation notes
 
