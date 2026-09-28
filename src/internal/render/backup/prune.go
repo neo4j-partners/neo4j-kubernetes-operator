@@ -169,6 +169,15 @@ func ObjectStorePruneJob(neo4j *neo4jv1.Neo4j, name, image string, dest neo4jv1.
 			SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: dest.Credentials.SecretName}},
 		}}
 	}
+	// Private-CA trust for a StorageGrid/MinIO endpoint signed by a corporate PKI: mount the CA and
+	// point rclone at it (RCLONE_CA_CERT), the same private CA the backup Job trusts for neo4j-admin.
+	var pruneVolumes []corev1.Volume
+	if dest.TLS != nil && dest.TLS.CACertSecret != "" {
+		vol, mnt := caCertVolumeMount(dest.TLS)
+		pruneVolumes = append(pruneVolumes, vol)
+		container.VolumeMounts = append(container.VolumeMounts, mnt)
+		container.Env = append(container.Env, corev1.EnvVar{Name: "RCLONE_CA_CERT", Value: caMountPath + "/" + caFileName})
+	}
 	if neo4j.Spec.Image != nil && neo4j.Spec.Image.PullPolicy != "" {
 		container.ImagePullPolicy = corev1.PullPolicy(neo4j.Spec.Image.PullPolicy)
 	}
@@ -187,6 +196,7 @@ func ObjectStorePruneJob(neo4j *neo4jv1.Neo4j, name, image string, dest neo4jv1.
 				Spec: corev1.PodSpec{
 					RestartPolicy:   corev1.RestartPolicyNever,
 					Containers:      []corev1.Container{container},
+					Volumes:         pruneVolumes,
 					SecurityContext: workload.PodSecurityContext(ctx),
 				},
 			},

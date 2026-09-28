@@ -115,6 +115,33 @@ func TestAggregateJobObjectStore(t *testing.T) {
 	}
 }
 
+func TestAggregateJobObjectStorePrivateCATrust(t *testing.T) {
+	// Aggregating a chain in a private-CA-signed bucket must trust the CA the same way the backup Job
+	// does — via AWS_CA_BUNDLE / SSL_CERT_FILE, which neo4j-admin's S3 client honors.
+	job, err := AggregateJob(testNeo4j(), "agg-obj", AggregateInputs{
+		ObjectURL: "s3://bkt/backups/neo4j/",
+		Databases: []string{"neo4j"},
+		TLS:       &neo4jv1.BackupObjectStoreTLS{CACertSecret: "corp-ca"},
+	})
+	if err != nil {
+		t.Fatalf("AggregateJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	caPath := caMountPath + "/" + caFileName
+	gotEnv := map[string]string{}
+	for _, e := range c.Env {
+		gotEnv[e.Name] = e.Value
+	}
+	for _, name := range []string{"AWS_CA_BUNDLE", "SSL_CERT_FILE"} {
+		if gotEnv[name] != caPath {
+			t.Errorf("env %s = %q, want %q", name, gotEnv[name], caPath)
+		}
+	}
+	if !hasVolume(job.Spec.Template.Spec.Volumes, caVolumeName) {
+		t.Errorf("CA volume missing; got %v", job.Spec.Template.Spec.Volumes)
+	}
+}
+
 func TestAggregateJobObjectStoreDeleteOldChain(t *testing.T) {
 	// Schedule-managed compaction sets DeleteOldChain, so neo4j-admin runs with
 	// --keep-old-backup=false and deletes the source chain's churn from the bucket.

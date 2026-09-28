@@ -107,6 +107,27 @@ spec:
                     - message: set pvc.claimName (existing) or pvc.size (provision),
                         not both
                       rule: has(self.claimName) != (has(self.size) || has(self.storageClassName))
+                  tls:
+                    description: |-
+                      TLS trusts a private/corporate CA for an S3-compatible HTTPS endpoint (StorageGrid / Ceph /
+                      NetApp / MinIO behind a private PKI). Valid only when type is s3; omit for a publicly-trusted
+                      endpoint.
+                    properties:
+                      caCertKey:
+                        default: ca.crt
+                        description: CACertKey is the key within CACertSecret holding
+                          the PEM bundle (default "ca.crt").
+                        type: string
+                      caCertSecret:
+                        description: |-
+                          CACertSecret names a Secret in the same namespace holding the PEM CA bundle to trust. The
+                          operator points neo4j-admin's S3 client at it (AWS_CA_BUNDLE / SSL_CERT_FILE) and passes it to
+                          the rclone prune Job (RCLONE_CA_CERT), so every object-store Job trusts the endpoint.
+                        minLength: 1
+                        type: string
+                    required:
+                    - caCertSecret
+                    type: object
                   type:
                     description: Type selects the store backend.
                     enum:
@@ -128,6 +149,10 @@ spec:
                     require pvc (not url)
                   rule: 'self.type == ''pvc'' ? (has(self.pvc) && !has(self.url))
                     : (has(self.url) && !has(self.pvc))'
+                - message: 'destination.tls (private-CA trust) is only supported for
+                    type: s3 (S3-compatible endpoints such as StorageGrid, Ceph, NetApp,
+                    MinIO)'
+                  rule: '!has(self.tls) || self.type == ''s3'''
               neo4jRef:
                 description: Neo4jRef is the target workload (same namespace).
                 properties:
