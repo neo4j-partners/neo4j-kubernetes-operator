@@ -52,6 +52,7 @@ func TestContractCELRulesPresent(t *testing.T) {
 		{"neo4j.com_neo4jbackups.yaml", []string{
 			"Neo4jBackup spec is immutable",
 			"object-store destinations require url",
+			"destination.tls (private-CA trust) is only supported for",
 		}},
 		{"neo4j.com_neo4jrestores.yaml", []string{
 			"system cannot be restored",

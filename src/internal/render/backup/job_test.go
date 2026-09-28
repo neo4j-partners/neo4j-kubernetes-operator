@@ -270,12 +270,90 @@ func TestBackupJobChainSubDirIsolatesObjectStore(t *testing.T) {
 	}
 }
 
+func TestBackupJobObjectStorePrivateCATrust(t *testing.T) {
+	// An S3-compatible endpoint signed by a private/corporate CA (StorageGrid): the backup Job must
+	// trust the CA or neo4j-admin's AWS SDK fails "TLS (SSL) negotiation failed". The operator mounts
+	// the CA Secret and points neo4j-admin's S3 client at it via AWS_CA_BUNDLE / SSL_CERT_FILE.
+	b := &neo4jv1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:  neo4jv1.Neo4jRef{Name: "g"},
+			Databases: []string{"neo4j"},
+			Destination: neo4jv1.BackupDestination{
+				Type:        neo4jv1.BackupDestinationS3,
+				URL:         "s3://bucket/prod/",
+				Credentials: &neo4jv1.BackupCredentials{SecretName: "s3-creds"},
+				TLS:         &neo4jv1.BackupObjectStoreTLS{CACertSecret: "corp-ca"},
+			},
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b, "")
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	// neo4j-admin's S3 client (AWS SDK v2 / CRT) trusts the CA via these env vars, not the JVM
+	// truststore, so the bare command stays and only env + a CA mount are added.
+	if len(c.Command) != 1 || c.Command[0] != "neo4j-admin" {
+		t.Fatalf("expected bare neo4j-admin command; got command=%v args=%v", c.Command, c.Args)
+	}
+	caPath := caMountPath + "/" + caFileName
+	wantEnv := map[string]string{"AWS_CA_BUNDLE": caPath, "SSL_CERT_FILE": caPath}
+	gotEnv := map[string]string{}
+	for _, e := range c.Env {
+		if _, ok := wantEnv[e.Name]; ok {
+			gotEnv[e.Name] = e.Value
+		}
+	}
+	for name, want := range wantEnv {
+		if gotEnv[name] != want {
+			t.Errorf("env %s = %q, want %q", name, gotEnv[name], want)
+		}
+	}
+	// The CA Secret is projected read-only as ca.crt.
+	if !hasVolume(job.Spec.Template.Spec.Volumes, caVolumeName) {
+		t.Errorf("CA volume missing; got %v", job.Spec.Template.Spec.Volumes)
+	}
+	var caMount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == caVolumeName {
+			caMount = &c.VolumeMounts[i]
+		}
+	}
+	if caMount == nil || caMount.MountPath != caMountPath || !caMount.ReadOnly {
+		t.Errorf("CA mount = %+v, want %s read-only", caMount, caMountPath)
+	}
+}
+
+func TestBackupJobNoCATrustWhenUnset(t *testing.T) {
+	// Public-CA endpoints keep the bare command (no keytool, no CA volume).
+	b := &neo4jv1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
+			Databases:   []string{"neo4j"},
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, URL: "s3://bucket/prod/"},
+		},
+	}
+	job, err := BackupJob(testNeo4j(), b, "")
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	if len(c.Command) != 1 || c.Command[0] != "neo4j-admin" {
+		t.Errorf("expected bare neo4j-admin command without CA; got %v", c.Command)
+	}
+	if hasVolume(job.Spec.Template.Spec.Volumes, caVolumeName) {
+		t.Errorf("CA volume must be absent when no TLS is configured; got %v", job.Spec.Template.Spec.Volumes)
+	}
+}
+
 func TestObjectStoreFolder(t *testing.T) {
 	for _, tc := range []struct {
 		url, sub, want string
 	}{
-		{"s3://b/p/", "", "s3://b/p/"},              // ad-hoc: already a dir, no chain
-		{"s3://b/p", "", "s3://b/p/"},               // ad-hoc: slash normalized
+		{"s3://b/p/", "", "s3://b/p/"},               // ad-hoc: already a dir, no chain
+		{"s3://b/p", "", "s3://b/p/"},                // ad-hoc: slash normalized
 		{"s3://b/p", "chain-1", "s3://b/p/chain-1/"}, // scheduled: nested prefix
 		{"azb://a/x/", "chain-1", "azb://a/x/chain-1/"},
 	} {

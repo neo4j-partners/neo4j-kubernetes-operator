@@ -128,6 +128,44 @@ func TestObjectStorePruneJob(t *testing.T) {
 	}
 }
 
+func TestObjectStorePruneJobPrivateCATrust(t *testing.T) {
+	// A StorageGrid endpoint behind a corporate PKI: the rclone prune Job must trust the same private
+	// CA the backup Job does, or the retention purge fails TLS negotiation. The operator mounts the CA
+	// and points rclone at it via RCLONE_CA_CERT.
+	dest := neo4jv1.BackupDestination{
+		Type:        neo4jv1.BackupDestinationS3,
+		URL:         "s3://bkt/prod/",
+		Credentials: &neo4jv1.BackupCredentials{SecretName: "s3-creds"},
+		TLS:         &neo4jv1.BackupObjectStoreTLS{CACertSecret: "corp-ca", CACertKey: "root.pem"},
+	}
+	job, err := ObjectStorePruneJob(testNeo4j(), PruneJobName("old"), "", dest, "s3://bkt/prod/old-chain/")
+	if err != nil {
+		t.Fatalf("ObjectStorePruneJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	var caCert string
+	for _, e := range c.Env {
+		if e.Name == "RCLONE_CA_CERT" {
+			caCert = e.Value
+		}
+	}
+	if caCert != caMountPath+"/"+caFileName {
+		t.Errorf("RCLONE_CA_CERT = %q, want %q", caCert, caMountPath+"/"+caFileName)
+	}
+	if !hasVolume(job.Spec.Template.Spec.Volumes, caVolumeName) {
+		t.Errorf("CA volume missing; got %v", job.Spec.Template.Spec.Volumes)
+	}
+	// The Secret's configured key is projected as the fixed ca.crt filename the env var points at.
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == caVolumeName {
+			if v.Secret == nil || v.Secret.SecretName != "corp-ca" || len(v.Secret.Items) != 1 ||
+				v.Secret.Items[0].Key != "root.pem" || v.Secret.Items[0].Path != caFileName {
+				t.Errorf("CA volume projection = %+v, want corp-ca[root.pem]->ca.crt", v.Secret)
+			}
+		}
+	}
+}
+
 func TestObjectStorePruneScriptPerProvider(t *testing.T) {
 	cases := []struct {
 		name     string

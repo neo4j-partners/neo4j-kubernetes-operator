@@ -374,6 +374,48 @@ spec:
   Job. This overrides the instance identity for the write side of a single backup.
 - **Restore reads have no credentials field** — they always use the target's `cloudIdentity`.
 
+### Trusting a private CA (S3-compatible endpoints)
+
+If your object store's HTTPS endpoint is served by a **private/corporate CA** — e.g. StorageGrid or
+MinIO behind a corporate PKI — the backup Job's bundled SDK trusts only the image's public CA bundle
+and fails the connection:
+
+```
+WARN … Unable to perform HEAD request on the path 's3://<bucket>/…': … TLS (SSL) negotiation failed
+```
+
+Point the destination at a Secret holding the endpoint's CA bundle (PEM) with `destination.tls`:
+
+```bash
+kubectl create secret generic storagegrid-ca --from-file=ca.crt=./corp-root-ca.pem
+```
+
+```yaml
+kind: Neo4jBackup
+spec:
+  destination:
+    type: s3
+    url: s3://my-bucket/neo4j/prod/
+    credentials: { secretName: aws-backup-creds }   # AWS_ACCESS_KEY_ID, AWS_ENDPOINT_URL_S3, …
+    tls:
+      caCertSecret: storagegrid-ca                  # Secret with the PEM CA bundle
+      caCertKey: ca.crt                              # key in the Secret (default: ca.crt)
+```
+
+The operator mounts the CA and makes **every object-store Job** trust it: the backup and aggregate
+Jobs point `neo4j-admin`'s S3 client at it via `AWS_CA_BUNDLE` / `SSL_CERT_FILE` (the AWS SDK v2 /
+CRT client verifies TLS against these, not the JVM truststore), and the `rclone` retention prune Job
+reads it with `RCLONE_CA_CERT`. Set the same `tls` block on a
+`Neo4jBackupSchedule.backupTemplate.destination` so scheduled backups and pruning trust it too.
+
+`tls` is **only valid for `type: s3`** (admission rejects it otherwise). Those env vars are read only
+by the S3 client; GCS and Azure Blob are managed services with public CAs, so a private-CA endpoint
+is an S3-compatible concept only (StorageGrid, Ceph, NetApp, MinIO).
+
+> This covers the **backup/aggregate/prune** write side. A **restore** reads on the server pods, so a
+> private-CA object-store restore trusts the CA through the workload's own TLS configuration rather
+> than this field.
+
 ### How workload identity works (the 60-second version)
 
 Workload identity means **no keys stored anywhere**. Think of it as a passport and a visa:

@@ -85,6 +85,28 @@ type BackupCredentials struct {
 	SecretName string `json:"secretName"`
 }
 
+// BackupObjectStoreTLS configures trust for an S3-compatible HTTPS endpoint whose TLS certificate is
+// signed by a private/corporate CA (StorageGrid, Ceph, NetApp, MinIO behind a corporate PKI).
+// Without it the backup/aggregate/prune Jobs trust only the image's public CA bundle and fail TLS
+// negotiation against such an endpoint ("TLS (SSL) negotiation failed"). Omit for a publicly-trusted
+// endpoint.
+//
+// It is s3-only by design (admission rejects it on other types): the trust is wired through the AWS
+// SDK's AWS_CA_BUNDLE / SSL_CERT_FILE, which only the S3 client reads. GCS and Azure Blob are managed
+// services with public CAs (no private-CA endpoint exists), and their Java clients would ignore those
+// env vars anyway, so allowing it there would be a silent no-op.
+type BackupObjectStoreTLS struct {
+	// CACertSecret names a Secret in the same namespace holding the PEM CA bundle to trust. The
+	// operator points neo4j-admin's S3 client at it (AWS_CA_BUNDLE / SSL_CERT_FILE) and passes it to
+	// the rclone prune Job (RCLONE_CA_CERT), so every object-store Job trusts the endpoint.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	CACertSecret string `json:"caCertSecret"`
+	// CACertKey is the key within CACertSecret holding the PEM bundle (default "ca.crt").
+	// +kubebuilder:default="ca.crt"
+	CACertKey string `json:"caCertKey,omitempty"`
+}
+
 // BackupPVC targets an in-cluster volume (dev/local fallback, not a DR path).
 // Provide claimName for an existing PVC, or size/storageClassName to have the
 // operator provision one — the same Dynamic/Existing model as BDR-005.
@@ -102,6 +124,7 @@ type BackupPVC struct {
 // BackupDestination is where artifacts are written (BDR-014 §4). Object stores use
 // a provider-neutral url; pvc uses the pvc block.
 // +kubebuilder:validation:XValidation:rule="self.type == 'pvc' ? (has(self.pvc) && !has(self.url)) : (has(self.url) && !has(self.pvc))",message="object-store destinations require url (not pvc); pvc destinations require pvc (not url)"
+// +kubebuilder:validation:XValidation:rule="!has(self.tls) || self.type == 's3'",message="destination.tls (private-CA trust) is only supported for type: s3 (S3-compatible endpoints such as StorageGrid, Ceph, NetApp, MinIO)"
 type BackupDestination struct {
 	// Type selects the store backend.
 	// +kubebuilder:validation:Required
@@ -116,6 +139,10 @@ type BackupDestination struct {
 	// which is an instance-level concern set on the target's spec.security.cloudIdentity, because
 	// cloud IAM trust binds to a fixed ServiceAccount name and so cannot vary per backup.
 	Credentials *BackupCredentials `json:"credentials,omitempty"`
+	// TLS trusts a private/corporate CA for an S3-compatible HTTPS endpoint (StorageGrid / Ceph /
+	// NetApp / MinIO behind a private PKI). Valid only when type is s3; omit for a publicly-trusted
+	// endpoint.
+	TLS *BackupObjectStoreTLS `json:"tls,omitempty"`
 }
 
 // BackupMetadataScope maps to neo4j-admin --include-metadata (ignored for system).

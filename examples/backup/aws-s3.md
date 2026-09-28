@@ -281,6 +281,24 @@ kubectl -n "$NS" create secret generic aws-backup-creds \
 #   --from-literal=AWS_ENDPOINT_URL_S3=http://minio.minio.svc:9000
 ```
 
+**Private-CA (HTTPS) endpoints** — if the S3-compatible endpoint (StorageGrid, MinIO behind a
+corporate PKI) presents a certificate signed by a private root CA, the backup fails with
+`TLS (SSL) negotiation failed`. Create a Secret with the CA bundle and reference it from
+`destination.tls` so every object-store Job (backup, aggregate, rclone prune) trusts it:
+
+```bash
+kubectl -n "$NS" create secret generic storagegrid-ca --from-file=ca.crt=./corp-root-ca.pem
+```
+
+```yaml
+spec:
+  destination:
+    type: s3
+    url: s3://my-bucket/neo4j/
+    credentials: { secretName: aws-backup-creds }
+    tls: { caCertSecret: storagegrid-ca }   # key defaults to ca.crt
+```
+
 Deploy the `Neo4j` **without** `security.cloudIdentity` (a static-key backup needs nothing on the
 instance beyond the backup listener — restore reads, however, still need the target's identity, so
 static keys suit backup-only or MinIO testing). Reference the Secret per backup and in the schedule:

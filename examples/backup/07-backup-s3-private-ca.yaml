@@ -1,0 +1,32 @@
+# Purpose: a Full backup to an S3-compatible endpoint whose HTTPS cert is signed by a private/
+#   corporate CA (StorageGrid, Ceph, NetApp, MinIO behind a corporate PKI). Without trusting the CA
+#   the backup fails with "TLS (SSL) negotiation failed". destination.tls points the backup/aggregate/
+#   prune Jobs at the CA so the connection verifies. (Only valid for type: s3.)
+# Prerequisites:
+#   1) A Neo4j (enterprise) with features.backup.enabled + a backup listener — see aws-s3.md.
+#   2) Static-key credentials Secret (AWS_* keys, incl. AWS_ENDPOINT_URL_S3 for the endpoint):
+#        kubectl create secret generic s3-backup-creds \
+#          --from-literal=AWS_ACCESS_KEY_ID=... \
+#          --from-literal=AWS_SECRET_ACCESS_KEY=... \
+#          --from-literal=AWS_ENDPOINT_URL_S3=https://storagegrid.corp.example:443 \
+#          --from-literal=AWS_REGION=us-east-1
+#   3) The endpoint's CA bundle (PEM) in a Secret, under key ca.crt:
+#        kubectl create secret generic storagegrid-ca --from-file=ca.crt=./corp-root-ca.pem
+# Apply: kubectl apply -f examples/backup/07-backup-s3-private-ca.yaml
+apiVersion: neo4j.com/v1
+kind: Neo4jBackup
+metadata:
+  name: bk-s3-private-ca
+spec:
+  neo4jRef:
+    name: backup-demo
+  databases: ["neo4j"]
+  type: Full
+  destination:
+    type: s3
+    url: s3://my-bucket/neo4j/prod/
+    credentials:
+      secretName: s3-backup-creds
+    tls:
+      caCertSecret: storagegrid-ca   # Secret holding the PEM CA bundle
+      caCertKey: ca.crt              # key in the Secret (optional; defaults to ca.crt)

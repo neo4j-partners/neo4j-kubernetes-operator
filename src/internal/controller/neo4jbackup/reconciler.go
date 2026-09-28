@@ -297,6 +297,7 @@ func aggregateInputs(b *neo4jv1.Neo4jBackup, src *neo4jv1.Neo4jBackup) (renderba
 	case objURL != "":
 		in.ObjectURL = objURL
 		in.Credentials = b.Spec.Destination.Credentials
+		in.TLS = b.Spec.Destination.TLS
 		// Schedule-managed compaction (the aggregate carries the schedule's chain label) reclaims the
 		// churn: neo4j-admin deletes the source chain's original full+increments from the bucket
 		// (--keep-old-backup=false). An ad-hoc Aggregate has no label and always keeps the user's chain.

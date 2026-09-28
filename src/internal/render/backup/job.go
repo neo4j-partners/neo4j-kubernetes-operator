@@ -52,7 +52,55 @@ const (
 	backupTTLSeconds int32 = 86400
 	backupBackoff    int32 = 3
 	containerName          = "neo4j-admin"
+	// caVolumeName / caMountPath / caFileName project a private-CA bundle Secret into an object-store
+	// Job so it can trust an endpoint signed by a corporate PKI (BackupObjectStoreTLS). The key is
+	// always mounted as caFileName so the env wiring reads a fixed path regardless of the Secret key.
+	caVolumeName = "s3-ca"
+	caMountPath  = "/etc/neo4j-backup-ca"
+	caFileName   = "ca.crt"
+	// DefaultCACertKey is the Secret key the operator reads when destination.tls.caCertKey is unset.
+	DefaultCACertKey = "ca.crt"
 )
+
+// caCertVolumeMount projects the private-CA Secret as a single read-only file (caFileName) and
+// returns the volume plus its mount, shared by the neo4j-admin and rclone object-store Jobs.
+func caCertVolumeMount(tls *neo4jv1.BackupObjectStoreTLS) (corev1.Volume, corev1.VolumeMount) {
+	key := tls.CACertKey
+	if key == "" {
+		key = DefaultCACertKey
+	}
+	vol := corev1.Volume{
+		Name: caVolumeName,
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+			SecretName: tls.CACertSecret,
+			Items:      []corev1.KeyToPath{{Key: key, Path: caFileName}},
+		}},
+	}
+	return vol, corev1.VolumeMount{Name: caVolumeName, MountPath: caMountPath, ReadOnly: true}
+}
+
+// objectStoreCATrust wires trust for an object-store endpoint whose HTTPS cert is signed by a
+// private/corporate CA (StorageGrid / Ceph / NetApp / MinIO behind a corporate PKI). It returns the
+// CA volume/mount plus the env vars neo4j-admin's S3 client reads to trust it. Returns (nil, nil,
+// nil) for a pvc destination or when no CA is configured.
+//
+// neo4j-admin's S3 connector uses the AWS SDK v2 / CRT HTTP client, which verifies TLS against
+// AWS_CA_BUNDLE / SSL_CERT_FILE and IGNORES the JVM truststore (-Djavax.net.ssl.trustStore has no
+// effect), so we point those env vars at the mounted CA bundle rather than building a JKS truststore.
+// It is s3-only: those env vars are read only by the S3 client (GCS/Azure Java clients use the JVM
+// truststore and have no private-CA endpoint), and admission enforces the same (BackupObjectStoreTLS).
+func objectStoreCATrust(dest neo4jv1.BackupDestination) (*corev1.Volume, *corev1.VolumeMount, []corev1.EnvVar) {
+	if dest.Type != neo4jv1.BackupDestinationS3 || dest.TLS == nil || dest.TLS.CACertSecret == "" {
+		return nil, nil, nil
+	}
+	vol, mount := caCertVolumeMount(dest.TLS)
+	caPath := caMountPath + "/" + caFileName
+	env := []corev1.EnvVar{
+		{Name: "AWS_CA_BUNDLE", Value: caPath}, // AWS SDK v2
+		{Name: "SSL_CERT_FILE", Value: caPath}, // AWS CRT / OpenSSL HTTP client
+	}
+	return &vol, &mount, env
+}
 
 // JobName is the deterministic Job name for a Neo4jBackup (owner-referenced by it).
 func JobName(backup *neo4jv1.Neo4jBackup) string { return backup.Name + "-backup" }
@@ -166,6 +214,14 @@ func BackupJob(neo4j *neo4jv1.Neo4j, backup *neo4jv1.Neo4jBackup, chainSubDir st
 		container.EnvFrom = []corev1.EnvFromSource{{
 			SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: creds.SecretName}},
 		}}
+	}
+	// Private-CA trust for an object-store endpoint signed by a corporate PKI (BackupObjectStoreTLS):
+	// mount the CA bundle and point neo4j-admin's S3 client at it via AWS_CA_BUNDLE / SSL_CERT_FILE.
+	// A PVC backup never reaches this (guarded in objectStoreCATrust).
+	if vol, mnt, env := objectStoreCATrust(backup.Spec.Destination); vol != nil {
+		volumes = append(volumes, *vol)
+		container.VolumeMounts = append(container.VolumeMounts, *mnt)
+		container.Env = append(container.Env, env...)
 	}
 
 	job := &batchv1.Job{
