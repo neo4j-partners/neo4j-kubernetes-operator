@@ -11,11 +11,15 @@ image:
 
 imagePullSecrets: []
 
-# Namespaces the operator reconciles (WATCH_NAMESPACE). One Role+RoleBinding each.
-# Must not include the Helm release namespace (NEO-016) — install the operator in
+# Watch scope (BDR-003). Set exactly one — render fails if both or neither are set:
+#   watchNamespaces: [ns-a, ns-b]   explicit list, one Role+RoleBinding each (default, recommended)
+#   clusterWide: true               watch ALL namespaces via a ClusterRole (opt-in)
+# watchNamespaces must not include the Helm release namespace (NEO-016): install the operator in
 # neo4j-operator-system (or similar) and list workload namespaces here.
-watchNamespaces:
-  - default
+# clusterWide grants the operator read on Secrets in every namespace and can bind RBAC cluster-wide
+# (BDR-003 amendment) — opt in knowingly. The operator's own namespace is always excluded (NEO-016).
+watchNamespaces: []
+clusterWide: false
 
 replicaCount: 1
 

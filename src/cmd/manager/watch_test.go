@@ -43,3 +43,36 @@ func TestWatchNamespaces(t *testing.T) {
 		t.Fatalf("workload-only = %#v err=%v", got, err)
 	}
 }
+
+func TestResolveWatchScope(t *testing.T) {
+	// Explicit list → namespaced scope.
+	t.Setenv("WATCH_ALL_NAMESPACES", "")
+	t.Setenv("WATCH_NAMESPACE", "default")
+	t.Setenv("POD_NAMESPACE", "neo4j-operator-system")
+	s, err := resolveWatchScope()
+	if err != nil || s.AllNamespaces || !reflect.DeepEqual(s.Namespaces, []string{"default"}) || s.OperatorNS != "neo4j-operator-system" {
+		t.Fatalf("namespaced = %#v err=%v", s, err)
+	}
+
+	// Cluster-wide opt-in with empty WATCH_NAMESPACE.
+	t.Setenv("WATCH_ALL_NAMESPACES", "true")
+	t.Setenv("WATCH_NAMESPACE", "")
+	s, err = resolveWatchScope()
+	if err != nil || !s.AllNamespaces || len(s.Namespaces) != 0 || s.OperatorNS != "neo4j-operator-system" {
+		t.Fatalf("cluster-wide = %#v err=%v", s, err)
+	}
+
+	// Mutually exclusive: cluster-wide + a namespace list is an error.
+	t.Setenv("WATCH_ALL_NAMESPACES", "true")
+	t.Setenv("WATCH_NAMESPACE", "default")
+	if _, err := resolveWatchScope(); err == nil {
+		t.Fatal("WATCH_ALL_NAMESPACES with WATCH_NAMESPACE should error")
+	}
+
+	// Fail-closed: neither set is still an error (delegates to watchNamespaces).
+	t.Setenv("WATCH_ALL_NAMESPACES", "")
+	t.Setenv("WATCH_NAMESPACE", "")
+	if _, err := resolveWatchScope(); err == nil {
+		t.Fatal("no scope should error")
+	}
+}

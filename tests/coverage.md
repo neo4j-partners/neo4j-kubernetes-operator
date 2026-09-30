@@ -21,6 +21,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-plugins` | [suites/feature-plugins.yaml](suites/feature-plugins.yaml) | Plugin runtime — APOC/GDS procedures callable, generated allowlists effective, licence Secret mounting, per-plugin config, manual-import channel (BDR-004) |
 | `operator-admission` | [suites/operator-admission.yaml](suites/operator-admission.yaml) | Admission rejections + one happy case |
 | `operator-scope` | [suites/operator-scope.yaml](suites/operator-scope.yaml) | Namespace-scoped operator ignores CRs outside WATCH_NAMESPACE + namespaced RBAC |
+| `operator-scope-clusterwide` | [suites/operator-scope-clusterwide.yaml](suites/operator-scope-clusterwide.yaml) | Cluster-wide operator reconciles CRs in un-configured namespaces via a single ClusterRole, still excludes its own namespace (NEO-016) |
 
 ## Coverage by suite
 
@@ -207,6 +208,11 @@ emitted for it yet.
 - [x] RBAC is namespaced, least-privilege, no cluster-wide grant — OP-1-006 · AC-OP-RBAC / AC-OP-SCOPE-SINGLE-004
 - [x] CR reconciled inside WATCH_NAMESPACE — OP-2-001-SCOPE-01 · AC-OP-SCOPE-SINGLE-002
 - [x] CR outside WATCH_NAMESPACE ignored — AC-OP-SCOPE-SINGLE-003
+
+### `operator-scope-clusterwide` — OP-2-001-SCOPE-03 (BDR-003 amendment)
+- [x] CR reconciled in a namespace the operator was not individually configured for — AC-OP-SCOPE-CLUSTER
+- [x] Operand RBAC is a single ClusterRole + ClusterRoleBinding, no per-namespace Role — AC-OP-SCOPE-CLUSTER
+- [x] CR in the operator's own namespace ignored cluster-wide — NEO-016
 
 ## Cross-cutting (every suite, `setup` / `teardown`)
 

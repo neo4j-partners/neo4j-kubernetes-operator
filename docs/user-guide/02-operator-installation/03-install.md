@@ -89,11 +89,11 @@ file — see
 takes that reference as a value instead, which is why the chart is the better choice for anything
 but a scratch cluster.
 
-The Deployment ships with `WATCH_NAMESPACE=default` (workload namespace only). Examples that omit
-`metadata.namespace` land in `default` and are reconciled. The operator namespace is never watched
-(NEO-016). To reconcile other namespaces, read
-[Watch scope and RBAC](04-operator-scope.md) before you go further — the environment variable and
-the roles have to be changed together.
+The chart requires an explicit watch scope: set `watchNamespaces` to your workload namespaces, or
+`clusterWide: true` to watch every namespace via a `ClusterRole` (opt-in; see
+[Watch scope and RBAC](04-operator-scope.md)). There is no implicit default — render fails if you
+set neither or both. The operator namespace is never watched (NEO-016). Read the scope guide before
+going further: the environment variable and the roles have to be changed together.
 
 Values worth knowing, on either chart:
 

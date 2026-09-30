@@ -1,3 +1,28 @@
+{{- include "neo4j-operator.validateScope" . }}
+{{- if .Values.clusterWide }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: neo4j-operator-manager-role
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+{{ include "neo4j-operator.managerRoleRules" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: neo4j-operator-manager-rolebinding
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: neo4j-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- else }}
 {{- range $ns := .Values.watchNamespaces }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -24,4 +49,5 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "neo4j-operator.serviceAccountName" $ }}
   namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
