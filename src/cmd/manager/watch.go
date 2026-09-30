@@ -6,8 +6,34 @@ import (
 	"strings"
 )
 
+// watchScope is the resolved reconcile scope (BDR-003): either an explicit namespace list or
+// opt-in cluster-wide. OperatorNS is excluded from a cluster-wide cache and skipped by the
+// reconciler (NEO-016).
+type watchScope struct {
+	AllNamespaces bool
+	Namespaces    []string
+	OperatorNS    string
+}
+
+// resolveWatchScope reads WATCH_ALL_NAMESPACES first (opt-in cluster-wide, out-of-band so an
+// unset/typo'd scope fails closed), otherwise falls back to the explicit WATCH_NAMESPACE list.
+func resolveWatchScope() (watchScope, error) {
+	podNS := strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("WATCH_ALL_NAMESPACES")), "true") {
+		if strings.TrimSpace(os.Getenv("WATCH_NAMESPACE")) != "" {
+			return watchScope{}, fmt.Errorf("WATCH_ALL_NAMESPACES=true is mutually exclusive with WATCH_NAMESPACE; leave WATCH_NAMESPACE empty for cluster-wide scope")
+		}
+		return watchScope{AllNamespaces: true, OperatorNS: podNS}, nil
+	}
+	ns, err := watchNamespaces()
+	if err != nil {
+		return watchScope{}, err
+	}
+	return watchScope{Namespaces: ns, OperatorNS: podNS}, nil
+}
+
 // watchNamespaces returns the configured watch list from WATCH_NAMESPACE.
-// Comma-separated; empty or "*" is invalid (cluster-wide is not supported with Role RBAC).
+// Comma-separated; empty or "*" is invalid. Cluster-wide is opt-in via WATCH_ALL_NAMESPACES.
 func watchNamespaces() ([]string, error) {
 	raw := strings.TrimSpace(os.Getenv("WATCH_NAMESPACE"))
 	if raw == "" {

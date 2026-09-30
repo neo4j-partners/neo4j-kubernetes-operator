@@ -73,8 +73,11 @@ capabilities, and a Community server refuses to start once its configuration men
 | One or more workload namespaces | Your `Neo4j` resources and the pods, Services and PVCs they own |
 
 The operator only reconciles namespaces it was told to watch, and it is not cluster-wide by
-default. The manifests ship with `WATCH_NAMESPACE=default`, which is why examples that omit
-`metadata.namespace` work out of the box. The operator install namespace is never on that list
+default. The chart requires an explicit scope — set `watchNamespaces` to your workload
+namespaces (the getting-started examples use `default`, which is why a `Neo4j` that omits
+`metadata.namespace` works there), or opt in to `clusterWide: true` to watch every namespace
+via a `ClusterRole` (see [Watch scope and RBAC](04-operator-scope.md) for the blast radius).
+The operator install namespace is never on that list
 (NEO-016) — a `Neo4j` CR there is refused at start-up if you add it. Adding a workload namespace
 means both extending that list and granting the operator rights in it — see
 [Watch scope and RBAC](04-operator-scope.md).

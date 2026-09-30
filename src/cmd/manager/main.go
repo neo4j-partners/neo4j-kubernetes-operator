@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -110,16 +111,26 @@ func main() {
 	defer closeLog()
 	ctrl.SetLogger(rootLog)
 
-	namespaces, err := watchNamespaces()
+	scope, err := resolveWatchScope()
 	if err != nil {
 		setupLog.Error(err, "invalid watch scope")
 		os.Exit(1)
 	}
-	defaultNamespaces := make(map[string]cache.Config, len(namespaces))
-	for _, ns := range namespaces {
-		defaultNamespaces[ns] = cache.Config{}
+	cacheOpts := cache.Options{}
+	if scope.AllNamespaces {
+		if scope.OperatorNS != "" {
+			// NEO-016: never cache/reconcile CRs in the operator's own namespace.
+			cacheOpts.DefaultFieldSelector = fields.OneTermNotEqualSelector("metadata.namespace", scope.OperatorNS)
+		}
+		setupLog.Info("watching all namespaces (cluster-wide)", "excludedNamespace", scope.OperatorNS)
+	} else {
+		defaultNamespaces := make(map[string]cache.Config, len(scope.Namespaces))
+		for _, ns := range scope.Namespaces {
+			defaultNamespaces[ns] = cache.Config{}
+		}
+		cacheOpts.DefaultNamespaces = defaultNamespaces
+		setupLog.Info("watching namespaces", "namespaces", scope.Namespaces)
 	}
-	setupLog.Info("watching namespaces", "namespaces", namespaces)
 	if allow := imagepolicy.AllowedRepositories(); allow == nil {
 		setupLog.Info("image repository allowlist", "allowed", "*")
 	} else {
@@ -133,12 +144,12 @@ func main() {
 	}
 
 	mgrOpts := ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsOpts,
+		Scheme:                 scheme,
+		Metrics:                metricsOpts,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "neo4j.com.neo4j-operator",
-		Cache:                  cache.Options{DefaultNamespaces: defaultNamespaces},
+		Cache:                  cacheOpts,
 	}
 	if enableWebhooks {
 		mgrOpts.WebhookServer = webhook.NewServer(webhook.Options{
@@ -155,6 +166,7 @@ func main() {
 
 	rec := neo4jctrl.NewReconciler(mgr)
 	rec.MaxConcurrentReconciles = maxConcurrentReconciles
+	rec.OperatorNamespace = scope.OperatorNS
 	if err := rec.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Neo4j")
 		os.Exit(1)

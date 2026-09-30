@@ -54,6 +54,10 @@ type Neo4jReconciler struct {
 	// MaxConcurrentReconciles defaults to 2 so one wedged CR cannot starve others (NEO-014).
 	MaxConcurrentReconciles int
 
+	// OperatorNamespace, when set, makes the reconciler skip Neo4j CRs in the operator's own
+	// namespace (NEO-016). Belt-and-suspenders alongside the cluster-wide cache field selector.
+	OperatorNamespace string
+
 	// advisories keeps the spec-derived Events to one per generation. Zero value is usable.
 	advisories events.Advisory
 }
@@ -95,6 +99,11 @@ func NormalizeMaxConcurrentReconciles(n int) (int, error) {
 func (r *Neo4jReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx).WithName("neo4j")
 	log.V(1).Info("reconcile start")
+
+	if r.OperatorNamespace != "" && req.Namespace == r.OperatorNamespace {
+		log.V(1).Info("ignoring Neo4j in operator namespace (NEO-016)")
+		return ctrl.Result{}, nil
+	}
 
 	var neo4j neo4jv1.Neo4j
 	if err := r.Get(ctx, req.NamespacedName, &neo4j); err != nil {

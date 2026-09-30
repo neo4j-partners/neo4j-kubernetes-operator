@@ -56,8 +56,14 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
         env:
+        {{- include "neo4j-operator.validateScope" . }}
+        {{- if .Values.clusterWide }}
+        - name: WATCH_ALL_NAMESPACES
+          value: "true"
+        {{- else }}
         - name: WATCH_NAMESPACE
           value: {{ include "neo4j-operator.watchNamespacesCSV" . | quote }}
+        {{- end }}
         - name: POD_NAMESPACE
           valueFrom:
             fieldRef:
