@@ -181,10 +181,10 @@ func appendLoggingVolumes(ctx render.Context, container *corev1.Container, volum
 // and starve its node (NEO-014, CWE-770/CWE-400). Users still override any field via spec.resources.
 // ponytail: fixed defaults, not workload-aware — set spec.resources for large or memory-heavy instances.
 var (
-	defaultCPURequest    = resource.MustParse("500m")
+	defaultCPURequest    = resource.MustParse("1")
 	defaultMemoryRequest = resource.MustParse("2Gi")
-	defaultCPULimit      = resource.MustParse("2")
-	defaultMemoryLimit   = resource.MustParse("4Gi")
+	defaultCPULimit      = resource.MustParse("1")
+	defaultMemoryLimit   = resource.MustParse("2Gi")
 )
 
 // withDefaultResources fills only the requests/limits the user left unset, so partial overrides work

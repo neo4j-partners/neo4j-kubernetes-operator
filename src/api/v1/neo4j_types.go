@@ -93,8 +93,8 @@ type Neo4jSpec struct {
 	// Storage configures data and auxiliary volumes plus extra mounts and Secret projections.
 	Storage *StorageSpec `json:"storage,omitempty"`
 	// Resources sets CPU and memory requests and limits for the Neo4j container. Any field left unset
-	// is defaulted by the operator so the container is always bounded (NEO-014): requests 500m/2Gi,
-	// limits 2/4Gi. Set explicit values for large or memory-heavy instances.
+	// is defaulted by the operator so the container is always bounded (NEO-014): requests and limits
+	// both 1 CPU / 2Gi. Set explicit values for large or memory-heavy instances.
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// Config merges neo4j.conf, apoc.conf drop-ins, and JVM flags.
 	Config *ConfigSpec `json:"config,omitempty"`

@@ -637,7 +637,7 @@ func TestStatefulSetDefaultLimitNeverBelowRequest(t *testing.T) {
 			Version:  "2026.05.0",
 			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
 			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
-			// Only a large memory request; the limit is left to the operator default (4Gi).
+			// Only a large memory request; the limit is left to the operator default (2Gi).
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
 			},
@@ -662,7 +662,7 @@ func TestStatefulSetDefaultRequestNeverAboveUserLimit(t *testing.T) {
 			Version:  "2026.05.0",
 			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
 			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
-			// Only a small CPU limit, below the 500m default request; the request is left to the operator.
+			// Only a small CPU limit, below the 1 CPU default request; the request is left to the operator.
 			Resources: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")},
 			},
@@ -692,7 +692,7 @@ func TestClusterPoolDefaultsAndOverridesResources(t *testing.T) {
 				Mode:      neo4jv1.TopologyModeCluster,
 				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
 				Secondaries: &neo4jv1.SecondariesSpec{
-					// CPU request above the default CPU limit (2); memory left to the defaults.
+					// CPU request above the default CPU limit (1); memory left to the defaults.
 					Analytics: &neo4jv1.SecondaryPoolSpec{
 						Members: 1,
 						Resources: &corev1.ResourceRequirements{
