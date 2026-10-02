@@ -28,8 +28,12 @@ kubectl apply --server-side --force-conflicts \
 # 2. Operator (install or upgrade — same command)
 helm upgrade --install neo4j-operator \
   oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version ${VERSION} \
-  --namespace neo4j-operator-system --create-namespace
+  --namespace neo4j-operator-system --create-namespace \
+  --set 'watchNamespaces={default}'
 ```
+
+Every install must declare a scope: set `watchNamespaces` (the examples use `default`) **or**
+`clusterWide=true`. The feature-flag examples below omit it for brevity — add your scope flag too.
 
 The chart defaults `image.repository` to `ghcr.io/neo4j-partners/neo4j-kubernetes-operator` and
 resolves the tag from `Chart.appVersion`, so no `--set image.*` is needed.
@@ -44,6 +48,7 @@ make install
 
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace \
+  --set 'watchNamespaces={default}' \
   --set image.repository=YOUR_REGISTRY/neo4j-kubernetes-operator \
   --set image.tag=YOUR_TAG
 ```
@@ -60,7 +65,8 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-kubernetes-operator:YOUR_TAG
 |-----|---------|---------|
 | `image.repository` / `tag` / `digest` | ACR repo; tag defaults to `Chart.appVersion`; optional `digest` (`sha256:…`) | Prefer digest or semver — not `latest` |
 | `image.pullPolicy` | `IfNotPresent` | Use `Always` only for mutable tags |
-| `watchNamespaces` | `[default]` | Workload namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each). Must not include the operator release namespace (NEO-016). |
+| `watchNamespaces` | `[]` | Workload namespaces in `WATCH_NAMESPACE` (+ Role/RoleBinding each). Must not include the operator release namespace (NEO-016). Set this **or** `clusterWide`, not both. |
+| `clusterWide` | `false` | Opt-in: watch **all** namespaces via a `ClusterRole` (BDR-003). Grants Secret read cluster-wide; operator namespace still excluded (NEO-016). |
 | `serviceAccount.create` / `name` | `true` / `""` | When `create: false`, `name` is **required** (no silent fallback to `default`) |
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
 | `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |

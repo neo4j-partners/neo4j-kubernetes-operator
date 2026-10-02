@@ -1,0 +1,26 @@
+# Pipeline for cluster-wide scope tests (OP-2-001-SCOPE-03, BDR-003 amendment). Installs the
+# operator from the Helm chart with clusterWide=true: a ClusterRole, WATCH_ALL_NAMESPACES=true, and
+# no watchNamespaces list. The workload namespaces are created as plain namespaces the operator was
+# never told about, so reconciling a CR in them proves cluster-wide coverage.
+#
+# Positive control: a CR in each workload namespace is reconciled (scope/apply-watched +
+# assert/reconciled-in-namespace, reused from the namespaced suite). Negative control: a CR in the
+# operator's own namespace must be ignored (NEO-016), proving the exclusion still holds cluster-wide.
+setup:
+  - operator/install-helm-clusterwide
+
+teardown:
+  - cleanup/operator-helm
+
+case_run:
+  - scope/apply-watched
+  - scope/apply-operator-ns
+
+case_assert:
+  - assert/reconciled-in-namespace
+  - assert/rbac-clusterwide
+  - assert/operator-ns-ignored
+
+case_teardown:
+  - scope/cleanup-watched
+  - scope/cleanup-operator-ns

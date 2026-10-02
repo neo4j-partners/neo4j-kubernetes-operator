@@ -1,0 +1,15 @@
+name: operator-scope-clusterwide
+description: >
+  OP-2-001-SCOPE-03 (BDR-003 amendment) — the cluster-wide operator reconciles Neo4j CRs in
+  namespaces it was never individually configured for, grants its operand permissions through a
+  single ClusterRole + ClusterRoleBinding (no per-namespace Role), and still refuses to reconcile
+  CRs in its own namespace (NEO-016). Installed from the Helm chart with clusterWide=true, the only
+  install path that expresses cluster-wide scope. Covers AC-OP-SCOPE-CLUSTER.
+brief_ref: slice-scope
+use_pipeline: scope-clusterwide-suite
+on_case_failure: stop
+
+cases:
+  - id: all-namespaces-and-operator-ns-excluded
+    comment: OP-2-001-SCOPE-03 — CRs in workload namespaces the operator was not told about are reconciled, the grant is a single ClusterRole, and a CR in the operator namespace is left untouched (NEO-016).
+    expect: success

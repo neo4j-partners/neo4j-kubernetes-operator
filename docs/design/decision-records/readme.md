@@ -48,7 +48,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 |----|-------|--------|
 | [BDR-001](business/neo4j/001-single-neo4j-crd.md) | Single `Neo4j` CRD instead of `Neo4jStandalone` + `Neo4jCluster` | accepted |
 | [BDR-002](business/neo4j/002-neo4j-crd-topology.md) | `Neo4j` CRD topology — modes, primaries / secondaries (`analytics`, `read`) | accepted |
-| [BDR-003](business/operator/003-operator-install-scope.md) | Operator install scope — single namespace for V1; dedicated operator namespace; multi / cluster-wide deferred | proposed |
+| [BDR-003](business/operator/003-operator-install-scope.md) | Operator install scope — single namespace default; dedicated operator namespace; opt-in cluster-wide (2026-09-30 amendment, accepted); multi deferred | proposed |
 | [BDR-004](business/neo4j/004-neo4j-plugin-topology.md) | Plugin model — Option E (`pluginDefinitions` + pool refs) | accepted |
 | [BDR-005](business/neo4j/005-storage-volume-mode.md) | Storage — Option D: `spec.volumes` (`Dynamic` + `Existing` + aux `Share`) + Option E escape hatches | accepted |
 | [BDR-006](business/neo4j/007-tls-trust-model.md) | TLS trust — Option B: `secretName` + `subPath` (BYO) + mTLS + optional cert-manager (default off) | accepted |

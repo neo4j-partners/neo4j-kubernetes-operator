@@ -84,6 +84,7 @@ kubectl apply --server-side --force-conflicts \
 helm upgrade --install neo4j-operator \
   oci://ghcr.io/neo4j-partners/charts/neo4j-operator --version ${VERSION} \
   --namespace neo4j-operator-system --create-namespace \
+  --set 'watchNamespaces={default}' \
   --wait --timeout 300s
 ```
 

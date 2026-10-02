@@ -1,7 +1,13 @@
 # Watch scope and RBAC
 
-The operator reconciles an explicit list of namespaces. There is no cluster-wide mode, and there is
-no implicit default: if the scope is missing, the manager refuses to start rather than guess.
+The operator reconciles an explicit list of namespaces, or — opt-in — every namespace. There is no
+implicit default: if the scope is missing, the manager refuses to start rather than guess.
+
+Cluster-wide is off by default and namespaced is the recommended posture. Enable it with
+`clusterWide: true` (Helm), which renders a `ClusterRole` instead of per-namespace `Role`s and sets
+`WATCH_ALL_NAMESPACES=true` on the controller. It grants the operator read on **every Secret in the
+cluster** and the ability to bind RBAC cluster-wide — opt in knowingly (BDR-003). The operator's own
+namespace is always excluded (NEO-016), even cluster-wide.
 
 ## How scope is declared
 

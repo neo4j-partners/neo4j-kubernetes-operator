@@ -55,6 +55,18 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
+{{/*
+Validate watch scope (BDR-003): exactly one of clusterWide or a non-empty watchNamespaces.
+*/}}
+{{- define "neo4j-operator.validateScope" -}}
+{{- if and .Values.clusterWide (gt (len .Values.watchNamespaces) 0) -}}
+{{- fail "watch scope: set clusterWide: true OR watchNamespaces: [...], not both (BDR-003)" -}}
+{{- end -}}
+{{- if and (not .Values.clusterWide) (eq (len .Values.watchNamespaces) 0) -}}
+{{- fail "watch scope is required: set clusterWide: true or a non-empty watchNamespaces list (BDR-003)" -}}
+{{- end -}}
+{{- end }}
+
 {{- define "neo4j-operator.watchNamespacesCSV" -}}
 {{- range .Values.watchNamespaces }}
 {{- if eq . $.Release.Namespace }}
