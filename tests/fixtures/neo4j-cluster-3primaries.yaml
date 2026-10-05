@@ -17,6 +17,12 @@ spec:
     # Explicit: the default is 1, which would host the `neo4j` database on a single
     # primary — an HA DBMS with non-HA data. 3 keeps data on every primary.
     defaultPrimariesCount: 3
+  # e2e runs on one kind node (~4 CPU). The operator defaults an omitted request to a full CPU,
+  # so the scale-out-in case grown to 5 members would need 5 CPU and leave primary-3/-4 Pending
+  # (Insufficient cpu). Pin a small request — scheduling counts requests, the limit stays defaulted.
+  resources:
+    requests:
+      cpu: 250m
   storage:
     volumes:
       data:
