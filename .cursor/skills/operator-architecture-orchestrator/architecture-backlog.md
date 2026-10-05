@@ -62,7 +62,7 @@ Legend: `✓` decided · `○` draft exists · `·` open · `—` N/A V1
 | D-05 | Cluster quorum / readiness gating | · | D-04 | before marking Ready |
 | D-06 | Scale-out: ordinal join workflow | · | BDR-009 | |
 | D-07 | Scale-in: decommission + PVC policy | · | BDR-009 | webhook vs reconciler |
-| D-08 | Version upgrade: image bump strategy | · | V1 scope | rolling SS |
+| D-08 | Version upgrade: image bump strategy | ○ ADR-017 | V1 scope | guardrails first; partition deferred |
 | D-09 | TLS reload vs pod restart on cert change | · | BDR-006 | `trust.reload` |
 | D-10 | Plugin install: image vs sidecar vs download | · | BDR-004 | |
 | D-11 | Backup / restore Job orchestration | · | post-V1 | separate controllers |

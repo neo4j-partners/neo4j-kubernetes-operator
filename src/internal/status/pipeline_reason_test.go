@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/upgrade"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	rendersecrets "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 )
@@ -16,6 +17,8 @@ func TestPipelineErrorReasonIsCatalogued(t *testing.T) {
 		fmt.Errorf("wrapped: %w", rendersecrets.ErrNotMountable):      oracle.ReasonSecretNotMountable,
 		fmt.Errorf("wrapped: %w", rendersecrets.ErrAuthNotDelegated):  oracle.ReasonSecretNotDelegated,
 		fmt.Errorf("wrapped: %w", rendersecrets.ErrAuthValueRejected): oracle.ReasonAuthSecretInvalid,
+		fmt.Errorf("wrapped: %w", upgrade.ErrVersionDowngrade):        oracle.ReasonVersionDowngradeRefused,
+		fmt.Errorf("wrapped: %w", upgrade.ErrVersionUpgrade):          oracle.ReasonVersionUpgradeRefused,
 		errors.New("unrelated pipeline failure"):                      oracle.ReasonReconcileFailed,
 	}
 	for err, want := range cases {

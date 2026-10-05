@@ -53,7 +53,7 @@ Required: `edition`, `version`, `topology.mode`, plus `license.accept` on `enter
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `spec.edition` | string | — | **Required.** `enterprise` or `community`. Community is restricted to `topology.mode: Standalone` and cannot use `features.backup` or `features.monitoring.prometheus` |
-| `spec.version` | string | — | **Required.** Neo4j calendar version, for example `2026.05.0`; the `-enterprise` image suffix is added for you, and community uses the unsuffixed tag. Changing it later is not orchestrated |
+| `spec.version` | string | — | **Required.** Neo4j calendar version, for example `2026.05.0`; the `-enterprise` image suffix is added for you, and community uses the unsuffixed tag. Changing it on a running resource rolls the deployment; see [Version changes](../03-neo4j/09-operations.md#version-changes) |
 | `spec.license.accept` | string | — | `yes` or `eval`. **Required on `enterprise`**; on `community` the whole `license` block may be omitted, and is ignored if present |
 | `spec.image.repository` | string | `neo4j` | Must match operator allowlist (NEO-012); default `neo4j` / `docker.io/neo4j` |
 | `spec.image.digest` | string | — | Optional `sha256:…` pin; renders `repo@digest` instead of `:tag` |
@@ -262,7 +262,8 @@ Read status rather than inferring state from pods. Conditions are the contract; 
 | `status.diagnostics` | object | `SHOW SERVERS` and `SHOW DATABASES` snapshots, with `lastCollectedTime`; failures here do not affect `Ready` |
 | `status.readPoolReplicas` | int32 | Observed read pool size, for the scale subresource |
 | `status.volumeClaimRetentionWhenDeleted` | string | The retention policy pinned at creation |
-| `status.upgrade`, `status.lastUpgradeTime` | object | Reserved for orchestrated upgrades; empty today |
+| `status.upgrade` | object | Present while a `spec.version` change is in flight (`phase`, `targetVersion`, `previousVersion`, `progress`, `lastError`); cleared when the roll finishes |
+| `status.lastUpgradeTime` | time | Set when a version roll finishes |
 
 Conditions you will actually gate on:
 
@@ -298,7 +299,7 @@ decisions cannot be forged from outside. Do not write them.
 | Cluster primaries from several to exactly 1 | Held with reason `UnsupportedSinglePrimary` |
 | Cluster primaries from 1 upwards | Held with reason `UnsupportedSystemScaleUp` |
 | `whenDeleted: Delete` patched after creation | Accepted but not armed; the pinned value stands |
-| `spec.version` | Accepted; the rollout is not orchestrated |
+| `spec.version` backwards, or onto a path the operator will not roll | Refused — `VersionDowngradeRefused` or `VersionUpgradeRefused`; the running version is left in place |
 
 ## Related
 

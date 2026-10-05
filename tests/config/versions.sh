@@ -48,3 +48,10 @@ export KUBERNETES_VERSION_FLOOR="${KUBERNETES_VERSION_FLOOR:-1.35.0}"
 # Both editions are published under the same tag with an `-enterprise` suffix, which is why only
 # the version is configurable here and NEO4J_EDITION stays a separate knob.
 export NEO4J_VERSION_DEFAULT="${NEO4J_VERSION_DEFAULT:-2026.07.1}"
+
+# The version feature-upgrade deploys before rolling forward onto the pin above. It upgrades TO the
+# pin rather than past it, so the version every other suite runs stays the one under test and only
+# one extra image is needed. Both must be in the 2025-2026 series with the from-version older: Neo4j
+# allows any release in the series to reach any later one in a single hop, but treats every LTS as a
+# checkpoint that cannot be skipped, so a pair spanning one would not be a supported upgrade.
+export NEO4J_VERSION_UPGRADE_FROM="${NEO4J_VERSION_UPGRADE_FROM:-2026.05.0}"
