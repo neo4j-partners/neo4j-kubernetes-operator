@@ -662,7 +662,7 @@ func TestStatefulSetDefaultRequestNeverAboveUserLimit(t *testing.T) {
 			Version:  "2026.05.0",
 			License:  &neo4jv1.LicenseSpec{Accept: neo4jv1.LicenseAcceptYes},
 			Topology: neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
-			// Only a small CPU limit, below the 1 CPU default request; the request is left to the operator.
+			// Only a small CPU limit, below the 500m default request; the request is left to the operator.
 			Resources: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")},
 			},

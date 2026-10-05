@@ -181,7 +181,10 @@ func appendLoggingVolumes(ctx render.Context, container *corev1.Container, volum
 // and starve its node (NEO-014, CWE-770/CWE-400). Users still override any field via spec.resources.
 // ponytail: fixed defaults, not workload-aware — set spec.resources for large or memory-heavy instances.
 var (
-	defaultCPURequest    = resource.MustParse("1")
+	// A modest CPU request (not a full-CPU Guaranteed reservation) so several members pack onto one
+	// node — a full-CPU request leaves a 4-pod cluster unschedulable on a 4-vCPU node. The limit
+	// still caps a single container at 1 CPU; scheduling only counts the request.
+	defaultCPURequest    = resource.MustParse("500m")
 	defaultMemoryRequest = resource.MustParse("2Gi")
 	defaultCPULimit      = resource.MustParse("1")
 	defaultMemoryLimit   = resource.MustParse("2Gi")
