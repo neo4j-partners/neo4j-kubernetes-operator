@@ -32,6 +32,11 @@ spec:
           size: 100Gi
   auth:
     generatePassword: true
+  trust:
+    # Required in Cluster mode: the operator needs an admin Bolt path (NEO-004). This plaintext
+    # opt-in, or trust.certificates.bolt for verified TLS — see "The operator needs an admin
+    # session" below.
+    insecureAdminConnection: true
 ```
 
 Runnable variants: [`examples/cluster/`](../../../examples/cluster/) — start from
@@ -113,8 +118,12 @@ spec:
 A Cluster with neither is **rejected at admission** — it could never be operated, so there is no
 point letting it start. Be clear-eyed about what the flag does and does not do: it does not open
 anything on the network. If Bolt has no TLS, the port is already in cleartext for every client. The
-flag is your acknowledgement that the operator's own admin password will travel that way too. It has
-no effect in Standalone mode, where the operator opens no admin session at all.
+flag is your acknowledgement that the operator's own admin password will travel that way too.
+
+Standalone needs neither path and admission asks for neither, because reconciling a single server
+opens no admin session. The exception is a restore: `Neo4jRestore` seeds the database over admin
+Bolt whatever the topology, so a Standalone that is a restore target needs the same opt-in — see
+[Backup and restore](10-backup-restore.md).
 
 ## Formation and readiness
 
