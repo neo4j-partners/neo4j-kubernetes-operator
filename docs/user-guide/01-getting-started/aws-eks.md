@@ -15,6 +15,7 @@ step 3, without changing anything else on this page.
 | Requirement | Notes |
 |-------------|-------|
 | AWS account | Permission to create an EKS cluster, a VPC and IAM roles |
+| Kubernetes 1.35 or later | EKS still defaults to 1.34 — step 1 asks for 1.35 explicitly |
 | [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) v2 | Signed in — `aws configure sso` then `aws sso login`, or `aws configure` |
 | [eksctl](https://eksctl.io/installation/) | Creates the cluster, its VPC and its IAM roles in one command |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | Context set by `eksctl create cluster` |
@@ -49,15 +50,26 @@ create the cluster, or to grant you those permissions; the rest of this page is 
 eksctl create cluster \
   --name "$CLUSTER" \
   --region "$REGION" \
+  --version 1.35 \
   --nodes 2 \
   --node-type m5.xlarge \
   --with-oidc
 kubectl get nodes
 ```
 
-Expect 15 to 20 minutes: `eksctl` builds a VPC, the control plane and a managed node group, and
-writes your kubeconfig at the end. `--with-oidc` is what makes step 2 possible — it is not the
-default, and adding it afterwards means another pass.
+Expect 15 to 20 minutes: `eksctl` builds a VPC, the control plane and a managed node group, then
+writes your kubeconfig.
+
+`--with-oidc` is required. It binds an IAM role to a Kubernetes service account. It is
+off by default, and turning it on later means a second `eksctl` run.
+
+`--version 1.35` is required. The operator needs Kubernetes **1.35 or later**, because its CRD
+validation rules use the CEL quantity library that older API servers reject. EKS still creates
+1.34 clusters by default, and without the flag step 3 fails with
+`chart requires kubeVersion: >= 1.35.0-0`. Later versions work too — see the
+[EKS version calendar](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html)
+for what your region offers. On an existing cluster, check the version with `kubectl version` and
+upgrade with `eksctl upgrade cluster`.
 
 ### 2. Give the cluster a working StorageClass
 
