@@ -58,11 +58,17 @@ These are set by the operator and lose to `spec.config.neo4j`. Overriding them i
 |-----|---------|---------|
 | `server.default_listen_address` | `0.0.0.0` | Making Neo4j reachable from outside the pod |
 | `server.directories.plugins` | `/plugins` | Deployments with plugins or a plugins volume |
-| `dbms.security.procedures.unrestricted`, `dbms.security.procedures.allowlist` | The patterns of the plugins on this pool, such as `apoc.*,gds.*` | Declared plugins |
+| `dbms.security.procedures.allowlist` | The patterns of the plugins on this pool, such as `apoc.*,gds.*` | Declared plugins |
 | `dbms.security.http_auth_allowlist` | `gds.*` | Deployments with Graph Data Science |
 
-Overriding the procedure allowlists replaces them wholesale, so include the plugin patterns you still
+Overriding the procedure allowlist replaces it wholesale, so include the plugin patterns you still
 need — dropping `apoc.*` from the list disables APOC procedures.
+
+`dbms.security.procedures.unrestricted` is **not** in that table: the operator never sets it, whatever
+plugins you declare. Allowlisting makes a procedure callable, but one that touches database internals
+also needs the sandbox lifted, and that grant stays an explicit choice in `spec.config.neo4j`
+(NEO-024). GDS algorithms and `bloom.checkLicenseCompliance()` are the ones you will notice — see
+[Plugins](../03-neo4j/07-plugins.md#licensed-plugins).
 
 ## Why these are managed
 

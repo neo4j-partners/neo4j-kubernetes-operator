@@ -1,8 +1,8 @@
-# Two plugins assigned so the generated procedure allowlists carry both patterns.
-# The operator derives dbms.security.procedures.unrestricted and .allowlist from the
-# assigned ids (operator_defaults.go) and sets BOTH keys to the same value. No
-# spec.config.neo4j here on purpose — a user override would replace the generated value
-# and the case would prove nothing.
+# Two plugins assigned so the generated procedure allowlist carries both patterns.
+# The operator derives dbms.security.procedures.allowlist from the assigned ids
+# (operator_defaults.go) and leaves dbms.security.procedures.unrestricted unset — the
+# assert checks both halves (NEO-024). No spec.config.neo4j here on purpose: a user
+# override would replace the generated value and the case would prove nothing.
 apiVersion: neo4j.com/v1
 kind: Neo4j
 metadata:
