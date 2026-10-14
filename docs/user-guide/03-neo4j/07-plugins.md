@@ -183,9 +183,8 @@ spec:
   plugins: [gds, bloom]
   config:
     neo4j:
-      # Both *.license_file keys below are plugin-namespaced, and the server validates its
-      # configuration before the plugin that declares them is on the classpath. Without this
-      # it refuses to start: "No declared setting with name: gds.enterprise.license_file".
+      # Required before Neo4j 2026.11 for the *.license_file keys below, remove it from
+      # 2026.11 on — see "Strict validation before Neo4j 2026.11".
       server.config.strict_validation.enabled: "false"
       # GDS and Bloom procedures that touch database internals need the sandbox lifted.
       # bloom.checkLicenseCompliance() answers 52N34 without it.
@@ -209,6 +208,29 @@ normally write them itself when it installs `gds`/`bloom`, but it writes them to
 The [Neo4j Helm chart docs](https://neo4j.com/docs/operations-manual/current/kubernetes/plugins/#install-gds-ee-bloom)
 ask for the same keys for the same reason. Setting them is what makes a licensed plugin usable
 — `feature-plugins` boots exactly this shape on every CI run.
+
+### Strict validation before Neo4j 2026.11
+
+Before Neo4j 2026.11, `server.config.strict_validation.enabled: "false"` is required whenever the
+configuration contains a setting declared by a plugin, such as `gds.enterprise.license_file` or
+`dbms.bloom.license_file`. Without it the server refuses to start:
+
+```
+Unrecognized setting. No declared setting with name: gds.enterprise.license_file.
+```
+
+The operator supplies the configuration as a ConfigMap, which Neo4j reads as a directory with one
+file per setting. In that form, versions before 2026.11 read every setting before loading the
+plugins, so a plugin's settings are still unknown when strict validation checks them. With
+validation off, the same settings are accepted, the plugins load, and the settings take effect.
+
+Turning it off applies to the whole configuration, not only to plugin settings: a misspelt key
+anywhere is logged as a warning and ignored instead of stopping the server. Check the startup log
+after changing `spec.config`.
+
+From Neo4j 2026.11 the plugin settings are read after the plugins are loaded, and the override is
+no longer needed. Remove it when you move `spec.version` to 2026.11 or later, so that a typo fails
+the startup again.
 
 Each licence Secret is mounted under `/licenses/<plugin>`, and — like every Secret the operator
 mounts — must carry `neo4j.com/mountable-by-operator: "true"`:
