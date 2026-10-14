@@ -26,6 +26,11 @@ spec:
       backup: 6362
 ```
 
+For a **cluster** the operator dials every primary's backup endpoint (one `--from` per member), not
+the single admin Service — a database is only allocated to a subset of members, so `neo4j-admin`
+fails over across them until it reaches the one that hosts it. This works on any supported Neo4j
+version; on 2025.09+ you can instead pass `options.extraArgs: ["--remote-address-resolution"]`.
+
 **Restores need an admin Bolt path.** The operator seeds a database over its admin Bolt session
 (`CREATE DATABASE … OPTIONS {seedURI…}`), which requires either verified TLS or an explicit opt-in
 to plaintext — the same [NEO-004](../05-reference/errors.md) rule the rest of the operator uses:

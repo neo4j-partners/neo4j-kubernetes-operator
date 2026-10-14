@@ -111,6 +111,33 @@ func FromAddress(ctx render.Context) string {
 	return fmt.Sprintf("%s.%s.svc:%d", ctx.AdminServiceName(), ctx.Namespace(), ctx.BackupPort())
 }
 
+// FromAddresses is the list of backup-listener addresses neo4j-admin dials (one --from each).
+// Standalone resolves to the single derived admin Service. In a cluster that Service load-balances
+// across all primaries, but a user database is only allocated to a subset of members — so dialing
+// it lands on a random member and fails when that member does not host the database ("databases
+// either don't match any database on the remote server or they are aliases"). Instead we enumerate
+// each primary's per-pod internals Service (which exposes the backup port) so neo4j-admin fails over
+// across members until it reaches one that hosts the database — the same multi-endpoint approach the
+// Helm chart takes (DATABASE_BACKUP_ENDPOINTS). This is version-agnostic, unlike
+// --remote-address-resolution (Neo4j 2025.09+).
+//
+// ponytail: only primary members are enumerated; a database allocated solely to secondaries is not
+// covered. Upgrade path: also enumerate secondary pods, or add --remote-address-resolution on
+// 2025.09+ (available today via spec.options.extraArgs).
+func FromAddresses(ctx render.Context) []string {
+	if !render.IsClusterMode(ctx.Neo4j) {
+		return []string{FromAddress(ctx)}
+	}
+	primary := render.NewContext(ctx.Neo4j, render.PoolPrimary)
+	replicas := primary.PoolReplicas()
+	addrs := make([]string, 0, replicas)
+	for ord := int32(0); ord < replicas; ord++ {
+		svc := primary.MemberInternalsServiceName(primary.PodName(ord))
+		addrs = append(addrs, fmt.Sprintf("%s.%s.svc:%d", svc, primary.Namespace(), primary.BackupPort()))
+	}
+	return addrs
+}
+
 // BackupJob builds the run-to-completion Job for a Neo4jBackup. chainSubDir, when non-empty,
 // isolates a chain's artifacts under <destination>/<chainSubDir> so an aggregation of one chain can
 // never make a later differential of another chain mis-parent onto it (a schedule sets it to the
@@ -276,13 +303,15 @@ func backupScript(args []string, toPath string, dbs []string, chainSubDir string
 // backupArgs composes the neo4j-admin argument vector from operator-owned flags, typed
 // options, and the allow-listed extraArgs (BDR-014 §12 / ADR-015).
 func backupArgs(ctx render.Context, backup *neo4jv1.Neo4jBackup, toPath string) []string {
-	args := []string{
-		"database", "backup",
-		"--from=" + FromAddress(ctx),
-		"--to-path=" + toPath,
-		"--temp-path=" + scratchMountPath,
-		"--type=" + AdminType(backup.Spec.Type),
+	args := []string{"database", "backup"}
+	for _, addr := range FromAddresses(ctx) {
+		args = append(args, "--from="+addr)
 	}
+	args = append(args,
+		"--to-path="+toPath,
+		"--temp-path="+scratchMountPath,
+		"--type="+AdminType(backup.Spec.Type),
+	)
 	if o := backup.Spec.Options; o != nil {
 		if o.Compress != nil {
 			args = append(args, fmt.Sprintf("--compress=%t", *o.Compress))

@@ -82,6 +82,50 @@ func TestBackupJobObjectStore(t *testing.T) {
 	}
 }
 
+func TestBackupJobClusterFromEndpoints(t *testing.T) {
+	// In a cluster the admin Service load-balances across all primaries, but a database is only on a
+	// subset of members — so the Job must dial every primary's per-pod backup endpoint (one --from
+	// each) and let neo4j-admin fail over to the member that hosts the database, never a single
+	// random-routing Service address.
+	neo4j := &neo4jv1.Neo4j{
+		ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
+		Spec: neo4jv1.Neo4jSpec{
+			Edition: neo4jv1.EditionEnterprise,
+			Version: "2025.01.0",
+			Topology: neo4jv1.TopologySpec{
+				Mode:      neo4jv1.TopologyModeCluster,
+				Primaries: &neo4jv1.PrimariesSpec{Members: 3},
+			},
+		},
+	}
+	b := &neo4jv1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+		Spec: neo4jv1.Neo4jBackupSpec{
+			Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
+			Databases:   []string{"test1"},
+			Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, URL: "s3://bucket/prod/"},
+		},
+	}
+	job, err := BackupJob(neo4j, b, "")
+	if err != nil {
+		t.Fatalf("BackupJob: %v", err)
+	}
+	c := job.Spec.Template.Spec.Containers[0]
+	for _, want := range []string{
+		"--from=g-primary-0-internals.ns.svc:6362",
+		"--from=g-primary-1-internals.ns.svc:6362",
+		"--from=g-primary-2-internals.ns.svc:6362",
+	} {
+		if !hasArg(c.Args, want) {
+			t.Errorf("args missing %q; got %v", want, c.Args)
+		}
+	}
+	// The single random-routing admin Service address must not be used in cluster mode.
+	if hasArg(c.Args, "--from=g-admin.ns.svc:6362") {
+		t.Errorf("cluster backup should not dial the admin Service directly; got %v", c.Args)
+	}
+}
+
 func TestBackupJobObjectStoreAddsTrailingSlash(t *testing.T) {
 	// neo4j-admin treats a slash-less object-store url as a file and fails; the destination is a
 	// directory, so the operator normalizes it (azb example from the Azure test runbook).
