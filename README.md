@@ -65,11 +65,6 @@ Start troubleshooting from [common issues](docs/user-guide/04-troubleshooting/01
 
 ## Feature status
 
-Standalone and Cluster deployment, storage, connectors and Service exposure, TLS, authentication,
-configuration and JVM settings, plugins, scheduling, probes and Prometheus metrics are implemented, and
-most are verified end-to-end on every pull request. Database and user management, backup and restore,
-version upgrades, Ingress, LDAP and multi-cluster are not implemented.
-
 Read [what works today](docs/user-guide/01-getting-started/feature-status.md) before relying on a
 field: it is the maintained list, and it separates what is tested end-to-end from what is implemented
 but unverified, from what is planned with a settled design, and from what is not decided yet.
