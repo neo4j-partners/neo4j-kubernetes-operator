@@ -1,0 +1,19 @@
+name: feature-monitoring
+description: >
+  Prometheus metrics export (BDR-010). The endpoint is checked the way Prometheus reaches it —
+  from another pod through the admin Service — since kubectl port-forward and in-pod probes reach
+  localhost and cannot tell a pod-wide bind from a loopback one.
+brief_ref: neo4j-features-monitoring
+use_pipeline: neo4j-suite
+on_case_failure: continue
+pipeline:
+  case_assert:
+    - assert/{{assert}}
+
+cases:
+  - id: prometheus-scrape
+    comment: features.monitoring.prometheus + listeners.metrics — the admin Service publishes tcp-prometheus and GET /metrics answers 200 with neo4j_* families from a separate client pod.
+    fixture: tests/fixtures/neo4j-monitoring-prometheus.yaml
+    assert: metrics-scrape
+    expect: success
+    cr_name: e2e-metrics

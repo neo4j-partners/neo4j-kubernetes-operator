@@ -1,0 +1,29 @@
+apiVersion: neo4j.com/v1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "__NEO4J_VERSION__"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  # The feature turns the Prometheus endpoint on, the listener opens the port; the admin
+  # Service <cr>-admin publishes it as tcp-prometheus.
+  features:
+    monitoring:
+      prometheus:
+        enabled: true
+  connectivity:
+    listeners:
+      metrics: 2004

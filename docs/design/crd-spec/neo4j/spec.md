@@ -378,7 +378,7 @@ Enterprise online backup ([BDR-010](../../decision-records/business/neo4j/010-ne
 | Group | Field | Type | Default | `neo4j.conf` key |
 |-------|-------|------|---------|------------------|
 | `prometheus` | `enabled` | bool | `false` | `server.metrics.prometheus.enabled` |
-| `prometheus` | `endpoint` | string | `localhost:2004` | `server.metrics.prometheus.endpoint` — port MUST match `connectivity.listeners.metrics` |
+| `prometheus` | `endpoint` | string | `0.0.0.0:2004` | `server.metrics.prometheus.endpoint` — ignored: the operator renders `0.0.0.0:<connectivity.listeners.metrics>` (Neo4j's own `localhost` default is unreachable from outside the pod) |
 | `csv` | `enabled` | bool | `true` | `server.metrics.csv.enabled` |
 | `csv` | `interval` | string | `30s` | `server.metrics.csv.interval` |
 | `csv.rotation` | `keepNumber` | int | `7` | `server.metrics.csv.rotation.keep_number` |

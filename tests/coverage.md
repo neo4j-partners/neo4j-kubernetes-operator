@@ -226,6 +226,10 @@ emitted for it yet.
 - [ ] Optional cleanup of services/jobs/PVCs on request — NEO-2-018 (optional path)
 - [ ] Operator control-plane uninstall — OP-1-005 / OP-2-005-UNINST-02 (different scope)
 
+### `feature-monitoring` — BDR-010
+- [x] Prometheus endpoint scraped from a separate client pod through the admin Service (`tcp-prometheus`): `GET /metrics` answers 200 with `neo4j_*` families. The endpoint was bound to `localhost`, which in-pod probes and `kubectl port-forward` still reach, so only an off-pod scrape catches it — NEO3-97 (case `prometheus-scrape`)
+- [ ] ServiceMonitor created when the Prometheus Operator CRD is installed, skipped without failing otherwise — MON-001
+
 ### `operator-scope` — OP-1-001
 - [x] RBAC is namespaced, least-privilege, no cluster-wide grant — OP-1-006 · AC-OP-RBAC / AC-OP-SCOPE-SINGLE-004
 - [x] CR reconciled inside WATCH_NAMESPACE — OP-2-001-SCOPE-01 · AC-OP-SCOPE-SINGLE-002
