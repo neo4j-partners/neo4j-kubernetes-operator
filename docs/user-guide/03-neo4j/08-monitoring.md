@@ -27,17 +27,23 @@ already, publishing the metrics port under the name `tcp-prometheus`. Metrics ar
 added to the client Service — application clients have no business scraping them, and on a
 LoadBalancer that would expose internals.
 
-`spec.features.monitoring.prometheus.endpoint` is ignored: the endpoint follows the listener port.
+`spec.features.monitoring.prometheus.endpoint` is ignored: the operator binds the endpoint to
+`0.0.0.0` on the listener port, so it is reachable through the admin Service and on the pod IP.
 
 ## Checking the endpoint
 
+Scrape it from another pod, the way Prometheus does:
+
 ```bash
-kubectl port-forward -n default svc/dev-admin 2004:2004
-curl -s localhost:2004/metrics | head -20
+kubectl run metrics-check -n default --rm -i --restart=Never --image=curlimages/curl -- \
+  curl -s http://dev-admin.default.svc:2004/metrics | head -20
 ```
 
 You should see Neo4j metric families such as `neo4j_database_*` and JVM metrics. An empty response
 usually means the feature flag is missing while the listener is set, or the reverse.
+
+`kubectl port-forward` is not a valid test: it connects from inside the pod, so it also succeeds
+against an endpoint bound to `localhost` that no scraper can reach.
 
 ## ServiceMonitor
 

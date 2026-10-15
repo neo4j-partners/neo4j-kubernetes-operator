@@ -35,7 +35,9 @@ func listenerConfKeys(ctx render.Context) map[string]string {
 	}
 	if ctx.MetricsListenerEnabled() {
 		keys["server.metrics.prometheus.enabled"] = "true"
-		keys["server.metrics.prometheus.endpoint"] = fmt.Sprintf("localhost:%d", ctx.MetricsPort())
+		// Neo4j defaults to localhost, which kubectl port-forward reaches but the admin Service
+		// and any Prometheus scraping the pod IP do not.
+		keys["server.metrics.prometheus.endpoint"] = fmt.Sprintf("0.0.0.0:%d", ctx.MetricsPort())
 	}
 	return keys
 }

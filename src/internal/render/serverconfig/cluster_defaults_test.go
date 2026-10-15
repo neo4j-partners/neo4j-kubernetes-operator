@@ -318,7 +318,7 @@ func TestListenerConfKeysHTTPSBackupMetrics(t *testing.T) {
 		"server.backup.listen_address":           "0.0.0.0:6362",
 		"server.backup.enabled":                  "true",
 		"server.metrics.prometheus.enabled":      "true",
-		"server.metrics.prometheus.endpoint":     "localhost:2004",
+		"server.metrics.prometheus.endpoint":     "0.0.0.0:2004",
 	} {
 		if data[key] != want {
 			t.Fatalf("config key %q = %q, want %q", key, data[key], want)
