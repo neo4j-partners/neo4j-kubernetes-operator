@@ -261,8 +261,8 @@ func TestReadPoolCannotBootstrapAsPrimary(t *testing.T) {
 	if primary["server.cluster.system_database_mode"] == "SECONDARY" {
 		t.Fatalf("primary must not force SECONDARY system mode: %#v", primary)
 	}
-	if primary["initial.server.mode_constraint"] == "SECONDARY" {
-		t.Fatalf("primary must not have SECONDARY mode_constraint: %#v", primary)
+	if primary["initial.server.mode_constraint"] != "PRIMARY" {
+		t.Fatalf("primary must bootstrap with PRIMARY mode_constraint: %#v", primary)
 	}
 }
 

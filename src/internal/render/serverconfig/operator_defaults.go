@@ -73,6 +73,12 @@ func clusterNeo4jConfKeys(ctx render.Context) map[string]string {
 		keys["server.cluster.system_database_mode"] = "SECONDARY"
 		keys["initial.server.mode_constraint"] = "SECONDARY"
 	}
+	// Neo4j enables the servers that bootstrap the system database by itself, so formation's
+	// ENABLE SERVER never reaches them; this setting is the only way they get their constraint.
+	// Without it they come up NONE and the default database stacks its secondaries on them.
+	if ctx.Pool == render.PoolPrimary {
+		keys["initial.server.mode_constraint"] = "PRIMARY"
+	}
 
 	return keys
 }

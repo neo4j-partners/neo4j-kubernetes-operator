@@ -42,7 +42,8 @@ Warning Event with reason `DuplicateEntry`, showing `kept (operator-injected)` â
 | `dbms.cluster.discovery.resolver_type`, `dbms.kubernetes.discovery.service_port_name`, `dbms.kubernetes.label_selector`, `dbms.cluster.raft.binding_timeout` | Kubernetes-based cluster discovery |
 | `dbms.routing.enabled`, `dbms.routing.default_router`, `dbms.routing.client_side.enforce_for_domains` | Cluster mode and `spec.connectivity.clusterDomain` |
 | `server.bolt.advertised_address`, `server.cluster.advertised_address`, `server.cluster.raft.advertised_address`, `server.routing.advertised_address` | Per-member Service names |
-| `server.cluster.system_database_mode`, `initial.server.mode_constraint` | Being an analytics or read pool member |
+| `server.cluster.system_database_mode` | Being an analytics or read pool member |
+| `initial.server.mode_constraint` | The pool: `PRIMARY` for primaries, `SECONDARY` for analytics and read members. Neo4j only reads it when a server is first enabled, so it does not change servers of an existing cluster |
 | `dbms.ssl.policy.*`, `server.bolt.tls_level` | `spec.trust` |
 | `server.logs.config`, `server.logs.user.config` | `spec.logging` |
 

@@ -84,6 +84,13 @@ func ConfigChecksum(ctx render.Context) string {
 		if bootstrapOnlyKeys[k] {
 			continue
 		}
+		// Neo4j reads initial.server.mode_constraint only when a server is first enabled. The primary
+		// pool gained it after 1.0.0; hashing it would roll the primaries of every existing cluster
+		// on operator upgrade to deliver a value they will never read. The secondary pools keep
+		// hashing it, as they have since 1.0.0, so their checksum does not move either.
+		if k == "initial.server.mode_constraint" && ctx.Pool == render.PoolPrimary {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
