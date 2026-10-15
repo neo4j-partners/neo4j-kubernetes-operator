@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -77,9 +78,84 @@ func TestBackupJobObjectStore(t *testing.T) {
 	if job.Labels["app.kubernetes.io/managed-by"] != "neo4j-operator" {
 		t.Errorf("missing managed-by label; got %v", job.Labels)
 	}
-	if *job.Spec.TTLSecondsAfterFinished != backupTTLSeconds {
-		t.Errorf("ttl = %d, want %d", *job.Spec.TTLSecondsAfterFinished, backupTTLSeconds)
+	if *job.Spec.TTLSecondsAfterFinished != failedBackupTTLSeconds {
+		t.Errorf("ttl = %d, want %d", *job.Spec.TTLSecondsAfterFinished, failedBackupTTLSeconds)
 	}
+	// One attempt per backup: retries would each provision their own ephemeral scratch PVC.
+	if *job.Spec.BackoffLimit != backupJobBackoff {
+		t.Errorf("backoffLimit = %d, want %d (one scratch PVC per backup)", *job.Spec.BackoffLimit, backupJobBackoff)
+	}
+}
+
+func scratchVol(t *testing.T, job *batchv1.Job) corev1.Volume {
+	t.Helper()
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == scratchVolume {
+			return v
+		}
+	}
+	t.Fatalf("scratch volume missing; got %v", job.Spec.Template.Spec.Volumes)
+	return corev1.Volume{}
+}
+
+func TestBackupJobScratch(t *testing.T) {
+	// The --temp-path staging volume must size to spec.scratch so a large database doesn't overflow
+	// the node's ephemeral storage (ADR-015): default emptyDir, ephemeral PVC when size is set,
+	// mounted claim when claimName is set.
+	base := func(s *neo4jv1.BackupScratch) *neo4jv1.Neo4jBackup {
+		return &neo4jv1.Neo4jBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: "nb", Namespace: "ns"},
+			Spec: neo4jv1.Neo4jBackupSpec{
+				Neo4jRef:    neo4jv1.Neo4jRef{Name: "g"},
+				Databases:   []string{"neo4j"},
+				Destination: neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, URL: "s3://b/"},
+				Scratch:     s,
+			},
+		}
+	}
+
+	t.Run("default emptyDir", func(t *testing.T) {
+		job, err := BackupJob(testNeo4j(), base(nil), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v := scratchVol(t, job); v.EmptyDir == nil {
+			t.Errorf("scratch should default to emptyDir; got %+v", v.VolumeSource)
+		}
+	})
+
+	t.Run("size provisions a generic ephemeral PVC", func(t *testing.T) {
+		b := base(&neo4jv1.BackupScratch{Size: "200Gi", StorageClassName: "fast-ssd"})
+		job, err := BackupJob(testNeo4j(), b, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A generic ephemeral volume: k8s owns the PVC to the pod and GCs it when the pod is deleted,
+		// which the reconciler triggers immediately on success (deletes the whole Job → pod).
+		v := scratchVol(t, job)
+		if v.Ephemeral == nil || v.Ephemeral.VolumeClaimTemplate == nil {
+			t.Fatalf("scratch should be a generic ephemeral volume; got %+v", v.VolumeSource)
+		}
+		spec := v.Ephemeral.VolumeClaimTemplate.Spec
+		if req := spec.Resources.Requests[corev1.ResourceStorage]; req.String() != "200Gi" {
+			t.Errorf("scratch size = %q, want 200Gi", req.String())
+		}
+		if got := spec.StorageClassName; got == nil || *got != "fast-ssd" {
+			t.Errorf("scratch storageClassName = %v, want fast-ssd", got)
+		}
+	})
+
+	t.Run("claimName mounts existing PVC", func(t *testing.T) {
+		b := base(&neo4jv1.BackupScratch{ClaimName: "scratch-pvc"})
+		job, err := BackupJob(testNeo4j(), b, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := scratchVol(t, job)
+		if v.PersistentVolumeClaim == nil || v.PersistentVolumeClaim.ClaimName != "scratch-pvc" {
+			t.Errorf("scratch should mount existing claim scratch-pvc; got %+v", v.VolumeSource)
+		}
+	})
 }
 
 func TestBackupJobClusterFromEndpoints(t *testing.T) {

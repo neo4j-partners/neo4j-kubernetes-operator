@@ -77,6 +77,9 @@ type BackupTemplate struct {
 	Destination BackupDestination `json:"destination"`
 	// Options is neo4j-admin passthrough inherited by every emitted Neo4jBackup.
 	Options *BackupOptions `json:"options,omitempty"`
+	// Scratch sizes the --temp-path staging volume inherited by every emitted Neo4jBackup
+	// (including the aggregate). Set scratch.size for large databases.
+	Scratch *BackupScratch `json:"scratch,omitempty"`
 }
 
 // Neo4jBackupScheduleSpec owns cron cadences, retention, and the chain (BDR-014 §10).

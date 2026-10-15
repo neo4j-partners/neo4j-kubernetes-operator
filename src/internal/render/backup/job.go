@@ -25,6 +25,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
@@ -47,10 +48,25 @@ const (
 	// file:/backups/<ptr> against an empty dir and the server reports "not found" (ADR-015).
 	pvcSubPath = storage.BackupsSubPath
 	// backupTTLSeconds keeps a finished Job (and its logs) around for a day so the cause of a
-	// failure survives GC (ADR-015 — logs & observability).
+	// failure survives GC (ADR-015 — logs & observability). Used by the prune/metadata Jobs.
 	// ponytail: fixed 24h; upgrade path is a schedule/operator flag when someone needs it.
 	backupTTLSeconds int32 = 86400
-	backupBackoff    int32 = 3
+	// failedBackupTTLSeconds bounds how long a backup/aggregate Job (pod + logs) lingers. A
+	// succeeded backup's Job is deleted immediately by the reconciler (status carries the whole
+	// result and the pod would only pin its ephemeral scratch PVC), so this TTL effectively governs
+	// *failures*: long enough to `kubectl logs` the cause, short enough not to hold a scratch volume
+	// for a day. It is also a backstop for a succeeded Job the reconciler didn't get to delete. The
+	// failure cause is additionally recorded in Neo4jBackup.status.message, which outlives the pod.
+	failedBackupTTLSeconds int32 = 3600
+	// backupBackoff retries the aux Jobs (prune/metadata) a few times — they use a cheap fixed
+	// emptyDir scratch, so a retry pod costs nothing.
+	backupBackoff int32 = 3
+	// backupJobBackoff is 0 for the backup/aggregate Jobs: each retry would spawn a new pod, and each
+	// pod provisions its OWN generic ephemeral scratch PVC — so retrying a failed backup multiplies
+	// large PVCs (up to backoff+1 of them) for little gain. Backup failures are usually deterministic
+	// (bad destination/credentials/chain), and a schedule retries on its next tick anyway, so we run
+	// exactly one attempt → one scratch PVC per backup.
+	backupJobBackoff int32 = 0
 	containerName          = "neo4j-admin"
 )
 
@@ -152,16 +168,13 @@ func BackupJob(neo4j *neo4jv1.Neo4j, backup *neo4jv1.Neo4jBackup, chainSubDir st
 	if err != nil {
 		return nil, err
 	}
-	// Scratch staging volume for --temp-path.
-	volumes = append(volumes, corev1.Volume{
-		Name:         scratchVolume,
-		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-	})
+	// Scratch staging volume for --temp-path (sized per backup.Spec.Scratch).
+	volumes = append(volumes, ScratchVolume(backup.Spec.Scratch))
 	mounts = append(mounts, corev1.VolumeMount{Name: scratchVolume, MountPath: scratchMountPath})
 
 	labels := ctx.CommonLabels("backup")
-	ttl := backupTTLSeconds
-	backoff := backupBackoff
+	ttl := failedBackupTTLSeconds
+	backoff := backupJobBackoff
 
 	args := backupArgs(ctx, backup, toPath)
 	container := corev1.Container{
@@ -247,6 +260,45 @@ func destination(d neo4jv1.BackupDestination, subDir string) (toPath string, vol
 		return "", nil, nil, fmt.Errorf("object-store destination requires url")
 	}
 	return ObjectStoreFolder(d.URL, subDir), nil, nil, nil
+}
+
+// ScratchVolume builds the --temp-path staging volume neo4j-admin writes a working copy of the
+// backup to before streaming it to the destination (ADR-015). The default (nil, or neither size nor
+// claim set) is a node-backed emptyDir — fine for small DBs / dev, but it shares the node's
+// ephemeral storage and overflows on a large database. A Size provisions a dedicated generic
+// ephemeral PVC: Kubernetes creates it when the pod starts and GCs it when the pod is deleted (owned
+// by the pod), which the short scratch TTL (see jobTTL) triggers soon after the backup finishes —
+// so the big volume is reclaimed without any operator-side PVC lifecycle. A ClaimName mounts an
+// existing user PVC instead (never created or deleted by the operator). Size is admission-validated
+// against the k8s quantity pattern, so MustParse never panics on an admitted spec (same contract as
+// storage's dynamicPVC).
+func ScratchVolume(s *neo4jv1.BackupScratch) corev1.Volume {
+	v := corev1.Volume{Name: scratchVolume}
+	switch {
+	case s != nil && s.ClaimName != "":
+		v.VolumeSource = corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: s.ClaimName},
+		}
+	case s != nil && s.Size != "":
+		spec := corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(s.Size)},
+			},
+		}
+		if s.StorageClassName != "" {
+			sc := s.StorageClassName
+			spec.StorageClassName = &sc
+		}
+		v.VolumeSource = corev1.VolumeSource{
+			Ephemeral: &corev1.EphemeralVolumeSource{
+				VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{Spec: spec},
+			},
+		}
+	default:
+		v.VolumeSource = corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}
+	}
+	return v
 }
 
 // ObjectStoreFolder is the directory url neo4j-admin writes to (and restore/aggregate later read

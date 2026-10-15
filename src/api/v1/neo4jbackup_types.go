@@ -99,6 +99,27 @@ type BackupPVC struct {
 	StorageClassName string `json:"storageClassName,omitempty"`
 }
 
+// BackupScratch sizes the throwaway staging volume neo4j-admin writes to via --temp-path before
+// streaming artifacts to the destination (ADR-015). It must hold a working copy of the
+// (compressed) backup, so for a large database the default node-backed emptyDir can overflow the
+// node's ephemeral storage and get the backup pod evicted (or fail with InsufficientScratchSpace).
+// Set at most one of size or claimName; omit both for an emptyDir (small DBs / dev).
+// +kubebuilder:validation:XValidation:rule="!(has(self.claimName) && has(self.size))",message="set scratch.size (provision) or scratch.claimName (existing), not both"
+type BackupScratch struct {
+	// Size provisions a dedicated generic ephemeral PVC for scratch (e.g. 200Gi): Kubernetes creates
+	// it with the backup pod and garbage-collects it when the pod is deleted — which the operator does
+	// immediately on success. Size it to a working copy of the (compressed) backup. This is the fix
+	// for large databases.
+	// +kubebuilder:validation:Pattern=`^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$`
+	Size string `json:"size,omitempty"`
+	// StorageClassName for a provisioned scratch PVC (omit for the cluster default).
+	StorageClassName string `json:"storageClassName,omitempty"`
+	// ClaimName mounts an existing PVC as scratch instead of provisioning one (the operator never
+	// deletes it, but deleting the Job on success releases it promptly). Reused across runs, so it must
+	// not be shared by concurrent backups — prefer size unless you have a dedicated disk.
+	ClaimName string `json:"claimName,omitempty"`
+}
+
 // BackupDestination is where artifacts are written (BDR-014 §4). Object stores use
 // a provider-neutral url; pvc uses the pvc block.
 // +kubebuilder:validation:XValidation:rule="self.type == 'pvc' ? (has(self.pvc) && !has(self.url)) : (has(self.url) && !has(self.pvc))",message="object-store destinations require url (not pvc); pvc destinations require pvc (not url)"
@@ -163,6 +184,9 @@ type Neo4jBackupSpec struct {
 	Source *BackupSource `json:"source,omitempty"`
 	// Options is optional neo4j-admin passthrough (§12).
 	Options *BackupOptions `json:"options,omitempty"`
+	// Scratch sizes the --temp-path staging volume. Omit for a node-backed emptyDir (small DBs /
+	// dev); set scratch.size for large databases so staging gets a dedicated ephemeral PVC.
+	Scratch *BackupScratch `json:"scratch,omitempty"`
 }
 
 // BackupArtifact records one produced backup object.

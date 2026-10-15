@@ -11,6 +11,11 @@ spec:
     name: backup-demo
   databases: ["neo4j"]
   type: Full
+  # For a large database, give --temp-path its own disk so staging doesn't overflow node
+  # ephemeral storage (omit for a node-backed emptyDir, as below — fine for small/demo DBs):
+  # scratch:
+  #   size: 200Gi                  # ephemeral PVC, auto-deleted when the backup pod is (on success)
+  #   # storageClassName: fast-ssd # optional; omit for the cluster default
   destination:
     type: pvc
     pvc:

@@ -6,6 +6,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -136,6 +137,41 @@ func TestReconcileCommunityFailsTerminally(t *testing.T) {
 	}
 }
 
+func TestReconcileSucceededBackupDeletesJob(t *testing.T) {
+	// A succeeded backup keeps its whole result in status, so the operator reclaims the finished Job
+	// (and its pod + any ephemeral scratch PVC) immediately rather than holding it for the TTL.
+	s := scheme(t)
+	backup := backupCR()
+	job, err := renderbackup.BackupJob(enterpriseNeo4j(), backup, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controllerutil.SetControllerReference(backup, job, s); err != nil {
+		t.Fatal(err)
+	}
+	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	c := fake.NewClientBuilder().WithScheme(s).
+		WithObjects(enterpriseNeo4j(), backup, job).
+		WithStatusSubresource(&neo4jv1.Neo4jBackup{}).Build()
+	r := &BackupReconciler{Client: c, Scheme: s, Recorder: record.NewFakeRecorder(16)}
+
+	// First reconcile mirrors the Complete Job → Succeeded.
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if ph := getBackup(t, c).Status.Phase; ph != neo4jv1.RunPhaseSucceeded {
+		t.Fatalf("phase = %q, want Succeeded", ph)
+	}
+	// Second reconcile (in prod triggered by the status update) reclaims the finished Job.
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	var got batchv1.Job
+	if err := c.Get(t.Context(), types.NamespacedName{Name: renderbackup.JobName(backup), Namespace: "ns"}, &got); !apierrors.IsNotFound(err) {
+		t.Errorf("succeeded backup Job should be deleted; got err=%v", err)
+	}
+}
+
 func TestReconcileFailedJobSurfacesPodMessage(t *testing.T) {
 	s := scheme(t)
 	backup := backupCR()
@@ -175,6 +211,13 @@ func TestReconcileFailedJobSurfacesPodMessage(t *testing.T) {
 	}
 	if got.Status.Message != realMsg {
 		t.Errorf("status.message = %q, want the pod's neo4j-admin cause %q", got.Status.Message, realMsg)
+	}
+	// Unlike a success, a failed backup's Job is kept (logs) — a re-reconcile must not reclaim it.
+	if _, err := r.Reconcile(t.Context(), req()); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if err := c.Get(t.Context(), types.NamespacedName{Name: job.Name, Namespace: "ns"}, &batchv1.Job{}); err != nil {
+		t.Errorf("failed backup Job should be kept for its logs; got err=%v", err)
 	}
 }
 

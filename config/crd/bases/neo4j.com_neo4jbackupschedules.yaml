@@ -177,6 +177,34 @@ spec:
                         description: Verbose → --verbose.
                         type: boolean
                     type: object
+                  scratch:
+                    description: |-
+                      Scratch sizes the --temp-path staging volume inherited by every emitted Neo4jBackup
+                      (including the aggregate). Set scratch.size for large databases.
+                    properties:
+                      claimName:
+                        description: |-
+                          ClaimName mounts an existing PVC as scratch instead of provisioning one (the operator never
+                          deletes it, but deleting the Job on success releases it promptly). Reused across runs, so it must
+                          not be shared by concurrent backups — prefer size unless you have a dedicated disk.
+                        type: string
+                      size:
+                        description: |-
+                          Size provisions a dedicated generic ephemeral PVC for scratch (e.g. 200Gi): Kubernetes creates
+                          it with the backup pod and garbage-collects it when the pod is deleted — which the operator does
+                          immediately on success. Size it to a working copy of the (compressed) backup. This is the fix
+                          for large databases.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        type: string
+                      storageClassName:
+                        description: StorageClassName for a provisioned scratch PVC
+                          (omit for the cluster default).
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: set scratch.size (provision) or scratch.claimName (existing),
+                        not both
+                      rule: '!(has(self.claimName) && has(self.size))'
                 required:
                 - destination
                 type: object

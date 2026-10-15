@@ -26,6 +26,17 @@ spec:
     enabled: true                  # compact each closed chain into one recovered full
   backupTemplate:
     databases: ["neo4j"]
+    # scratch sizes the --temp-path staging volume neo4j-admin writes a working copy to before
+    # streaming to the destination. Omit it (as other examples do) for a node-backed emptyDir —
+    # fine for small/demo DBs. For a LARGE database set scratch.size: each backup gets its own
+    # ephemeral PVC that Kubernetes auto-creates with the pod and auto-deletes with it — and the
+    # operator deletes the pod as soon as the backup succeeds. Otherwise the emptyDir can overflow
+    # node ephemeral storage.
+    scratch:
+      size: 200Gi                  # ~a working copy of the (compressed) backup
+      # storageClassName: fast-ssd # optional; omit for the cluster default
+      # Alternative to size — mount an existing PVC instead (the operator never deletes it):
+      # claimName: neo4j-backup-scratch
     destination:
       type: pvc
       pvc:

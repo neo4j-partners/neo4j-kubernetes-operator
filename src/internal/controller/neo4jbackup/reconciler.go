@@ -72,8 +72,13 @@ func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	// Immutable record: a terminal run never spawns a second Job (GitOps re-apply safe).
+	// Immutable record: a terminal run never spawns a second Job (GitOps re-apply safe). A succeeded
+	// backup's Job is reclaimed here (status already carries the result; the pod would only pin its
+	// ephemeral scratch PVC). A failed backup's Job is kept for its logs until failedBackupTTLSeconds.
 	if backup.Status.Phase == neo4jv1.RunPhaseSucceeded || backup.Status.Phase == neo4jv1.RunPhaseFailed {
+		if backup.Status.Phase == neo4jv1.RunPhaseSucceeded {
+			r.deleteOwnedJob(ctx, &backup)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -254,7 +259,7 @@ func aggregateInputs(b *neo4jv1.Neo4jBackup, src *neo4jv1.Neo4jBackup) (renderba
 	fail := func(reason oracle.Reason, msg string) (renderbackup.AggregateInputs, *oracle.Reason, string) {
 		return renderbackup.AggregateInputs{}, &reason, msg
 	}
-	in := renderbackup.AggregateInputs{DBArtifacts: map[string]string{}}
+	in := renderbackup.AggregateInputs{DBArtifacts: map[string]string{}, Scratch: b.Spec.Scratch}
 	var claim, objURL string
 	for _, db := range b.Spec.Databases {
 		a, ok := artifactFor(src, db)
@@ -447,6 +452,20 @@ func (r *BackupReconciler) writeStatus(ctx context.Context, b *neo4jv1.Neo4jBack
 		return err
 	}
 	return nil
+}
+
+// deleteOwnedJob reclaims a succeeded backup's Job — and, via background propagation, its pod and any
+// generic ephemeral scratch PVC the pod owns — once the result is durable in status. A success keeps
+// nothing useful in the pod (phase/artifacts are in status), so there is no reason to hold it (or its
+// scratch volume) for the TTL. Deleting the whole Job (not the PVC directly) avoids the pvc-protection
+// race that leaves a claim stuck Terminating. Failed Jobs are left for failedBackupTTLSeconds so their
+// logs remain. Best-effort and idempotent (runs each reconcile of a terminal-succeeded record).
+func (r *BackupReconciler) deleteOwnedJob(ctx context.Context, b *neo4jv1.Neo4jBackup) {
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: renderbackup.JobName(b), Namespace: b.Namespace}}
+	bg := metav1.DeletePropagationBackground
+	if err := r.Delete(ctx, job, &client.DeleteOptions{PropagationPolicy: &bg}); err != nil && !apierrors.IsNotFound(err) {
+		ctrllog.FromContext(ctx).WithName("neo4jbackup").Error(err, "deleting succeeded backup job", "job", job.Name)
+	}
 }
 
 // setCondition takes catalogued values only — see internal/oracle and status.setCondition.

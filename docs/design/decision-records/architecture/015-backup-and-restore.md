@@ -232,13 +232,15 @@ Every failure sets `status.phase=Failed` with a stable `reason`, emits a Kuberne
 | `BackupListenerUnreachable` | backup | cannot reach `:6362` on the target | yes |
 | `DestinationUnwritable` | backup | `--to-path` / `url` not writable | no |
 | `CredentialsInvalid` / `IdentityUnavailable` | both | Secret or workload-identity token rejected by the provider | no |
-| `InsufficientScratchSpace` | backup | `--temp-path` volume full | no (resize) |
+| `InsufficientScratchSpace` | backup | `--temp-path` volume full | no (set `spec.scratch.size` — a dedicated ephemeral PVC reclaimed when the backup pod is deleted: immediately on success, else after `failedBackupTTLSeconds` — instead of the default node-backed emptyDir) |
 | `ChainBroken` / `ParentBackupMissing` | backup/restore | incremental with no valid parent, or a missing chain link | no |
 
 ### Logs & observability
 
 - `neo4j-admin` output **is the Job pod's logs** → `kubectl logs job/<backup>`; `options.verbose` raises detail.
-- Jobs are garbage-collected, so: set `spec.ttlSecondsAfterFinished` so logs linger a configurable window, and on failure **capture the log tail into `Neo4jBackup.status.message` + an Event**, so the cause survives Job GC.
+- Jobs are garbage-collected, so on failure **capture the log tail into `Neo4jBackup.status.message` + an Event**, so the cause survives Job GC.
+- **Backup/aggregate Job lifecycle:** a **succeeded** backup's Job is deleted immediately by the reconciler (its result is already in `status`, and the pod would otherwise pin its ephemeral scratch PVC); a **failed** backup's Job is kept for `failedBackupTTLSeconds` (default 1h) so `kubectl logs` is available, then TTL-GC'd. `status.message` is the durable record either way.
+- **Backup/aggregate Jobs run `backoffLimit=0`** (one attempt): each retry pod provisions its own generic ephemeral scratch PVC, so retrying would multiply large PVCs. Backup failures are usually deterministic, and a schedule retries on its next tick; the aux Jobs (prune/metadata, cheap `emptyDir` scratch) keep the normal retry count.
 - `options.keepFailed` preserves the failed artifact for post-mortem (`neo4j-admin backup inspect`).
 - Restore runs over Bolt (no Job): the reconciler records the driving statement outcome + `SHOW DATABASES` state into `status` / Events.
 - Persisting a full log file next to the artifact is a possible enhancement, not first-release.

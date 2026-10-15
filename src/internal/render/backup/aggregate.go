@@ -42,6 +42,10 @@ type AggregateInputs struct {
 	ObjectURL   string
 	Databases   []string                        // object store: db operands to aggregate
 	Credentials *neo4jv1.BackupCredentials // object store: static-key Secret (nil → workload identity)
+	// Scratch sizes the --temp-path staging volume (same semantics as a backup's spec.scratch): an
+	// aggregate also writes a working copy before producing the recovered full, so a large chain
+	// needs real disk here too. Nil → emptyDir.
+	Scratch *neo4jv1.BackupScratch
 	// DeleteOldChain runs the object-store aggregate with --keep-old-backup=false, so neo4j-admin
 	// deletes the source chain's original full+increments from the bucket after producing the
 	// recovered full. It is set only for schedule-managed compaction (which owns the chain and wants
@@ -90,15 +94,12 @@ func AggregateJob(neo4j *neo4jv1.Neo4j, jobName string, in AggregateInputs) (*ba
 		return nil, fmt.Errorf("aggregate inputs specify neither a PVC claim nor an object-store url")
 	}
 
-	volumes = append(volumes, corev1.Volume{
-		Name:         scratchVolume,
-		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-	})
+	volumes = append(volumes, ScratchVolume(in.Scratch))
 	mounts = append(mounts, corev1.VolumeMount{Name: scratchVolume, MountPath: scratchMountPath})
 
 	labels := ctx.CommonLabels("backup-aggregate")
-	ttl := backupTTLSeconds
-	backoff := backupBackoff
+	ttl := failedBackupTTLSeconds
+	backoff := backupJobBackoff
 
 	container := corev1.Container{
 		Name:                     containerName,

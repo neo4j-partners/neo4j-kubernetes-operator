@@ -236,6 +236,7 @@ func (r *ScheduleReconciler) emit(ctx context.Context, sched *neo4jv1.Neo4jBacku
 			Destination: tmpl.Destination,
 			Type:        typ,
 			Options:     tmpl.Options,
+			Scratch:     tmpl.Scratch,
 		},
 	}
 	if err := controllerutil.SetControllerReference(sched, b, r.Scheme); err != nil {
@@ -274,6 +275,7 @@ func (r *ScheduleReconciler) emitAggregate(ctx context.Context, sched *neo4jv1.N
 			Type:        neo4jv1.BackupTypeAggregate,
 			Source:      &neo4jv1.BackupSource{BackupRef: tip},
 			Options:     tmpl.Options,
+			Scratch:     tmpl.Scratch,
 		},
 	}
 	if err := controllerutil.SetControllerReference(sched, b, r.Scheme); err != nil {
