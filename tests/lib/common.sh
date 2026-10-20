@@ -215,7 +215,12 @@ collect_diagnostics() {
     local selector="app.kubernetes.io/instance=${NEO4J_CR_NAME}"
     kubectl describe pod -n "${NEO4J_NAMESPACE}" -l "${selector}" \
       >"${out}/workload-pods-describe.txt" 2>&1 || true
-    local pod base
+    local pod base pw=""
+    if [[ -n "${NEO4J_AUTH_SECRET:-}" ]]; then
+      pw="$(kubectl get secret "${NEO4J_AUTH_SECRET}" -n "${NEO4J_NAMESPACE}" \
+        -o jsonpath='{.data.NEO4J_AUTH}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+      pw="${pw#neo4j/}"
+    fi
     for pod in $(kubectl get pods -n "${NEO4J_NAMESPACE}" -l "${selector}" -o name 2>/dev/null); do
       base="${pod#pod/}"
       kubectl logs "${pod}" -n "${NEO4J_NAMESPACE}" -c neo4j --tail=-1 \
@@ -223,6 +228,16 @@ collect_diagnostics() {
       # --previous captures the crashed container before the CrashLoopBackOff restart.
       kubectl logs "${pod}" -n "${NEO4J_NAMESPACE}" -c neo4j --previous --tail=-1 \
         >"${out}/${base}.previous.log" 2>&1 || true
+      # neo4j.log stops at "Started."; why a database stays unavailable afterwards (store
+      # recovery, failed start) is only in debug.log and in SHOW DATABASES.
+      kubectl exec "${pod}" -n "${NEO4J_NAMESPACE}" -c neo4j -- tail -n 500 /logs/debug.log \
+        >"${out}/${base}.debug.log" 2>&1 || true
+      if [[ -n "${pw}" ]]; then
+        kubectl exec "${pod}" -n "${NEO4J_NAMESPACE}" -c neo4j -- \
+          cypher-shell -a bolt://localhost:7687 -u neo4j -p "${pw}" -d system --format plain \
+          "SHOW DATABASES YIELD name, address, role, requestedStatus, currentStatus, statusMessage;" \
+          >"${out}/${base}.databases.txt" 2>&1 || true
+      fi
     done
   fi
 }

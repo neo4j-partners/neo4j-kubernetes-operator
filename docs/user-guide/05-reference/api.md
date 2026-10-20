@@ -269,7 +269,7 @@ Conditions you will actually gate on:
 
 | Condition | True means |
 |-----------|-----------|
-| `Ready` | The workload is reachable for the current generation |
+| `Ready` | The workload is reachable for the current generation. It covers the servers, not their databases: check database status yourself if you need one online |
 | `Installed` | The base Kubernetes objects exist |
 | `Reconciling` | A reconcile is in progress |
 | `Error` | Reconcile failed; the reason names the cause |
