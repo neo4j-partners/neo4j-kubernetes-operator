@@ -38,10 +38,18 @@ IMAGE_TAG="${IMAGE##*:}"
 log "Installing CRD (server-side)"
 make install
 
+# Another suite on the same cluster may have deleted these namespaces moments ago.
+wait_namespace_gone "${RELEASE_NS}"
+IFS=',' read -r -a watched_list <<<"${WATCHED}"
+for ns in "${watched_list[@]}"; do
+  ns="${ns// /}"
+  [[ -n "${ns}" ]] || continue
+  wait_namespace_gone "${ns}"
+done
+
 # Helm creates its release namespace but never a namespace it is asked to put a Role in: a
 # rendered Namespace object that already exists fails the install on ownership metadata, so the
 # chart cannot own these. Creating them here is what a platform team does before installing.
-IFS=',' read -r -a watched_list <<<"${WATCHED}"
 for ns in "${watched_list[@]}"; do
   ns="${ns// /}"
   [[ -n "${ns}" ]] || continue

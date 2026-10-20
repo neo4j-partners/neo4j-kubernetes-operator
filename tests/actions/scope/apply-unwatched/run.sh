@@ -19,6 +19,8 @@ source "${SCRIPT_DIR}/../../../lib/common.sh"
 NS="${E2E_SCOPE_NAMESPACE:-e2e-unwatched}"
 CR="${E2E_SCOPE_CR:-e2e-scope}"
 
+# scope/cleanup-unwatched deletes this namespace without waiting.
+wait_namespace_gone "${NS}"
 log "Creating unwatched namespace ${NS}"
 kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 

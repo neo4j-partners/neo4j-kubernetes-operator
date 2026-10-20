@@ -37,11 +37,15 @@ IMAGE_TAG="${IMAGE##*:}"
 log "Installing CRD (server-side)"
 make install
 
+# Another suite on the same cluster may have deleted these namespaces moments ago.
+wait_namespace_gone "${RELEASE_NS}"
+
 # Plain workload namespaces — no Role. Cluster-wide covers them by watching everything.
 IFS=',' read -r -a workload_list <<<"${WORKLOAD}"
 for ns in "${workload_list[@]}"; do
   ns="${ns// /}"
   [[ -n "${ns}" ]] || continue
+  wait_namespace_gone "${ns}"
   log "Ensuring workload namespace ${ns}"
   kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 done

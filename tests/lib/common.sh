@@ -60,6 +60,22 @@ kubectl_wait_deployment() {
   kubectl rollout status "deployment/${name}" -n "${namespace}" --timeout="${timeout}"
 }
 
+# wait_namespace_gone blocks while a namespace a previous suite or case deleted is still
+# terminating: Kubernetes refuses new content there, so `kubectl apply` or `helm --create-namespace`
+# would fail outright. Cleanups delete namespaces with --wait=false to keep teardown fast, and on a
+# shared cluster (nightly kind) the next suite starts about a second later. On timeout the
+# namespace's own conditions name what is holding it — typically a Neo4j finalizer left behind
+# because the operator was uninstalled before the CR was released.
+wait_namespace_gone() {  # <namespace> [timeout]
+  local ns=$1 timeout=${2:-180s}
+  [[ "$(kubectl get namespace "${ns}" -o jsonpath='{.status.phase}' 2>/dev/null)" == "Terminating" ]] || return 0
+  log "Namespace ${ns} is terminating — waiting up to ${timeout} for it to go"
+  kubectl wait --for=delete "namespace/${ns}" --timeout="${timeout}" >/dev/null 2>&1 && return 0
+  kubectl get namespace "${ns}" \
+    -o jsonpath='{range .status.conditions[?(@.status=="True")]}{.type}: {.message}{"\n"}{end}' >&2 || true
+  die "namespace ${ns} still terminating after ${timeout}"
+}
+
 kubectl_jsonpath() {
   kubectl get "$1" -n "${NEO4J_NAMESPACE}" -o "jsonpath={$2}"
 }

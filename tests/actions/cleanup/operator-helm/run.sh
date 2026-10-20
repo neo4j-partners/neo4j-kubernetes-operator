@@ -6,7 +6,8 @@
 # Namespace deletes do not wait. A namespace only finishes terminating once every finalizer in it
 # is released, and the controller that releases the Neo4j finalizer is the one being uninstalled
 # here — blocking on that would trade a leftover namespace on a disposable cluster for a hung
-# teardown.
+# teardown. The install actions wait for a namespace still terminating (wait_namespace_gone), so a
+# suite started right after this one on the same cluster does not trip over it.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
