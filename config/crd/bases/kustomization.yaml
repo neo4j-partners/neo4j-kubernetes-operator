@@ -6,3 +6,4 @@ resources:
 - neo4j.com_neo4jbackups.yaml
 - neo4j.com_neo4jbackupschedules.yaml
 - neo4j.com_neo4jrestores.yaml
+- neo4j.com_neo4jstudios.yaml

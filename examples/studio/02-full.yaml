@@ -1,0 +1,125 @@
+# Purpose: a SELF-CONTAINED, runnable Neo4jStudio exercising the full operator surface — a one-to-many
+#   Studio pointed at an in-cluster Enterprise Neo4j (ReverseProxy) with a BYO asset store, its own
+#   Service front door, replicas, role mapping, sign-in toggles, HTTPS, tool toggles, and both the
+#   plaintext and secret-aware NES_* config passthroughs. Exercises BDR-015 §2, §4, §5, §8, §9.
+#
+# Prerequisites (the operator does NOT create these — BDR-015 §4-a, BYO):
+#   1. An Enterprise Neo4j named my-graph in this namespace, HTTP connector enabled (7474, default).
+#   2. The asset database and its architect account, created once on that Neo4j, e.g. via cypher-shell:
+#        CREATE DATABASE `studio-assets` IF NOT EXISTS;
+#        CREATE USER studio SET PASSWORD 'choose-a-strong-password' CHANGE NOT REQUIRED;
+#        GRANT ROLE architect ON DATABASE `studio-assets` TO studio;
+#      Put that same password in the studio-assetstore-auth Secret below.
+#
+# Config model: the operator renders settings as NES_* environment variables (the documented
+#   approach), which override the image's bundled config.yaml. First-class fields cover the common
+#   surface; `config` passes any non-secret NES_* key verbatim and `configFromSecrets` sources any
+#   secret-valued NES_* key from a Secret as a secretKeyRef env (never inline — §5).
+#
+# Apply: kubectl apply -f examples/studio/02-full.yaml
+#   HTTPS is on below, so reach Studio with:
+#     kubectl port-forward svc/studio-full 8080:8080  → https://localhost:8080 (self-signed: accept the warning)
+#
+# --- Secrets (replace every REPLACE_ME before any real use) -------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: studio-assetstore-auth           # the architect account for Studio's asset database (BYO — §4-a)
+type: Opaque
+stringData:
+  username: studio
+  password: REPLACE_ME
+---
+# TLS material for Studio's own HTTPS listener. Must be a kubernetes.io/tls Secret; tls.key must be an
+# unencrypted PKCS#8 PEM (BEGIN PRIVATE KEY). Generate a self-signed pair for a quick trial:
+#   openssl req -x509 -newkey rsa:2048 -nodes -keyout tls.key -out tls.crt -days 365 \
+#     -subj "/CN=studio-full" && \
+#   kubectl create secret tls studio-tls --cert=tls.crt --key=tls.key
+apiVersion: v1
+kind: Secret
+metadata:
+  name: studio-tls
+type: kubernetes.io/tls
+stringData:
+  tls.crt: REPLACE_ME_WITH_CERT_PEM
+  tls.key: REPLACE_ME_WITH_UNENCRYPTED_PRIVATE_KEY_PEM
+---
+# Secret-valued NES_* config, injected as secretKeyRef env (§5). Here: a generativeAi provider API key.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: studio-genai
+type: Opaque
+stringData:
+  apiKey: REPLACE_ME_WITH_PROVIDER_API_KEY
+---
+# Optional Enterprise Studio license (distinct from the Neo4j Enterprise license). Studio starts
+# without it (BDR-015 §3); uncomment this Secret and spec.license below to supply one. The Secret
+# key MUST be nes.license (the operator mounts it and points NES_license_path at it).
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: studio-license
+# type: Opaque
+# stringData:
+#   nes.license: REPLACE_ME_WITH_LICENSE_CONTENTS
+# ---
+# --- Neo4jStudio ---------------------------------------------------------------------------------
+apiVersion: neo4j.com/v1
+kind: Neo4jStudio
+metadata:
+  name: studio-full
+spec:
+  version: "latest"                      # pin to a released tag for production
+  image:
+    repository: "neo4j/enterprise-studio"
+    pullPolicy: IfNotPresent
+  # license:                             # OPTIONAL — uncomment with the Secret above
+  #   secretRef:
+  #     name: studio-license
+  replicas: 1                            # stateless; defaults to 1 (BDR-015 §10)
+  deployments:
+    - name: prod-graph
+      neo4jRef:
+        name: my-graph                   # in-cluster; operator resolves the client Service URI
+      mode: ReverseProxy                 # Studio proxies HTTP to the DBMS (uses the 7474 connector)
+      auth:                              # end-user sign-in methods (both default enabled in NES)
+        basic: true                      #   username/password
+        oidc: false                      #   single sign-on
+      roleMapping:                       # map Neo4j roles → Studio roles for this deployment
+        - role: studioAdmin
+          members:
+            - kind: databaseRole
+              name: admin
+        - role: studioCreator
+          members:
+            - kind: databaseRole
+              name: PUBLIC
+  assetStore:
+    uri: "neo4j://my-graph.default.svc:7687"   # Bolt scheme — Studio is a driver client here
+    database: studio-assets
+    auth:
+      secretRef:
+        name: studio-assetstore-auth
+  server:
+    tls:                                 # HTTPS on Studio's own listener (server.https.*)
+      enabled: true
+      secretRef:
+        name: studio-tls
+  tools:                                 # toggle UI tools (all default enabled)
+    bloom: true
+    dashboards: true
+    query: true
+  connectivity:
+    service:
+      type: ClusterIP                    # port-forward to reach it; swap for LoadBalancer or add an Ingress
+  # security:                            # OPTIONAL — override the hardened defaults (merged over them)
+  #   containerSecurityContext:
+  #     runAsUser: 1000
+  config:                                # non-secret NES_* passthrough only; secrets go below (§9)
+    NES_generativeAi_chatCompletionProvider_default_upstream_model: "gpt-4o"
+  configFromSecrets:                     # secret-valued NES_* keys sourced from Secrets (§5)
+    - name: NES_generativeAi_chatCompletionProvider_default_upstream_apiKey
+      secretRef:
+        name: studio-genai
+        key: apiKey
