@@ -70,9 +70,13 @@ conn_probe() {
 # conn_show_setting <host> <pw> <name> — print the effective value of a Neo4j setting via
 # SHOW SETTINGS over bolt, run inside CONN_EXEC_FN. Mirrors a manual cypher-shell check:
 # reads the *runtime* value Neo4j resolved, not the rendered ConfigMap fragment.
+#
+# Settings belong to the server, so this goes to the system database: the default database can
+# stay unavailable for minutes after a restart (store recovery) while the server is up and Ready,
+# and a config assert has no business waiting on it.
 conn_show_setting() {
   local host=$1 pw=$2 name=$3 snippet
-  snippet="cypher-shell -a 'bolt://${host}:${CONN_BOLT_PORT}' -u neo4j -p '${pw}' --format plain \"SHOW SETTINGS YIELD name, value WHERE name = '${name}' RETURN value;\""
+  snippet="cypher-shell -a 'bolt://${host}:${CONN_BOLT_PORT}' -u neo4j -p '${pw}' -d system --format plain \"SHOW SETTINGS YIELD name, value WHERE name = '${name}' RETURN value;\""
   "${CONN_EXEC_FN}" "${snippet}"
 }
 
@@ -147,6 +151,26 @@ conn_run_cypher() {
   "${CONN_EXEC_FN}" "${snippet}"
 }
 
+# conn_wait_default_database <host> <pw> <label> — block until every copy of the default database
+# that Neo4j means to be online is online. Ready on the CR means the servers are up, not that
+# their databases are (the operator does not manage databases), so an assert that needs the
+# default database waits for it here. The name is never assumed: SHOW DEFAULT DATABASE resolves it.
+conn_wait_default_database() {
+  local host=$1 pw=$2 label=$3 snippet out pending=""
+  local deadline=$((SECONDS + ${E2E_DATABASE_TIMEOUT:-300}))
+  snippet="cypher-shell -a 'bolt://${host}:${CONN_BOLT_PORT}' -u neo4j -p '${pw}' -d system --format plain \"SHOW DEFAULT DATABASE YIELD requestedStatus, currentStatus WHERE requestedStatus = 'online' AND currentStatus <> 'online' RETURN count(*) AS pending;\""
+  while [[ "${SECONDS}" -lt "${deadline}" ]]; do
+    if out="$("${CONN_EXEC_FN}" "${snippet}" 2>&1)"; then
+      pending="$(tail -1 <<<"${out}")"
+      [[ "${pending}" == "0" ]] && return 0
+    fi
+    sleep "${CONN_RETRY_DELAY:-3}"
+  done
+  snippet="cypher-shell -a 'bolt://${host}:${CONN_BOLT_PORT}' -u neo4j -p '${pw}' -d system --format plain \"SHOW DEFAULT DATABASE YIELD name, address, currentStatus, statusMessage;\""
+  "${CONN_EXEC_FN}" "${snippet}" >&2 || true
+  die "[${label}] default database not online after ${E2E_DATABASE_TIMEOUT:-300}s"
+}
+
 # conn_assert_cypher <host> <pw> <cypher> <expect-substring> <label> — run the statement and
 # require the output to contain expect-substring. Containment, not equality, because plugin
 # versions move; retried on the same budget as conn_assert_setting because a freshly-Ready
@@ -154,6 +178,7 @@ conn_run_cypher() {
 conn_assert_cypher() {
   local host=$1 pw=$2 cypher=$3 want=$4 label=$5
   local out ok=1 max="${CONN_RETRIES:-20}" i
+  conn_wait_default_database "${host}" "${pw}" "${label}"
   for ((i = 1; i <= max; i++)); do
     if out="$(conn_run_cypher "${host}" "${pw}" "${cypher}" 2>&1)"; then
       if grep -qF -- "${want}" <<<"${out}"; then
