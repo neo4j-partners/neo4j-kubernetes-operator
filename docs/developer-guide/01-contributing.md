@@ -68,7 +68,7 @@ make govulncheck   # known vulnerabilities in dependencies
 ```
 
 `make audit` shells out to Python, so `python3` needs to be on your PATH. Use a Go toolchain matching
-CI (1.26.5); the module declares `go 1.26.0`.
+CI (1.26.10); the module declares `go 1.26.0`.
 
 For anything touching the reconcile path, run the end-to-end suite you are most likely to break
 before opening the pull request:
