@@ -232,6 +232,8 @@ var (
 		"At least one successful restore exists for this Neo4j instance")
 	ConditionScheduleReady = declareCondition("ScheduleReady", GateNone,
 		"The backup schedule's cron cadences are valid and active, or intentionally suspended")
+	ConditionStudioReady = declareCondition("StudioReady", GateFalseBlocks,
+		"The Enterprise Studio Deployment is Available and every served deployment resolved")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -445,6 +447,18 @@ var (
 		asEvent("Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10)"))
 	ReasonScheduleAggregateFailed = declare("ScheduleAggregateFailed", SeverityWarn, SurfaceEvent,
 		asEvent("The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail"))
+)
+
+// StudioReady — a Neo4jStudio Enterprise Studio deployment (BDR-015 / ADR-018).
+var (
+	ReasonStudioAvailable = declareNominal("StudioAvailable", SurfaceCondition,
+		on(ConditionStudioReady, "The Studio Deployment is Available and serving"))
+	ReasonStudioProgressing = declare("StudioProgressing", SeverityInfo, SurfaceCondition,
+		on(ConditionStudioReady, "The Studio Deployment is rolling out; waiting for it to become Available"))
+	ReasonStudioTargetNotFound = declare("StudioTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionStudioReady, "An in-cluster `deployments[].neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonStudioEditionUnsupported = declare("StudioEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionStudioReady, "A served in-cluster Neo4j is community; Enterprise Studio serves Enterprise deployments"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

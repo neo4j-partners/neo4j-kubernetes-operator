@@ -179,6 +179,7 @@ projection of the same catalog: the [error reference](../../../user-guide/05-ref
 | `BackupReady` | At least one successful backup exists for this Neo4j instance | Yes — `False` holds `Ready` back |
 | `RestoreReady` | At least one successful restore exists for this Neo4j instance | Yes — `False` holds `Ready` back |
 | `ScheduleReady` | The backup schedule's cron cadences are valid and active, or intentionally suspended | No |
+| `StudioReady` | The Enterprise Studio Deployment is Available and every served deployment resolved | Yes — `False` holds `Ready` back |
 <!-- END GENERATED oracle:conditions -->
 
 ### Planned for a later version

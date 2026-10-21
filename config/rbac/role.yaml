@@ -58,6 +58,7 @@ rules:
   - apps
   resources:
   - statefulsets
+  - deployments
   verbs:
   - create
   - delete
@@ -94,6 +95,7 @@ rules:
   - networking.k8s.io
   resources:
   - networkpolicies
+  - ingresses
   verbs:
   - create
   - delete
@@ -184,6 +186,26 @@ rules:
   - neo4j.com
   resources:
   - neo4jrestores/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4jstudios
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4jstudios/status
   verbs:
   - get
   - patch

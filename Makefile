@@ -33,7 +33,7 @@ all: generate manifests build
 
 .PHONY: run
 run: ## Run the controller locally (LOG_ARGS e.g. --zap-devel --zap-log-level=debug)
-	go run ./src/cmd/manager/main.go --leader-elect=false $(LOG_ARGS)
+	go run ./src/cmd/manager --leader-elect=false $(LOG_ARGS)
 
 .PHONY: build
 build: ## Build manager binary to bin/manager
