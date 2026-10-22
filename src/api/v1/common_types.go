@@ -499,6 +499,17 @@ type ConnectivityServiceSpec struct {
 	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
 	Expose                   []string `json:"expose,omitempty"`
 	Ports                    *ServicePortsSpec `json:"ports,omitempty"`
+	// SessionAffinity controls client-Service stickiness. Unset defaults by topology: ClientIP for a
+	// Cluster, None for Standalone. ClientIP is required so HTTP Query API explicit transactions (begin
+	// → run → commit span multiple requests, pinned to one member) do not fail with TransactionNotFound
+	// against a cluster (BDR-016). Bolt clients are unaffected either way.
+	// +kubebuilder:validation:Enum=None;ClientIP
+	SessionAffinity string `json:"sessionAffinity,omitempty"`
+	// SessionAffinityTimeoutSeconds is the ClientIP stickiness window; defaults to 10800 (3h, the default
+	// dbms.transaction.timeout) when SessionAffinity resolves to ClientIP. Ignored when affinity is None.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=86400
+	SessionAffinityTimeoutSeconds *int32 `json:"sessionAffinityTimeoutSeconds,omitempty"`
 }
 
 // ReverseProxyServiceSpec configures the reverse-proxy front Service.

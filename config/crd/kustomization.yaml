@@ -3,3 +3,4 @@ resources:
 - bases/neo4j.com_neo4jbackups.yaml
 - bases/neo4j.com_neo4jbackupschedules.yaml
 - bases/neo4j.com_neo4jrestores.yaml
+- bases/neo4j.com_neo4jstudios.yaml

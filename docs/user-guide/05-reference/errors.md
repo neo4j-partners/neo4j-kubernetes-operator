@@ -100,6 +100,9 @@ Reasons that report a problem, a decision, or an operation in progress.
 | ScheduleReady | ScheduleInvalidCron | error | condition+event | A cron expression (full or incremental) could not be parsed |
 | — (Event only) | SchedulePruneFailed | warn | event | The Job that deletes an expired chain's artifacts (PVC files, or the object-store prefix via rclone) failed, or its destination is misconfigured; the chain and its records are kept and retried, and the message carries the failure detail |
 | — (Event only) | ScheduleAggregateFailed | warn | event | The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail |
+| StudioReady | StudioProgressing | info | condition | The Studio Deployment is rolling out; waiting for it to become Available |
+| StudioReady | StudioTargetNotFound | warn | condition | An in-cluster `deployments[].neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| StudioReady | StudioEditionUnsupported | error | condition+event | A served in-cluster Neo4j is community; Enterprise Studio serves Enterprise deployments |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
@@ -132,6 +135,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | — (Event only) | ScheduleBackupEmitted | info | event | A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain |
 | — (Event only) | SchedulePruned | info | event | Retention removed a whole expired backup chain — its stored artifacts (PVC files, or the object-store prefix purged by the rclone prune Job) and its records; the Event names the chain and how many backups were pruned (BDR-014 §10) |
 | — (Event only) | ScheduleCompacted | info | event | Aggregate compaction collapsed a closed chain into its recovered full and pruned the original links (kept the recovered full); the Event names the chain and how many links were pruned (BDR-014 §10) |
+| StudioReady | StudioAvailable | info | condition | The Studio Deployment is Available and serving |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
 <!-- END GENERATED oracle:steady -->
