@@ -26,7 +26,7 @@ What is fixed by [BDR-015](../business/studio/015-enterprise-studio.md) and must
 - Studio **validates its config at startup and exits immediately** if a required key is missing ([configuration](https://neo4j.com/docs/enterprise-studio/current/configuration/)) — a config regression is a crash-loop, so the operator must assemble the full required set deterministically.
 - Env vars **override** the mounted `config.yaml` ([configuration reference](https://neo4j.com/docs/enterprise-studio/current/configuration-reference/)); mixing both without a precedence rule produces surprising runtime values.
 - `NES_*` carries **secrets** (asset-store password, OIDC client secret) — putting them in a ConfigMap or a plain env literal leaks them into `kubectl describe`.
-- A `ReverseProxy` deployment against a **cluster** without session affinity breaks Studio↔cluster HTTP sessions ([prerequisites](https://neo4j.com/docs/enterprise-studio/current/prerequisites/)).
+- A `ReverseProxy` deployment against a **cluster** without session affinity breaks Studio↔cluster HTTP sessions ([prerequisites](https://neo4j.com/docs/enterprise-studio/current/prerequisites/)). **Correction (BDR-016):** the affinity that fixes this is on the **served cluster's** client Service (`sessionAffinity: ClientIP`), not Studio's front door — the front-door stickiness below only pins browser→Studio. Studio holds no cluster-affinity logic; it resolves to a now-affinity-safe Service (see [BDR-016](../business/neo4j/016-cluster-http-session-affinity.md)).
 - Resolving an in-cluster `neo4jRef` to a URI must reuse the **existing Service naming** ([ADR-005](005-render-conventions.md), [BDR-007](../business/neo4j/006-service-exposure-connectivity.md)) — re-deriving it independently drifts from the workload's real Services.
 
 ---
@@ -109,7 +109,7 @@ func (r *Neo4jStudioReconciler) Reconcile(ctx context.Context, s *v1.Neo4jStudio
 ### What gets rendered
 
 - **`Deployment`** (1 replica default; `replicas` configurable later) running `image.repository`:`spec.version`, container port `NES_server_port` (default `8080`), owner-referenced to the `Neo4jStudio` ([ADR-005](005-render-conventions.md)). No PVC — Studio is stateless.
-- **`Service`** fronting the Studio port, shape from `spec.connectivity.service` via `render/connectivity`. When any served deployment is `ReverseProxy` against a `Cluster`, the Service is rendered with **`sessionAffinity: ClientIP`** (Ingress gets the sticky-session annotation) — this is the [prerequisites](https://neo4j.com/docs/enterprise-studio/current/prerequisites/) requirement, enforced not documented.
+- **`Service`** fronting the Studio port, shape from `spec.connectivity.service` via `render/connectivity`. When any served deployment is `ReverseProxy` against a `Cluster`, Studio's own Service is rendered with **`sessionAffinity: ClientIP`** (Ingress gets the sticky-session annotation) — this pins the **browser→Studio** hop. Note this does **not** fix the Studio→cluster transaction routing; that requires affinity on the served cluster's own client Service, owned by [BDR-016](../business/neo4j/016-cluster-http-session-affinity.md).
 - **optional `Ingress`** from `spec.connectivity.ingress.rules`, reusing the [BDR-007](../business/neo4j/006-service-exposure-connectivity.md) builder.
 - **`ServiceAccount`** for the Studio pod (no special RBAC — Studio talks to Neo4j over Bolt/HTTP, not the K8s API).
 

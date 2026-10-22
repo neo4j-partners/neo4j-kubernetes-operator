@@ -38,7 +38,7 @@ Studio reaches a served deployment in one of **two modes** ([deployments](https:
 | **`Direct`** | The user's browser connects straight to the DBMS over Bolt (`bolt://`/`neo4j://`) | DB is network-reachable from the client |
 | **`ReverseProxy`** | Studio proxies HTTP traffic to the DBMS's HTTP connector; the browser only talks to Studio | DB is not directly reachable; Studio is the single front door |
 
-A **`ReverseProxy`** deployment against a **cluster** breaks Studio↔cluster HTTP sessions unless the front door has **session affinity** — a hard prerequisite, not a tuning knob ([prerequisites](https://neo4j.com/docs/enterprise-studio/current/prerequisites/)).
+A **`ReverseProxy`** deployment against a **cluster** breaks Studio↔cluster HTTP sessions unless the **served cluster's** client Service has **session affinity** (`sessionAffinity: ClientIP`) — a hard prerequisite, not a tuning knob ([prerequisites](https://neo4j.com/docs/enterprise-studio/current/prerequisites/), [Operations Manual](https://neo4j.com/docs/operations-manual/current/kubernetes/neo4j-clusters-session-affinity/)). This is a `Neo4j`-connectivity concern that affects every HTTP explicit-transaction client, not a Studio feature — owned by [BDR-016](../neo4j/016-cluster-http-session-affinity.md); Studio simply resolves to the affinity-safe Service. (Earlier drafts placed this on Studio's front door, which only pins browser→Studio — corrected.)
 
 ### Forces
 

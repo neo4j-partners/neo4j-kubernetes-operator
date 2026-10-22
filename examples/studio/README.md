@@ -106,6 +106,10 @@ kubectl port-forward svc/studio-full 8080:8080
   now runs Studio as non-root UID `7474`. Rebuild/redeploy the operator.
 - **No license** — Studio logs `running unlicensed` and still starts (BDR-015 §3); add a license Secret
   (key `nes.license`) to remove the warning.
+- **`Transaction … not found` / `neo4j-cluster-affinity` when serving a cluster in `ReverseProxy`** — HTTP
+  explicit transactions must stay pinned to one cluster member. The operator sets `sessionAffinity: ClientIP`
+  on a cluster `Neo4j`'s client Service by default (BDR-016), so this works out of the box. If you overrode
+  it with `spec.connectivity.service.sessionAffinity: None`, set it back to `ClientIP` (or omit it).
 
 ## Cleanup
 
