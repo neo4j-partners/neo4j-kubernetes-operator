@@ -3,6 +3,8 @@ tests/old
 
 # make build — manager binary (Makefile: go build -o bin/manager)
 /bin/
+# stray root-level build output (go build -o manager / Docker /manager)
+/manager
 
 # E2E run artefacts (diagnostics, logs)
 tests/results/*
