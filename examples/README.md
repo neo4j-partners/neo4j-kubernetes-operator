@@ -132,6 +132,20 @@ block swapped):
 
 Concepts and field reference: [Backup and restore](../docs/user-guide/03-neo4j/10-backup-restore.md).
 
+## Enterprise Studio (API preview)
+
+The [`studio/`](studio/) directory holds `Neo4jStudio` CRs that stand up Neo4j Enterprise Studio and
+point it at one-to-many `Neo4j` deployments. **The CRD is installed but the controller is not
+implemented yet** ([BDR-015](../docs/design/decision-records/business/studio/015-enterprise-studio.md) /
+[ADR-018](../docs/design/decision-records/architecture/018-enterprise-studio.md)) — applying a
+`Neo4jStudio` validates and is stored, but nothing is rendered and `.status` stays empty until the
+reconciler lands. Start with the [quick start](studio/README.md).
+
+| File | Demonstrates |
+|------|--------------|
+| [`studio/01-minimal.yaml`](studio/01-minimal.yaml) | Smallest valid `Neo4jStudio` — one in-cluster `Direct` deployment + BYO asset store |
+| [`studio/02-full.yaml`](studio/02-full.yaml) | One-to-many (`ReverseProxy` + external `Direct`), license, image, replicas, Service + Ingress, `config` passthrough |
+
 ## Feature × topology matrix
 
 | Feature | Standalone | Cluster |
