@@ -41,6 +41,7 @@ func ClientService(ctx render.Context) *corev1.Service {
 		Ports:                    connectorServicePorts(ctx, ctx.ClientExpose(), true),
 		LoadBalancerSourceRanges: ctx.ClientLoadBalancerSourceRanges(),
 	}
+	spec.SessionAffinity, spec.SessionAffinityConfig = clientSessionAffinity(ctx)
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -51,6 +52,35 @@ func ClientService(ctx render.Context) *corev1.Service {
 		},
 		Spec: spec,
 	}
+}
+
+// clientSessionAffinity resolves the client Service stickiness (BDR-016). An explicit
+// spec.connectivity.service.sessionAffinity wins; unset defaults to ClientIP for a cluster (required so
+// HTTP Query API explicit transactions stay pinned to one member) and None for a standalone. The render
+// always sets a non-empty value so it is authoritative over any live value (preserveServiceServerFields
+// only carries a live affinity forward when the desired one is empty).
+func clientSessionAffinity(ctx render.Context) (corev1.ServiceAffinity, *corev1.SessionAffinityConfig) {
+	affinity := ""
+	var timeout *int32
+	if ctx.Neo4j.Spec.Connectivity != nil && ctx.Neo4j.Spec.Connectivity.Service != nil {
+		affinity = ctx.Neo4j.Spec.Connectivity.Service.SessionAffinity
+		timeout = ctx.Neo4j.Spec.Connectivity.Service.SessionAffinityTimeoutSeconds
+	}
+	if affinity == "" {
+		if render.IsClusterMode(ctx.Neo4j) {
+			affinity = string(corev1.ServiceAffinityClientIP)
+		} else {
+			affinity = string(corev1.ServiceAffinityNone)
+		}
+	}
+	if affinity != string(corev1.ServiceAffinityClientIP) {
+		return corev1.ServiceAffinityNone, nil
+	}
+	t := int32(10800) // 3h — matches the default dbms.transaction.timeout
+	if timeout != nil {
+		t = *timeout
+	}
+	return corev1.ServiceAffinityClientIP, &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: &t}}
 }
 
 // AdminService builds the derived admin Service (publishNotReadyAddresses) — BDR-007.
