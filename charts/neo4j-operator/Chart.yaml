@@ -4,9 +4,9 @@ description: Neo4j Kubernetes Operator controller (CRDs, RBAC, Deployment)
 type: application
 version: 1.0.0
 appVersion: "1.0.0"
-# Oldest release still supported upstream. The CRD's validation rules need an API server that
-# compiles them, including the CEL quantity library used to block a volume shrink.
-kubeVersion: ">= 1.35.0-0"
+# Minimum API server version. The CRDs use the CEL quantity library (quantity()/isQuantity())
+# to block a volume shrink; that library is always-on from Kubernetes 1.29 onward.
+kubeVersion: ">= 1.29.0-0"
 keywords:
   - neo4j
   - operator
