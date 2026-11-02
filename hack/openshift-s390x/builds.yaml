@@ -1,0 +1,82 @@
+# In-cluster image builds for linux/s390x, pushed to the OpenShift internal registry.
+#
+# Both are Docker-strategy BuildConfigs with a *binary* source: you upload the build context from
+# your laptop with `oc start-build --from-dir`, the build runs natively on an s390x node (no
+# emulation), and its output ImageStreamTag is pushed to the internal registry automatically by the
+# build's `builder` ServiceAccount — you never run `podman push` or log in to the registry.
+#
+# Resulting in-cluster pull references (reachable from every node, no external egress at runtime):
+#   image-registry.openshift-image-registry.svc:5000/neo4j/neo4j:2026.09.0-enterprise
+#   image-registry.openshift-image-registry.svc:5000/neo4j-operator-system/neo4j-operator:1.0.0
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: neo4j
+  namespace: neo4j
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: neo4j-s390x
+  namespace: neo4j
+spec:
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.neo4j
+  output:
+    to:
+      kind: ImageStreamTag
+      # The operator derives the enterprise image tag as <version>-enterprise (official neo4j
+      # convention), so publish that exact tag — it must match spec.version + the edition suffix.
+      name: neo4j:2026.09.0-enterprise
+  # Sized for this cluster's small workers (~0.8 CPU / ~1Gi free per node).
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: neo4j-operator
+  namespace: neo4j-operator-system
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: neo4j-operator-s390x
+  namespace: neo4j-operator-system
+spec:
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+      # The operator Dockerfile cross-compiles with GOARCH=${TARGETARCH}. buildah sets these from
+      # the build node, but we pin them so the output is deterministic regardless of the builder.
+      buildArgs:
+        - name: TARGETARCH
+          value: s390x
+        - name: TARGETOS
+          value: linux
+  output:
+    to:
+      kind: ImageStreamTag
+      name: neo4j-operator:1.0.0
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

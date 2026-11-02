@@ -21,11 +21,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -38,6 +41,7 @@ import (
 	neo4jrestorectrl "github.com/neo4j/neo4j-kubernetes-operator/src/internal/controller/neo4jrestore"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/imagepolicy"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/logging"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/platform"
 	renderbackup "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/backup"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/validation"
 )
@@ -62,6 +66,7 @@ func main() {
 	var allowedImageRepos string
 	var objectStorePruneImage string
 	var maxConcurrentReconciles int
+	var platformFlag string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "Metrics bind address. \"0\" disables the endpoint. Any other value requires --metrics-secure (NEO-017).")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
@@ -75,6 +80,9 @@ func main() {
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 0,
 		fmt.Sprintf("Max concurrent Neo4j reconciles (NEO-014). 0 uses %d, or MAX_CONCURRENT_RECONCILES. Maximum %d.",
 			neo4jctrl.DefaultMaxConcurrentReconciles, neo4jctrl.MaxConcurrentReconcilesLimit))
+	flag.StringVar(&platformFlag, "platform", "",
+		"Target platform for operand pod security contexts (NEO-026): auto|openshift|kubernetes. "+
+			"Empty or auto detects OpenShift via the security.openshift.io API; falls back to PLATFORM env.")
 	// Production JSON by default (ADR-014); --zap-devel for console. Optional --log-file tees verbose logs.
 	logOpts := logging.Options{}
 	logOpts.BindFlags(flag.CommandLine)
@@ -158,7 +166,22 @@ func main() {
 		})
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
+	restCfg := ctrl.GetConfigOrDie()
+
+	// Resolve the operand security-context platform: explicit flag/env wins, else autodetect
+	// OpenShift by probing for its SCC API group (NEO-026).
+	if platformFlag == "" {
+		platformFlag = os.Getenv("PLATFORM")
+	}
+	var detectedOpenShift bool
+	if m := platform.Mode(strings.ToLower(strings.TrimSpace(platformFlag))); m != platform.OpenShift && m != platform.Kubernetes {
+		detectedOpenShift = detectOpenShift(restCfg)
+	}
+	resolvedPlatform := platform.Resolve(platformFlag, detectedOpenShift)
+	platform.Set(resolvedPlatform)
+	setupLog.Info("resolved operand platform", "platform", resolvedPlatform, "requested", platformFlag, "detectedOpenShift", detectedOpenShift)
+
+	mgr, err := ctrl.NewManager(restCfg, mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -217,4 +240,29 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// detectOpenShift reports whether the cluster exposes the security.openshift.io API group,
+// the reliable signal that SCCs govern pod admission (NEO-026). On any discovery error it
+// assumes plain Kubernetes — the safe default that keeps the fsGroup pin PVCs need.
+func detectOpenShift(cfg *rest.Config) bool {
+	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "openshift detection failed; assuming kubernetes")
+		return false
+	}
+	groups, err := dc.ServerGroups()
+	if groups == nil {
+		if err != nil {
+			setupLog.Error(err, "openshift detection failed; assuming kubernetes")
+		}
+		return false
+	}
+	// Scan whatever groups came back even on a partial (aggregated-API) error.
+	for _, g := range groups.Groups {
+		if g.Name == "security.openshift.io" {
+			return true
+		}
+	}
+	return false
 }

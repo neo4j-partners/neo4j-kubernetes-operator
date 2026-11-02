@@ -1,0 +1,21 @@
+# Helm values to run the operator from the internal-registry s390x image.
+# Do not also set image.digest — a digest of an amd64/arm64 index has no linux/s390x
+# entry and the kubelet stays in ImagePullBackOff.
+# Install with:
+#   helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+#     --namespace neo4j-operator-system \
+#     -f hack/openshift-s390x/values-s390x.yaml
+
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/neo4j-operator-system/neo4j-operator
+  tag: "1.0.0"
+  pullPolicy: Always
+
+# Watch the workload project.
+watchNamespaces:
+  - neo4j
+
+# Let CRs reference the self-built s390x Neo4j image (NEO-012 allowlist). Without this the operator
+# rejects spec.image.repository below.
+allowedImageRepositories:
+  - image-registry.openshift-image-registry.svc:5000/neo4j/neo4j

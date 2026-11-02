@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+#
+# Neo4j Enterprise container image for linux/s390x (IBM Z), built for the Neo4j operator.
+#
+# Neo4j is pure Java: the product tree and the official container entrypoint are architecture
+# independent (JVM bytecode + bash). Only the JRE and the PID-1 reaper are arch-specific. So we
+# reuse Neo4j's own /var/lib/neo4j and /startup *verbatim* from the published amd64 image — a file
+# COPY, never executed, so the source image's architecture is irrelevant — on top of an s390x JRE.
+#
+# ponytail: reuse the official entrypoint rather than hand-rolling the NEO4J_CONF/EXTENDED_CONF/
+# NEO4J_AUTH env->neo4j.conf contract the operator's StatefulSet depends on. Ceiling: if a bundled
+# plugin ships amd64-only native code (core Neo4j does not — the plain unix tarball runs on s390x,
+# proven by neo4j-partners/neo4j-z-testbed), that plugin would need an s390x build. Upgrade path:
+# switch the source to a tarball COPY (see README "Tarball variant") if egress to docker.io is
+# unavailable at build time.
+
+# Pin the amd64 manifest by DIGEST so buildah on an s390x build node pulls *this* image (there is no
+# s390x variant to resolve) purely to copy files out. Bump digest + version together on upgrade.
+# Digest for docker.io/library/neo4j:2026.09.0-enterprise (linux/amd64), captured 2026-10-19:
+FROM docker.io/library/neo4j@sha256:11782dc24a4156700e04e3cefe84b5a766eef994b733d560e7841c30c66ee51b AS neo4j-src
+
+# eclipse-temurin publishes linux/s390x. Keep the JRE major in step with the Neo4j release (21).
+FROM docker.io/library/eclipse-temurin:21-jre
+
+# tini is the official image's PID 1 (ENTRYPOINT ["tini","-g","--", ...]). Install the distro's
+# s390x build; copying the amd64 binary across would not run.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tini curl wget \
+ && rm -rf /var/lib/apt/lists/*
+
+# The official entrypoint expects a neo4j user. On OpenShift, platform auto leaves the UID unset
+# and restricted-v2 assigns one; the group-writable tree below is what lets that UID write.
+RUN groupadd -g 7474 neo4j && useradd -u 7474 -g neo4j -m -s /bin/bash neo4j
+
+# Neo4j product tree + official startup/entrypoint scripts (arch-agnostic).
+COPY --from=neo4j-src /var/lib/neo4j /var/lib/neo4j
+COPY --from=neo4j-src /startup /startup
+
+# Reproduce the official image's runtime contract exactly (from `oc image info ... -o json`).
+ENV NEO4J_HOME=/var/lib/neo4j \
+    NEO4J_EDITION=enterprise \
+    NEO4J_TARBALL=neo4j-enterprise-2026.09.0-unix.tar.gz \
+    JAVA_HOME=/opt/java/openjdk \
+    LANG=C.UTF-8 \
+    PATH=/var/lib/neo4j/bin:/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# OpenShift restricted-v2 runs as an arbitrary UID whose group is 0, not 7474.
+# Group 0 must be able to create /var/lib/neo4j/metrics or Neo4j exits AccessDenied.
+RUN chown -R 7474:0 /var/lib/neo4j /startup && chmod -R g=u /var/lib/neo4j /startup
+
+WORKDIR /var/lib/neo4j
+EXPOSE 7473 7474 7687
+VOLUME /data /logs
+ENTRYPOINT ["tini", "-g", "--", "/startup/docker-entrypoint.sh"]
+CMD ["neo4j"]

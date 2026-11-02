@@ -685,7 +685,7 @@ Empty → operator applies Neo4j-tuned defaults (`NEO-3-009-PROBE-01`).
 
 | Field | Description |
 |-------|-------------|
-| `podSecurityContext` | Override pod SC; omit for Neo4j defaults (`runAsUser`/`fsGroup` 7474). |
+| `podSecurityContext` | Override pod SC. Omit for the operator default: `runAsUser`/`fsGroup` 7474 on Kubernetes. On OpenShift (`platform: auto` or `openshift`) those fields stay unset so `restricted-v2` assigns the UID. |
 | `containerSecurityContext` | Override container SC; omit for defaults (`drop: [ALL]`). |
 | `serviceAccount.annotations` | Annotations on the operand SA. Cloud workload-identity keys (IRSA, GKE WI, Azure MI) are rejected — out of scope per NEO-002. |
 | `serviceAccount.create` | Reserved — operator always creates the workload SA. |

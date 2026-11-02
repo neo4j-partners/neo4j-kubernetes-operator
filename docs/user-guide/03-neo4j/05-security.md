@@ -316,8 +316,14 @@ Examples: [`examples/standalone/07-tls-https-bolt.yaml`](../../../examples/stand
 
 ## Pod and container hardening
 
-The Neo4j container runs as uid and gid 7474 with a matching fsGroup, so volumes are writable without
-root. Override the contexts when your cluster's policies demand something specific:
+On Kubernetes the Neo4j container runs as uid and gid 7474 with a matching fsGroup, so a freshly
+provisioned volume is writable without root. On OpenShift — self-managed, ROSA, or Azure Red Hat
+OpenShift — the operator leaves `runAsUser`, `runAsGroup`, and `fsGroup` unset. `restricted-v2`
+assigns a UID from the project range and rejects a fixed `7474`. That choice is the operator's
+`platform` value (`auto` by default, which detects `security.openshift.io`), not a field on the
+`Neo4j` resource. See the [chart README](../../../charts/neo4j-operator/README.md#openshift).
+
+Override the contexts when your cluster's policies demand something specific:
 
 ```yaml
 spec:

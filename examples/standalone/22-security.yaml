@@ -14,7 +14,9 @@ spec:
   topology:
     mode: Standalone
   security:
-    # Omit pod/container securityContext to keep Neo4j defaults (uid/gid 7474, drop ALL).
+    # Omit pod/container securityContext for the operator default: uid/gid/fsGroup 7474 on
+    # Kubernetes. On OpenShift (platform auto) those fields stay unset and restricted-v2
+    # assigns the UID. drop ALL still applies in both cases.
     serviceAccount:
       # Plain SA annotations are for non-IAM metadata only. Cloud workload-identity annotations
       # (azure.workload.identity/client-id, eks.amazonaws.com/role-arn, iam.gke.io/gcp-service-account)

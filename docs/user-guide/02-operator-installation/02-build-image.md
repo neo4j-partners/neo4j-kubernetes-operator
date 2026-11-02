@@ -42,6 +42,53 @@ The manager is pure Go, so this cross-compiles on a native builder instead of em
 — a plain `go build` for another architecture, not a slower image build. Single-architecture is
 deliberate for local work: `kind load docker-image` does not take a multi-platform archive.
 
+### OpenShift on IBM Z (linux/s390x)
+
+OpenShift itself does not require a custom image. `platform: auto` leaves the Neo4j UID unset on
+any OpenShift cluster, including Azure Red Hat OpenShift, and the published `linux/amd64` or
+`linux/arm64` image runs there. This section is only for IBM Z, where that index has no
+`linux/s390x` entry.
+
+Published images, and the usual ACR build, are a manifest index of `linux/amd64` and `linux/arm64`.
+An s390x kubelet refuses that index:
+
+```text
+no image found in image index for architecture "s390x"
+```
+
+`image.digest` makes it stick. The digest on `neo4joperatoracr.azurecr.io/neo4j-operator` is that
+index, so the pod stays in `ImagePullBackOff` no matter which tag you set beside it. Drop the
+digest and build an s390x image on the cluster. A laptop cannot produce one without emulation, and
+the OpenShift nodes already are s390x.
+
+The kit in [`hack/openshift-s390x`](../../../hack/openshift-s390x/README.md) is the path that was
+run on this cluster. A Docker-strategy `BuildConfig` uploads the repo from your laptop, builds on
+an s390x node, and buildah pushes the result into the internal registry. You do not `docker push`.
+From the repository root, logged in with `oc`:
+
+```bash
+oc new-project neo4j-operator-system 2>/dev/null || oc project neo4j-operator-system
+oc apply -f hack/openshift-s390x/builds.yaml
+
+# Context is the repo root; the repo Dockerfile cross-compiles with TARGETARCH=s390x.
+oc start-build neo4j-operator-s390x -n neo4j-operator-system --from-dir=. --follow
+
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system \
+  -f hack/openshift-s390x/values-s390x.yaml
+```
+
+That values file points `image.repository` at
+`image-registry.openshift-image-registry.svc:5000/neo4j-operator-system/neo4j-operator` and sets
+`image.tag` to `1.0.0`. It does not set `image.digest`, and it does not use `imagePullSecrets` —
+the internal registry is pulled by the project's builder identity. `platform` stays at `auto`, so
+the operator detects OpenShift and does not pin UID 7474.
+
+Neo4j itself is also unpublished for s390x. The same kit builds that image (`neo4j-s390x`
+BuildConfig, `Dockerfile.neo4j`) and the sample `Neo4j` resources that reference it. Follow
+[`hack/openshift-s390x/README.md`](../../../hack/openshift-s390x/README.md) for that build, the
+allowlist entry, and the small memory limits this cluster needed.
+
 ## Make the image reachable
 
 How the image gets to the nodes depends on your cluster.

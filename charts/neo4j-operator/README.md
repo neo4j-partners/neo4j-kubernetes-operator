@@ -71,6 +71,7 @@ make helm-install IMG=YOUR_REGISTRY/neo4j-kubernetes-operator:YOUR_TAG
 | `webhook.enabled` | `false` | Validating admission webhook (rejects privileged / hostPath at apply) |
 | `webhook.certManager.enabled` | `true` | When webhook on: create self-signed Issuer + Certificate (requires cert-manager) |
 | `maxConcurrentReconciles` | `2` | Concurrent Neo4j reconciles (NEO-014). Maximum 16 |
+| `platform` | `auto` | Operand UID. `auto` detects OpenShift and leaves `runAsUser`/`fsGroup` unset so `restricted-v2` assigns one. `openshift` always does that. `kubernetes` pins UID/GID/fsGroup `7474` |
 | `metrics.enabled` | `false` | Operator HTTPS `/metrics` with Kubernetes auth (NEO-017). Do not use `extraArgs` |
 | `metrics.port` | `8443` | Metrics listen port when enabled |
 | `metrics.serviceMonitor.enabled` | `false` | Optional Prometheus Operator ServiceMonitor (needs `metrics.enabled` and the CRD) |
@@ -106,6 +107,51 @@ operator to that architecture and will fail to start on any other node:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/neo4j-partners/neo4j-kubernetes-operator:1.0.0
+```
+
+## OpenShift
+
+This applies to every OpenShift cluster: self-managed, ROSA, and Azure Red Hat OpenShift. It is
+not specific to IBM Z.
+
+`platform` defaults to `auto`. When the API server exposes `security.openshift.io`, the operator
+does not set `runAsUser`, `runAsGroup`, or `fsGroup` on the Neo4j pod. `restricted-v2` assigns a
+UID from the project range, so the pod is admitted without an SCC grant. On plain Kubernetes the
+same default pins UID, GID, and `fsGroup` to `7474`, which a fresh volume needs in order to be
+writable by a non-root process.
+
+Force one or the other when detection is wrong:
+
+```bash
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  -n neo4j-operator-system --create-namespace \
+  --set platform=openshift \
+  --set 'watchNamespaces={default}'
+```
+
+`platform: kubernetes` puts `7474` back. `restricted-v2` rejects that UID; the operand ServiceAccount
+would need `nonroot-v2`.
+
+Published images are `linux/amd64` and `linux/arm64`, which is what ARO and other x86 or ARM
+OpenShift clusters pull. IBM Z is the exception below.
+
+### OpenShift on IBM Z (linux/s390x)
+
+That index has no `linux/s390x` entry. On an IBM Z node the kubelet reports
+`no image found in image index for architecture "s390x"` and the pod stays in `ImagePullBackOff`.
+Do not set `image.digest` to the ACR or GHCR index, and do not pass that `--set image.digest=…`
+on the same command — `--set` overrides the values file and puts the amd64/arm64 index back.
+Build on the cluster and install from the internal registry. The steps that were run on this
+cluster are in
+[`hack/openshift-s390x/README.md`](../../hack/openshift-s390x/README.md):
+
+```bash
+oc apply -f hack/openshift-s390x/builds.yaml
+oc start-build neo4j-operator-s390x -n neo4j-operator-system --from-dir=. --follow
+
+helm upgrade --install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system \
+  -f hack/openshift-s390x/values-s390x.yaml
 ```
 
 ## Validating webhook (optional)

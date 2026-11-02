@@ -1,0 +1,49 @@
+# A 3-primary Neo4j cluster on the self-built s390x image.
+# Apply after the operator is running. platform auto (the chart default) does not pin UID 7474,
+# so restricted-v2 admits the pod and no SCC grant is required.
+#
+# version MUST match a tag that exists in the registry (…/neo4j:<version>-enterprise). We built
+# 2026.09.0, so the ImageStream has neo4j:2026.09.0-enterprise.
+#
+# resources/heap are deliberately tiny: this test cluster's two workers have ~1Gi free each (~2Gi
+# total), and three members only fit at ~500Mi request / 700Mi limit with a 256m heap + 64m page
+# cache. There is NO headroom left — do not run cypher-shell inside a member pod (its extra JVM
+# OOM-kills the container); connect over port-forward from your laptop instead.
+apiVersion: neo4j.com/v1
+kind: Neo4j
+metadata:
+  name: cl
+  namespace: neo4j
+spec:
+  edition: enterprise
+  version: "2026.09.0"
+  image:
+    repository: image-registry.openshift-image-registry.svc:5000/neo4j/neo4j
+    pullPolicy: Always
+  license:
+    accept: "yes"
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 500Mi
+    limits:
+      cpu: "1"
+      memory: 700Mi
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 256m
+      server.memory.heap.max_size: 256m
+      server.memory.pagecache.size: 64m
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+          storageClassName: managed-nfs-storage
+  auth:
+    generatePassword: true

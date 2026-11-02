@@ -1,0 +1,39 @@
+# A Standalone Neo4j pointed at the self-built s390x image in the internal registry.
+# Apply after the operator is running (see README). platform auto needs no SCC grant.
+apiVersion: neo4j.com/v1
+kind: Neo4j
+metadata:
+  name: dev
+  namespace: neo4j
+spec:
+  edition: enterprise
+  version: "2026.09.0"            # used as the image tag -> …/neo4j:2026.09.0
+  image:
+    repository: image-registry.openshift-image-registry.svc:5000/neo4j/neo4j
+    pullPolicy: Always
+  license:
+    accept: "yes"
+  # Sized for this cluster's small workers (~1Gi free each). Mirrors neo4j-z-testbed's settings.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 800Mi
+    limits:
+      cpu: "1"
+      memory: 1200Mi
+  config:
+    neo4j:
+      server.memory.heap.initial_size: 512m
+      server.memory.heap.max_size: 512m
+      server.memory.pagecache.size: 128m
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+          storageClassName: managed-nfs-storage   # from `oc get storageclass` on this cluster
+  auth:
+    generatePassword: true

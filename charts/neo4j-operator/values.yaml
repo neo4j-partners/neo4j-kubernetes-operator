@@ -36,6 +36,14 @@ allowedImageRepositories:
 # Maximum 16 — higher values are rejected at operator start (API-server stampede).
 maxConcurrentReconciles: 2
 
+# Target platform for operand pod security contexts (NEO-026). Controls whether the operator
+# pins the Neo4j container UID/GID/fsGroup to 7474 or leaves them unset for the platform to assign:
+#   auto        detect at startup — OpenShift if the security.openshift.io API is present (default)
+#   openshift   never pin UID/fsGroup; the restricted-v2 SCC injects an in-range UID (no SCC grant needed)
+#   kubernetes  pin 7474 so non-root pods can write freshly provisioned PVCs
+# On OpenShift the Neo4j image runs fine under an arbitrary UID, so auto/openshift needs no anyuid grant.
+platform: auto
+
 # Extra args appended after --leader-elect / health probe / logging args.
 # Do not pass --metrics-bind-address here (NEO-017) — use metrics.enabled.
 extraArgs: []

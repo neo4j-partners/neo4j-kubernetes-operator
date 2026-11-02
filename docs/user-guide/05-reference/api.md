@@ -231,7 +231,7 @@ See [Monitoring](../03-neo4j/08-monitoring.md).
 | `spec.podDisruptionBudget.enabled` | bool | `false` | |
 | `spec.podDisruptionBudget.minAvailable` | int or string | — | Must be satisfiable; `100%` is rejected |
 | `spec.probes.{startup,liveness,readiness}` | Probe | TCP on Bolt | An override replaces the default entirely |
-| `spec.security.podSecurityContext` | PodSecurityContext | uid/gid/fsGroup 7474 | |
+| `spec.security.podSecurityContext` | PodSecurityContext | uid/gid/fsGroup 7474 on Kubernetes; unset on OpenShift (`platform: auto`) | |
 | `spec.security.containerSecurityContext` | SecurityContext | — | |
 | `spec.security.serviceAccount.create` | bool | `false` | ServiceAccount named after the resource |
 | `spec.security.serviceAccount.annotations` | map | — | Cloud workload-identity annotations are rejected |

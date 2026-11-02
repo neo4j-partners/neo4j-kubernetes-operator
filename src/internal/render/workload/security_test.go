@@ -8,8 +8,37 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/platform"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
+
+// TestPlatformAwareSecurityContextDefaults asserts the NEO-026 split: OpenShift omits the
+// fixed UID/GID/fsGroup (so the restricted-v2 SCC injects an in-range UID), Kubernetes pins
+// 7474 (so non-root pods can write freshly provisioned PVCs). Universal hardening holds in both.
+func TestPlatformAwareSecurityContextDefaults(t *testing.T) {
+	t.Cleanup(func() { platform.Set(platform.Kubernetes) })
+
+	platform.Set(platform.OpenShift)
+	psc := defaultPodSecurityContext()
+	if psc.RunAsUser != nil || psc.RunAsGroup != nil || psc.FSGroup != nil {
+		t.Fatalf("OpenShift pod context must omit UID/GID/fsGroup, got %#v", psc)
+	}
+	if psc.RunAsNonRoot == nil || !*psc.RunAsNonRoot {
+		t.Fatal("OpenShift pod context must still set runAsNonRoot")
+	}
+	if csc := defaultContainerSecurityContext(); csc.RunAsUser != nil || csc.RunAsGroup != nil {
+		t.Fatalf("OpenShift container context must omit UID/GID, got %#v", csc)
+	}
+
+	platform.Set(platform.Kubernetes)
+	psc = defaultPodSecurityContext()
+	if psc.FSGroup == nil || *psc.FSGroup != 7474 || psc.RunAsUser == nil || *psc.RunAsUser != 7474 {
+		t.Fatalf("Kubernetes pod context must pin 7474, got %#v", psc)
+	}
+	if csc := defaultContainerSecurityContext(); csc.RunAsUser == nil || *csc.RunAsUser != 7474 {
+		t.Fatalf("Kubernetes container context must pin 7474, got %#v", csc)
+	}
+}
 
 func TestValidateSecurityRejectsPrivileged(t *testing.T) {
 	priv := true

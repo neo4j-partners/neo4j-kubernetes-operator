@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/platform"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/plugins"
 	rendercfg "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/serverconfig"
@@ -231,35 +232,48 @@ func defaultResource(requests, limits corev1.ResourceList, name corev1.ResourceN
 	}
 }
 
+// defaultPodSecurityContext returns the hardened pod security context. The universal fields
+// (runAsNonRoot, seccomp RuntimeDefault) are always set. On OpenShift the UID/GID/fsGroup are
+// left unset so the restricted-v2 SCC injects an in-range UID — a fixed 7474 is rejected there.
+// On plain Kubernetes they are pinned to 7474 because K8s injects no fsGroup, so a non-root
+// process could not write a freshly provisioned PVC (NEO-026).
 func defaultPodSecurityContext() *corev1.PodSecurityContext {
 	runAsNonRoot := true
-	runAsUser := int64(7474)
-	runAsGroup := int64(7474)
-	fsGroup := int64(7474)
-	policy := corev1.FSGroupChangeAlways
-	return &corev1.PodSecurityContext{
-		RunAsNonRoot:        &runAsNonRoot,
-		RunAsUser:           &runAsUser,
-		RunAsGroup:          &runAsGroup,
-		FSGroup:             &fsGroup,
-		FSGroupChangePolicy: &policy,
-		SeccompProfile:      &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	psc := &corev1.PodSecurityContext{
+		RunAsNonRoot:   &runAsNonRoot,
+		SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 	}
+	if !platform.IsOpenShift() {
+		runAsUser := int64(7474)
+		runAsGroup := int64(7474)
+		fsGroup := int64(7474)
+		policy := corev1.FSGroupChangeAlways
+		psc.RunAsUser = &runAsUser
+		psc.RunAsGroup = &runAsGroup
+		psc.FSGroup = &fsGroup
+		psc.FSGroupChangePolicy = &policy
+	}
+	return psc
 }
 
+// defaultContainerSecurityContext mirrors defaultPodSecurityContext: universal hardening always,
+// the fixed UID/GID only off OpenShift (NEO-026).
 func defaultContainerSecurityContext() *corev1.SecurityContext {
 	runAsNonRoot := true
-	runAsUser := int64(7474)
-	runAsGroup := int64(7474)
 	allowPrivEsc := false
-	return &corev1.SecurityContext{
+	csc := &corev1.SecurityContext{
 		RunAsNonRoot:             &runAsNonRoot,
-		RunAsUser:                &runAsUser,
-		RunAsGroup:               &runAsGroup,
 		AllowPrivilegeEscalation: &allowPrivEsc,
 		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 	}
+	if !platform.IsOpenShift() {
+		runAsUser := int64(7474)
+		runAsGroup := int64(7474)
+		csc.RunAsUser = &runAsUser
+		csc.RunAsGroup = &runAsGroup
+	}
+	return csc
 }
 
 // StandaloneStatefulSet is an alias kept for tests; Standalone uses the server pool.

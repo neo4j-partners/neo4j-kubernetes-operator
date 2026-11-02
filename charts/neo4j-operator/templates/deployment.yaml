@@ -37,6 +37,9 @@ spec:
         - --allowed-image-repositories={{ .Values.allowedImageRepositories | join "," }}
         {{- end }}
         - --max-concurrent-reconciles={{ .Values.maxConcurrentReconciles | default 2 }}
+        {{- if .Values.platform }}
+        - --platform={{ .Values.platform }}
+        {{- end }}
         {{- if .Values.logging.devel }}
         - --zap-devel=true
         {{- end }}
