@@ -146,9 +146,11 @@ type LicenseSpec struct {
 
 // ImageSpec overrides container image repository and pull policy.
 type ImageSpec struct {
-	// Repository is the image name without tag (default neo4j). Must match the
-	// operator --allowed-image-repositories allowlist (NEO-012).
-	// +kubebuilder:default="neo4j"
+	// Repository is the image name without tag (default docker.io/neo4j). Must match the
+	// operator --allowed-image-repositories allowlist (NEO-012). The default is fully qualified
+	// so it satisfies OpenShift CRI-O short-name enforcement; on Docker Hub it resolves to the
+	// same library/neo4j image as the bare name.
+	// +kubebuilder:default="docker.io/neo4j"
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9]([a-zA-Z0-9._:-]*/)*[a-zA-Z0-9._-]+$`
 	Repository string `json:"repository,omitempty"`
 	// Digest pins the image by digest (repo@sha256:...). When set, the tag from

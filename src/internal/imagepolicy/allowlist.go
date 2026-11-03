@@ -67,7 +67,7 @@ func AllowedRepositories() []string {
 
 // Validate checks spec.image.repository against the operator allowlist and digest shape (NEO-012).
 func Validate(neo4j *neo4jv1.Neo4j) error {
-	repo := "neo4j"
+	repo := "docker.io/neo4j"
 	var digest string
 	if neo4j.Spec.Image != nil {
 		if neo4j.Spec.Image.Repository != "" {

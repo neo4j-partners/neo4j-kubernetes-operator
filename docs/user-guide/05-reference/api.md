@@ -55,7 +55,7 @@ Required: `edition`, `version`, `topology.mode`, plus `license.accept` on `enter
 | `spec.edition` | string | — | **Required.** `enterprise` or `community`. Community is restricted to `topology.mode: Standalone` and cannot use `features.backup` or `features.monitoring.prometheus` |
 | `spec.version` | string | — | **Required.** Neo4j calendar version, for example `2026.05.0`; the `-enterprise` image suffix is added for you, and community uses the unsuffixed tag. Changing it on a running resource rolls the deployment; see [Version changes](../03-neo4j/09-operations.md#version-changes) |
 | `spec.license.accept` | string | — | `yes` or `eval`. **Required on `enterprise`**; on `community` the whole `license` block may be omitted, and is ignored if present |
-| `spec.image.repository` | string | `neo4j` | Must match operator allowlist (NEO-012); default `neo4j` / `docker.io/neo4j` |
+| `spec.image.repository` | string | `docker.io/neo4j` | Must match operator allowlist (NEO-012). Fully qualified so it satisfies OpenShift CRI-O short-name enforcement; resolves to the same `library/neo4j` image as the bare name on Docker Hub |
 | `spec.image.digest` | string | — | Optional `sha256:…` pin; renders `repo@digest` instead of `:tag` |
 | `spec.image.pullPolicy` | string | `IfNotPresent` | `Always`, `IfNotPresent` or `Never` |
 | `spec.image.pullSecrets` | []string | — | Names of image pull Secrets in the workload namespace |

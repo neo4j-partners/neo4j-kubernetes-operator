@@ -134,7 +134,7 @@ func TestCommunityStatefulSetOmitsLicensingEnv(t *testing.T) {
 	}
 	sts := StandaloneStatefulSet(render.StandaloneContext(neo4j))
 	container := sts.Spec.Template.Spec.Containers[0]
-	if container.Image != "neo4j:2026.05.0" {
+	if container.Image != "docker.io/neo4j:2026.05.0" {
 		t.Fatalf("image = %q, want the unsuffixed community tag", container.Image)
 	}
 	for _, e := range container.Env {

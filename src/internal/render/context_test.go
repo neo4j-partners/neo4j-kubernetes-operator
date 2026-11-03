@@ -30,8 +30,8 @@ func TestStandaloneContextNaming(t *testing.T) {
 	if ctx.AuthSecretName() != "dev-auth" {
 		t.Fatalf("AuthSecretName = %q, want dev-auth", ctx.AuthSecretName())
 	}
-	if ctx.ImageRef() != "neo4j:2026.05.0-enterprise" {
-		t.Fatalf("ImageRef = %q, want neo4j:2026.05.0-enterprise", ctx.ImageRef())
+	if ctx.ImageRef() != "docker.io/neo4j:2026.05.0-enterprise" {
+		t.Fatalf("ImageRef = %q, want docker.io/neo4j:2026.05.0-enterprise", ctx.ImageRef())
 	}
 }
 
@@ -47,13 +47,13 @@ func TestImageRef(t *testing.T) {
 			name:    "enterprise appends suffix",
 			edition: neo4jv1.EditionEnterprise,
 			version: "2026.05.0",
-			wantRef: "neo4j:2026.05.0-enterprise",
+			wantRef: "docker.io/neo4j:2026.05.0-enterprise",
 		},
 		{
 			name:    "enterprise does not double suffix",
 			edition: neo4jv1.EditionEnterprise,
 			version: "2026.05.0-enterprise",
-			wantRef: "neo4j:2026.05.0-enterprise",
+			wantRef: "docker.io/neo4j:2026.05.0-enterprise",
 		},
 		{
 			name:    "custom repository",
@@ -67,7 +67,7 @@ func TestImageRef(t *testing.T) {
 			name:    "community keeps the bare tag",
 			edition: neo4jv1.EditionCommunity,
 			version: "2026.05.0",
-			wantRef: "neo4j:2026.05.0",
+			wantRef: "docker.io/neo4j:2026.05.0",
 		},
 	}
 

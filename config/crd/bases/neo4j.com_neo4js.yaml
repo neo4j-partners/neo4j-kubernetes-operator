@@ -652,10 +652,12 @@ spec:
                       type: string
                     type: array
                   repository:
-                    default: neo4j
+                    default: docker.io/neo4j
                     description: |-
-                      Repository is the image name without tag (default neo4j). Must match the
-                      operator --allowed-image-repositories allowlist (NEO-012).
+                      Repository is the image name without tag (default docker.io/neo4j). Must match the
+                      operator --allowed-image-repositories allowlist (NEO-012). The default is fully qualified
+                      so it satisfies OpenShift CRI-O short-name enforcement; on Docker Hub it resolves to the
+                      same library/neo4j image as the bare name.
                     pattern: ^[a-zA-Z0-9]([a-zA-Z0-9._:-]*/)*[a-zA-Z0-9._-]+$
                     type: string
                 type: object
