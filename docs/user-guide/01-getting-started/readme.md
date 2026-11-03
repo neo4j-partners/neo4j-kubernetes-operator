@@ -1,6 +1,6 @@
 # Getting started
 
-Five ways in, depending on what you already have.
+Six ways in, depending on what you already have.
 
 | You have | Start here | Time |
 |----------|-----------|------|
@@ -8,6 +8,7 @@ Five ways in, depending on what you already have.
 | An Azure subscription | [Azure AKS](azure-aks.md) — published chart, no Docker needed | ~20 min |
 | A Google Cloud project | [Google Kubernetes Engine](gcp-gke.md) — published chart, no Docker needed | ~20 min |
 | An AWS account | [Amazon EKS](aws-eks.md) — published chart, no Docker needed | ~30 min |
+| An OpenShift cluster (ARO, ROSA, self-managed) | [OpenShift](openshift.md) — published chart, SCC handled automatically | ~20 min |
 | A running cluster with the operator installed | [Your first Neo4j](first-neo4j.md) | ~5 min |
 
 Before you invest time, check [what works today](feature-status.md). The `Neo4j` CRD is
@@ -17,9 +18,9 @@ planned with a settled design, and what is not decided yet.
 
 ## What you get
 
-The four platform walkthroughs end at the same place: the operator running in
-`neo4j-operator-system`, and one Standalone Neo4j instance in `default` with a generated
-password, reachable over Bolt and HTTP.
+The five platform walkthroughs end at the same place: the operator running in
+`neo4j-operator-system`, and one Standalone Neo4j instance with a generated password, reachable
+over Bolt and HTTP.
 
 From there, [Your first Neo4j](first-neo4j.md) explains the resource you just created — what the
 operator built, how to read its status, how to connect — and points at the topic pages for
