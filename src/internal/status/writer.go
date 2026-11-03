@@ -188,19 +188,25 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1.Neo4j) erro
 	// status.upgrade narrates a version change; it never gates Ready, and status.phase stays Running
 	// throughout (ADR-017, status.md). A nil result means nothing is in flight — the finished record
 	// of an upgrade is status.version plus lastUpgradeTime, not a Completed block left behind.
-	wasUpgrading := neo4j.Status.Upgrade != nil
 	inFlight := upgrade.Observe(neo4j, poolStates, time.Now())
 	neo4j.Status.Upgrade = inFlight
-	if wasUpgrading && inFlight == nil {
-		done := metav1.Now()
-		neo4j.Status.LastUpgradeTime = &done
-	}
 
 	// The version is what is RUNNING, so it may only advance once nothing is in flight. Readiness
 	// alone is not enough: for a moment after the pod template changes the old pods are still ready
 	// and the StatefulSet still reports the old revision, which is long enough to publish a version
 	// no pod has started (ADR-017).
 	if allReady && !rolling && inFlight == nil && !offline {
+		// A roll finishes the instant the running version actually advances, so stamp
+		// lastUpgradeTime from that state change rather than from a status.upgrade non-nil->nil
+		// edge. During a roll every reconcile early-returns through the requeue fast path
+		// (reconciler.go), which skips ObserveAndWrite, so status.upgrade is often never persisted
+		// and that edge is never observed — comparing versions here does not depend on catching it.
+		// A first install (status.version == "") is not an upgrade; downgrades are refused in
+		// upgrade.Preflight, so a difference at this point is always a completed forward roll.
+		if neo4j.Status.Version != "" && neo4j.Status.Version != neo4j.Spec.Version {
+			done := metav1.Now()
+			neo4j.Status.LastUpgradeTime = &done
+		}
 		neo4j.Status.Version = neo4j.Spec.Version
 	}
 	changing := changeInFlight(neo4j, rolling, drainPending)

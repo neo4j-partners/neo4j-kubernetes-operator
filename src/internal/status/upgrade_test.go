@@ -123,6 +123,28 @@ func TestVersionAdvancesAndUpgradeClearsOnceConverged(t *testing.T) {
 	}
 }
 
+// Regression: during a roll every reconcile early-returns through the requeue fast path in
+// reconciler.go, which skips ObserveAndWrite, so status.upgrade is frequently never persisted as
+// non-nil. The old code stamped lastUpgradeTime only on the status.upgrade non-nil->nil edge, so
+// the terminal pass — which sees status.upgrade already nil — missed it and the upgrade reported no
+// completion time. The stamp must come from the running version advancing, not from that edge.
+func TestLastUpgradeTimeStampedWhenUpgradeBlockWasNeverPersisted(t *testing.T) {
+	n := upgradeCR("2026.05.0", "2026.07.0")
+	// status.upgrade is intentionally nil: the edge the old code relied on never happened.
+	pool := render.ContextForPool(n, render.PoolServer)
+	w, cr := writerFor(n, sts(n, pool.ImageRef(), 1, 1, 1, "rev-new", "rev-new"))
+
+	if err := w.ObserveAndWrite(context.Background(), cr); err != nil {
+		t.Fatalf("ObserveAndWrite: %v", err)
+	}
+	if cr.Status.Version != "2026.07.0" {
+		t.Errorf("status.version = %q after the roll converged, want 2026.07.0", cr.Status.Version)
+	}
+	if cr.Status.LastUpgradeTime == nil {
+		t.Fatal("lastUpgradeTime must be stamped when the running version advances, even if status.upgrade was never persisted during the roll")
+	}
+}
+
 // A first install is not an upgrade, however the revisions look.
 func TestFirstInstallReportsNoUpgrade(t *testing.T) {
 	n := upgradeCR("", "2026.07.0")
