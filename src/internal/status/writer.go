@@ -14,11 +14,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/upgrade"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/podlog"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
@@ -35,6 +37,11 @@ type Writer struct {
 	// plugin installation. Nil disables the PluginsReady check rather than failing it: the
 	// operator must not hold Ready back on evidence it cannot read (BDR-004).
 	PodLogs podlog.Reader
+	// Recorder emits the StorageResizeCompleted Event on the StorageResizing→PVCBound edge. Nil is
+	// usable (the advisory no-ops), so tests that only exercise conditions need not wire it.
+	Recorder record.EventRecorder
+	// advisories pins that completion Event to one per generation. Zero value is ready to use.
+	advisories events.Advisory
 }
 
 func NewWriter(c client.Client) *Writer {
@@ -141,7 +148,14 @@ func (w *Writer) ObserveAndWrite(ctx context.Context, neo4j *neo4jv1.Neo4j) erro
 
 	setCondition(neo4j, oracle.ConditionInstalled, boolCondition(anySTSFound), installedReason(anySTSFound), "")
 	neo4j.Status.ServerSummary = &neo4jv1.ReplicaSummary{Servers: desired, Ready: ready}
+	// Read the reason the previous pass wrote before overwriting it: the completion Event is the
+	// StorageResizing→PVCBound edge, and both halves have to come from the same author.
+	prevStorageReason := ""
+	if c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionStorageReady.String()); c != nil {
+		prevStorageReason = c.Reason
+	}
 	setCondition(neo4j, oracle.ConditionStorageReady, boolCondition(storageReady), storageReason, storageMsg)
+	w.reportResizeCompleted(neo4j, prevStorageReason, storageReason, storageReady)
 
 	// Read once: it gates allReady just below, and it is also the signal that a scale-in the user
 	// asked for is in flight, which decides the phase (ADR-004).
@@ -322,6 +336,35 @@ func pendingMessage(pvcName string, pvc *corev1.PersistentVolumeClaim, ctxRender
 			pvcName, sc)
 	}
 	return fmt.Sprintf("PVC %q is Pending (no storageClassName set; waiting for a default StorageClass)", pvcName)
+}
+
+// reportResizeCompleted emits one Event when StorageReady crosses StorageResizing→PVCBound.
+//
+// Both reasons come from the writer's own consecutive passes over one capacity snapshot, so the
+// edge can no longer be split across the pipeline. Deriving it in the persistence step read claim
+// capacity early while this condition was written late from a second snapshot: a grow whose
+// capacity caught up mid-pass moved the condition without either half ever seeing the other, and
+// the Event was lost (the kind/local-path flake, where every claim catches up at once).
+//
+// The Advisory memo pins it to one Event per generation — a racy requeue off a stale cache can read
+// the old reason as StorageResizing a second time — and a fresh grow bumps generation to re-arm it.
+func (w *Writer) reportResizeCompleted(neo4j *neo4jv1.Neo4j, prevReason string, newReason oracle.Reason, storageReady bool) {
+	if !storageReady || prevReason != oracle.ReasonStorageResizing.String() || newReason != oracle.ReasonPVCBound {
+		return
+	}
+	w.advisories.Emit(w.Recorder, neo4j, corev1.EventTypeNormal, oracle.ReasonStorageResizeCompleted,
+		fmt.Sprintf("every volume reached the size the spec asks for (%s)", desiredSizeSummary(neo4j)))
+}
+
+func desiredSizeSummary(neo4j *neo4jv1.Neo4j) string {
+	if neo4j.Spec.Storage == nil || neo4j.Spec.Storage.Volumes == nil {
+		return "unspecified"
+	}
+	data := neo4j.Spec.Storage.Volumes.Data
+	if data.Mode == neo4jv1.VolumeModeDynamic && data.Dynamic != nil && data.Dynamic.Size != "" {
+		return "data=" + data.Dynamic.Size
+	}
+	return "unspecified"
 }
 
 func desiredDataSize(ctxRender render.Context) string {

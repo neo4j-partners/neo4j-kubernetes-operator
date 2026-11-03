@@ -2,7 +2,6 @@ package persistence
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -117,58 +116,4 @@ func (r *Reconciler) growClaim(ctx context.Context, neo4j *neo4jv1.Neo4j, namesp
 		return false, err
 	}
 	return true, nil
-}
-
-// claimsBehindCapacity names every operator-owned claim whose capacity has not reached its own
-// request, which is what an expansion still in flight looks like from outside.
-func (r *Reconciler) claimsBehindCapacity(ctx context.Context, neo4j *neo4jv1.Neo4j) []string {
-	if r.Client == nil {
-		return nil
-	}
-	var list corev1.PersistentVolumeClaimList
-	if err := r.Client.List(ctx, &list, client.InNamespace(neo4j.Namespace),
-		client.MatchingLabelsSelector{Selector: render.StoragePVCSelector(neo4j.Name)}); err != nil {
-		return nil
-	}
-	var behind []string
-	for i := range list.Items {
-		pvc := &list.Items[i]
-		requested := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-		actual := pvc.Status.Capacity[corev1.ResourceStorage]
-		if actual.Cmp(requested) < 0 {
-			behind = append(behind, pvc.Name)
-		}
-	}
-	sort.Strings(behind)
-	return behind
-}
-
-// reportResizeCompleted emits one Event on the pass that sees the last claim catch up. The edge is
-// read from the condition the previous pass published, the only durable memory the operator keeps
-// of "a grow was in flight": emitting on level instead would fire every pass and spend the object's
-// Event budget (internal/events).
-//
-// The edge alone is racy: the StorageReady condition is written later in the pipeline, so a requeue
-// that fetches the object from a cache still holding StorageResizing sees wasResizing=true a second
-// time and fires again (client-go then aggregates the two into one Event with count=2). Routing
-// through the Advisory memo pins it to one Event per generation; a grow changes spec.storage size,
-// which bumps generation and re-arms it. ponytail: a manual PVC grow that never touched the CR does
-// not bump generation, so a repeat completion in the same generation is suppressed — out of scope.
-func (r *Reconciler) reportResizeCompleted(neo4j *neo4jv1.Neo4j, wasResizing bool, behind []string) {
-	if !wasResizing || len(behind) > 0 || r.Recorder == nil {
-		return
-	}
-	r.advisories.Emit(r.Recorder, neo4j, corev1.EventTypeNormal, oracle.ReasonStorageResizeCompleted,
-		fmt.Sprintf("every volume reached the size the spec asks for (%s)", desiredSizeSummary(neo4j)))
-}
-
-func desiredSizeSummary(neo4j *neo4jv1.Neo4j) string {
-	if neo4j.Spec.Storage == nil || neo4j.Spec.Storage.Volumes == nil {
-		return "unspecified"
-	}
-	data := neo4j.Spec.Storage.Volumes.Data
-	if data.Mode == neo4jv1.VolumeModeDynamic && data.Dynamic != nil && data.Dynamic.Size != "" {
-		return "data=" + data.Dynamic.Size
-	}
-	return "unspecified"
 }

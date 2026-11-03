@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -16,7 +15,6 @@ import (
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/events"
-	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderstorage "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/storage"
 )
@@ -61,10 +59,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 			"pinned", string(*neo4j.Status.VolumeClaimRetentionWhenDeleted))
 	}
 
-	// Read before expandVolumes patches anything: the condition still carries what the previous pass
-	// published, which is how this pass knows a grow was in flight and can report it finished.
-	wasResizing := storageReasonIs(neo4j, oracle.ReasonStorageResizing)
-
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxRender := render.ContextForPool(neo4j, pool)
 		logDataPlan(log, ctxRender)
@@ -76,13 +70,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 	}
 
 	r.expandVolumes(ctx, neo4j)
-	r.reportResizeCompleted(neo4j, wasResizing, r.claimsBehindCapacity(ctx, neo4j))
 	return shared.Done()
-}
-
-func storageReasonIs(neo4j *neo4jv1.Neo4j, reason oracle.Reason) bool {
-	c := meta.FindStatusCondition(neo4j.Status.Conditions, oracle.ConditionStorageReady.String())
-	return c != nil && c.Reason == reason.String()
 }
 
 func logDataPlan(log logr.Logger, ctxRender render.Context) {

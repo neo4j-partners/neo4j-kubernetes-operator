@@ -1,7 +1,6 @@
 package persistence
 
 import (
-	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -14,7 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
-	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
@@ -172,87 +170,3 @@ func TestExpandVolumesNoStatefulSet(t *testing.T) {
 	}
 }
 
-func TestClaimsBehindCapacity(t *testing.T) {
-	neo4j := sizedNeo4j("10Gi")
-	r, _ := newReconciler(t,
-		claim("data-dev-server-0", "10Gi", "10Gi"),
-		claim("data-dev-server-1", "10Gi", "5Gi"),
-	)
-
-	behind := r.claimsBehindCapacity(t.Context(), neo4j)
-
-	if len(behind) != 1 || behind[0] != "data-dev-server-1" {
-		t.Errorf("behind = %v, want only data-dev-server-1", behind)
-	}
-}
-
-func countEvents(rec *record.FakeRecorder) int {
-	n := 0
-	for {
-		select {
-		case <-rec.Events:
-			n++
-		default:
-			return n
-		}
-	}
-}
-
-// A racy requeue can read the StorageReady condition as StorageResizing a second time before the
-// PVCBound write lands, so the edge fires twice. The Advisory memo keeps the completion to one Event
-// per generation, and a generation bump (a fresh grow) re-arms it.
-func TestReportResizeCompletedIsIdempotentPerGeneration(t *testing.T) {
-	r, rec := newReconciler(t)
-	neo4j := sizedNeo4j("10Gi")
-	neo4j.UID = "uid-1"
-	neo4j.Generation = 2
-
-	r.reportResizeCompleted(neo4j, true, nil)
-	r.reportResizeCompleted(neo4j, true, nil) // stale requeue, same generation
-	if got := countEvents(rec); got != 1 {
-		t.Fatalf("events in one generation = %d, want exactly 1", got)
-	}
-
-	neo4j.Generation = 3 // a later grow bumps generation
-	r.reportResizeCompleted(neo4j, true, nil)
-	if got := countEvents(rec); got != 1 {
-		t.Fatalf("events after generation bump = %d, want 1", got)
-	}
-}
-
-// The completion Event is edge-triggered off the condition the previous pass published. Emitting on
-// level would fire every pass and spend the object's Event budget.
-func TestReportResizeCompleted(t *testing.T) {
-	cases := []struct {
-		name        string
-		wasResizing bool
-		behind      []string
-		wantEvent   bool
-	}{
-		{name: "a grow that just finished", wasResizing: true, wantEvent: true},
-		{name: "a grow still in flight", wasResizing: true, behind: []string{"data-dev-server-0"}},
-		{name: "steady state, nothing was resizing", wasResizing: false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			neo4j := sizedNeo4j("10Gi")
-			r, rec := newReconciler(t)
-
-			r.reportResizeCompleted(neo4j, tc.wasResizing, tc.behind)
-
-			select {
-			case ev := <-rec.Events:
-				if !tc.wantEvent {
-					t.Fatalf("unexpected event %q", ev)
-				}
-				if !strings.Contains(ev, oracle.ReasonStorageResizeCompleted.String()) {
-					t.Errorf("event = %q, want reason %s", ev, oracle.ReasonStorageResizeCompleted)
-				}
-			default:
-				if tc.wantEvent {
-					t.Fatal("expected a StorageResizeCompleted event")
-				}
-			}
-		})
-	}
-}

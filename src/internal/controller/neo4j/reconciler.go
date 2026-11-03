@@ -326,6 +326,9 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 	c := mgr.GetClient()
 	scheme := mgr.GetScheme()
 	writer := status.NewWriter(c)
+	// The StorageResizeCompleted Event is emitted here, on the StorageResizing→PVCBound edge the
+	// writer alone authors — see status.Writer.reportResizeCompleted (ADR-009).
+	writer.Recorder = mgr.GetEventRecorderFor("neo4j-controller")
 	// Plugin installation happens in the image entrypoint, and two of its three failures let the
 	// server start anyway — so the only evidence is the container's own output, which needs a
 	// clientset (BDR-004). A reader we cannot build leaves the check disabled rather than
