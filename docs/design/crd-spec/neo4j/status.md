@@ -378,6 +378,13 @@ spec — the usual Kubernetes caveat, not an operator quirk.
 Deliberately not part of `Ready`: the diagnostics collection error, and every condition in
 [Planned for a later version](#planned-for-a-later-version).
 
+**`Ready` is about servers, not databases.** A member counts as ready when its pod passes the Bolt
+TCP probe; nothing checks that a database is online. The operator does not manage databases (no
+Database CR in this version), and only their owner knows which ones matter. So `Ready=True` can be
+observed while the default database is still starting, recovering its store after a restart, or
+failed. A client that needs a database waits for it itself, for example on
+`SHOW DEFAULT DATABASE YIELD currentStatus` against the system database.
+
 ---
 
 ## Observability contract
