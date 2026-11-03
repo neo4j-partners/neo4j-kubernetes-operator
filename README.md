@@ -7,9 +7,9 @@ resource status.
 
 ## Requirements
 
-- Kubernetes 1.35 or later, with a StorageClass that can provision volumes. That is the oldest
-  release still supported upstream, and the CRD's validation rules need an API server that
-  evaluates them — including the quantity comparison that blocks a volume shrink.
+- Kubernetes 1.34 or later, with a StorageClass that can provision volumes. That includes
+  OpenShift 4.21. The CRD's validation rules need an API server that evaluates them, including
+  the quantity comparison that blocks a volume shrink.
 - **Neo4j Enterprise or Community.** Enterprise requires `spec.license.accept: "yes"`, which records
   that you hold a license from Neo4j for the image you are about to run. Community needs no licence
   and runs Standalone only — clustering, backup and metrics are Enterprise capabilities.

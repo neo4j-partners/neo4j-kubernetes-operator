@@ -10,7 +10,7 @@
 #
 # The shrink guard is the one worth reading twice. It compares quantities rather than strings, so
 # 5Gi -> 4000Mi is caught as the reduction it is; a string comparison would wave it through. That is
-# what puts the supported Kubernetes floor at 1.35 — older API servers have no CEL quantity library.
+# The comparison needs the CEL quantity library. The supported Kubernetes floor is 1.34.
 #
 # A grow is attempted last as the positive control: a rule set that refused everything would pass
 # every rejection check and be useless.

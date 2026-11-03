@@ -132,7 +132,7 @@ We will embed CEL rules in CRD `x-kubernetes-validations` for:
 live PVC". It does not: the spec's own previous value is what a shrink must be compared against, and
 `oldSelf` carries it. The webhook is off by default, so a rule that lives only there is unenforced on
 a stock install — which is how a shrink came to be accepted in practice. Comparing quantities needs
-the CEL quantity library, and that is why the supported Kubernetes floor is 1.35 (see
+the CEL quantity library (Kubernetes 1.29+). The supported floor is 1.34 (see
 [BDR-005](../business/neo4j/005-storage-volume-mode.md) and the prerequisites page).
 
 STO-003 keeps its webhook assignment but is not implemented: reading a cluster-scoped StorageClass to

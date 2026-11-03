@@ -41,7 +41,7 @@ export KUBERNETES_VERSION_EKS="${KUBERNETES_VERSION_EKS:-1.36}"
 # prerequisites. envtest runs the unit tests here rather than on the newest version, so the CRD's
 # CEL rules are proved against the oldest Kubernetes the operator claims to support: that is the
 # version where a rule using a newer CEL library would fail, and the one no other job exercises.
-export KUBERNETES_VERSION_FLOOR="${KUBERNETES_VERSION_FLOOR:-1.35.0}"
+export KUBERNETES_VERSION_FLOOR="${KUBERNETES_VERSION_FLOOR:-1.34.0}"
 
 # --------------------------------------------------------------------- Neo4j
 #

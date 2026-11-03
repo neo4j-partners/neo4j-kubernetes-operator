@@ -4,10 +4,10 @@ What must be true before you install the operator.
 
 ## Kubernetes cluster
 
-Any conformant Kubernetes **1.35 or later**, including local kind and minikube clusters. That
-tracks the upstream support window — 1.35 is the oldest release still receiving patches. The CRD
-carries validation rules that an older API server would either skip or refuse to compile: blocking a
-volume shrink compares two quantities, which needs the CEL quantity library.
+Any conformant Kubernetes **1.34 or later**, including local kind and minikube clusters and
+OpenShift 4.21. The chart enforces that floor through `kubeVersion: ">= 1.34.0-0"`. The CRD
+blocks a volume shrink by comparing quantities, which the CEL quantity library has provided
+since 1.29, so every cluster at this floor evaluates the rule.
 
 Your `kubectl` context needs permission to install a CustomResourceDefinition and to create a
 namespace, Deployment, ServiceAccount and the roles the operator binds. Cluster-admin is the

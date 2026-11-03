@@ -36,8 +36,8 @@ func TestCELRulesCompile(t *testing.T) {
 	}
 
 	// library.Quantity is the same extension the apiserver exposes to CRD rules, so a typo in
-	// quantity()/compareTo fails here rather than at CRD install time. It needs Kubernetes 1.29+,
-	// well under the 1.35 floor the project supports.
+	// quantity()/compareTo fails here rather than at CRD install time. The library needs
+	// Kubernetes 1.29+; the supported floor is 1.34.
 	env, err := cel.NewEnv(
 		cel.Variable("self", cel.DynType),
 		cel.Variable("oldSelf", cel.DynType),
