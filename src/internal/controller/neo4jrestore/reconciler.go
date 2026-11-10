@@ -71,6 +71,7 @@ func NewReconciler(mgr ctrl.Manager) *RestoreReconciler {
 
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jrestores,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jrestores/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=neo4j.com,resources=neo4jrestores/finalizers,verbs=update
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackups,verbs=get;list;watch
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js,verbs=get;list;watch
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete

@@ -197,6 +197,9 @@ rules:
   - neo4j.com
   resources:
   - neo4js/finalizers
+  - neo4jbackups/finalizers
+  - neo4jbackupschedules/finalizers
+  - neo4jrestores/finalizers
   verbs:
   - update
 - apiGroups:

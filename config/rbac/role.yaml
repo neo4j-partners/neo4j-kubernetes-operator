@@ -145,6 +145,12 @@ rules:
 - apiGroups:
   - neo4j.com
   resources:
+  - neo4jbackups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - neo4j.com
+  resources:
   - neo4jbackups/status
   verbs:
   - get
@@ -165,6 +171,12 @@ rules:
 - apiGroups:
   - neo4j.com
   resources:
+  - neo4jbackupschedules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - neo4j.com
+  resources:
   - neo4jbackupschedules/status
   verbs:
   - get
@@ -182,6 +194,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - neo4j.com
+  resources:
+  - neo4jrestores/finalizers
+  verbs:
+  - update
 - apiGroups:
   - neo4j.com
   resources:

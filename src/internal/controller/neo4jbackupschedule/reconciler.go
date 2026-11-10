@@ -86,6 +86,7 @@ func NewReconciler(mgr ctrl.Manager) *ScheduleReconciler {
 
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackupschedules,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackupschedules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackupschedules/finalizers,verbs=update
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4js,verbs=get;list;watch
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
