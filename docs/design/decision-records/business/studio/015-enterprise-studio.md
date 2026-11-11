@@ -250,6 +250,14 @@ change so the release can pick them up independently.
    any unset request/limit half falls back to operator defaults (requests 250m CPU / 512Mi, limits
    1 CPU / 1Gi) so the container is always bounded (NEO-014) — lighter than the Neo4j workload's
    defaults since Studio is a stateless web app.
+2. **`neo4jRef` reaches the backing Neo4j over TLS when it is exposed.** The operator previously
+   hard-coded `http://<client-svc>:7474` with no way to use TLS. Resolution now follows whatever the
+   referenced Neo4j publishes on its client Service: when the `https` connector is exposed
+   (`connectivity.listeners.https` + `service.expose` includes `https`) Studio targets
+   `https://<client-svc>:<httpsPort>`, otherwise plain HTTP — honouring any `service.ports` remap.
+   For a self-signed/operator CA, NES must trust that certificate (wired via `config` /
+   `configFromSecrets`). An external `uri` stays fully under the user's control (verbatim, incl.
+   `https://`).
 
 ---
 

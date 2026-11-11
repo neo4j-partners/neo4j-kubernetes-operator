@@ -220,6 +220,10 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
 - **Resources.** `render/studio.withDefaultResources` fills unset request/limit halves from Studio
   defaults (250m/512Mi requests, 1/1Gi limits), mirroring `render/workload.withDefaultResources` with
   lighter values; the Studio container always renders bounded (NEO-014).
+- **neo4jRef TLS.** `domain/studio.clientHTTPURI` resolves the backing DBMS endpoint from
+  `render.Context.ClientExpose()`: `https://host:ServiceFacadePort(https)` when the https connector is
+  exposed, else `http://host:ServiceFacadePort(http)`. Replaces the hard-coded `http://…:HTTPPort()`;
+  Direct-mode Bolt TLS is already expressible via an explicit `publicUri` (e.g. `neo4j+s://…`).
 
 ---
 

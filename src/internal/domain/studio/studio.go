@@ -98,12 +98,12 @@ func ResolveDeployments(ctx context.Context, c client.Client, s *neo4jv1.Neo4jSt
 			return nil, &ResolveError{Deployment: d.Name, Kind: ResolveEditionUnsupported,
 				Detail: fmt.Sprintf("deployment %q: Neo4j %q is %s; Enterprise Studio serves Enterprise deployments", d.Name, neo4j.Name, neo4j.Spec.Edition)}
 		}
-		// uri is always the server-reachable HTTP API (NES uses it to proxy/validate); Direct adds the
-		// browser-reachable Bolt endpoint as publicUri. Reuses the workload's own Service naming/ports
-		// (render.Context) rather than re-deriving them (ADR-018).
+		// uri is always the server-reachable HTTP(S) API (NES uses it to proxy/validate); Direct adds
+		// the browser-reachable Bolt endpoint as publicUri. Reuses the workload's own Service
+		// naming/ports (render.Context) rather than re-deriving them (ADR-018).
 		rc := render.StandaloneContext(&neo4j)
 		host := fmt.Sprintf("%s.%s.svc", rc.ClientServiceName(), neo4j.Namespace)
-		rd := renderstudio.ResolvedDeployment{Name: d.Name, URI: fmt.Sprintf("http://%s:%d", host, rc.HTTPPort()), Mode: string(mode)}
+		rd := renderstudio.ResolvedDeployment{Name: d.Name, URI: clientHTTPURI(rc, host), Mode: string(mode)}
 		if mode == neo4jv1.StudioModeDirect {
 			// Browser-reachable Bolt: explicit override wins, else the in-cluster Service DNS.
 			rd.PublicURI = d.PublicURI
@@ -114,6 +114,21 @@ func ResolveDeployments(ctx context.Context, c client.Client, s *neo4jv1.Neo4jSt
 		out = append(out, rd)
 	}
 	return out, nil
+}
+
+// clientHTTPURI resolves the HTTP(S) endpoint Studio uses to reach the backing Neo4j's client Service.
+// It follows whatever the Neo4j actually publishes on that Service: HTTPS when the https connector is
+// exposed (the operator no longer hard-codes plain http://…:7474 — customer feedback), otherwise HTTP.
+// Ports honour any connectivity.service.ports remap via ServiceFacadePort. For TLS, the backing Neo4j
+// must expose the https connector (connectivity.listeners.https + service.expose includes https); NES
+// then needs to trust that server certificate, wired through spec.config / configFromSecrets.
+func clientHTTPURI(rc render.Context, host string) string {
+	for _, conn := range rc.ClientExpose() {
+		if conn == render.ConnectorHTTPS {
+			return fmt.Sprintf("https://%s:%d", host, rc.ServiceFacadePort(render.ConnectorHTTPS))
+		}
+	}
+	return fmt.Sprintf("http://%s:%d", host, rc.ServiceFacadePort(render.ConnectorHTTP))
 }
 
 // Apply renders and server-side applies the Studio object set, each owner-referenced to the

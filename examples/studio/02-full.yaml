@@ -89,7 +89,8 @@ spec:
     - name: prod-graph
       neo4jRef:
         name: my-graph                   # in-cluster; operator resolves the client Service URI
-      mode: ReverseProxy                 # Studio proxies HTTP to the DBMS (uses the 7474 connector)
+      mode: ReverseProxy                 # Studio proxies to the DBMS HTTP connector (7474), or HTTPS
+                                         #   (7473) automatically when my-graph exposes the https connector
       auth:                              # end-user sign-in methods (both default enabled in NES)
         basic: true                      #   username/password
         oidc: false                      #   single sign-on

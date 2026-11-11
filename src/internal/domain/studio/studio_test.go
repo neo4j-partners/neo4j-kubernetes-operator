@@ -120,6 +120,26 @@ func TestResolveDeployments(t *testing.T) {
 		}
 	})
 
+	t.Run("neo4jRef resolves to HTTPS when the Neo4j exposes the https connector", func(t *testing.T) {
+		// Customer feedback: no longer hard-coded to http://…:7474. A backing Neo4j that publishes the
+		// https connector on its client Service is reached over TLS, honouring its declared https port.
+		n := neo4j("tls", neo4jv1.EditionEnterprise)
+		httpsPort := int32(7473)
+		n.Spec.Connectivity = &neo4jv1.ConnectivitySpec{
+			Listeners: &neo4jv1.ConnectivityListenersSpec{HTTPS: &httpsPort},
+			Service:   &neo4jv1.ConnectivityServiceSpec{Expose: []string{"bolt", "https"}},
+		}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "proxy", Neo4jRef: &neo4jv1.Neo4jRef{Name: "tls"}, Mode: neo4jv1.StudioModeReverseProxy})
+		got, rerr := ResolveDeployments(context.Background(), c, cr)
+		if rerr != nil {
+			t.Fatalf("unexpected error: %v", rerr)
+		}
+		if got[0].URI != "https://tls.ns.svc:7473" {
+			t.Fatalf("URI = %q, want https://tls.ns.svc:7473", got[0].URI)
+		}
+	})
+
 	t.Run("missing neo4jRef is retryable TargetNotFound", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(s).Build()
 		cr := studioCR(neo4jv1.StudioDeployment{Name: "d", Neo4jRef: &neo4jv1.Neo4jRef{Name: "ghost"}, Mode: neo4jv1.StudioModeDirect})
