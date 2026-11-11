@@ -109,6 +109,21 @@ type StudioDeploymentAuth struct {
 	OIDC *bool `json:"oidc,omitempty"`
 }
 
+// StudioNeo4jRef references an in-cluster Neo4j in the same namespace, optionally targeting one of its
+// cluster pools. The operator resolves it to that pool's Service URI (ADR-018 — never re-derived).
+type StudioNeo4jRef struct {
+	// Name of the target Neo4j resource in the same namespace.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Pool optionally targets a specific cluster pool of the referenced Neo4j: analytics (the GDS
+	// analytics pool), read, or primary. Omit for the default north-south client Service (primaries).
+	// Only meaningful for a Cluster — ignored for a Standalone. analytics/read resolve to that pool's
+	// headless Service (per-member DNS); set spec.deployments[].mode accordingly for multi-member pools.
+	// +kubebuilder:validation:Enum=primary;analytics;read
+	Pool string `json:"pool,omitempty"`
+}
+
 // StudioDeployment is one Neo4j deployment that Studio serves (BDR-015 §2 — one-to-many). Exactly
 // one of neo4jRef (in-cluster, resolved by the operator) or uri (external, used verbatim).
 // +kubebuilder:validation:XValidation:rule="has(self.neo4jRef) != has(self.uri)",message="set deployments[].neo4jRef (in-cluster) or deployments[].uri (external), not both"
@@ -119,8 +134,8 @@ type StudioDeployment struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 	// Neo4jRef references an in-cluster Neo4j in the same namespace; the operator resolves it to the
-	// workload's client Service URI (ADR-018 — never re-derived).
-	Neo4jRef *Neo4jRef `json:"neo4jRef,omitempty"`
+	// workload's client Service URI (ADR-018 — never re-derived). Optionally targets a cluster pool.
+	Neo4jRef *StudioNeo4jRef `json:"neo4jRef,omitempty"`
 	// URI is an external Neo4j endpoint (e.g. neo4j+s://…), used verbatim; the operator does not
 	// resolve or validate its reachability at admission (BDR-015 §2).
 	URI string `json:"uri,omitempty"`

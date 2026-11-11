@@ -258,6 +258,12 @@ change so the release can pick them up independently.
    For a self-signed/operator CA, NES must trust that certificate (wired via `config` /
    `configFromSecrets`). An external `uri` stays fully under the user's control (verbatim, incl.
    `https://`).
+3. **`neo4jRef` can target a cluster pool.** `deployments[].neo4jRef.pool` (enum `primary`/`analytics`/
+   `read`) resolves to that pool's Service. The north-south client Service only fronts primaries, so
+   the GDS **analytics** pool (and the read pool) were previously unreachable by `neo4jRef` — users had
+   to hand-write the URL. `analytics`/`read` now resolve to the pool's headless Service
+   (`<name>-<pool>`), reusing the same HTTPS auto-detect; a pool that is not configured fails fast with
+   a clear resolve error. Omit `pool` for the default (primaries); it is ignored for a standalone.
 
 ---
 

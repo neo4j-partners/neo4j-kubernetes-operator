@@ -98,8 +98,8 @@ func TestResolveDeployments(t *testing.T) {
 	t.Run("in-cluster neo4jRef resolves to service URI per mode", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(s).WithObjects(neo4j("g", neo4jv1.EditionEnterprise)).Build()
 		cr := studioCR(
-			neo4jv1.StudioDeployment{Name: "direct", Neo4jRef: &neo4jv1.Neo4jRef{Name: "g"}, Mode: neo4jv1.StudioModeDirect},
-			neo4jv1.StudioDeployment{Name: "proxy", Neo4jRef: &neo4jv1.Neo4jRef{Name: "g"}, Mode: neo4jv1.StudioModeReverseProxy},
+			neo4jv1.StudioDeployment{Name: "direct", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "g"}, Mode: neo4jv1.StudioModeDirect},
+			neo4jv1.StudioDeployment{Name: "proxy", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "g"}, Mode: neo4jv1.StudioModeReverseProxy},
 		)
 		got, rerr := ResolveDeployments(context.Background(), c, cr)
 		if rerr != nil {
@@ -130,7 +130,7 @@ func TestResolveDeployments(t *testing.T) {
 			Service:   &neo4jv1.ConnectivityServiceSpec{Expose: []string{"bolt", "https"}},
 		}
 		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
-		cr := studioCR(neo4jv1.StudioDeployment{Name: "proxy", Neo4jRef: &neo4jv1.Neo4jRef{Name: "tls"}, Mode: neo4jv1.StudioModeReverseProxy})
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "proxy", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "tls"}, Mode: neo4jv1.StudioModeReverseProxy})
 		got, rerr := ResolveDeployments(context.Background(), c, cr)
 		if rerr != nil {
 			t.Fatalf("unexpected error: %v", rerr)
@@ -140,9 +140,40 @@ func TestResolveDeployments(t *testing.T) {
 		}
 	})
 
+	t.Run("neo4jRef.pool targets the cluster pool's headless Service", func(t *testing.T) {
+		// Customer feedback: the north-south client Service only fronts primaries, so the GDS analytics
+		// pool is reachable only via its own pool Service. pool: analytics resolves there.
+		n := neo4j("cl", neo4jv1.EditionEnterprise)
+		n.Spec.Topology = neo4jv1.TopologySpec{
+			Mode:        neo4jv1.TopologyModeCluster,
+			Primaries:   &neo4jv1.PrimariesSpec{Members: 3},
+			Secondaries: &neo4jv1.SecondariesSpec{Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1}},
+		}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "gds", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "cl", Pool: "analytics"}, Mode: neo4jv1.StudioModeReverseProxy})
+		got, rerr := ResolveDeployments(context.Background(), c, cr)
+		if rerr != nil {
+			t.Fatalf("unexpected error: %v", rerr)
+		}
+		if got[0].URI != "http://cl-analytics.ns.svc:7474" {
+			t.Fatalf("URI = %q, want http://cl-analytics.ns.svc:7474", got[0].URI)
+		}
+	})
+
+	t.Run("neo4jRef.pool on an unconfigured pool fails fast", func(t *testing.T) {
+		n := neo4j("cl", neo4jv1.EditionEnterprise)
+		n.Spec.Topology = neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeCluster, Primaries: &neo4jv1.PrimariesSpec{Members: 3}}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "gds", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "cl", Pool: "analytics"}})
+		_, rerr := ResolveDeployments(context.Background(), c, cr)
+		if rerr == nil {
+			t.Fatalf("want error for missing analytics pool, got nil")
+		}
+	})
+
 	t.Run("missing neo4jRef is retryable TargetNotFound", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(s).Build()
-		cr := studioCR(neo4jv1.StudioDeployment{Name: "d", Neo4jRef: &neo4jv1.Neo4jRef{Name: "ghost"}, Mode: neo4jv1.StudioModeDirect})
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "d", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "ghost"}, Mode: neo4jv1.StudioModeDirect})
 		_, rerr := ResolveDeployments(context.Background(), c, cr)
 		if rerr == nil || rerr.Kind != ResolveTargetNotFound {
 			t.Fatalf("want ResolveTargetNotFound, got %+v", rerr)
@@ -151,7 +182,7 @@ func TestResolveDeployments(t *testing.T) {
 
 	t.Run("community edition is terminal EditionUnsupported", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(s).WithObjects(neo4j("comm", neo4jv1.EditionCommunity)).Build()
-		cr := studioCR(neo4jv1.StudioDeployment{Name: "d", Neo4jRef: &neo4jv1.Neo4jRef{Name: "comm"}, Mode: neo4jv1.StudioModeDirect})
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "d", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "comm"}, Mode: neo4jv1.StudioModeDirect})
 		_, rerr := ResolveDeployments(context.Background(), c, cr)
 		if rerr == nil || rerr.Kind != ResolveEditionUnsupported {
 			t.Fatalf("want ResolveEditionUnsupported, got %+v", rerr)

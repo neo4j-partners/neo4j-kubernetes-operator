@@ -224,6 +224,11 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
   `render.Context.ClientExpose()`: `https://host:ServiceFacadePort(https)` when the https connector is
   exposed, else `http://host:ServiceFacadePort(http)`. Replaces the hard-coded `http://…:HTTPPort()`;
   Direct-mode Bolt TLS is already expressible via an explicit `publicUri` (e.g. `neo4j+s://…`).
+- **neo4jRef pool.** A Studio-local `StudioNeo4jRef` adds optional `pool` (the shared `Neo4jRef` stays
+  `name`-only so the backup CRD schema is unaffected). `domain/studio.backingHost` resolves
+  `analytics`/`read` to `render.NewContext(neo4j, pool).HeadlessServiceName()` (raw listener ports);
+  `primary`/unset keep the north-south client Service (facade ports). `validatePool` rejects a pool
+  with zero members (`PoolReplicas()==0`) up front.
 
 ---
 

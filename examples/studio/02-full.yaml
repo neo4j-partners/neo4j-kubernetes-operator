@@ -99,6 +99,12 @@ spec:
           databaseRoles: [admin]
         - role: studioCreator
           databaseRoles: [PUBLIC]         # databaseUsers: [alice] to grant specific users
+    # Reference a specific cluster pool (e.g. the GDS analytics pool) — only for a clustered neo4jRef:
+    # - name: gds-analytics
+    #   neo4jRef:
+    #     name: my-graph
+    #     pool: analytics                 # resolves to the analytics pool's Service (primary/read also valid)
+    #   mode: ReverseProxy
   assetStore:
     uri: "neo4j://my-graph.default.svc:7687"   # Bolt scheme — Studio is a driver client here
     database: studio-assets

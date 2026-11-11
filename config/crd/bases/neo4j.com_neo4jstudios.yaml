@@ -262,12 +262,23 @@ spec:
                     neo4jRef:
                       description: |-
                         Neo4jRef references an in-cluster Neo4j in the same namespace; the operator resolves it to the
-                        workload's client Service URI (ADR-018 — never re-derived).
+                        workload's client Service URI (ADR-018 — never re-derived). Optionally targets a cluster pool.
                       properties:
                         name:
                           description: Name of the target Neo4j resource in the same
                             namespace.
                           minLength: 1
+                          type: string
+                        pool:
+                          description: |-
+                            Pool optionally targets a specific cluster pool of the referenced Neo4j: analytics (the GDS
+                            analytics pool), read, or primary. Omit for the default north-south client Service (primaries).
+                            Only meaningful for a Cluster — ignored for a Standalone. analytics/read resolve to that pool's
+                            headless Service (per-member DNS); set spec.deployments[].mode accordingly for multi-member pools.
+                          enum:
+                          - primary
+                          - analytics
+                          - read
                           type: string
                       required:
                       - name

@@ -98,12 +98,16 @@ func ResolveDeployments(ctx context.Context, c client.Client, s *neo4jv1.Neo4jSt
 			return nil, &ResolveError{Deployment: d.Name, Kind: ResolveEditionUnsupported,
 				Detail: fmt.Sprintf("deployment %q: Neo4j %q is %s; Enterprise Studio serves Enterprise deployments", d.Name, neo4j.Name, neo4j.Spec.Edition)}
 		}
+		if perr := validatePool(&neo4j, d.Name, d.Neo4jRef.Pool); perr != nil {
+			return nil, perr
+		}
 		// uri is always the server-reachable HTTP(S) API (NES uses it to proxy/validate); Direct adds
-		// the browser-reachable Bolt endpoint as publicUri. Reuses the workload's own Service
+		// the browser-reachable Bolt endpoint as publicUri. An optional neo4jRef.pool targets a cluster
+		// pool's Service (GDS analytics — customer feedback). Reuses the workload's own Service
 		// naming/ports (render.Context) rather than re-deriving them (ADR-018).
 		rc := render.StandaloneContext(&neo4j)
-		host := fmt.Sprintf("%s.%s.svc", rc.ClientServiceName(), neo4j.Namespace)
-		rd := renderstudio.ResolvedDeployment{Name: d.Name, URI: clientHTTPURI(rc, host), Mode: string(mode)}
+		host, useFacade := backingHost(&neo4j, d.Neo4jRef.Pool)
+		rd := renderstudio.ResolvedDeployment{Name: d.Name, URI: httpURI(rc, host, useFacade), Mode: string(mode)}
 		if mode == neo4jv1.StudioModeDirect {
 			// Browser-reachable Bolt: explicit override wins, else the in-cluster Service DNS.
 			rd.PublicURI = d.PublicURI
@@ -116,19 +120,57 @@ func ResolveDeployments(ctx context.Context, c client.Client, s *neo4jv1.Neo4jSt
 	return out, nil
 }
 
-// clientHTTPURI resolves the HTTP(S) endpoint Studio uses to reach the backing Neo4j's client Service.
-// It follows whatever the Neo4j actually publishes on that Service: HTTPS when the https connector is
-// exposed (the operator no longer hard-codes plain http://…:7474 — customer feedback), otherwise HTTP.
-// Ports honour any connectivity.service.ports remap via ServiceFacadePort. For TLS, the backing Neo4j
-// must expose the https connector (connectivity.listeners.https + service.expose includes https); NES
-// then needs to trust that server certificate, wired through spec.config / configFromSecrets.
-func clientHTTPURI(rc render.Context, host string) string {
-	for _, conn := range rc.ClientExpose() {
-		if conn == render.ConnectorHTTPS {
-			return fmt.Sprintf("https://%s:%d", host, rc.ServiceFacadePort(render.ConnectorHTTPS))
+// backingHost returns the in-cluster Service DNS Studio uses to reach the backing Neo4j, plus whether
+// the port should come from the client Service facade (vs. the raw listener port). Default is the
+// north-south client Service. An optional neo4jRef.pool (analytics/read) targets that pool's headless
+// Service in a cluster — the north-south Service only fronts primaries, so GDS analytics/read members
+// are only reachable via their own pool Service (customer feedback). Ignored for a standalone.
+func backingHost(neo4j *neo4jv1.Neo4j, pool string) (host string, useFacade bool) {
+	rc := render.StandaloneContext(neo4j)
+	host, useFacade = fmt.Sprintf("%s.%s.svc", rc.ClientServiceName(), neo4j.Namespace), true
+	if render.IsClusterMode(neo4j) {
+		switch pool {
+		case string(render.PoolAnalytics), string(render.PoolRead):
+			pc := render.NewContext(neo4j, render.PoolID(pool))
+			host, useFacade = fmt.Sprintf("%s.%s.svc", pc.HeadlessServiceName(), neo4j.Namespace), false
 		}
 	}
-	return fmt.Sprintf("http://%s:%d", host, rc.ServiceFacadePort(render.ConnectorHTTP))
+	return host, useFacade
+}
+
+// httpURI builds the HTTP(S) endpoint for a resolved host. It follows whatever the Neo4j publishes:
+// HTTPS when the https connector is exposed (the operator no longer hard-codes plain http://…:7474 —
+// customer feedback), otherwise HTTP. The north-south client Service uses facade (remappable) ports;
+// a pool headless Service exposes the raw listener ports. For TLS, the backing Neo4j must expose the
+// https connector and NES must trust its certificate (wired via spec.config / configFromSecrets).
+func httpURI(rc render.Context, host string, useFacade bool) string {
+	scheme, conn := "http", render.ConnectorHTTP
+	for _, c := range rc.ClientExpose() {
+		if c == render.ConnectorHTTPS {
+			scheme, conn = "https", render.ConnectorHTTPS
+			break
+		}
+	}
+	port := rc.ListenerPort(conn)
+	if useFacade {
+		port = rc.ServiceFacadePort(conn)
+	}
+	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
+}
+
+// validatePool fails fast when neo4jRef.pool targets a cluster pool that is not configured, so a
+// mistargeted deployment surfaces a clear error instead of resolving to a dead Service DNS. The pool
+// is only honoured for a cluster (ignored for a standalone — see backingHost); primary always exists.
+func validatePool(neo4j *neo4jv1.Neo4j, deployment, pool string) *ResolveError {
+	if pool == "" || !render.IsClusterMode(neo4j) ||
+		(pool != string(render.PoolAnalytics) && pool != string(render.PoolRead)) {
+		return nil
+	}
+	if render.NewContext(neo4j, render.PoolID(pool)).PoolReplicas() == 0 {
+		return &ResolveError{Deployment: deployment, Kind: ResolveTargetNotFound,
+			Detail: fmt.Sprintf("deployment %q: Neo4j %q has no %s pool (neo4jRef.pool)", deployment, neo4j.Name, pool)}
+	}
+	return nil
 }
 
 // Apply renders and server-side applies the Studio object set, each owner-referenced to the
