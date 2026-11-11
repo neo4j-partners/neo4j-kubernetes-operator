@@ -20,10 +20,54 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 )
+
+func studioContainerResources(s *neo4jv1.Neo4jStudio) corev1.ResourceRequirements {
+	return Deployment(s, nil).Spec.Template.Spec.Containers[0].Resources
+}
+
+func TestDeploymentAppliesResources(t *testing.T) {
+	s := &neo4jv1.Neo4jStudio{
+		ObjectMeta: metav1.ObjectMeta{Name: "nes", Namespace: "ns"},
+		Spec: neo4jv1.Neo4jStudioSpec{
+			AssetStore: neo4jv1.StudioAssetStore{URI: "neo4j://store:7687", Database: "assets", Auth: neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a"}}},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("300m")},
+				Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")},
+			},
+		},
+	}
+	r := studioContainerResources(s)
+	// Explicit values win; the unset request/limit halves fall back to the operator defaults.
+	if got := r.Requests.Cpu().String(); got != "300m" {
+		t.Errorf("cpu request = %q, want 300m", got)
+	}
+	if got := r.Limits.Memory().String(); got != "2Gi" {
+		t.Errorf("memory limit = %q, want 2Gi", got)
+	}
+	if r.Limits.Cpu().IsZero() || r.Requests.Memory().IsZero() {
+		t.Errorf("unset halves must default, got %#v", r)
+	}
+}
+
+// Omitting spec.resources must still yield a bounded container so a Studio pod can never run unbounded
+// and starve its node (NEO-014).
+func TestDeploymentDefaultsResourcesWhenOmitted(t *testing.T) {
+	s := &neo4jv1.Neo4jStudio{
+		ObjectMeta: metav1.ObjectMeta{Name: "nes", Namespace: "ns"},
+		Spec: neo4jv1.Neo4jStudioSpec{
+			AssetStore: neo4jv1.StudioAssetStore{URI: "neo4j://store:7687", Database: "assets", Auth: neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a"}}},
+		},
+	}
+	r := studioContainerResources(s)
+	if r.Limits.Cpu().IsZero() || r.Limits.Memory().IsZero() || r.Requests.Cpu().IsZero() || r.Requests.Memory().IsZero() {
+		t.Fatalf("omitted spec.resources must default cpu+memory requests and limits, got %#v", r)
+	}
+}
 
 func plainEnv(env []corev1.EnvVar) map[string]string {
 	m := map[string]string{}

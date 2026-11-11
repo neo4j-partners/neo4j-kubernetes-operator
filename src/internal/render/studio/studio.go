@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -183,6 +184,7 @@ func Deployment(s *neo4jv1.Neo4jStudio, resolved []ResolvedDeployment) *appsv1.D
 						Ports:           []corev1.ContainerPort{{Name: "http", ContainerPort: port}},
 						Env:             EnvVars(s, resolved),
 						VolumeMounts:    mounts,
+						Resources:       withDefaultResources(s.Spec.Resources),
 						ReadinessProbe:  probe(s, port),
 						SecurityContext: containerSecurityContext(s),
 					}},
@@ -556,6 +558,52 @@ func parsePort(v string) int32 {
 		return 0
 	}
 	return int32(n)
+}
+
+// Operator defaults that bound an omitted spec.resources so the Studio container is always bounded
+// and can never run unbounded and starve its node (NEO-014, CWE-770/CWE-400). Studio is a stateless
+// web app, so these are lighter than the Neo4j workload's. Users still override any field via
+// spec.resources. ponytail: fixed defaults, mirroring render/workload.withDefaultResources — set
+// spec.resources for heavier Studio usage.
+var (
+	defaultCPURequest    = resource.MustParse("250m")
+	defaultMemoryRequest = resource.MustParse("512Mi")
+	defaultCPULimit      = resource.MustParse("1")
+	defaultMemoryLimit   = resource.MustParse("1Gi")
+)
+
+// withDefaultResources fills only the requests/limits the user left unset, so partial overrides work
+// and an omitted spec.resources still yields a bounded container (NEO-014).
+func withDefaultResources(rr corev1.ResourceRequirements) corev1.ResourceRequirements {
+	out := *rr.DeepCopy()
+	if out.Requests == nil {
+		out.Requests = corev1.ResourceList{}
+	}
+	if out.Limits == nil {
+		out.Limits = corev1.ResourceList{}
+	}
+	defaultResource(out.Requests, out.Limits, corev1.ResourceCPU, defaultCPURequest, defaultCPULimit)
+	defaultResource(out.Requests, out.Limits, corev1.ResourceMemory, defaultMemoryRequest, defaultMemoryLimit)
+	return out
+}
+
+// defaultResource fills a missing request/limit for one resource, clamping an invented request down to
+// a user-set limit below our default so we never emit an invalid request>limit container (NEO-014).
+func defaultResource(requests, limits corev1.ResourceList, name corev1.ResourceName, reqDefault, limDefault resource.Quantity) {
+	if _, ok := requests[name]; !ok {
+		req := reqDefault.DeepCopy()
+		if lim, ok := limits[name]; ok && req.Cmp(lim) > 0 {
+			req = lim.DeepCopy()
+		}
+		requests[name] = req
+	}
+	if _, ok := limits[name]; !ok {
+		lim := limDefault.DeepCopy()
+		if req := requests[name]; lim.Cmp(req) < 0 {
+			lim = req.DeepCopy()
+		}
+		limits[name] = lim
+	}
 }
 
 func probe(s *neo4jv1.Neo4jStudio, port int32) *corev1.Probe {

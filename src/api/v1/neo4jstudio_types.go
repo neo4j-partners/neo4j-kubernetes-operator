@@ -268,6 +268,10 @@ type Neo4jStudioSpec struct {
 	// Replicas is the Studio Deployment replica count. Studio is stateless; defaults to 1 (BDR-015 §10).
 	// +kubebuilder:validation:Minimum=1
 	Replicas *int32 `json:"replicas,omitempty"`
+	// Resources sets CPU and memory requests and limits for the Studio container. Any field left unset
+	// is defaulted by the operator so the container is always bounded (NEO-014): requests 250m CPU /
+	// 512Mi, limits 1 CPU / 1Gi. Set explicit values for heavier Studio usage.
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// Security overrides the operator's hardened pod/container securityContext defaults.
 	Security *StudioSecuritySpec `json:"security,omitempty"`
 	// Config passes through non-secret NES_* keys verbatim (BDR-015 §9), e.g. tuning or generativeAi

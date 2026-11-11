@@ -1905,6 +1905,7 @@ func (in *Neo4jStudioSpec) DeepCopyInto(out *Neo4jStudioSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	in.Resources.DeepCopyInto(&out.Resources)
 	if in.Security != nil {
 		in, out := &in.Security, &out.Security
 		*out = new(StudioSecuritySpec)

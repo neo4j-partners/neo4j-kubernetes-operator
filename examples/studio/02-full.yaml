@@ -78,6 +78,13 @@ spec:
   #   secretRef:
   #     name: studio-license
   replicas: 1                            # stateless; defaults to 1 (BDR-015 §10)
+  resources:                             # CPU/memory for the Studio container; unset halves fall back
+    requests:                            #   to the operator defaults (250m/512Mi req, 1/1Gi lim — NEO-014)
+      cpu: "250m"
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
   deployments:
     - name: prod-graph
       neo4jRef:

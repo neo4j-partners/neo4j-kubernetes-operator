@@ -213,6 +213,14 @@ Implements the [BDR-015 usability revision](../business/studio/015-enterprise-st
   `StudioConnectivitySpec` as `spec.connectivity.tls`. `render/studio.tlsEnabled` and the TLS
   volume/probe read from `Connectivity.TLS`.
 
+## Customer feedback revision — execution (2026-11-11)
+
+Implements the [BDR-015 customer feedback revision](../business/studio/015-enterprise-studio.md#customer-feedback-revision-2026-11-11):
+
+- **Resources.** `render/studio.withDefaultResources` fills unset request/limit halves from Studio
+  defaults (250m/512Mi requests, 1/1Gi limits), mirroring `render/workload.withDefaultResources` with
+  lighter values; the Studio container always renders bounded (NEO-014).
+
 ---
 
 ## References

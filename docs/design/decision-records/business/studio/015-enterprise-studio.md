@@ -240,6 +240,17 @@ changing the model** (one-to-many, `neo4jRef`/`uri`, referenced Secrets all stan
 Unchanged and still required: at least one `deployments[]` entry and `assetStore` (BYO — §4-a).
 Auto-provisioning the asset DB remains deferred to [BDR-012](../identity-user-roles/012-identity-management.md).
 
+## Customer feedback revision (2026-11-11)
+
+The first external trial of the Studio CR surfaced real gaps. Each is addressed as its own atomic
+change so the release can pick them up independently.
+
+1. **`spec.resources` for the Studio pod.** The Studio container previously set no CPU/memory requests
+   or limits, so it ran unbounded. `spec.resources` (standard `ResourceRequirements`) now sets them;
+   any unset request/limit half falls back to operator defaults (requests 250m CPU / 512Mi, limits
+   1 CPU / 1Gi) so the container is always bounded (NEO-014) — lighter than the Neo4j workload's
+   defaults since Studio is a stateless web app.
+
 ---
 
 ## References
