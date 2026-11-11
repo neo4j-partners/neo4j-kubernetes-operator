@@ -122,6 +122,10 @@ func (f *fakeAdmin) CreateOrReplaceDatabaseWithSeed(context.Context, string, str
 func (f *fakeAdmin) StopDatabase(context.Context, string) error  { return nil }
 func (f *fakeAdmin) StartDatabase(context.Context, string) error { return nil }
 
+func (f *fakeAdmin) CreateDatabaseIfNotExists(context.Context, string) error     { return nil }
+func (f *fakeAdmin) CreateUserIfNotExists(context.Context, string, string) error { return nil }
+func (f *fakeAdmin) GrantRole(context.Context, string, string) error             { return nil }
+
 func testClusterCR(primaries int32) *neo4jv1.Neo4j {
 	return &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},

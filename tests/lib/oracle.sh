@@ -29,7 +29,7 @@ oracle_reasons_for() {  # <condition>
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported BackupSourceNotFound BackupSourceUnsupported ;;
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreMetadataApplying RestoreMetadataFailed ;;
     ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
-    StudioReady) printf '%s\n' StudioAvailable StudioProgressing StudioTargetNotFound StudioEditionUnsupported StudioDegraded ;;
+    StudioReady) printf '%s\n' StudioAvailable StudioProgressing StudioTargetNotFound StudioEditionUnsupported StudioDegraded StudioProvisioning ;;
     event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
     *) return 1 ;;
   esac
@@ -128,6 +128,7 @@ oracle_severity() {  # <reason>
     StudioTargetNotFound) echo warn ;;
     StudioEditionUnsupported) echo error ;;
     StudioDegraded) echo warn ;;
+    StudioProvisioning) echo warn ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;

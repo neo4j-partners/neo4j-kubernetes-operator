@@ -15,7 +15,7 @@ resolution.
 | Dependency | Provided by | Notes |
 |------------|-------------|-------|
 | **Served deployment(s)** | `deployments[]` — `neo4jRef` (in-cluster) or external `uri` | one-to-many; each `Direct` or `ReverseProxy` (§2) |
-| **Asset store** | a Neo4j database + an account with the `architect` role | **you pre-create it** (BYO — §4-a); the operator does not create it |
+| **Asset store** | a Neo4j database + an account with the `architect` role | **you pre-create it** (BYO — §4-a), **or** let the operator create it with `assetStore.provision` against an in-cluster `neo4jRef` (§4) |
 | **License** (optional) | `license.secretRef` | distinct from the Neo4j license; Studio starts without it (§3) |
 | **Sign-in / roles** (optional) | `deployments[].auth` (basic/oidc toggles), `deployments[].roleMapping` | Studio uses the end-user's own login — no per-deployment service credentials |
 | **HTTPS** (optional) | `server.tls` → a `kubernetes.io/tls` Secret | serves Studio over HTTPS on its own port |
@@ -33,11 +33,17 @@ against a cluster (§7).
 - A `Neo4j` **Enterprise** deployment named `my-graph` in your namespace (any example under
   [`../standalone/`](../standalone/) or [`../cluster/`](../cluster/) works; `02-full.yaml` uses
   `ReverseProxy`, which needs the HTTP connector — see [`../standalone/07-tls-https-bolt.yaml`](../standalone/07-tls-https-bolt.yaml)).
-- A pre-created **asset database** (`studio-assets`) whose account has the `architect` role.
+- A pre-created **asset database** (`studio-assets`) whose account has the `architect` role —
+  **or** skip this step and let the operator provision it ([`03-provisioned.yaml`](03-provisioned.yaml)).
 
 All commands target your current namespace; add `-n <ns>` to use another.
 
 ## 1. Pre-create the asset database (BYO — §4-a)
+
+> Skip this step if you use [`03-provisioned.yaml`](03-provisioned.yaml): with `assetStore.provision`
+> the operator creates the database, the architect account, and the grant for you (§4) — it only needs
+> an in-cluster `neo4jRef` and that Neo4j's admin Bolt trust (NEO-004: `trust.certificates.bolt` or
+> `trust.insecureAdminConnection`).
 
 ```bash
 PW=$(kubectl get secret my-graph-auth -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d | cut -d/ -f2)
@@ -96,6 +102,7 @@ kubectl port-forward svc/studio-full 8080:8080
 |------|--------------|
 | [`01-minimal.yaml`](01-minimal.yaml) | Smallest valid `Neo4jStudio` — one in-cluster `ReverseProxy` deployment + BYO asset store |
 | [`02-full.yaml`](02-full.yaml) | **Self-contained, runnable** — bundles the Secrets, then an in-cluster `ReverseProxy` deployment, BYO asset store, sign-in toggles, role mapping, HTTPS (`server.tls`), tool toggles, replicas, Service, and both `config` / `configFromSecrets` passthroughs |
+| [`03-provisioned.yaml`](03-provisioned.yaml) | **Operator-provisioned asset store** — `assetStore.neo4jRef` + `provision: true`; the operator CREATEs the database, the architect account, and the grant on the in-cluster Neo4j (no BYO pre-create) |
 
 ## Troubleshooting
 
@@ -106,6 +113,11 @@ kubectl port-forward svc/studio-full 8080:8080
   now runs Studio as non-root UID `7474`. Rebuild/redeploy the operator.
 - **No license** — Studio logs `running unlicensed` and still starts (BDR-015 §3); add a license Secret
   (key `nes.license`) to remove the warning.
+- **Stuck `Pending` / reason `StudioProvisioning`** (only with `assetStore.provision`) — the operator
+  cannot open an admin Bolt session to the `neo4jRef` target yet. Confirm the target is `Available` and
+  that it allows admin Bolt (NEO-004): set `spec.trust.certificates.bolt` (verified TLS) or
+  `spec.trust.insecureAdminConnection: true` on that `Neo4j`. The provisioning ops are idempotent and
+  retried, so it clears once the target is reachable.
 - **`Transaction … not found` / `neo4j-cluster-affinity` when serving a cluster in `ReverseProxy`** — HTTP
   explicit transactions must stay pinned to one cluster member. The operator sets `sessionAffinity: ClientIP`
   on a cluster `Neo4j`'s client Service by default (BDR-016), so this works out of the box. If you overrode

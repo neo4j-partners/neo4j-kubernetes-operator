@@ -229,6 +229,18 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
   `analytics`/`read` to `render.NewContext(neo4j, pool).HeadlessServiceName()` (raw listener ports);
   `primary`/unset keep the north-south client Service (facade ports). `validatePool` rejects a pool
   with zero members (`PoolReplicas()==0`) up front.
+- **Asset-store provisioning (scoped BDR-012 §4-b).** The `Admin` interface (ADR-007 allowlist) gains
+  three idempotent verbs — `CreateDatabaseIfNotExists`, `CreateUserIfNotExists`, `GrantRole` — run on
+  `system` via `ExecuteQueryWithDatabase`. Names and the password are Bolt parameters; the role is a
+  validated literal (`architect`) since Cypher rejects a parameter in the ROLE position.
+  `domain/studio.ResolveAssetStore` resolves `assetStore.neo4jRef` to `neo4j://<client-svc>:<boltPort>`
+  (external `uri` echoed verbatim); the reconciler stamps it on the in-memory spec so `render` emits
+  the right `NES_*` env. When `assetStore.provision` is set, the reconciler reads the architect
+  credentials from `assetStore.auth`, opens the operator admin session via `formation.Dial` (the same
+  NEO-004-gated path as backup/restore), and calls `domain/studio.ProvisionAssetStore` **before**
+  applying the Deployment. Failures map to the new `StudioProvisioning` reason (Pending, 30s requeue);
+  the ops are idempotent so retries are safe. Provisioning is refused for an external `uri` (CEL:
+  `provision` ⇒ `neo4jRef`) — the operator has no admin credentials for an unmanaged DBMS.
 
 ---
 

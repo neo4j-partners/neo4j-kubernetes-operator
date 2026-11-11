@@ -461,6 +461,8 @@ var (
 		on(ConditionStudioReady, "A served in-cluster Neo4j is community; Enterprise Studio serves Enterprise deployments"))
 	ReasonStudioDegraded = declare("StudioDegraded", SeverityWarn, SurfaceBoth,
 		on(ConditionStudioReady, "The Studio Deployment failed to roll out; the usual cause is an unreachable or misconfigured asset store (BYO) — check `assetStore` uri/database/credentials and `kubectl logs`"))
+	ReasonStudioProvisioning = declare("StudioProvisioning", SeverityWarn, SurfaceCondition,
+		on(ConditionStudioReady, "Provisioning the asset store on the in-cluster `assetStore.neo4jRef` (CREATE DATABASE/USER + GRANT) has not yet succeeded — waiting for the target to be reachable over admin Bolt (NEO-004 TLS trust required)"))
 )
 
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the

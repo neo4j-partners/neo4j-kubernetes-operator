@@ -34,9 +34,61 @@ import (
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/shared"
+	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 	renderstudio "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/studio"
 )
+
+// assetStoreArchitectRole is the built-in role Enterprise Studio's asset-store account needs (NES
+// prerequisites). A fixed literal — it is interpolated into GRANT ROLE (a role cannot be a parameter),
+// so it must never come from user input.
+const assetStoreArchitectRole = "architect"
+
+// ResolveAssetStore returns the Bolt URI NES uses to reach the asset store: an external uri verbatim,
+// or an in-cluster neo4jRef resolved to the Neo4j's Bolt client Service URI (neo4j://<svc>:<boltPort>
+// — customer feedback). A missing neo4jRef is a retryable TargetNotFound; a community target is
+// terminal, matching ResolveDeployments. The Deployment field carries "assetStore" for error context.
+func ResolveAssetStore(ctx context.Context, c client.Client, s *neo4jv1.Neo4jStudio) (string, *ResolveError) {
+	as := s.Spec.AssetStore
+	if as.URI != "" || as.Neo4jRef == nil {
+		return as.URI, nil
+	}
+	var neo4j neo4jv1.Neo4j
+	key := types.NamespacedName{Name: as.Neo4jRef.Name, Namespace: s.Namespace}
+	if err := c.Get(ctx, key, &neo4j); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", &ResolveError{Deployment: "assetStore", Kind: ResolveTargetNotFound,
+				Detail: fmt.Sprintf("assetStore: Neo4j %q not found in namespace %q", as.Neo4jRef.Name, s.Namespace)}
+		}
+		return "", &ResolveError{Deployment: "assetStore", Kind: ResolveTargetNotFound, Detail: err.Error()}
+	}
+	if neo4j.Spec.Edition != neo4jv1.EditionEnterprise {
+		return "", &ResolveError{Deployment: "assetStore", Kind: ResolveEditionUnsupported,
+			Detail: fmt.Sprintf("assetStore: Neo4j %q is %s; the asset store must be Enterprise", neo4j.Name, neo4j.Spec.Edition)}
+	}
+	rc := render.StandaloneContext(&neo4j)
+	return fmt.Sprintf("neo4j://%s.%s.svc:%d", rc.ClientServiceName(), neo4j.Namespace, rc.BoltPort()), nil
+}
+
+// ProvisionAssetStore creates the asset database, the architect account (with the given password), and
+// the architect role grant on the backing Neo4j via admin Bolt — idempotently (BDR-015 §4 in-cluster
+// provisioning, customer feedback). The caller supplies an admin session (formation.Dial) and the
+// architect credentials read from assetStore.auth; the password travels as a Bolt parameter.
+func ProvisionAssetStore(ctx context.Context, admin intneo4j.Admin, database, username, password string) error {
+	if database == "" || username == "" || password == "" {
+		return fmt.Errorf("assetStore provisioning needs a database name and architect username/password")
+	}
+	if err := admin.CreateDatabaseIfNotExists(ctx, database); err != nil {
+		return fmt.Errorf("create asset database %q: %w", database, err)
+	}
+	if err := admin.CreateUserIfNotExists(ctx, username, password); err != nil {
+		return fmt.Errorf("create asset-store user %q: %w", username, err)
+	}
+	if err := admin.GrantRole(ctx, assetStoreArchitectRole, username); err != nil {
+		return fmt.Errorf("grant %s to %q: %w", assetStoreArchitectRole, username, err)
+	}
+	return nil
+}
 
 // ResolveErrorKind classifies a deployment-resolution failure so the reconciler can map it to the
 // right catalogued reason (oracle).

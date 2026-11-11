@@ -71,7 +71,7 @@ type StudioImageSpec struct {
 	Digest string `json:"digest,omitempty"`
 	// +kubebuilder:validation:Enum=Always;IfNotPresent;Never
 	// +kubebuilder:default=IfNotPresent
-	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
+	PullPolicy  corev1.PullPolicy `json:"pullPolicy,omitempty"`
 	PullSecrets []string          `json:"pullSecrets,omitempty"`
 }
 
@@ -155,22 +155,33 @@ type StudioDeployment struct {
 }
 
 // StudioAssetStore is the Neo4j database where Studio persists its own assets (saved queries,
-// visualizations, per-user state). The referenced account needs the architect role. In the first
-// release the operator does not create it — a missing/unreachable asset DB surfaces as Degraded
-// (BDR-015 §4, BYO).
+// visualizations, per-user state). The referenced account needs the architect role. The asset store
+// is either an external uri (BYO) or an in-cluster neo4jRef; with provision: true the operator creates
+// the database, the architect account, and the role grant on the in-cluster target (BDR-015 §4).
+// +kubebuilder:validation:XValidation:rule="has(self.uri) != has(self.neo4jRef)",message="assetStore: set exactly one of uri (external) or neo4jRef (in-cluster)"
+// +kubebuilder:validation:XValidation:rule="!self.provision || has(self.neo4jRef)",message="assetStore.provision requires assetStore.neo4jRef — the operator provisions only an in-cluster, operator-managed Neo4j (it needs that instance's admin credentials; an external uri cannot be provisioned)"
 type StudioAssetStore struct {
-	// URI of the Neo4j instance holding the asset database (e.g. neo4j://my-graph.ns.svc:7687). Studio
+	// URI of an external Neo4j holding the asset database (e.g. neo4j://my-graph.ns.svc:7687). Studio
 	// connects to it as a Bolt driver client, so it must use a Neo4j/Bolt scheme (not http/https) —
-	// independent of any served deployment's mode.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
+	// independent of any served deployment's mode. Mutually exclusive with neo4jRef.
 	// +kubebuilder:validation:Pattern=`^(neo4j|neo4j\+s|neo4j\+ssc|bolt|bolt\+s|bolt\+ssc)://`
-	URI string `json:"uri"`
-	// Database is the asset database name; it must already exist (BYO — BDR-015 §4-a).
+	URI string `json:"uri,omitempty"`
+	// Neo4jRef references an in-cluster, operator-managed Neo4j in the same namespace; the operator
+	// resolves it to the Bolt client Service URI (neo4j://<svc>:<boltPort>). Required for provision.
+	// Mutually exclusive with uri.
+	Neo4jRef *Neo4jRef `json:"neo4jRef,omitempty"`
+	// Provision opts in to the operator creating the asset database, the architect account (from auth),
+	// and the role grant on the neo4jRef target via admin Bolt — idempotently (BDR-015 §4). Requires
+	// neo4jRef. Default false keeps the asset store BYO. Admin Bolt needs the target's NEO-004 TLS trust
+	// (trust.certificates.bolt or trust.insecureAdminConnection).
+	Provision bool `json:"provision,omitempty"`
+	// Database is the asset database name. With provision it is created (IF NOT EXISTS); otherwise it
+	// must already exist (BYO — BDR-015 §4-a).
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Database string `json:"database"`
-	// Auth references the asset-store credentials.
+	// Auth references the asset-store architect credentials (Secret keys username/password). With
+	// provision the operator creates this account with that password; otherwise it is used as-is.
 	// +kubebuilder:validation:Required
 	Auth CredentialRef `json:"auth"`
 }
@@ -193,9 +204,9 @@ type StudioIngressRule struct {
 
 // StudioIngressSpec configures an optional Ingress in front of Studio (BDR-015 §8, reuses BDR-007).
 type StudioIngressSpec struct {
-	ClassName   string            `json:"className,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
-	TLS         []IngressTLSBlock `json:"tls,omitempty"`
+	ClassName   string              `json:"className,omitempty"`
+	Annotations map[string]string   `json:"annotations,omitempty"`
+	TLS         []IngressTLSBlock   `json:"tls,omitempty"`
 	Rules       []StudioIngressRule `json:"rules,omitempty"`
 }
 

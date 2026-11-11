@@ -106,11 +106,16 @@ spec:
     #     pool: analytics                 # resolves to the analytics pool's Service (primary/read also valid)
     #   mode: ReverseProxy
   assetStore:
+    # Either an external uri (BYO, verbatim) OR an in-cluster neo4jRef — exactly one.
     uri: "neo4j://my-graph.default.svc:7687"   # Bolt scheme — Studio is a driver client here
-    database: studio-assets
+    # neo4jRef:                          # in-cluster, operator-managed Neo4j (same namespace)
+    #   name: my-graph                   # resolved to neo4j://<client-svc>:<boltPort>
+    # provision: true                    # opt-in: operator CREATEs the DB + architect account + grant
+    #                                     # (requires neo4jRef; needs the target's NEO-004 Bolt TLS trust)
+    database: studio-assets              # with provision it is created; otherwise it must exist
     auth:
       secretRef:
-        name: studio-assetstore-auth
+        name: studio-assetstore-auth     # keys username/password (the architect service account)
   tools:                                 # toggle UI tools (all default enabled)
     bloom: true
     dashboards: true

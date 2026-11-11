@@ -62,7 +62,9 @@ spec:
                   §4).
                 properties:
                   auth:
-                    description: Auth references the asset-store credentials.
+                    description: |-
+                      Auth references the asset-store architect credentials (Secret keys username/password). With
+                      provision the operator creates this account with that password; otherwise it is used as-is.
                     properties:
                       secretRef:
                         description: SecretRef names the Secret holding the credentials.
@@ -78,23 +80,52 @@ spec:
                     - secretRef
                     type: object
                   database:
-                    description: Database is the asset database name; it must already
-                      exist (BYO — BDR-015 §4-a).
+                    description: |-
+                      Database is the asset database name. With provision it is created (IF NOT EXISTS); otherwise it
+                      must already exist (BYO — BDR-015 §4-a).
                     minLength: 1
                     type: string
+                  neo4jRef:
+                    description: |-
+                      Neo4jRef references an in-cluster, operator-managed Neo4j in the same namespace; the operator
+                      resolves it to the Bolt client Service URI (neo4j://<svc>:<boltPort>). Required for provision.
+                      Mutually exclusive with uri.
+                    properties:
+                      name:
+                        description: Name of the target Neo4j resource in the same
+                          namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  provision:
+                    description: |-
+                      Provision opts in to the operator creating the asset database, the architect account (from auth),
+                      and the role grant on the neo4jRef target via admin Bolt — idempotently (BDR-015 §4). Requires
+                      neo4jRef. Default false keeps the asset store BYO. Admin Bolt needs the target's NEO-004 TLS trust
+                      (trust.certificates.bolt or trust.insecureAdminConnection).
+                    type: boolean
                   uri:
                     description: |-
-                      URI of the Neo4j instance holding the asset database (e.g. neo4j://my-graph.ns.svc:7687). Studio
+                      URI of an external Neo4j holding the asset database (e.g. neo4j://my-graph.ns.svc:7687). Studio
                       connects to it as a Bolt driver client, so it must use a Neo4j/Bolt scheme (not http/https) —
-                      independent of any served deployment's mode.
-                    minLength: 1
+                      independent of any served deployment's mode. Mutually exclusive with neo4jRef.
                     pattern: ^(neo4j|neo4j\+s|neo4j\+ssc|bolt|bolt\+s|bolt\+ssc)://
                     type: string
                 required:
                 - auth
                 - database
-                - uri
                 type: object
+                x-kubernetes-validations:
+                - message: 'assetStore: set exactly one of uri (external) or neo4jRef
+                    (in-cluster)'
+                  rule: has(self.uri) != has(self.neo4jRef)
+                - message: assetStore.provision requires assetStore.neo4jRef — the
+                    operator provisions only an in-cluster, operator-managed Neo4j
+                    (it needs that instance's admin credentials; an external uri cannot
+                    be provisioned)
+                  rule: '!self.provision || has(self.neo4jRef)'
               config:
                 additionalProperties:
                   type: string

@@ -18,6 +18,7 @@ package studio
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
+	intneo4j "github.com/neo4j/neo4j-kubernetes-operator/src/internal/neo4j"
 )
 
 func testScheme(t *testing.T) *runtime.Scheme {
@@ -186,6 +188,105 @@ func TestResolveDeployments(t *testing.T) {
 		_, rerr := ResolveDeployments(context.Background(), c, cr)
 		if rerr == nil || rerr.Kind != ResolveEditionUnsupported {
 			t.Fatalf("want ResolveEditionUnsupported, got %+v", rerr)
+		}
+	})
+}
+
+func TestResolveAssetStore(t *testing.T) {
+	s := testScheme(t)
+
+	t.Run("external uri used verbatim", func(t *testing.T) {
+		c := fake.NewClientBuilder().WithScheme(s).Build()
+		cr := studioCR() // studioCR seeds assetStore.URI = bolt://a:7687
+		uri, rerr := ResolveAssetStore(context.Background(), c, cr)
+		if rerr != nil {
+			t.Fatalf("unexpected error: %v", rerr)
+		}
+		if uri != "bolt://a:7687" {
+			t.Fatalf("uri = %q, want bolt://a:7687", uri)
+		}
+	})
+
+	t.Run("in-cluster neo4jRef resolves to the Bolt client Service URI", func(t *testing.T) {
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(neo4j("g", neo4jv1.EditionEnterprise)).Build()
+		cr := studioCR()
+		cr.Spec.AssetStore = neo4jv1.StudioAssetStore{
+			Neo4jRef: &neo4jv1.Neo4jRef{Name: "g"},
+			Database: "assets",
+			Auth:     neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a-auth"}},
+		}
+		uri, rerr := ResolveAssetStore(context.Background(), c, cr)
+		if rerr != nil {
+			t.Fatalf("unexpected error: %v", rerr)
+		}
+		if uri != "neo4j://g.ns.svc:7687" {
+			t.Fatalf("uri = %q, want neo4j://g.ns.svc:7687", uri)
+		}
+	})
+
+	t.Run("missing neo4jRef is retryable TargetNotFound", func(t *testing.T) {
+		c := fake.NewClientBuilder().WithScheme(s).Build()
+		cr := studioCR()
+		cr.Spec.AssetStore = neo4jv1.StudioAssetStore{
+			Neo4jRef: &neo4jv1.Neo4jRef{Name: "ghost"},
+			Database: "assets",
+			Auth:     neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a-auth"}},
+		}
+		_, rerr := ResolveAssetStore(context.Background(), c, cr)
+		if rerr == nil || rerr.Kind != ResolveTargetNotFound {
+			t.Fatalf("want ResolveTargetNotFound, got %+v", rerr)
+		}
+	})
+}
+
+// recordingAdmin embeds the Admin interface (nil) and records only the provisioning calls under test.
+type recordingAdmin struct {
+	intneo4j.Admin
+	db, user, pass, role string
+	failOn               string
+}
+
+func (r *recordingAdmin) CreateDatabaseIfNotExists(_ context.Context, name string) error {
+	r.db = name
+	if r.failOn == "db" {
+		return fmt.Errorf("boom")
+	}
+	return nil
+}
+
+func (r *recordingAdmin) CreateUserIfNotExists(_ context.Context, u, p string) error {
+	r.user, r.pass = u, p
+	if r.failOn == "user" {
+		return fmt.Errorf("boom")
+	}
+	return nil
+}
+
+func (r *recordingAdmin) GrantRole(_ context.Context, role, _ string) error {
+	r.role = role
+	return nil
+}
+
+func TestProvisionAssetStore(t *testing.T) {
+	t.Run("runs the three idempotent ops with the architect role and param password", func(t *testing.T) {
+		a := &recordingAdmin{}
+		if err := ProvisionAssetStore(context.Background(), a, "assets", "architect-svc", "s3cret"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if a.db != "assets" || a.user != "architect-svc" || a.pass != "s3cret" || a.role != assetStoreArchitectRole {
+			t.Fatalf("unexpected calls: %+v", a)
+		}
+	})
+
+	t.Run("empty inputs are rejected before dialing", func(t *testing.T) {
+		if err := ProvisionAssetStore(context.Background(), &recordingAdmin{}, "", "u", "p"); err == nil {
+			t.Fatal("want error for empty database")
+		}
+	})
+
+	t.Run("a failing op is surfaced", func(t *testing.T) {
+		if err := ProvisionAssetStore(context.Background(), &recordingAdmin{failOn: "user"}, "assets", "u", "p"); err == nil {
+			t.Fatal("want error when CreateUser fails")
 		}
 	})
 }

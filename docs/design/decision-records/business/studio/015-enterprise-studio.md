@@ -264,6 +264,28 @@ change so the release can pick them up independently.
    to hand-write the URL. `analytics`/`read` now resolve to the pool's headless Service
    (`<name>-<pool>`), reusing the same HTTPS auto-detect; a pool that is not configured fails fast with
    a clear resolve error. Omit `pool` for the default (primaries); it is ignored for a standalone.
+4. **Opt-in in-cluster asset-store provisioning.** §4 above left asset-DB creation deferred (4-a BYO
+   shipped; 4-b operator-provisioned deferred to [BDR-012](../identity-user-roles/012-identity-management.md)).
+   The trial confirmed the BYO ceiling is a real friction point for in-cluster Neo4j, so we adopt a
+   **scoped 4-b** now, gated to the only target the operator can safely provision:
+   - `assetStore.neo4jRef` points at an in-cluster, operator-managed Neo4j (same namespace); the
+     operator resolves it to the Bolt client URI (`neo4j://<client-svc>:<boltPort>`), so users no
+     longer hand-write the asset-store `uri`. `uri` (external, BYO) and `neo4jRef` are mutually
+     exclusive (CEL-enforced).
+   - `assetStore.provision: true` (requires `neo4jRef`) opts in to the operator creating the asset
+     database, the `architect` account (from `assetStore.auth`), and the role grant — idempotently
+     via admin Bolt (`CREATE DATABASE/USER … IF NOT EXISTS`, `GRANT ROLE`). It reuses the same
+     operator-owned admin session as backup/restore (`formation.Dial`, NEO-004 TLS trust), so no new
+     credential path and no overlap with BDR-012's end-user identity model: this provisions one
+     service account for Studio's own storage, not user identities. The architect password travels as
+     a Bolt query parameter (never a Cypher literal); the role is a fixed literal.
+   - Why not an external `uri`? The operator has no admin credentials for a DBMS it does not manage, so
+     provisioning is **only** offered for `neo4jRef`. External `uri` stays strictly BYO. `provision`
+     defaults `false`, so the 4-a BYO contract is unchanged for everyone who does not opt in.
+   - `ponytail:` provisioning is fire-and-reconcile — a failure surfaces as `StudioProvisioning`
+     (Pending, requeued), not auto-rollback; the three ops are idempotent so retries are safe. An
+     existing user keeps its password (IF NOT EXISTS is non-destructive); the upgrade path for Secret
+     rotation is an `ALTER USER` sync.
 
 ---
 

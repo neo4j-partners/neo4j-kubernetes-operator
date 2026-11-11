@@ -37,6 +37,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	domainstudio "github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/studio"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
 	renderstudio "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/studio"
@@ -73,6 +74,29 @@ func (r *StudioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Resolve the asset store (external uri verbatim, or an in-cluster neo4jRef → Bolt client URI) and
+	// stamp it on the in-memory spec so render emits the right NES_* env. The reconciler only writes
+	// status, never the spec, so this mutation is local to this reconcile.
+	assetURI, aerr := domainstudio.ResolveAssetStore(ctx, r.Client, &studio)
+	if aerr != nil {
+		switch aerr.Kind {
+		case domainstudio.ResolveEditionUnsupported:
+			return r.fail(ctx, &studio, oracle.ReasonStudioEditionUnsupported, aerr.Detail)
+		default:
+			return r.retryable(ctx, &studio, oracle.ReasonStudioTargetNotFound, aerr.Detail)
+		}
+	}
+	studio.Spec.AssetStore.URI = assetURI
+
+	// Opt-in in-cluster provisioning: create the asset DB, architect account, and role grant before the
+	// Studio Deployment starts (BDR-015 §4). Idempotent, so it runs every reconcile until it succeeds.
+	if studio.Spec.AssetStore.Provision {
+		if err := r.provisionAssetStore(ctx, &studio); err != nil {
+			return r.retryable(ctx, &studio, oracle.ReasonStudioProvisioning,
+				fmt.Sprintf("asset-store provisioning on neo4jRef %q: %v", studio.Spec.AssetStore.Neo4jRef.Name, err))
+		}
 	}
 
 	resolved, rerr := domainstudio.ResolveDeployments(ctx, r.Client, &studio)
@@ -224,6 +248,40 @@ func deploymentWedged(dep *appsv1.Deployment) bool {
 		}
 	}
 	return false
+}
+
+// provisionAssetStore opens an admin Bolt session to the in-cluster neo4jRef and idempotently creates
+// the asset database, the architect account (with the auth Secret's password), and the role grant.
+func (r *StudioReconciler) provisionAssetStore(ctx context.Context, s *neo4jv1.Neo4jStudio) error {
+	var neo4j neo4jv1.Neo4j
+	key := types.NamespacedName{Name: s.Spec.AssetStore.Neo4jRef.Name, Namespace: s.Namespace}
+	if err := r.Get(ctx, key, &neo4j); err != nil {
+		return fmt.Errorf("get neo4jRef target: %w", err)
+	}
+	user, pass, err := r.assetStoreCreds(ctx, s)
+	if err != nil {
+		return err
+	}
+	admin, err := formation.Dial(ctx, r.Client, r.Recorder, &neo4j)
+	if err != nil {
+		return fmt.Errorf("admin Bolt dial: %w", err)
+	}
+	defer admin.Close(ctx)
+	return domainstudio.ProvisionAssetStore(ctx, admin, s.Spec.AssetStore.Database, user, pass)
+}
+
+// assetStoreCreds reads the architect username/password from the asset-store auth Secret.
+func (r *StudioReconciler) assetStoreCreds(ctx context.Context, s *neo4jv1.Neo4jStudio) (user, pass string, err error) {
+	var secret corev1.Secret
+	key := types.NamespacedName{Name: s.Spec.AssetStore.Auth.SecretRef.Name, Namespace: s.Namespace}
+	if err := r.Get(ctx, key, &secret); err != nil {
+		return "", "", fmt.Errorf("get auth secret %q: %w", key.Name, err)
+	}
+	user, pass = string(secret.Data["username"]), string(secret.Data["password"])
+	if user == "" || pass == "" {
+		return "", "", fmt.Errorf("auth secret %q needs non-empty username and password keys", key.Name)
+	}
+	return user, pass, nil
 }
 
 // studioURL resolves a user-facing URL from the Ingress (preferred) or the in-cluster Service DNS.

@@ -104,6 +104,7 @@ Reasons that report a problem, a decision, or an operation in progress.
 | StudioReady | StudioTargetNotFound | warn | condition | An in-cluster `deployments[].neo4jRef` does not resolve to a Neo4j in this namespace yet |
 | StudioReady | StudioEditionUnsupported | error | condition+event | A served in-cluster Neo4j is community; Enterprise Studio serves Enterprise deployments |
 | StudioReady | StudioDegraded | warn | condition+event | The Studio Deployment failed to roll out; the usual cause is an unreachable or misconfigured asset store (BYO) — check `assetStore` uri/database/credentials and `kubectl logs` |
+| StudioReady | StudioProvisioning | warn | condition | Provisioning the asset store on the in-cluster `assetStore.neo4jRef` (CREATE DATABASE/USER + GRANT) has not yet succeeded — waiting for the target to be reachable over admin Bolt (NEO-004 TLS trust required) |
 | — (Event only) | DuplicateEntry | warn | event | Two values collided on the same key in a spec field; the Event names the field, the value kept and the one dropped |
 | — (Event only) | DatabaseTopologyResized | warn | event | A scale-in forced `ALTER DATABASE SET TOPOLOGY` on a database wider than the remaining pool; the Event names the database and both counts, before and after |
 | — (Event only) | InsecureAdminConnection | warn | event | The operator's own admin Bolt connection is unencrypted because `trust.insecureAdminConnection` is true (NEO-004) |
