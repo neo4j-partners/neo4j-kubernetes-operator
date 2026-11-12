@@ -103,6 +103,7 @@ kubectl port-forward svc/studio-full 8080:8080
 | [`01-minimal.yaml`](01-minimal.yaml) | Smallest valid `Neo4jStudio` — one in-cluster `ReverseProxy` deployment + BYO asset store |
 | [`02-full.yaml`](02-full.yaml) | **Self-contained, runnable** — bundles the Secrets, then an in-cluster `ReverseProxy` deployment, BYO asset store, sign-in toggles, role mapping, HTTPS (`server.tls`), tool toggles, replicas, Service, and both `config` / `configFromSecrets` passthroughs |
 | [`03-provisioned.yaml`](03-provisioned.yaml) | **Operator-provisioned asset store** — `assetStore.neo4jRef` + `provision: true`; the operator CREATEs the database, the architect account, and the grant on the in-cluster Neo4j (no BYO pre-create) |
+| [`04-aks-letsencrypt-tls.yaml`](04-aks-letsencrypt-tls.yaml) | **AKS, public HTTPS** — `connectivity.ingress` (nginx) + a cert-manager Let's Encrypt `ClusterIssuer`; TLS terminated at the Ingress with a real, auto-renewed certificate, asset store provisioned. Needs ingress-nginx, cert-manager, and a public DNS record (see the file header) |
 
 ## Troubleshooting
 
