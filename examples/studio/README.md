@@ -15,7 +15,7 @@ resolution.
 | Dependency | Provided by | Notes |
 |------------|-------------|-------|
 | **Served deployment(s)** | `deployments[]` — `neo4jRef` (in-cluster) or external `uri` | one-to-many; each `Direct` or `ReverseProxy` (§2) |
-| **Asset store** | a Neo4j database + an account with the `architect` role | **you pre-create it** (BYO — §4-a), **or** let the operator create it with `assetStore.provision` against an in-cluster `neo4jRef` (§4) |
+| **Asset store** | a Neo4j database + an account with the `architect` role | **you pre-create it** (BYO — §4-a), **or** `assetStore.provision` against an in-cluster `neo4jRef` (§4) — the operator then creates the database, the account, **and the auth Secret if it's absent** (generated user `studio` + random password) |
 | **License** (optional) | `license.secretRef` | distinct from the Neo4j license; Studio starts without it (§3) |
 | **Sign-in / roles** (optional) | `deployments[].auth` (basic/oidc toggles), `deployments[].roleMapping` | Studio uses the end-user's own login — no per-deployment service credentials |
 | **HTTPS** (optional) | `server.tls` → a `kubernetes.io/tls` Secret | serves Studio over HTTPS on its own port |
@@ -40,8 +40,9 @@ All commands target your current namespace; add `-n <ns>` to use another.
 
 ## 1. Pre-create the asset database (BYO — §4-a)
 
-> Skip this step if you use [`03-provisioned.yaml`](03-provisioned.yaml): with `assetStore.provision`
-> the operator creates the database, the architect account, and the grant for you (§4) — it only needs
+> Skip this step **and** the Secret in step 2 if you use [`03-provisioned.yaml`](03-provisioned.yaml):
+> with `assetStore.provision` the operator creates the database, the architect account, the grant, and
+> the auth Secret (when absent — generated user `studio` + random password) for you (§4). It only needs
 > an in-cluster `neo4jRef` and that Neo4j's admin Bolt trust (NEO-004: `trust.certificates.bolt` or
 > `trust.insecureAdminConnection`).
 

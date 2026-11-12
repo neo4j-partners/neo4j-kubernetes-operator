@@ -245,6 +245,10 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
   applying the Deployment. Failures map to the new `StudioProvisioning` reason (Pending, 30s requeue);
   the ops are idempotent so retries are safe. Provisioning is refused for an external `uri` (CEL:
   `provision` ⇒ `neo4jRef`) — the operator has no admin credentials for an unmanaged DBMS.
+  `assetStoreCreds` get-or-generates the auth Secret: absent + `provision` → `secrets.RandomPassword`
+  (shared crypto generator) into a new owner-referenced `Secret` (user `studio`), created **once**
+  (`Create`, not apply — a present Secret is read verbatim, never overwritten, so the password is
+  stable). The controller now `Owns(&corev1.Secret{})` for GC; RBAC already allowed `secrets` CRUD.
 
 ---
 

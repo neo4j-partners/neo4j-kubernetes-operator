@@ -288,6 +288,13 @@ change so the release can pick them up independently.
      credential path and no overlap with BDR-012's end-user identity model: this provisions one
      service account for Studio's own storage, not user identities. The architect password travels as
      a Bolt query parameter (never a Cypher literal); the role is a fixed literal.
+   - **The auth Secret itself is generated when absent.** If `assetStore.auth.secretRef` does not exist
+     yet (and `provision` is set), the operator creates it — user `studio` + a random password — owns
+     it (GC'd with the `Neo4jStudio`), and uses it for both the `CREATE USER` and Studio's sign-in. So
+     provisioning is zero-touch: the user supplies neither the database nor the credential. An existing
+     Secret is used verbatim and **never overwritten** (rotation stays the user's call); create-once
+     keeps the password stable across reconciles. Multiple Studios against one DBMS should supply their
+     own Secrets with distinct usernames (the generated default is always `studio`).
    - Why not an external `uri`? The operator has no admin credentials for a DBMS it does not manage, so
      provisioning is **only** offered for `neo4jRef`. External `uri` stays strictly BYO. `provision`
      defaults `false`, so the 4-a BYO contract is unchanged for everyone who does not opt in.

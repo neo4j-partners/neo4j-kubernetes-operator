@@ -11,8 +11,9 @@
 # Then:  kubectl wait --for=condition=StudioReady neo4jstudio/studio-provisioned --timeout=300s
 #   While provisioning is in flight the CR sits in phase Pending / reason StudioProvisioning.
 ---
-# The architect service account Studio uses for its asset store. With provision the operator CREATEs a
-# Neo4j user with THIS username/password (CHANGE NOT REQUIRED) and grants it the architect role.
+# OPTIONAL with provision: if you omit this Secret, the operator generates it (user "studio" + a random
+# password), owns it, and uses it. Include it only to choose the username/password yourself. With
+# provision the operator CREATEs a Neo4j user with these credentials (CHANGE NOT REQUIRED) + architect.
 apiVersion: v1
 kind: Secret
 metadata:

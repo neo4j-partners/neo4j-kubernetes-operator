@@ -30,7 +30,7 @@ oracle_reasons_for() {  # <condition>
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreMetadataApplying RestoreMetadataFailed ;;
     ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
     StudioReady) printf '%s\n' StudioAvailable StudioProgressing StudioTargetNotFound StudioEditionUnsupported StudioDegraded StudioProvisioning ;;
-    event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
+    event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted AssetStoreSecretGenerated ;;
     *) return 1 ;;
   esac
 }
@@ -135,13 +135,14 @@ oracle_severity() {  # <reason>
     AdminBoltTLSRequired) echo warn ;;
     SecretMounted) echo info ;;
     StorageResizeCompleted) echo info ;;
+    AssetStoreSecretGenerated) echo info ;;
     *) return 1 ;;
   esac
 }
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|StudioAvailable|SecretMounted|StorageResizeCompleted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|StudioAvailable|SecretMounted|StorageResizeCompleted|AssetStoreSecretGenerated) return 0 ;;
     *) return 1 ;;
   esac
 }

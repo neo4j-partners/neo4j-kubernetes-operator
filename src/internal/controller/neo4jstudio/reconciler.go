@@ -40,6 +40,7 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/formation"
 	domainstudio "github.com/neo4j/neo4j-kubernetes-operator/src/internal/domain/studio"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/oracle"
+	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/secrets"
 	renderstudio "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/studio"
 )
 
@@ -270,18 +271,73 @@ func (r *StudioReconciler) provisionAssetStore(ctx context.Context, s *neo4jv1.N
 	return domainstudio.ProvisionAssetStore(ctx, admin, s.Spec.AssetStore.Database, user, pass)
 }
 
-// assetStoreCreds reads the architect username/password from the asset-store auth Secret.
+// assetStoreCreds returns the architect username/password for the asset store. When provisioning and
+// the referenced Secret does not exist yet, the operator generates it (username "studio" + a random
+// password) and owns it — so provisioning is zero-touch. An existing Secret is used as-is and never
+// overwritten (rotating it is the user's call).
 func (r *StudioReconciler) assetStoreCreds(ctx context.Context, s *neo4jv1.Neo4jStudio) (user, pass string, err error) {
+	name := s.Spec.AssetStore.Auth.SecretRef.Name
 	var secret corev1.Secret
-	key := types.NamespacedName{Name: s.Spec.AssetStore.Auth.SecretRef.Name, Namespace: s.Namespace}
-	if err := r.Get(ctx, key, &secret); err != nil {
-		return "", "", fmt.Errorf("get auth secret %q: %w", key.Name, err)
+	getErr := r.Get(ctx, types.NamespacedName{Name: name, Namespace: s.Namespace}, &secret)
+	switch {
+	case getErr == nil:
+		user, pass = string(secret.Data["username"]), string(secret.Data["password"])
+		if user == "" || pass == "" {
+			return "", "", fmt.Errorf("auth secret %q needs non-empty username and password keys", name)
+		}
+		return user, pass, nil
+	case apierrors.IsNotFound(getErr):
+		return r.generateAssetStoreSecret(ctx, s, name)
+	default:
+		return "", "", fmt.Errorf("get auth secret %q: %w", name, getErr)
 	}
-	user, pass = string(secret.Data["username"]), string(secret.Data["password"])
-	if user == "" || pass == "" {
-		return "", "", fmt.Errorf("auth secret %q needs non-empty username and password keys", key.Name)
+}
+
+const (
+	assetStoreDefaultUser     = "studio"
+	assetStorePasswordEntropy = 24
+)
+
+// generateAssetStoreSecret creates the asset-store auth Secret with a generated password, owner-
+// referenced to the Neo4jStudio (so it is GC'd with it). Create-once: a later reconcile reads the
+// existing Secret instead of regenerating, so the password stays stable.
+func (r *StudioReconciler) generateAssetStoreSecret(ctx context.Context, s *neo4jv1.Neo4jStudio, name string) (string, string, error) {
+	pass, err := secrets.RandomPassword(assetStorePasswordEntropy)
+	if err != nil {
+		return "", "", fmt.Errorf("generate asset-store password: %w", err)
 	}
-	return user, pass, nil
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: s.Namespace,
+			Labels:    map[string]string{"app.kubernetes.io/managed-by": "neo4j-operator", "app.kubernetes.io/part-of": "neo4jstudio"},
+		},
+		Type:       corev1.SecretTypeOpaque,
+		StringData: map[string]string{"username": assetStoreDefaultUser, "password": pass},
+	}
+	if err := ctrl.SetControllerReference(s, secret, r.Scheme); err != nil {
+		return "", "", err
+	}
+	if err := r.Create(ctx, secret); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			// Raced with another actor that created it — re-read and use whatever landed.
+			var existing corev1.Secret
+			if gerr := r.Get(ctx, types.NamespacedName{Name: name, Namespace: s.Namespace}, &existing); gerr != nil {
+				return "", "", gerr
+			}
+			u, p := string(existing.Data["username"]), string(existing.Data["password"])
+			if u == "" || p == "" {
+				return "", "", fmt.Errorf("auth secret %q needs non-empty username and password keys", name)
+			}
+			return u, p, nil
+		}
+		return "", "", fmt.Errorf("create asset-store secret %q: %w", name, err)
+	}
+	if r.Recorder != nil {
+		r.Recorder.Event(s, corev1.EventTypeNormal, oracle.ReasonAssetStoreSecretGenerated.String(),
+			fmt.Sprintf("generated asset-store auth Secret %q (user %q) for provisioning", name, assetStoreDefaultUser))
+	}
+	return assetStoreDefaultUser, pass, nil
 }
 
 // studioURL resolves a user-facing URL from the Ingress (preferred) or the in-cluster Service DNS.
@@ -304,6 +360,7 @@ func (r *StudioReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.Secret{}).
 		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }

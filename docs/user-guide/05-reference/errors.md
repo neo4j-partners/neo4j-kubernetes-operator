@@ -140,6 +140,7 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | StudioReady | StudioAvailable | info | condition | The Studio Deployment is Available and serving |
 | — (Event only) | SecretMounted | info | event | A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label |
 | — (Event only) | StorageResizeCompleted | info | event | Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass |
+| — (Event only) | AssetStoreSecretGenerated | info | event | `assetStore.provision` is set and the `assetStore.auth` Secret was absent, so the operator generated it (user `studio` + a random password) and owns it; the Event names the Secret and the user |
 <!-- END GENERATED oracle:steady -->
 
 ## DuplicateEntry

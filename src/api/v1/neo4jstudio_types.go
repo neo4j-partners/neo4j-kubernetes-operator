@@ -181,7 +181,9 @@ type StudioAssetStore struct {
 	// +kubebuilder:validation:MinLength=1
 	Database string `json:"database"`
 	// Auth references the asset-store architect credentials (Secret keys username/password). With
-	// provision the operator creates this account with that password; otherwise it is used as-is.
+	// provision: if the Secret is absent the operator generates it (user "studio" + a random password)
+	// and owns it; if it exists it is used as-is and the operator creates that account with its
+	// password. Without provision the Secret must exist (BYO).
 	// +kubebuilder:validation:Required
 	Auth CredentialRef `json:"auth"`
 }

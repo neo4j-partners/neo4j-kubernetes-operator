@@ -480,4 +480,6 @@ var (
 		asEvent("A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label"))
 	ReasonStorageResizeCompleted = declareNominal("StorageResizeCompleted", SurfaceEvent,
 		asEvent("Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass"))
+	ReasonAssetStoreSecretGenerated = declareNominal("AssetStoreSecretGenerated", SurfaceEvent,
+		asEvent("`assetStore.provision` is set and the `assetStore.auth` Secret was absent, so the operator generated it (user `studio` + a random password) and owns it; the Event names the Secret and the user"))
 )
