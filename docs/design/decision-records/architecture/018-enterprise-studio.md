@@ -117,10 +117,12 @@ func (r *Neo4jStudioReconciler) Reconcile(ctx context.Context, s *v1.Neo4jStudio
 
 Studio reads a `config.yaml` and lets any `NES_*` env var override it (env wins) ([configuration](https://neo4j.com/docs/enterprise-studio/current/configuration/)). We exploit that split deliberately:
 
+> **Revised (shipped).** The projected `config.yaml` ConfigMap below was **not** built — *all* config ships as `NES_*` env (non-secret via plain `env`, secret-valued via `valueFrom.secretKeyRef`), since env fully overrides the image's bundled `config.yaml`. No ConfigMap object is rendered. The split described here now runs entirely through env.
+
 | Source | Carries | Why |
 |--------|---------|-----|
-| Projected **`config.yaml`** (ConfigMap, mounted) | Non-secret keys: `server.port`, deployment URIs + `mode`, `assetStore.default.{uri,database}`, passthrough `spec.config` | Declarative, diffable, non-sensitive |
-| **env from `secretRef`** (`NES_assetStore_default_authentication_basic_password`, OIDC `clientSecret`, …) | Secrets only | Env **overrides** the file, and `valueFrom.secretKeyRef` keeps secrets out of the ConfigMap and `describe` output |
+| Plain **`NES_*` env** | Non-secret keys: `server.port`, deployment URIs + `mode`, `assetStore.default.{uri,database}`, passthrough `spec.config` | Declarative, diffable, non-sensitive; env overrides the image's bundled `config.yaml` |
+| **env from `secretRef`** (`NES_assetStore_default_authentication_basic_password`, OIDC `clientSecret`, …) | Secrets only | `valueFrom.secretKeyRef` keeps secrets out of the manifest and `describe` output |
 | Mounted **license file** (optional) | the NES license (`spec.license.secretRef`, when set) → `NES_license_path` points at the mount | Studio starts without it; when provided, a file mount matches the product's `license.path` model |
 
 The operator assembles the **complete required-config set** ([configuration — minimum required](https://neo4j.com/docs/enterprise-studio/current/configuration/)) deterministically, so Studio never crash-loops on a missing key. A single `studio.RequiredConfig(version)` function is the source of truth and is version-aware for forward compatibility.
@@ -143,6 +145,8 @@ The operator assembles the **complete required-config set** ([configuration — 
 
 ### Asset-DB provisioning ([BDR-015](../business/studio/015-enterprise-studio.md) §4 — open)
 
+> **Superseded (2026-11-11).** A scoped 4-b shipped — see the [Customer feedback revision — execution](#customer-feedback-revision--execution-2026-11-11) below. The `EnsureAssetDB` *reachability probe* sketched here (4-a) was **not** built; a missing asset DB surfaces via the Deployment failing to roll out (`StudioDegraded`), and `provision: true` now creates the DB/account/grant on an in-cluster `neo4jRef`. The text below is the original design rationale.
+
 The CRD contract leaves the owner open; this ADR fixes **how each path executes** and recommends starting with 4-a:
 
 - **4-a (BYO) — chosen first.** `EnsureAssetDB` is a **reachability probe only**: over Bolt (asset-store `secretRef`), confirm `assetStore.database` exists and the account has `architect`; on failure set `status.phase=Degraded`, `reason=AssetDatabaseMissing`, Event. The operator **creates nothing**. Smallest surface, no Bolt admin verbs, no overlap with [BDR-012](../business/identity-user-roles/012-identity-management.md).
@@ -154,7 +158,7 @@ Server-side apply the owned object set; re-reconcile is a no-op when the live ob
 
 ### Status & conditions ([ADR-004](004-status-and-conditions.md))
 
-`status.phase` ∈ {Pending, Running, Degraded, Failed}; `Ready` condition gated on **Deployment `Available`** AND **asset-DB reachable**; `status.url` resolved from Service/Ingress; `status.deployments[].{resolvedUri,reachable}` per entry. Reason strings live in `internal/oracle` and project into [`errors.md`](../../../user-guide/05-reference/errors.md) ([ADR-014](014-operator-observability.md)) — not enumerated here.
+`status.phase` ∈ {Pending, Running, Degraded, Failed}; `Ready` condition gated on **Deployment `Available`** (the separate "asset-DB reachable" gate and the `status.deployments[].reachable` field were dropped in the Usability revision — Ready reflects the Deployment, and a crash-looping Studio from an unreachable asset store surfaces as `Degraded`); `status.url` resolved from Service/Ingress; `status.deployments[].resolvedUri` per entry. Reason strings live in `internal/oracle` and project into [`errors.md`](../../../user-guide/05-reference/errors.md) ([ADR-014](014-operator-observability.md)) — not enumerated here.
 
 ### RBAC delta
 
@@ -220,10 +224,10 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
 - **Resources.** `render/studio.withDefaultResources` fills unset request/limit halves from Studio
   defaults (250m/512Mi requests, 1/1Gi limits), mirroring `render/workload.withDefaultResources` with
   lighter values; the Studio container always renders bounded (NEO-014).
-- **neo4jRef TLS.** `domain/studio.clientHTTPURI` resolves the backing DBMS endpoint from
-  `render.Context.ClientExpose()`: `https://host:ServiceFacadePort(https)` when the https connector is
-  exposed, else `http://host:ServiceFacadePort(http)`. Replaces the hard-coded `http://…:HTTPPort()`;
-  Direct-mode Bolt TLS is already expressible via an explicit `publicUri` (e.g. `neo4j+s://…`).
+- **neo4jRef TLS.** `domain/studio.httpURI` (host from `backingHost`) resolves the backing DBMS
+  endpoint from `render.Context.ClientExpose()`: `https://host:…` when the https connector is exposed,
+  else `http://host:…`. Replaces the hard-coded `http://…:7474`; Direct-mode Bolt TLS is already
+  expressible via an explicit `publicUri` (e.g. `neo4j+s://…`).
 - **neo4jRef pool.** A Studio-local `StudioNeo4jRef` adds optional `pool` (the shared `Neo4jRef` stays
   `name`-only so the backup CRD schema is unaffected). `domain/studio.backingHost` resolves
   `analytics`/`read` to `render.NewContext(neo4j, pool).HeadlessServiceName()` (raw listener ports);

@@ -15,8 +15,9 @@ limitations under the License.
 */
 
 // Package studio renders the Kubernetes objects for an Enterprise Studio deployment (ADR-018):
-// a stateless Deployment plus its Service, ServiceAccount, ConfigMap and optional Ingress. Pure
-// builders — no client, no I/O. The caller (domain/studio) resolves deployment URIs and applies.
+// a stateless Deployment plus its Service, ServiceAccount and optional Ingress. All NES config is
+// passed as NES_* env (no ConfigMap). Pure builders — no client, no I/O. The caller (domain/studio)
+// resolves deployment URIs and applies.
 package studio
 
 import (

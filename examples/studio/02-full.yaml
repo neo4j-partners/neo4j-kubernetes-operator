@@ -8,7 +8,7 @@
 #   2. The asset database and its architect account, created once on that Neo4j, e.g. via cypher-shell:
 #        CREATE DATABASE `studio-assets` IF NOT EXISTS;
 #        CREATE USER studio SET PASSWORD 'choose-a-strong-password' CHANGE NOT REQUIRED;
-#        GRANT ROLE architect ON DATABASE `studio-assets` TO studio;
+#        GRANT ROLE architect TO studio;      -- roles are granted globally, not per-database
 #      Put that same password in the studio-assetstore-auth Secret below.
 #
 # Config model: the operator renders settings as NES_* environment variables (the documented

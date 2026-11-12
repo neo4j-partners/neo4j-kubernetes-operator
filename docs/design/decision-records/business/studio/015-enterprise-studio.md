@@ -160,12 +160,12 @@ The operator does nothing; users deploy upstream Studio via its own Helm chart a
 **We will adopt Option A** — a dedicated **`Neo4jStudio`** satellite CRD in the `neo4j.com` group.
 
 1. **One `kind`: `Neo4jStudio`** — a satellite that references served workloads by `neo4jRef` (in-cluster) or external `uri`, mirroring the backup/restore pattern ([BDR-001](../neo4j/001-single-neo4j-crd.md), [BDR-014](../backup-restore/014-backup-restore.md)). It is **not** a field of `Neo4j`.
-2. **`deployments[]` is one-to-many** — each entry has **exactly one** of `neo4jRef` (resolved to the workload's client Service URI by the operator, never re-derived — [ADR-018](../../architecture/018-enterprise-studio.md)) **or** external `uri` (used verbatim; the operator does not resolve or validate reachability at admission), plus a `mode: Direct | ReverseProxy` and a per-deployment `auth.secretRef`.
+2. **`deployments[]` is one-to-many** — each entry has **exactly one** of `neo4jRef` (resolved to the workload's client Service URI by the operator, never re-derived — [ADR-018](../../architecture/018-enterprise-studio.md)) **or** external `uri` (used verbatim; the operator does not resolve or validate reachability at admission), plus a `mode: Direct | ReverseProxy` and optional per-deployment **sign-in toggles** (`auth.basic` / `auth.oidc`). Studio stores **no** per-deployment service credential — end users sign in with their own Neo4j login (revised — see Usability revision §8).
 3. **Studio license is optional and distinct** — `spec.license.secretRef` carries the **Enterprise Studio** license, which is a different artifact from the Neo4j Enterprise license. Studio **starts without it** ([prerequisites](https://neo4j.com/docs/enterprise-studio/current/prerequisites/#_acquire_a_license_key_optional)), so admission does **not** require it.
 4. **Asset-DB provisioning owner — left open; BYO recommended first.** Studio needs a reachable asset database whose account holds the `architect` role. The *owner* of creating that database is deliberately **not fixed** by this release:
     - **4-a (BYO) — recommended first.** The user pre-creates the asset database and account; the operator **creates nothing** and only treats a missing/unreachable asset DB as `status.phase=Degraded`. Smallest surface, no operator-side Bolt admin verbs, no overlap with identity management.
     - **4-b (operator-provisioned) — deferred.** The operator would `CREATE DATABASE` + grant the `architect` role and write the generated credential to a Secret. We **defer** this until [BDR-012](../identity-user-roles/012-identity-management.md) identity management lands, so asset-DB/account creation reuses that controller rather than a parallel Bolt-admin path. `ponytail:` 4-a is the known-ceiling simplification — ceiling is "user must pre-create the asset DB"; upgrade path is 4-b on top of BDR-012.
-5. **All credentials are referenced `Secret`s** — the license, each `deployments[].auth`, and `assetStore.auth` are `secretRef`s. **No inline literals** — secrets never land in a spec field or `kubectl describe`.
+5. **All credentials are referenced `Secret`s** — the license and `assetStore.auth` are `secretRef`s (`deployments[].auth` carries only sign-in toggles, not a credential — see §2). **No inline literals** — secrets never land in a spec field or `kubectl describe`.
 6. **Enterprise + HTTP connector required for served deployments** — Studio serves Enterprise DBMSs, and a `ReverseProxy` (or HTTP-mode) deployment requires the served workload to expose its HTTP/HTTPS connector ([BDR-010](../neo4j/010-neo4j-features-catalog.md)). For an in-cluster `neo4jRef`, this is validated at reconcile against the referenced `Neo4j`; for an external `uri`, it is the user's responsibility (documented).
 7. **Session affinity is enforced, not documented** — when any served deployment is `ReverseProxy` against a cluster, Studio's own front door is made sticky; this prerequisite is enforced by the reconciler/render, not left as a runbook footgun (execution: [ADR-018](../../architecture/018-enterprise-studio.md)).
 8. **Studio exposure reuses `service` + `ingress.rules`** — `spec.connectivity` follows the established exposure model ([BDR-007](../neo4j/006-service-exposure-connectivity.md)); Studio does not invent a new exposure surface.
@@ -236,6 +236,15 @@ changing the model** (one-to-many, `neo4jRef`/`uri`, referenced Secrets all stan
    instead of `{ role, members: [{ kind, name }] }`. The `kind` discriminator is replaced by two typed
    lists — `role` stays enum-validated. `render` expands this back into the exact NES JSON
    (`[{role, members:[{kind,name}]}]`), so Studio sees byte-identical output.
+8. **`deployments[].auth` is sign-in toggles, not a service credential.** The original proposal (Option A)
+   gave each deployment an `auth.secretRef`. That modelled a per-deployment *service account*, but
+   Enterprise Studio proxy/Direct modes use the **end user's own** Neo4j login — Studio never holds a
+   service credential for a served deployment. So `deployments[].auth` became
+   `{ basic?: bool, oidc?: bool }` — the sign-in methods NES offers for that deployment
+   (`authentication.{basic,oidc}.enabled`), both defaulting enabled. The only asset-side credential is
+   `assetStore.auth` (the architect account Studio uses for its *own* storage). This removes the
+   `deployments[].auth.secretRef` field entirely — the source of the "why did the deployment secretRef
+   disappear?" confusion.
 
 Unchanged and still required: at least one `deployments[]` entry and `assetStore` (BYO — §4-a).
 Auto-provisioning the asset DB remains deferred to [BDR-012](../identity-user-roles/012-identity-management.md).
