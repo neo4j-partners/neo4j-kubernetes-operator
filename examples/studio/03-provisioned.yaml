@@ -1,0 +1,43 @@
+# Purpose: let the operator provision Studio's asset store on an in-cluster Neo4j (BDR-015 §4,
+#   customer feedback revision) instead of pre-creating it (BYO). With assetStore.provision the
+#   operator CREATEs the asset database, the architect account (from the auth Secret below), and the
+#   role grant — idempotently, over the operator's admin Bolt session — before starting Studio.
+# Prerequisites:
+#   - an Enterprise Neo4j named my-graph in this namespace (the operator resolves its Bolt client URI),
+#   - that Neo4j must let the operator open an *admin* Bolt session (NEO-004): set either
+#       spec.trust.certificates.bolt (verified TLS, recommended) or spec.trust.insecureAdminConnection: true.
+#   - NO pre-created asset database or account — that is the point of this example.
+# Apply: kubectl apply -f examples/studio/03-provisioned.yaml
+# Then:  kubectl wait --for=condition=StudioReady neo4jstudio/studio-provisioned --timeout=300s
+#   While provisioning is in flight the CR sits in phase Pending / reason StudioProvisioning.
+---
+# OPTIONAL with provision: if you omit this Secret, the operator generates it (user "studio" + a random
+# password), owns it, and uses it. Include it only to choose the username/password yourself. With
+# provision the operator CREATEs a Neo4j user with these credentials (CHANGE NOT REQUIRED) + architect.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: studio-assetstore-auth
+type: Opaque
+stringData:
+  username: studio                       # the account the operator creates and Studio signs in as
+  password: REPLACE_ME                   # replace before any real use
+---
+apiVersion: neo4j.com/v1
+kind: Neo4jStudio
+metadata:
+  name: studio-provisioned
+spec:
+  deployments:
+    - name: my-graph                     # display name in Studio
+      neo4jRef:
+        name: my-graph                   # in-cluster Neo4j in this namespace (operator resolves the URI)
+                                         # mode defaults to ReverseProxy
+  assetStore:
+    neo4jRef:
+      name: my-graph                     # in-cluster, operator-managed Neo4j — resolved to neo4j://<svc>:<boltPort>
+    provision: true                      # operator CREATEs the database + architect account + grant (idempotent)
+    database: studio-assets              # created IF NOT EXISTS
+    auth:
+      secretRef:
+        name: studio-assetstore-auth     # the architect account above

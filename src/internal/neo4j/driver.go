@@ -75,7 +75,6 @@ func rewriteAdminURI(uri string, opts ConnectOpts) (string, error) {
 	}
 }
 
-
 func (a *driverAdmin) Close(ctx context.Context) error {
 	return a.driver.Close(ctx)
 }
@@ -351,6 +350,35 @@ func (a *driverAdmin) StartDatabase(ctx context.Context, name string) error {
 	_, err := neo4j.ExecuteQuery(ctx, a.driver,
 		"START DATABASE $name",
 		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+func (a *driverAdmin) CreateDatabaseIfNotExists(ctx context.Context, name string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"CREATE DATABASE $name IF NOT EXISTS",
+		map[string]any{"name": name}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+// CreateUserIfNotExists creates the asset-store account with CHANGE NOT REQUIRED so Studio can log in
+// without a forced password reset. IF NOT EXISTS is non-destructive: an existing user keeps its current
+// password (rotating the Secret does not re-set it — ponytail: upgrade path is an ALTER USER sync).
+func (a *driverAdmin) CreateUserIfNotExists(ctx context.Context, username, password string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"CREATE USER $user IF NOT EXISTS SET PASSWORD $password CHANGE NOT REQUIRED",
+		map[string]any{"user": username, "password": password}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
+// GrantRole grants a built-in role to a user. Neo4j does not accept a parameter in the ROLE position,
+// so role is interpolated as a literal — callers MUST pass a validated, known-safe role name.
+func (a *driverAdmin) GrantRole(ctx context.Context, role, username string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		fmt.Sprintf("GRANT ROLE %s TO $user", role),
+		map[string]any{"user": username}, neo4j.EagerResultTransformer,
 		neo4j.ExecuteQueryWithDatabase("system"))
 	return err
 }

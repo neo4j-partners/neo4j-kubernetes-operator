@@ -1,0 +1,93 @@
+# Purpose: a full, runnable Neo4jStudio for AKS, served over HTTPS with a real Let's Encrypt
+#   certificate (cert-manager + ingress-nginx), and with the asset store PROVISIONED by the operator
+#   on an in-cluster Neo4j (BDR-015 §4). End-to-end: public TLS at the edge, zero manual asset-DB setup.
+#
+# What this demonstrates:
+#   - connectivity.ingress with className nginx + the cert-manager annotation → an automatic LE cert,
+#   - TLS terminated at the Ingress (Studio runs plain HTTP behind it — no connectivity.tls needed),
+#   - assetStore.neo4jRef + provision: true → the operator CREATEs the DB, architect account, and grant.
+#
+# Prerequisites (AKS):
+#   1. An AKS cluster with kubectl context set, and this operator installed.
+#   2. ingress-nginx installed and its Service has a public IP:
+#        helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && helm repo update
+#        helm install ingress-nginx ingress-nginx/ingress-nginx \
+#          --namespace ingress-nginx --create-namespace
+#        kubectl -n ingress-nginx get svc ingress-nginx-controller -w   # note EXTERNAL-IP
+#      (On AKS you can instead use the Application Gateway Ingress Controller; set className: azure-application-gateway
+#       and the appgw.ingress.kubernetes.io annotations — the cert-manager flow is the same.)
+#   3. cert-manager installed:
+#        helm repo add jetstack https://charts.jetstack.io && helm repo update
+#        helm install cert-manager jetstack/cert-manager \
+#          --namespace cert-manager --create-namespace --set crds.enabled=true
+#   4. A public DNS A record for the host below pointing at the ingress EXTERNAL-IP
+#        (e.g. studio.example.com -> 20.x.x.x). Let's Encrypt HTTP-01 needs the name to resolve publicly.
+#   5. An Enterprise Neo4j named my-graph in this namespace, HTTP connector enabled, AND admin Bolt
+#      trust for the operator (NEO-004) — set ONE of these on that Neo4j:
+#        spec.trust.certificates.bolt: <bolt TLS secret>     # verified TLS (recommended), OR
+#        spec.trust.insecureAdminConnection: true            # test clusters only
+#
+# Replace studio.example.com (host + tls.hosts) and the ACME email, create the auth Secret's password,
+# then:  kubectl apply -f examples/studio/04-aks-letsencrypt-tls.yaml
+# Watch the cert issue:  kubectl get certificate studio-tls-cert -w   (READY=True when done)
+# Watch Studio:          kubectl wait --for=condition=StudioReady neo4jstudio/studio-aks --timeout=300s
+# Then browse:           https://studio.example.com   (a real, trusted certificate)
+---
+# Let's Encrypt production issuer (cluster-scoped). HTTP-01 solved through the nginx ingress class.
+# Use the staging URL first (https://acme-staging-v02.api.letsencrypt.org/directory) to avoid LE rate
+# limits while testing — staging certs are untrusted but prove the whole flow works.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: REPLACE_ME@example.com        # LE expiry notices go here
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+# OPTIONAL with provision: omit this Secret entirely and the operator generates it (user "studio" +
+# a random password) and owns it. Include it only to pick your own credentials.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: studio-assetstore-auth
+type: Opaque
+stringData:
+  username: studio
+  password: REPLACE_ME                   # replace before applying
+---
+apiVersion: neo4j.com/v1
+kind: Neo4jStudio
+metadata:
+  name: studio-aks
+spec:
+  deployments:
+    - name: my-graph                     # display name in Studio
+      neo4jRef:
+        name: my-graph                   # in-cluster Neo4j; mode defaults to ReverseProxy
+  assetStore:
+    neo4jRef:
+      name: my-graph                     # resolved to neo4j://<client-svc>:<boltPort>
+    provision: true                      # operator CREATEs the DB + architect account + grant (needs NEO-004 trust)
+    database: studio-assets
+    auth:
+      secretRef:
+        name: studio-assetstore-auth
+  connectivity:
+    service:
+      type: ClusterIP                    # the Ingress is the front door; the Service stays internal
+    ingress:
+      className: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod   # cert-manager issues + renews the cert
+      tls:
+        - hosts: [studio.neo4j-lab.local]    # REPLACE_ME — must match rules[].host and the DNS A record
+          secretName: studio-tls-cert    # cert-manager writes the issued cert here (created for you)
+      rules:
+        - host: studio.neo4j-lab.local       # REPLACE_ME

@@ -59,6 +59,7 @@ func NewReconciler(mgr ctrl.Manager) *BackupReconciler {
 
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackups/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=neo4j.com,resources=neo4jbackups/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

@@ -127,6 +127,57 @@ func TestClientServiceExposeBoltOnly(t *testing.T) {
 	}
 }
 
+func TestClientServiceSessionAffinity(t *testing.T) {
+	cluster := func(svc *neo4jv1.ConnectivityServiceSpec) *neo4jv1.Neo4j {
+		return &neo4jv1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "cl", Namespace: "default"},
+			Spec: neo4jv1.Neo4jSpec{
+				Topology:     neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeCluster, Primaries: &neo4jv1.PrimariesSpec{Members: 3}},
+				Connectivity: &neo4jv1.ConnectivitySpec{Service: svc},
+			},
+		}
+	}
+	standalone := func(svc *neo4jv1.ConnectivityServiceSpec) *neo4jv1.Neo4j {
+		return &neo4jv1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "dev", Namespace: "default"},
+			Spec: neo4jv1.Neo4jSpec{
+				Topology:     neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeStandalone},
+				Connectivity: &neo4jv1.ConnectivitySpec{Service: svc},
+			},
+		}
+	}
+	custom := int32(60)
+
+	// Cluster + unset → ClientIP with the 3h default (BDR-016).
+	svc := ClientService(render.ClientServiceContext(cluster(nil)))
+	if svc.Spec.SessionAffinity != corev1.ServiceAffinityClientIP {
+		t.Fatalf("cluster default affinity = %q, want ClientIP", svc.Spec.SessionAffinity)
+	}
+	if svc.Spec.SessionAffinityConfig == nil || svc.Spec.SessionAffinityConfig.ClientIP == nil ||
+		*svc.Spec.SessionAffinityConfig.ClientIP.TimeoutSeconds != 10800 {
+		t.Fatalf("cluster default timeout = %#v, want 10800", svc.Spec.SessionAffinityConfig)
+	}
+
+	// Standalone + unset → None, no config.
+	svc = ClientService(render.ClientServiceContext(standalone(nil)))
+	if svc.Spec.SessionAffinity != corev1.ServiceAffinityNone || svc.Spec.SessionAffinityConfig != nil {
+		t.Fatalf("standalone default = %q/%#v, want None/nil", svc.Spec.SessionAffinity, svc.Spec.SessionAffinityConfig)
+	}
+
+	// Explicit None on a cluster overrides the topology default.
+	svc = ClientService(render.ClientServiceContext(cluster(&neo4jv1.ConnectivityServiceSpec{SessionAffinity: "None"})))
+	if svc.Spec.SessionAffinity != corev1.ServiceAffinityNone || svc.Spec.SessionAffinityConfig != nil {
+		t.Fatalf("cluster explicit None = %q/%#v, want None/nil", svc.Spec.SessionAffinity, svc.Spec.SessionAffinityConfig)
+	}
+
+	// Explicit ClientIP + custom timeout is honored (e.g. on a standalone).
+	svc = ClientService(render.ClientServiceContext(standalone(&neo4jv1.ConnectivityServiceSpec{SessionAffinity: "ClientIP", SessionAffinityTimeoutSeconds: &custom})))
+	if svc.Spec.SessionAffinity != corev1.ServiceAffinityClientIP ||
+		svc.Spec.SessionAffinityConfig == nil || *svc.Spec.SessionAffinityConfig.ClientIP.TimeoutSeconds != 60 {
+		t.Fatalf("explicit ClientIP+timeout = %q/%#v, want ClientIP/60", svc.Spec.SessionAffinity, svc.Spec.SessionAffinityConfig)
+	}
+}
+
 func TestAdminServiceCreatedWithBackupAndMetrics(t *testing.T) {
 	backup := int32(6362)
 	metrics := int32(2004)

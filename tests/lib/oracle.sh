@@ -12,7 +12,7 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady PluginsReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady PluginsReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady StudioReady
 }
 
 oracle_reasons_for() {  # <condition>
@@ -29,7 +29,8 @@ oracle_reasons_for() {  # <condition>
     BackupReady) printf '%s\n' BackupSucceeded BackupInProgress BackupJobFailed BackupTargetNotFound BackupEditionUnsupported BackupListenerDisabled BackupDestinationUnsupported BackupSourceNotFound BackupSourceUnsupported ;;
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreMetadataApplying RestoreMetadataFailed ;;
     ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
-    event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted ;;
+    StudioReady) printf '%s\n' StudioAvailable StudioProgressing StudioTargetNotFound StudioEditionUnsupported StudioDegraded StudioProvisioning ;;
+    event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted AssetStoreSecretGenerated ;;
     *) return 1 ;;
   esac
 }
@@ -122,19 +123,26 @@ oracle_severity() {  # <reason>
     SchedulePruneFailed) echo warn ;;
     ScheduleCompacted) echo info ;;
     ScheduleAggregateFailed) echo warn ;;
+    StudioAvailable) echo info ;;
+    StudioProgressing) echo info ;;
+    StudioTargetNotFound) echo warn ;;
+    StudioEditionUnsupported) echo error ;;
+    StudioDegraded) echo warn ;;
+    StudioProvisioning) echo warn ;;
     DuplicateEntry) echo warn ;;
     DatabaseTopologyResized) echo warn ;;
     InsecureAdminConnection) echo warn ;;
     AdminBoltTLSRequired) echo warn ;;
     SecretMounted) echo info ;;
     StorageResizeCompleted) echo info ;;
+    AssetStoreSecretGenerated) echo info ;;
     *) return 1 ;;
   esac
 }
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|SecretMounted|StorageResizeCompleted) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|StudioAvailable|SecretMounted|StorageResizeCompleted|AssetStoreSecretGenerated) return 0 ;;
     *) return 1 ;;
   esac
 }

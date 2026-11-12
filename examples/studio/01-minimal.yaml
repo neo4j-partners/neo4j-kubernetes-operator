@@ -1,0 +1,27 @@
+# Purpose: the smallest valid Neo4jStudio — one in-cluster deployment plus the BYO asset store.
+#   Demonstrates the API shape from BDR-015 §2 / §4.
+# Prerequisites:
+#   - an Enterprise Neo4j named my-graph in this namespace with its HTTP connector enabled (7474),
+#   - a pre-created asset database with an architect account (BYO — BDR-015 §4-a),
+#   - the referenced asset-store auth Secret (see examples/studio/README.md, or the self-contained 02-full.yaml).
+# Defaults note: version defaults to the operator's pinned Studio tag, and deployments[].mode defaults
+#   to ReverseProxy — the in-cluster-safe choice (Studio proxies HTTP to the DBMS; the browser only
+#   talks to Studio's front door). Direct would make the *browser* dial Bolt; for an in-cluster
+#   neo4jRef that needs a browser-reachable publicUri (admission rejects Direct+neo4jRef without one).
+# Apply: kubectl apply -f examples/studio/01-minimal.yaml
+apiVersion: neo4j.com/v1
+kind: Neo4jStudio
+metadata:
+  name: studio-minimal
+spec:
+  deployments:
+    - name: my-graph                     # display name in Studio
+      neo4jRef:
+        name: my-graph                   # in-cluster Neo4j in this namespace (operator resolves the URI)
+                                         # mode defaults to ReverseProxy; sign-in uses NES defaults (basic + oidc)
+  assetStore:
+    uri: "neo4j://my-graph.default.svc:7687"  # Neo4j instance holding Studio's asset database
+    database: studio-assets              # must already exist; account needs the architect role (BYO)
+    auth:
+      secretRef:
+        name: studio-assetstore-auth

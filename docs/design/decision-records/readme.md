@@ -60,6 +60,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [BDR-012](business/identity-user-roles/012-identity-management.md) | Neo4j identity — **Option C proposed**: `Neo4jUser` + `Neo4jRole` + `Neo4jGrant`; reconcile Role → Grant → User; **post-V1** | proposed |
 | [BDR-013](business/database/013-database.md) | Logical database — **Option A proposed**: no declarative `Neo4jDatabase` CR; databases by name; priority to backup / restore; post-install task CR (`Neo4jDatabaseTask`) still under reflection | proposed |
 | [BDR-014](business/backup-restore/014-backup-restore.md) | Backup / restore — **Option A proposed**: three CRDs `Neo4jBackup` + `Neo4jBackupSchedule` + `Neo4jRestore`; provider-neutral `url` + PVC destinations; full + incremental chains, independent crons, chain-aware full.retention + boundary aggregation; restore by `backupRef` with `overwrite` guard; databases by name (restore = user DBs only, `system` rejected); Enterprise only; V2 | proposed |
+| [BDR-015](business/studio/015-enterprise-studio.md) | Enterprise Studio — **Option A proposed**: dedicated `Neo4jStudio` satellite CRD; one-to-many `deployments[]` (`neo4jRef` or external `uri`, `Direct`/`ReverseProxy`); optional Studio `license.secretRef` (distinct from Neo4j license); asset-DB owner left open (BYO recommended first); Enterprise + HTTP connector required; V2 | proposed |
 
 ### Architecture (`architecture/`)
 
@@ -82,6 +83,7 @@ Optional: **Alternatives considered**, **References** (FR IDs, `09-crd-spec/`, i
 | [ADR-015](architecture/015-backup-and-restore.md) | Backup / restore execution — backup via Kubernetes `Job` (neo4j image) with chain-aware pruning + `aggregate`; per-database artifact layout; restore via online seed-from-URI over Bolt, gated on formation; failure-mode conditions; system/DR → [design note](../backup-restore/disaster-recovery.md) | proposed |
 | [ADR-016](architecture/016-cloud-identity.md) | Cloud identity for backup/restore — **Option C proposed**: static-key Secret (portable, MinIO-testable) + opt-in workload identity (IRSA / EKS Pod Identity / GKE WI / Azure WI); dedicated backup-Job SA; relax NEO-002 behind explicit opt-in; no cloud SDK in operator; PVC/`file:`/`server:` path needs none of this | proposed |
 | [ADR-017](architecture/017-rolling-upgrade.md) | Rolling upgrade of `spec.version` — guardrails and observation over the default `RollingUpdate`; partition cursor deferred | proposed |
+| [ADR-018](architecture/018-enterprise-studio.md) | Enterprise Studio deployment — **Option A proposed**: native render (`render/studio` + `Neo4jStudioReconciler`), stateless `Deployment` + `Service` + optional `Ingress`; config via mounted `config.yaml` + secret env overrides + mounted license; session-affinity enforced for ReverseProxy clusters; asset-DB = reachability probe (4-a BYO), operator-provisioning deferred to BDR-012 | proposed |
 
 ---
 

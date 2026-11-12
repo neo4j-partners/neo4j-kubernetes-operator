@@ -232,6 +232,8 @@ var (
 		"At least one successful restore exists for this Neo4j instance")
 	ConditionScheduleReady = declareCondition("ScheduleReady", GateNone,
 		"The backup schedule's cron cadences are valid and active, or intentionally suspended")
+	ConditionStudioReady = declareCondition("StudioReady", GateFalseBlocks,
+		"The Enterprise Studio Deployment is Available and every served deployment resolved")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -447,6 +449,22 @@ var (
 		asEvent("The aggregate backup for a closed chain failed, so its links are kept (not compacted) and retried; the message carries the failure detail"))
 )
 
+// StudioReady — a Neo4jStudio Enterprise Studio deployment (BDR-015 / ADR-018).
+var (
+	ReasonStudioAvailable = declareNominal("StudioAvailable", SurfaceCondition,
+		on(ConditionStudioReady, "The Studio Deployment is Available and serving"))
+	ReasonStudioProgressing = declare("StudioProgressing", SeverityInfo, SurfaceCondition,
+		on(ConditionStudioReady, "The Studio Deployment is rolling out; waiting for it to become Available"))
+	ReasonStudioTargetNotFound = declare("StudioTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionStudioReady, "An in-cluster `deployments[].neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonStudioEditionUnsupported = declare("StudioEditionUnsupported", SeverityError, SurfaceBoth,
+		on(ConditionStudioReady, "A served in-cluster Neo4j is community; Enterprise Studio serves Enterprise deployments"))
+	ReasonStudioDegraded = declare("StudioDegraded", SeverityWarn, SurfaceBoth,
+		on(ConditionStudioReady, "The Studio Deployment failed to roll out; the usual cause is an unreachable or misconfigured asset store (BYO) — check `assetStore` uri/database/credentials and `kubectl logs`"))
+	ReasonStudioProvisioning = declare("StudioProvisioning", SeverityWarn, SurfaceCondition,
+		on(ConditionStudioReady, "Provisioning the asset store on the in-cluster `assetStore.neo4jRef` (CREATE DATABASE/USER + GRANT) has not yet succeeded — waiting for the target to be reachable over admin Bolt (NEO-004 TLS trust required)"))
+)
+
 // Event-only reasons: the CR stays healthy, the operator reports a decision or restates the
 // spec. Advisories among them are recorded once per generation (internal/events.Advisory).
 var (
@@ -462,4 +480,6 @@ var (
 		asEvent("A labelled Secret is being mounted into the Neo4j pods; the Event names the Secret and the opt-in label"))
 	ReasonStorageResizeCompleted = declareNominal("StorageResizeCompleted", SurfaceEvent,
 		asEvent("Every claim reached the size the spec asks for; the Event names the volume and the new capacity. Emitted on the pass that observes the last claim catch up, not on every pass"))
+	ReasonAssetStoreSecretGenerated = declareNominal("AssetStoreSecretGenerated", SurfaceEvent,
+		asEvent("`assetStore.provision` is set and the `assetStore.auth` Secret was absent, so the operator generated it (user `studio` + a random password) and owns it; the Event names the Secret and the user"))
 )

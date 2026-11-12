@@ -92,6 +92,9 @@ func (f *fakeAdmin) EnableServer(context.Context, string, string) error         
 func (f *fakeAdmin) DeallocateDatabases(context.Context, string) error               { return nil }
 func (f *fakeAdmin) DropServer(context.Context, string) error                        { return nil }
 func (f *fakeAdmin) ClusterStable(context.Context) (bool, string, error)             { return true, "", nil }
+func (f *fakeAdmin) CreateDatabaseIfNotExists(context.Context, string) error         { return nil }
+func (f *fakeAdmin) CreateUserIfNotExists(context.Context, string, string) error     { return nil }
+func (f *fakeAdmin) GrantRole(context.Context, string, string) error                 { return nil }
 
 func scheme(t *testing.T) *runtime.Scheme {
 	t.Helper()

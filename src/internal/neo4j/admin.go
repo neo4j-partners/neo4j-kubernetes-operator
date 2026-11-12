@@ -61,6 +61,13 @@ type Admin interface {
 	StopDatabase(ctx context.Context, name string) error
 	StartDatabase(ctx context.Context, name string) error
 
+	// Asset-store provisioning (BDR-015 §4, Enterprise Studio). All idempotent: CREATE … IF NOT EXISTS
+	// and a repeat GRANT are no-ops, so they are safe to run every reconcile. Names and the password go
+	// as Bolt parameters (no literal interpolation); role is a validated literal.
+	CreateDatabaseIfNotExists(ctx context.Context, name string) error
+	CreateUserIfNotExists(ctx context.Context, username, password string) error
+	GrantRole(ctx context.Context, role, username string) error
+
 	Close(ctx context.Context) error
 }
 
