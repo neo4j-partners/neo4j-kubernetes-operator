@@ -24,10 +24,73 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
+	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
 func studioContainerResources(s *neo4jv1.Neo4jStudio) corev1.ResourceRequirements {
-	return Deployment(s, nil).Spec.Template.Spec.Containers[0].Resources
+	return Deployment(s, nil, nil).Spec.Template.Spec.Containers[0].Resources
+}
+
+func TestDeploymentMountsTrustCAsAndSetsSSLCertDir(t *testing.T) {
+	s := &neo4jv1.Neo4jStudio{ObjectMeta: metav1.ObjectMeta{Name: "nes", Namespace: "ns"}}
+	needs := []rendertrust.SecretKeyNeed{
+		{SecretName: "cl-https-tls", Key: "ca.crt"},
+		{SecretName: "cl-bolt-tls", Key: "ca.crt"},
+	}
+	dep := Deployment(s, nil, needs)
+	c := dep.Spec.Template.Spec.Containers[0]
+
+	var sslCertDir string
+	for _, e := range c.Env {
+		if e.Name == "SSL_CERT_DIR" {
+			sslCertDir = e.Value
+		}
+	}
+	if sslCertDir != caTrustMountPath {
+		t.Fatalf("SSL_CERT_DIR = %q, want %q", sslCertDir, caTrustMountPath)
+	}
+
+	var mount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == caTrustVolume {
+			mount = &c.VolumeMounts[i]
+		}
+	}
+	if mount == nil || mount.MountPath != caTrustMountPath || !mount.ReadOnly {
+		t.Fatalf("ca-trust mount = %#v, want read-only at %q", mount, caTrustMountPath)
+	}
+
+	var vol *corev1.Volume
+	for i := range dep.Spec.Template.Spec.Volumes {
+		if dep.Spec.Template.Spec.Volumes[i].Name == caTrustVolume {
+			vol = &dep.Spec.Template.Spec.Volumes[i]
+		}
+	}
+	if vol == nil || vol.Projected == nil {
+		t.Fatal("expected a projected ca-trust volume")
+	}
+	// One SecretProjection per secret, each ca.crt projected to a collision-free <secret>-ca.crt path.
+	paths := map[string]bool{}
+	for _, src := range vol.Projected.Sources {
+		if src.Secret == nil {
+			t.Fatalf("non-secret projection source: %#v", src)
+		}
+		for _, it := range src.Secret.Items {
+			paths[it.Path] = true
+		}
+	}
+	if !paths["cl-https-tls-ca.crt"] || !paths["cl-bolt-tls-ca.crt"] {
+		t.Fatalf("projected paths = %v, want cl-https-tls-ca.crt and cl-bolt-tls-ca.crt", paths)
+	}
+}
+
+func TestDeploymentNoTrustCAsNoSSLCertDir(t *testing.T) {
+	s := &neo4jv1.Neo4jStudio{ObjectMeta: metav1.ObjectMeta{Name: "nes", Namespace: "ns"}}
+	for _, e := range Deployment(s, nil, nil).Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "SSL_CERT_DIR" {
+			t.Fatal("SSL_CERT_DIR must not be set when there are no CA anchors")
+		}
+	}
 }
 
 func TestDeploymentAppliesResources(t *testing.T) {
@@ -187,7 +250,7 @@ func TestTLSAndSecurityOverride(t *testing.T) {
 			Security:   &neo4jv1.StudioSecuritySpec{ContainerSecurityContext: &corev1.SecurityContext{RunAsUser: &uid}},
 		},
 	}
-	dep := Deployment(s, nil)
+	dep := Deployment(s, nil, nil)
 	got := plainEnv(EnvVars(s, nil))
 	if got["NES_server_https_enabled"] != "true" || got["NES_server_https_certificates_privateKey"] != "tls.key" {
 		t.Errorf("TLS env not set: %#v", got)
@@ -214,7 +277,7 @@ func TestDeploymentIsHardenedAndStateless(t *testing.T) {
 			AssetStore: neo4jv1.StudioAssetStore{URI: "neo4j://store:7687", Database: "assets", Auth: neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "store-auth"}}},
 		},
 	}
-	dep := Deployment(s, []ResolvedDeployment{{Name: "g", URI: "http://g.ns.svc:7474", Mode: string(neo4jv1.StudioModeReverseProxy)}})
+	dep := Deployment(s, []ResolvedDeployment{{Name: "g", URI: "http://g.ns.svc:7474", Mode: string(neo4jv1.StudioModeReverseProxy)}}, nil)
 
 	pod := dep.Spec.Template.Spec
 	// Service-link env injection must be off, or a Service named e.g. nes-storage injects

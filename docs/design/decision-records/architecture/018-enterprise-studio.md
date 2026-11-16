@@ -230,15 +230,22 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
   expressible via an explicit `publicUri` (e.g. `neo4j+s://…`).
 - **neo4jRef pool.** A Studio-local `StudioNeo4jRef` adds optional `pool` (the shared `Neo4jRef` stays
   `name`-only so the backup CRD schema is unaffected). `domain/studio.backingHost` resolves
-  `analytics`/`read` to `render.NewContext(neo4j, pool).HeadlessServiceName()` (raw listener ports);
-  `primary`/unset keep the north-south client Service (facade ports). `validatePool` rejects a pool
-  with zero members (`PoolReplicas()==0`) up front.
+  `analytics`/`read` to `render.NewContext(neo4j, pool).HeadlessServiceDomain()` — the pool headless
+  Service FQDN (`<svc>.<ns>.svc.<clusterDomain>`), raw listener ports. It must be the FQDN, not the
+  short `.svc` form: `trust.inClusterNames` only adds the short SAN for the north-south client Service
+  (the operator's own admin dial needs it), so a pool is a cert SAN in its FQDN form only, and HTTPS
+  verification fails on the short name. `primary`/unset keep the north-south client Service (facade
+  ports, short form — it carries both SANs). `validatePool` rejects a pool with zero members
+  (`PoolReplicas()==0`) up front.
 - **Asset-store provisioning (scoped BDR-012 §4-b).** The `Admin` interface (ADR-007 allowlist) gains
   three idempotent verbs — `CreateDatabaseIfNotExists`, `CreateUserIfNotExists`, `GrantRole` — run on
   `system` via `ExecuteQueryWithDatabase`. Names and the password are Bolt parameters; the role is a
   validated literal (`architect`) since Cypher rejects a parameter in the ROLE position.
   `domain/studio.ResolveAssetStore` resolves `assetStore.neo4jRef` to `neo4j://<client-svc>:<boltPort>`
-  (external `uri` echoed verbatim); the reconciler stamps it on the in-memory spec so `render` emits
+  — or an encrypted Bolt scheme when the target runs bolt TLS (`trust.BoltTLSEnabled`), since a
+  REQUIRED-TLS listener refuses a plaintext dial (NES "retrieve routing table … EOF"); the exact
+  scheme (`neo4j+s` vs `neo4j+ssc`) is chosen by the TLS-trust revision below. An external
+  `uri` is echoed verbatim; the reconciler stamps it on the in-memory spec so `render` emits
   the right `NES_*` env. When `assetStore.provision` is set, the reconciler reads the architect
   credentials from `assetStore.auth`, opens the operator admin session via `formation.Dial` (the same
   NEO-004-gated path as backup/restore), and calls `domain/studio.ProvisionAssetStore` **before**
@@ -249,6 +256,32 @@ Implements the [BDR-015 customer feedback revision](../business/studio/015-enter
   (shared crypto generator) into a new owner-referenced `Secret` (user `studio`), created **once**
   (`Create`, not apply — a present Secret is read verbatim, never overwritten, so the password is
   stable). The controller now `Owns(&corev1.Secret{})` for GC; RBAC already allowed `secrets` CRUD.
+
+---
+
+## Backing-DB TLS trust revision — execution (2026-11-16)
+
+Implements the [BDR-015 backing-DB TLS trust revision](../business/studio/015-enterprise-studio.md):
+give NES the CA of an in-cluster `neo4jRef` target so it can verify that target's TLS.
+
+- **CA source (pure, `render/trust`).** `TrustAnchorKeys(neo4j, policy)` returns the Secret
+  name + key coordinates of the trust anchor a client must trust to verify that policy's server cert,
+  mirroring `formation.loadBoltRootCAs` precedence: BYO `trustedCerts.sources` items → else the
+  cert-manager-published `ca.crt` (`Material.Provisioned`) → else the self-signed leaf (`CertPath`).
+- **Collection (`domain/studio.CollectTrustCAs`).** Iterates the in-cluster `neo4jRef` targets Studio
+  references — each deployment's `https` policy (only when the target exposes the `https` connector,
+  the same test `httpURI` uses) and the asset store's `bolt` policy (only when `trust.BoltTLSEnabled`)
+  — Gets each target Neo4j, and dedupes the anchors into `[]SecretKeyNeed`.
+- **Projection (`render/studio`).** When any anchors exist, the Deployment gets one extra read-only
+  **projected** volume at `/certificates/trusted-cas` (each anchor an item with `Path = <secret>-<key>`,
+  so multiple targets/CAs never collide), and the container gets `SSL_CERT_DIR` pointed at it. Go's
+  `crypto/x509` loads the default system CA **file** (public roots preserved) **plus** every cert in
+  `SSL_CERT_DIR` — so this adds the private CA without weakening public-CA verification.
+- **Scheme (`ResolveAssetStore`).** Returns `neo4j+s` when the target runs bolt TLS **and** a trust
+  anchor is resolvable (the CA will be mounted, so NES can fully verify), else `neo4j+ssc` (encrypted,
+  verification skipped), else plaintext `neo4j://`.
+- **No CRD field, no new RBAC.** Behaviour is derived from the referenced targets' own trust config;
+  the operator already Gets `Neo4j` and mounts Secrets by name.
 
 ---
 

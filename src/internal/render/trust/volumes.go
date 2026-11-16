@@ -19,6 +19,8 @@ const (
 	// cert-manager issues kubernetes.io/tls Secrets with these fixed data keys.
 	certManagerKeyKey  = "tls.key"
 	certManagerCertKey = "tls.crt"
+	// certManagerCAKey is the issuing CA cert-manager publishes next to the leaf.
+	certManagerCAKey = "ca.crt"
 )
 
 // tlsPolicy is one Neo4j SSL framework policy (Helm ssl.{name} parity).
@@ -135,6 +137,43 @@ func materialOf(neo4j *neo4jv1.Neo4j, p *neo4jv1.TLSPolicySpec) (Material, bool)
 		CertSecret: p.PublicCertificate.SecretName,
 		CertPath:   subPathOr(p.PublicCertificate.SubPath, defaultPublicCert),
 	}, true
+}
+
+// TrustAnchorKeys returns the Secret name + data-key coordinates of the trust anchor a *client*
+// must trust to verify this policy's server certificate — for a consumer (e.g. Enterprise Studio)
+// that dials the Neo4j and needs its CA. Precedence mirrors formation.loadBoltRootCAs: BYO
+// trustedCerts.sources items first, else the cert-manager-published ca.crt, else the self-signed
+// leaf (public cert) as trust. Returns nil when the policy has no material configured.
+//
+// ponytail: a BYO trustedCerts source with no explicit items (whole-Secret) can't be enumerated
+// here without a client read, so it falls through to the leaf-as-trust anchor — correct for the
+// self-signed case and the only one that reaches a keyless source; the upgrade path is reading the
+// Secret's keys if a BYO multi-CA-in-one-Secret case ever needs projecting verbatim.
+func TrustAnchorKeys(neo4j *neo4jv1.Neo4j, policy string) []SecretKeyNeed {
+	spec := policyOf(neo4j, policy)
+	mat, ok := materialOf(neo4j, spec)
+	if !ok {
+		return nil
+	}
+	set := &secretKeySet{seen: map[string]struct{}{}}
+	if spec.TrustedCerts != nil {
+		for _, src := range spec.TrustedCerts.Sources {
+			if src.Secret == nil || src.Secret.Name == "" {
+				continue
+			}
+			for _, it := range src.Secret.Items {
+				set.add(src.Secret.Name, it.Key)
+			}
+		}
+	}
+	if len(set.out) == 0 {
+		if mat.Provisioned {
+			set.add(mat.CertSecret, certManagerCAKey) // cert-manager ca.crt
+		} else {
+			set.add(mat.CertSecret, mat.CertPath) // self-signed leaf-as-trust
+		}
+	}
+	return set.out
 }
 
 func subPathOr(subPath, def string) string {

@@ -11,6 +11,57 @@ import (
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
 )
 
+func TestTrustAnchorKeys(t *testing.T) {
+	t.Run("cert-manager publishes ca.crt", func(t *testing.T) {
+		neo4j := &neo4jv1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "cl", Namespace: "default"},
+			Spec: neo4jv1.Neo4jSpec{
+				Trust: &neo4jv1.TrustSpec{
+					Enabled:     true,
+					CertManager: &neo4jv1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"}},
+					Certificates: &neo4jv1.TrustCertificatesSpec{
+						Bolt: &neo4jv1.TLSPolicySpec{SecretName: "cl-bolt-tls"},
+					},
+				},
+			},
+		}
+		got := TrustAnchorKeys(neo4j, "bolt")
+		if len(got) != 1 || got[0] != (SecretKeyNeed{SecretName: "cl-bolt-tls", Key: "ca.crt"}) {
+			t.Fatalf("got %#v, want [{cl-bolt-tls ca.crt}]", got)
+		}
+	})
+
+	t.Run("self-signed BYO falls back to the leaf cert", func(t *testing.T) {
+		got := TrustAnchorKeys(standaloneWithBoltTrust(), "bolt")
+		// standaloneWithBoltTrust sets publicCertificate secret dev-bolt-cert, subPath public.crt.
+		if len(got) != 1 || got[0] != (SecretKeyNeed{SecretName: "dev-bolt-cert", Key: "public.crt"}) {
+			t.Fatalf("got %#v, want [{dev-bolt-cert public.crt}]", got)
+		}
+	})
+
+	t.Run("BYO trustedCerts sources win over the leaf", func(t *testing.T) {
+		neo4j := standaloneWithBoltTrust()
+		neo4j.Spec.Trust.Certificates.Bolt.TrustedCerts = &neo4jv1.TLSTrustedCertsSpec{
+			Sources: []corev1.VolumeProjection{{
+				Secret: &corev1.SecretProjection{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "bolt-ca"},
+					Items:                []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}},
+				},
+			}},
+		}
+		got := TrustAnchorKeys(neo4j, "bolt")
+		if len(got) != 1 || got[0] != (SecretKeyNeed{SecretName: "bolt-ca", Key: "ca.crt"}) {
+			t.Fatalf("got %#v, want [{bolt-ca ca.crt}]", got)
+		}
+	})
+
+	t.Run("no policy material → nil", func(t *testing.T) {
+		if got := TrustAnchorKeys(&neo4jv1.Neo4j{}, "bolt"); got != nil {
+			t.Fatalf("got %#v, want nil", got)
+		}
+	})
+}
+
 func TestAppendVolumesClusterBYO(t *testing.T) {
 	neo4j := clusterWithTrust()
 	ctx := render.ContextForPool(neo4j, render.PoolPrimary)

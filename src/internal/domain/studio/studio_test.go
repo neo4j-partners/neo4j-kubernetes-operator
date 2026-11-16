@@ -144,7 +144,8 @@ func TestResolveDeployments(t *testing.T) {
 
 	t.Run("neo4jRef.pool targets the cluster pool's headless Service", func(t *testing.T) {
 		// Customer feedback: the north-south client Service only fronts primaries, so the GDS analytics
-		// pool is reachable only via its own pool Service. pool: analytics resolves there.
+		// pool is reachable only via its own pool Service. pool: analytics resolves there — by FQDN,
+		// because the pool headless Service is only a TLS cert SAN in its .svc.<clusterDomain> form.
 		n := neo4j("cl", neo4jv1.EditionEnterprise)
 		n.Spec.Topology = neo4jv1.TopologySpec{
 			Mode:        neo4jv1.TopologyModeCluster,
@@ -157,8 +158,8 @@ func TestResolveDeployments(t *testing.T) {
 		if rerr != nil {
 			t.Fatalf("unexpected error: %v", rerr)
 		}
-		if got[0].URI != "http://cl-analytics.ns.svc:7474" {
-			t.Fatalf("URI = %q, want http://cl-analytics.ns.svc:7474", got[0].URI)
+		if got[0].URI != "http://cl-analytics.ns.svc.cluster.local:7474" {
+			t.Fatalf("URI = %q, want http://cl-analytics.ns.svc.cluster.local:7474", got[0].URI)
 		}
 	})
 
@@ -224,6 +225,36 @@ func TestResolveAssetStore(t *testing.T) {
 		}
 	})
 
+	t.Run("bolt TLS target with a resolvable CA resolves to verified neo4j+s", func(t *testing.T) {
+		// The backing Neo4j runs bolt with REQUIRED TLS, so a plaintext neo4j:// dial is refused
+		// (NES "retrieve routing table … EOF"). The operator can resolve the target's CA (and will
+		// mount it — CollectTrustCAs), so NES can fully verify: resolve to neo4j+s, not +ssc.
+		n := neo4j("g", neo4jv1.EditionEnterprise)
+		n.Spec.Trust = &neo4jv1.TrustSpec{
+			Enabled: true,
+			Certificates: &neo4jv1.TrustCertificatesSpec{
+				Bolt: &neo4jv1.TLSPolicySpec{
+					PrivateKey:        &neo4jv1.TLSSecretKeyRef{SecretName: "g-bolt-key"},
+					PublicCertificate: &neo4jv1.TLSSecretKeyRef{SecretName: "g-bolt-cert"},
+				},
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
+		cr := studioCR()
+		cr.Spec.AssetStore = neo4jv1.StudioAssetStore{
+			Neo4jRef: &neo4jv1.Neo4jRef{Name: "g"},
+			Database: "assets",
+			Auth:     neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a-auth"}},
+		}
+		uri, rerr := ResolveAssetStore(context.Background(), c, cr)
+		if rerr != nil {
+			t.Fatalf("unexpected error: %v", rerr)
+		}
+		if uri != "neo4j+s://g.ns.svc:7687" {
+			t.Fatalf("uri = %q, want neo4j+s://g.ns.svc:7687", uri)
+		}
+	})
+
 	t.Run("missing neo4jRef is retryable TargetNotFound", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(s).Build()
 		cr := studioCR()
@@ -237,6 +268,72 @@ func TestResolveAssetStore(t *testing.T) {
 			t.Fatalf("want ResolveTargetNotFound, got %+v", rerr)
 		}
 	})
+}
+
+func TestCollectTrustCAs(t *testing.T) {
+	s := testScheme(t)
+	https := int32(7473)
+	target := neo4j("cl", neo4jv1.EditionEnterprise)
+	target.Spec.Connectivity = &neo4jv1.ConnectivitySpec{
+		Listeners: &neo4jv1.ConnectivityListenersSpec{HTTPS: &https},
+		Service:   &neo4jv1.ConnectivityServiceSpec{Expose: []string{"bolt", "http", "https"}},
+	}
+	target.Spec.Trust = &neo4jv1.TrustSpec{
+		Enabled:     true,
+		CertManager: &neo4jv1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"}},
+		Certificates: &neo4jv1.TrustCertificatesSpec{
+			HTTPS: &neo4jv1.TLSPolicySpec{SecretName: "cl-https-tls"},
+			Bolt:  &neo4jv1.TLSPolicySpec{SecretName: "cl-bolt-tls"},
+		},
+	}
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(target).Build()
+	cr := studioCR(
+		neo4jv1.StudioDeployment{Name: "cl", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "cl"}},
+		neo4jv1.StudioDeployment{Name: "ext", URI: "https://x.example:7473"}, // external uri — no auto CA
+	)
+	cr.Spec.AssetStore = neo4jv1.StudioAssetStore{
+		Neo4jRef: &neo4jv1.Neo4jRef{Name: "cl"},
+		Database: "assets",
+		Auth:     neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a-auth"}},
+	}
+
+	needs, err := CollectTrustCAs(context.Background(), c, cr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := map[string]bool{}
+	for _, n := range needs {
+		got[n.SecretName+"/"+n.Key] = true
+	}
+	if !got["cl-https-tls/ca.crt"] {
+		t.Errorf("missing deployment https CA anchor; got %v", got)
+	}
+	if !got["cl-bolt-tls/ca.crt"] {
+		t.Errorf("missing asset-store bolt CA anchor; got %v", got)
+	}
+	if len(needs) != 2 {
+		t.Errorf("want exactly 2 anchors (external uri skipped), got %d: %v", len(needs), got)
+	}
+}
+
+func TestCollectTrustCAsSkipsPlaintextTarget(t *testing.T) {
+	s := testScheme(t)
+	// A target with no https connector and no bolt TLS contributes no anchors.
+	target := neo4j("cl", neo4jv1.EditionEnterprise)
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(target).Build()
+	cr := studioCR(neo4jv1.StudioDeployment{Name: "cl", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "cl"}})
+	cr.Spec.AssetStore = neo4jv1.StudioAssetStore{
+		Neo4jRef: &neo4jv1.Neo4jRef{Name: "cl"},
+		Database: "assets",
+		Auth:     neo4jv1.CredentialRef{SecretRef: neo4jv1.SecretRef{Name: "a-auth"}},
+	}
+	needs, err := CollectTrustCAs(context.Background(), c, cr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(needs) != 0 {
+		t.Fatalf("want no anchors for a plaintext target, got %#v", needs)
+	}
 }
 
 // recordingAdmin embeds the Admin interface (nil) and records only the provisioning calls under test.

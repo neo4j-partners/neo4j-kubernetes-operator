@@ -305,6 +305,40 @@ change so the release can pick them up independently.
 
 ---
 
+## Backing-DB TLS trust revision (2026-11-16)
+
+The trial of items 2–3 above over TLS surfaced the next gap. NES is itself a **client** of the backing
+Neo4j — it proxies HTTP(S) to the deployment's HTTP API (ReverseProxy) and opens a Bolt driver to the
+asset store. When that Neo4j runs TLS signed by a private CA (cert-manager/`corp-ca` or self-signed —
+the only option in-cluster, since public CAs cannot issue for `*.svc.cluster.local`), NES rejects the
+server certificate: `x509: certificate signed by unknown authority`. Unlike Bolt (which has the
+`+ssc` "encrypt but skip verification" scheme), a plain `https://` URL has **no** skip-verify, so
+ReverseProxy-over-HTTPS to a private-CA Neo4j simply could not work, and the asset-store Bolt dial was
+stuck on `+ssc` (encrypted but unverified).
+
+**Decision.** For an in-cluster `neo4jRef` target — the only case where the operator can know the CA —
+the operator **gives NES the CA automatically**: it mounts the target's trust anchor (`ca.crt`) into
+the Studio pod and sets `SSL_CERT_DIR` so NES (a Go `net/http`/driver client) adds it to the trust
+store it already consults. No new CRD field, and nothing to hand-wire for the common case. With the CA
+trusted, the asset-store Bolt dial upgrades from `neo4j+ssc` to verified `neo4j+s`; `+ssc` remains the
+fallback only when no CA is resolvable.
+
+- **Scope.** Auto-trust applies to in-cluster `neo4jRef` (deployments' `https` connector + the asset
+  store's `bolt`). An external `uri` stays strictly BYO — the operator has no handle on its CA, so the
+  user wires NES trust via `config` / `configFromSecrets` as before (`uri` keeps its explicit scheme).
+- **Security.** `SSL_CERT_DIR` *adds* to the system pool (it does not replace the public-CA bundle, so
+  NES's other HTTPS — license, genAI — still verifies normally). The operator adds exactly one anchor:
+  the issuing CA of a DBMS the user already controls. This is **narrower** than the `+ssc`/plain-HTTP
+  it replaces (which trusted any cert, or nothing). Point the material at the issuing CA, **not** a
+  broad corporate root — the anchor is process-global to NES, not per-connection. Tracked under the
+  same TLS-trust posture as NEO-004.
+- `ponytail:` the trust is process-global, not scoped per connection (NES exposes no per-target trust
+  key); the upgrade path is a NES-native per-connection trust setting if/when it exists. A CA **root**
+  rotation needs a Studio pod restart to re-read the mount (routine leaf renewals don't change
+  `ca.crt`); a rotation watch is a later addition.
+
+---
+
 ## References
 
 - [BDR-001](../neo4j/001-single-neo4j-crd.md) — single workload CRD, satellites via `neo4jRef`

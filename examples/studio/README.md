@@ -26,6 +26,14 @@ resolution.
 (§6); the operator makes Studio's own front door sticky when any served deployment is ReverseProxy
 against a cluster (§7).
 
+**Backing-DB TLS trust (automatic).** When an in-cluster `neo4jRef` target runs TLS (private,
+cert-manager/BYO CA — an in-cluster cert is never signed by a public root), Studio can't verify it
+out of the box. For `neo4jRef` targets the operator resolves that target's CA and mounts it into the
+Studio pod (`SSL_CERT_DIR`), so NES trusts the private CA **on top of** the public roots — Studio
+proxies HTTPS to the DBMS and dials the Bolt asset store with full verification (`neo4j+s`), not
+encrypt-but-don't-verify. This is automatic and adds no CR field; external `uri` deployments bring
+their own trust (`BDR-015` revision 2026-11-16).
+
 ## Prerequisites
 
 - A running cluster with `kubectl`, and the operator installed
@@ -113,6 +121,13 @@ kubectl port-forward svc/studio-full 8080:8080
   account in `studio-assetstore-auth` has the `architect` role (step 1). Check `kubectl logs`.
 - **`container has runAsNonRoot and image will run as root`** — you're on an older render; the operator
   now runs Studio as non-root UID `7474`. Rebuild/redeploy the operator.
+- **`http: proxy error: … x509: certificate signed by unknown authority`**, or an asset-store
+  `ConnectivityError … EOF` — Studio reached a TLS backing DB but didn't trust its (private) CA. For
+  in-cluster `neo4jRef` targets the operator now mounts the target's CA automatically (`SSL_CERT_DIR`);
+  if you still see this, redeploy the operator, and confirm the target's `trust.certificates.<policy>`
+  Secret exists (the operator skips targets whose CA Secret is absent). For an **external `uri`**
+  target, trust is yours: point `deployments[].uri` / `assetStore.uri` at a CA the pod already trusts,
+  or supply the CA via `config`/`configFromSecrets`.
 - **No license** — Studio logs `running unlicensed` and still starts (BDR-015 §3); add a license Secret
   (key `nes.license`) to remove the warning.
 - **Stuck `Pending` / reason `StudioProvisioning`** (only with `assetStore.provision`) — the operator

@@ -110,7 +110,14 @@ func (r *StudioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	if err := domainstudio.Apply(ctx, r.Client, r.Scheme, &studio, resolved); err != nil {
+	// Collect the CA anchors NES must trust to verify its in-cluster neo4jRef targets' TLS; render
+	// mounts them + sets SSL_CERT_DIR (BDR-015 backing-DB TLS trust revision).
+	caNeeds, caErr := domainstudio.CollectTrustCAs(ctx, r.Client, &studio)
+	if caErr != nil {
+		return ctrl.Result{}, caErr
+	}
+
+	if err := domainstudio.Apply(ctx, r.Client, r.Scheme, &studio, resolved, caNeeds); err != nil {
 		return ctrl.Result{}, err
 	}
 

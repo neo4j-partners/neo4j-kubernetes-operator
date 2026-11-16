@@ -34,6 +34,7 @@ import (
 
 	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
 	"github.com/neo4j/neo4j-kubernetes-operator/src/internal/render"
+	rendertrust "github.com/neo4j/neo4j-kubernetes-operator/src/internal/render/trust"
 )
 
 const (
@@ -62,6 +63,11 @@ const (
 	// A kubernetes.io/tls Secret stores the cert/key under these fixed keys.
 	tlsCertFile = "tls.crt"
 	tlsKeyFile  = "tls.key"
+
+	// caTrustVolume holds the backing-DB CA anchors the operator mounts so NES trusts an in-cluster
+	// neo4jRef target's TLS; caTrustMountPath is fed to Go's SSL_CERT_DIR (BDR-015 TLS-trust revision).
+	caTrustVolume    = "trusted-cas"
+	caTrustMountPath = "/certificates/trusted-cas"
 )
 
 // ResolvedDeployment is one served deployment with its resolved URIs (domain/studio fills these from
@@ -138,7 +144,7 @@ func replicas(s *neo4jv1.Neo4jStudio) int32 {
 // Deployment builds the stateless Studio Deployment (no PVC — ADR-018). All configuration is driven
 // through NES_* environment variables, which override the image's bundled config.yaml — the operator
 // does not mount a config file (the recommended approach for simple deployments per the NES docs).
-func Deployment(s *neo4jv1.Neo4jStudio, resolved []ResolvedDeployment) *appsv1.Deployment {
+func Deployment(s *neo4jv1.Neo4jStudio, resolved []ResolvedDeployment, caNeeds []rendertrust.SecretKeyNeed) *appsv1.Deployment {
 	reps := replicas(s)
 	port := Port(s)
 
@@ -159,6 +165,14 @@ func Deployment(s *neo4jv1.Neo4jStudio, resolved []ResolvedDeployment) *appsv1.D
 			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s.Spec.Connectivity.TLS.SecretRef.Name}},
 		})
 		mounts = append(mounts, corev1.VolumeMount{Name: tlsVolume, MountPath: tlsMountPath, ReadOnly: true})
+	}
+	// Backing-DB CA trust: project each in-cluster target's CA into one dir and point SSL_CERT_DIR at
+	// it, so NES (a Go client) trusts the private CA in addition to the public roots (BDR-015).
+	env := EnvVars(s, resolved)
+	if caVol := caTrustVolumeSource(caNeeds); caVol != nil {
+		volumes = append(volumes, corev1.Volume{Name: caTrustVolume, VolumeSource: corev1.VolumeSource{Projected: caVol}})
+		mounts = append(mounts, corev1.VolumeMount{Name: caTrustVolume, MountPath: caTrustMountPath, ReadOnly: true})
+		env = append(env, corev1.EnvVar{Name: "SSL_CERT_DIR", Value: caTrustMountPath})
 	}
 
 	return &appsv1.Deployment{
@@ -183,7 +197,7 @@ func Deployment(s *neo4jv1.Neo4jStudio, resolved []ResolvedDeployment) *appsv1.D
 						Image:           ImageRef(s),
 						ImagePullPolicy: pullPolicy(s),
 						Ports:           []corev1.ContainerPort{{Name: "http", ContainerPort: port}},
-						Env:             EnvVars(s, resolved),
+						Env:             env,
 						VolumeMounts:    mounts,
 						Resources:       withDefaultResources(s.Spec.Resources),
 						ReadinessProbe:  probe(s, port),
@@ -193,6 +207,36 @@ func Deployment(s *neo4jv1.Neo4jStudio, resolved []ResolvedDeployment) *appsv1.D
 			},
 		},
 	}
+}
+
+// caTrustVolumeSource builds a projected volume that collects every CA anchor into one directory,
+// each file named "<secret>-<key>" so anchors from different targets/Secrets never collide. Returns
+// nil when there are none. Deterministically ordered by secret then key so re-renders don't churn.
+func caTrustVolumeSource(needs []rendertrust.SecretKeyNeed) *corev1.ProjectedVolumeSource {
+	if len(needs) == 0 {
+		return nil
+	}
+	bySecret := map[string][]corev1.KeyToPath{}
+	var secrets []string
+	for _, n := range needs {
+		if _, ok := bySecret[n.SecretName]; !ok {
+			secrets = append(secrets, n.SecretName)
+		}
+		bySecret[n.SecretName] = append(bySecret[n.SecretName], corev1.KeyToPath{Key: n.Key, Path: n.SecretName + "-" + n.Key})
+	}
+	sort.Strings(secrets)
+	src := &corev1.ProjectedVolumeSource{}
+	for _, sec := range secrets {
+		items := bySecret[sec]
+		sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+		src.Sources = append(src.Sources, corev1.VolumeProjection{
+			Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: sec},
+				Items:                items,
+			},
+		})
+	}
+	return src
 }
 
 // deploymentID returns the alphanumeric NES deployment id for the i-th served deployment. NES requires
