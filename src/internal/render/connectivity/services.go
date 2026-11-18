@@ -54,6 +54,36 @@ func ClientService(ctx render.Context) *corev1.Service {
 	}
 }
 
+// PoolClientService builds a secondary pool's dedicated external client Service, or nil when the pool
+// declares no secondaries.<pool>.service (BDR-015 cluster GDS). The north-south ClientService fronts
+// only primaries, so a direct, non-routing Bolt connection pinned to the analytics/read pool — the
+// supported path for cluster GDS via Studio Direct mode — needs the pool's own Service. Mirrors
+// ClientService (client connectors, facade ports) but selects this pool's pods.
+func PoolClientService(ctx render.Context) *corev1.Service {
+	svc := ctx.PoolService()
+	if svc == nil {
+		return nil
+	}
+	svcType := corev1.ServiceTypeClusterIP
+	if svc.Type != "" {
+		svcType = corev1.ServiceType(svc.Type)
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        ctx.PoolClientServiceName(),
+			Namespace:   ctx.Namespace(),
+			Labels:      ctx.CommonLabels("connectivity"),
+			Annotations: svc.Annotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:                     svcType,
+			Selector:                 ctx.SelectorLabels(),
+			Ports:                    connectorServicePorts(ctx, ctx.ClientExpose(), true),
+			LoadBalancerSourceRanges: svc.LoadBalancerSourceRanges,
+		},
+	}
+}
+
 // clientSessionAffinity resolves the client Service stickiness (BDR-016). An explicit
 // spec.connectivity.service.sessionAffinity wins; unset defaults to ClientIP for a cluster (required so
 // HTTP Query API explicit transactions stay pinned to one member) and None for a standalone. The render

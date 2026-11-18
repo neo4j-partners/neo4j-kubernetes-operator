@@ -116,6 +116,29 @@ func TestCertificateBoltSANsCoverClientAndMembers(t *testing.T) {
 	}
 }
 
+// An externally-exposed secondary pool (secondaries.<pool>.service.publicHost) is dialed over bolt+s
+// at that name, so it must be a caller-facing (bolt/https) SAN — but never on the cluster cert (BDR-015).
+func TestCertificatePoolPublicHostIsCallerFacingSAN(t *testing.T) {
+	neo4j := clusterWithCertManager()
+	neo4j.Spec.Topology.Secondaries = &neo4jv1.SecondariesSpec{
+		Analytics: &neo4jv1.SecondaryPoolSpec{
+			Members: 1,
+			Service: &neo4jv1.PoolServiceSpec{Type: "LoadBalancer", PublicHost: "gds.example.com"},
+		},
+	}
+	certs := Certificates(neo4j, nil)
+	byPolicy := map[string]*unstructured.Unstructured{}
+	for _, pc := range certs {
+		byPolicy[pc.Policy] = pc.Object
+	}
+	if !hasString(nestedSlice(t, byPolicy["bolt"], "spec", "dnsNames"), "gds.example.com") {
+		t.Fatalf("pool publicHost must be a bolt SAN, got %v", nestedSlice(t, byPolicy["bolt"], "spec", "dnsNames"))
+	}
+	if hasString(nestedSlice(t, byPolicy["cluster"], "spec", "dnsNames"), "gds.example.com") {
+		t.Fatal("pool publicHost must never land on the cluster (member-discovery) certificate")
+	}
+}
+
 func TestCertManagerMountsAndSecretKeys(t *testing.T) {
 	neo4j := clusterWithCertManager()
 

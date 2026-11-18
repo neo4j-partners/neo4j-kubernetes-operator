@@ -134,8 +134,25 @@ func dnsNamesFor(neo4j *neo4jv1.Neo4j, def tlsPolicy, spec *neo4jv1.TLSPolicySpe
 				names.add(h)
 			}
 		}
+		// A secondary pool exposed externally (secondaries.<pool>.service.publicHost) is dialed over
+		// bolt+s at that name — it must be a SAN or verification fails (BDR-015 cluster GDS).
+		for _, h := range poolPublicHosts(neo4j) {
+			names.add(h)
+		}
 	}
 	return names.out
+}
+
+// poolPublicHosts lists the external DNS names of any externally-exposed secondary pools
+// (secondaries.{analytics,read}.service.publicHost). These are caller-facing Bolt/HTTPS SANs.
+func poolPublicHosts(neo4j *neo4jv1.Neo4j) []string {
+	hosts := &stringSet{seen: map[string]struct{}{}}
+	for _, pool := range []render.PoolID{render.PoolAnalytics, render.PoolRead} {
+		if svc := render.NewContext(neo4j, pool).PoolService(); svc != nil {
+			hosts.add(svc.PublicHost)
+		}
+	}
+	return hosts.out
 }
 
 // inClusterNames enumerates the operator-derived DNS names for a policy. Members are

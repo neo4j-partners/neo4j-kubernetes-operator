@@ -127,7 +127,7 @@ type StudioNeo4jRef struct {
 // StudioDeployment is one Neo4j deployment that Studio serves (BDR-015 §2 — one-to-many). Exactly
 // one of neo4jRef (in-cluster, resolved by the operator) or uri (external, used verbatim).
 // +kubebuilder:validation:XValidation:rule="has(self.neo4jRef) != has(self.uri)",message="set deployments[].neo4jRef (in-cluster) or deployments[].uri (external), not both"
-// +kubebuilder:validation:XValidation:rule="!(has(self.neo4jRef) && self.mode == 'Direct') || has(self.publicUri)",message="deployments[].mode Direct against an in-cluster neo4jRef needs a browser-reachable publicUri — the in-cluster Bolt Service DNS the operator would derive is not reachable from a browser (use ReverseProxy, or set publicUri)"
+// +kubebuilder:validation:XValidation:rule="!(has(self.neo4jRef) && self.mode == 'Direct') || has(self.publicUri) || (has(self.neo4jRef.pool) && (self.neo4jRef.pool == 'analytics' || self.neo4jRef.pool == 'read'))",message="deployments[].mode Direct against an in-cluster neo4jRef needs a browser-reachable publicUri — the in-cluster Bolt Service DNS the operator would derive is not reachable from a browser (use ReverseProxy, set publicUri, or target an analytics/read pool exposed via secondaries.<pool>.service.publicHost)"
 type StudioDeployment struct {
 	// Name is the display name of this deployment in Studio.
 	// +kubebuilder:validation:Required

@@ -339,6 +339,75 @@ fallback only when no CA is resolvable.
 
 ---
 
+## Cluster GDS via Direct-to-pool revision (2026-11-18)
+
+The trial moved on to **Graph Data Science on a cluster** through Studio and hit a wall that no
+Studio-side setting fixes. The diagnosis, and why it forces a specific shape, is worth recording
+because it is counter-intuitive.
+
+### Why `ReverseProxy` cannot serve cluster GDS
+
+GDS procedures are opened **only on the analytics pool** ([BDR-004](../neo4j/004-neo4j-plugin-topology.md)),
+the GDS graph catalog is **server-local** (a projected graph lives in one server's memory), and the
+analytics members run as read-only **secondaries**. A `ReverseProxy` deployment reaches the DBMS over
+the **HTTP Query API**, which defaults to **write** access mode and, on a cluster, routes writes to the
+leader. So a GDS call through `ReverseProxy` is issued as a write, lands on (or is routed toward) a
+**primary that has no GDS**, and fails — either `There is no procedure … gds.*` or
+`Neo.ClientError.Cluster.NotALeader / 50N42 … server-side routing is disabled`. The Query API exposes a
+per-request `accessMode: Read`, but **NES never sets it** (there is no such per-deployment knob in the
+[NES config reference](https://neo4j.com/docs/enterprise-studio/current/configuration-reference/)), so
+this is not fixable by operator config. `ReverseProxy` is **structurally** unable to serve cluster GDS.
+
+### The supported shape (matches Neo4j's own guidance)
+
+The [Enterprise Studio GDS-cluster example](https://neo4j.com/docs/enterprise-studio/current/configuration-examples/)
+says it directly: *"queries should be directed to a secondary … add a deployment entry that points to
+the secondary's address"*, over Bolt, and *"to enable data ingestion and database writes, add the
+write-enabled primary as a separate deployment."* That is `mode: Direct` against the analytics pool (a
+**non-routing** Bolt connection pinned to the GDS server), with an optional second deployment against
+the primaries for write-back/ingestion. Cluster GDS via Studio therefore **requires `Direct` mode**;
+this is a Neo4j topology fact, not a Studio limitation.
+
+### Decision
+
+1. **A secondary pool can be exposed externally — `secondaries.<pool>.service`.** A new optional block
+   on `Neo4j`'s secondary pools (`PoolServiceSpec`: `type`, `annotations`, `loadBalancerSourceRanges`,
+   `publicHost`) renders that pool's **own** external client Service. The north-south client Service
+   fronts only primaries ([BDR-007](../neo4j/006-service-exposure-connectivity.md)), so without this the
+   analytics members have no externally-reachable Bolt endpoint. Exposure lives on `Neo4j` (it owns its
+   pods, Services, and certificate), not on `Neo4jStudio`.
+2. **`publicHost` is added to the Bolt (and HTTPS) certificate SANs automatically.** `bolt+s` verifies
+   the dialed hostname, so the external name must be in the cert — the operator folds `publicHost` into
+   the SANs it already manages, with no hand-editing of `trust`.
+3. **Studio derives a non-routing `bolt+s` `publicUri` for a pool-targeted Direct deployment.** When a
+   `Direct` deployment's `neo4jRef.pool` resolves to a pool that declares `service.publicHost`, the
+   operator emits `bolt+s://<publicHost>:<boltPort>` (`bolt` when the target has no Bolt TLS). It is
+   **non-routing** on purpose: `neo4j://` routing hands a browser the cluster's *internal* advertised
+   addresses, which are unreachable from outside — so the official example's `neo4j://` becomes `bolt+s`
+   in Kubernetes. This also removes the need to hand-write `publicUri` for the common case. The §usability
+   `Direct` + `neo4jRef` ⇒ `publicUri` admission rule is relaxed to also accept a pool target (the
+   operator supplies the address); a pool with neither `publicHost` nor an explicit `publicUri` fails at
+   reconcile with a clear resolve error, not silently.
+4. **The analytics deployment is read/compute; write-back needs a primary.** Documented, mirroring the
+   Neo4j example's two-deployment shape: `gds.*` list/stream/algorithms work on the secondary; data
+   loads and `gds.*.write*` need a second `Direct` deployment targeting the primaries (no `pool`).
+
+### The one inherent boundary
+
+The browser must **trust the CA** that signs the Bolt certificate — plain PKI, not something any
+operator can automate. It is solved by issuer choice: an enterprise CA already trusted by managed
+devices, or a publicly-trusted certificate for the external name. (A single Bolt-policy cert cannot
+carry both `*.svc.cluster.local` *and* a public-CA-signed public DNS SAN, so a publicly-trusted external
+endpoint is a separate TLS-terminating front — an advanced topology, not the default.) This is the
+honest limit of the earlier "no specificities" wish: a direct Bolt endpoint inherently needs
+`bolt+s` + a SAN match + browser CA trust.
+
+`ponytail:` exposure is modelled only for the fixed secondary pools (`analytics`, `read`) that can run
+GDS/read workloads; the ceiling is "no arbitrary per-pool service topology", upgrade path is a general
+per-pool connectivity block if a third pool kind ever appears. Execution: [ADR-018](../../architecture/018-enterprise-studio.md).
+
+---
+
 ## References
 
 - [BDR-001](../neo4j/001-single-neo4j-crd.md) — single workload CRD, satellites via `neo4jRef`

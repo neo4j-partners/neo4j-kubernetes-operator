@@ -221,6 +221,62 @@ func TestAdminServiceCreatedWithBackupAndMetrics(t *testing.T) {
 	}
 }
 
+func TestPoolClientService(t *testing.T) {
+	withAnalyticsService := func(svc *neo4jv1.PoolServiceSpec) *neo4jv1.Neo4j {
+		return &neo4jv1.Neo4j{
+			ObjectMeta: metav1.ObjectMeta{Name: "cl", Namespace: "default"},
+			Spec: neo4jv1.Neo4jSpec{
+				Topology: neo4jv1.TopologySpec{
+					Mode:      neo4jv1.TopologyModeCluster,
+					Primaries: &neo4jv1.PrimariesSpec{Members: 3},
+					Secondaries: &neo4jv1.SecondariesSpec{
+						Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1, Service: svc},
+					},
+				},
+			},
+		}
+	}
+
+	// No service block → no pool Service rendered.
+	if got := PoolClientService(render.ContextForPool(withAnalyticsService(nil), render.PoolAnalytics)); got != nil {
+		t.Fatalf("pool without service should render nil, got %#v", got)
+	}
+
+	// With a LoadBalancer service block → a pool-scoped external client Service.
+	neo4j := withAnalyticsService(&neo4jv1.PoolServiceSpec{
+		Type:                     neo4jv1.ServiceType("LoadBalancer"),
+		LoadBalancerSourceRanges: []string{"10.0.0.0/8"},
+		Annotations:              map[string]string{"external-dns.alpha.kubernetes.io/hostname": "gds.example.com"},
+		PublicHost:               "gds.example.com",
+	})
+	svc := PoolClientService(render.ContextForPool(neo4j, render.PoolAnalytics))
+	if svc == nil {
+		t.Fatal("expected a pool client Service")
+	}
+	if svc.Name != "cl-analytics-client" {
+		t.Fatalf("pool client Service name = %q, want cl-analytics-client", svc.Name)
+	}
+	if svc.Spec.Type != corev1.ServiceTypeLoadBalancer {
+		t.Fatalf("type = %s, want LoadBalancer", svc.Spec.Type)
+	}
+	if svc.Spec.Selector[render.LabelPool] != string(render.PoolAnalytics) {
+		t.Fatalf("selector must pin to the analytics pool: %#v", svc.Spec.Selector)
+	}
+	if len(svc.Spec.LoadBalancerSourceRanges) != 1 || svc.Spec.LoadBalancerSourceRanges[0] != "10.0.0.0/8" {
+		t.Fatalf("source ranges = %#v", svc.Spec.LoadBalancerSourceRanges)
+	}
+	if svc.Annotations["external-dns.alpha.kubernetes.io/hostname"] != "gds.example.com" {
+		t.Fatalf("annotations = %#v", svc.Annotations)
+	}
+	byName := map[string]corev1.ServicePort{}
+	for _, p := range svc.Spec.Ports {
+		byName[p.Name] = p
+	}
+	if byName["tcp-bolt"].Port != 7687 {
+		t.Fatalf("bolt port = %#v", byName["tcp-bolt"])
+	}
+}
+
 func TestAdminServiceForClusterMode(t *testing.T) {
 	neo4j := &neo4jv1.Neo4j{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},

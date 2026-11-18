@@ -83,6 +83,31 @@ func (c Context) ClientServiceName() string { return c.Neo4j.Name }
 // HeadlessServiceName is the StatefulSet headless Service.
 func (c Context) HeadlessServiceName() string { return c.STSName() }
 
+// PoolClientServiceName is the dedicated external client Service for a secondary pool
+// (secondaries.<pool>.service — BDR-015 cluster GDS). Distinct from the headless Service (STSName)
+// and the north-south client Service (ClientServiceName, primaries only).
+func (c Context) PoolClientServiceName() string { return c.STSName() + "-client" }
+
+// PoolService returns the secondary pool's optional external Service spec, or nil when the pool has
+// none (or this is not an analytics/read pool). Drives PoolClientService render and the Bolt SANs.
+func (c Context) PoolService() *neo4jv1.PoolServiceSpec {
+	sec := c.Neo4j.Spec.Topology.Secondaries
+	if sec == nil {
+		return nil
+	}
+	switch c.Pool {
+	case PoolAnalytics:
+		if sec.Analytics != nil {
+			return sec.Analytics.Service
+		}
+	case PoolRead:
+		if sec.Read != nil {
+			return sec.Read.Service
+		}
+	}
+	return nil
+}
+
 // ConfigMapName is the neo4j.conf ConfigMap for this pool.
 func (c Context) ConfigMapName() string {
 	if c.Pool == PoolServer {

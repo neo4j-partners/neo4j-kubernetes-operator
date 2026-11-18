@@ -113,6 +113,7 @@ kubectl port-forward svc/studio-full 8080:8080
 | [`02-full.yaml`](02-full.yaml) | **Self-contained, runnable** — bundles the Secrets, then an in-cluster `ReverseProxy` deployment, BYO asset store, sign-in toggles, role mapping, HTTPS (`server.tls`), tool toggles, replicas, Service, and both `config` / `configFromSecrets` passthroughs |
 | [`03-provisioned.yaml`](03-provisioned.yaml) | **Operator-provisioned asset store** — `assetStore.neo4jRef` + `provision: true`; the operator CREATEs the database, the architect account, and the grant on the in-cluster Neo4j (no BYO pre-create) |
 | [`04-aks-letsencrypt-tls.yaml`](04-aks-letsencrypt-tls.yaml) | **AKS, public HTTPS** — `connectivity.ingress` (nginx) + a cert-manager Let's Encrypt `ClusterIssuer`; TLS terminated at the Ingress with a real, auto-renewed certificate, asset store provisioned. Needs ingress-nginx, cert-manager, and a public DNS record (see the file header) |
+| [`05-cluster-gds.yaml`](05-cluster-gds.yaml) | **Cluster GDS** — exposes the analytics pool (`secondaries.analytics.service.publicHost`) and serves it via a `Direct` deployment; the operator derives a non-routing `bolt+s://<publicHost>:7687` publicUri and adds the name to the Bolt SANs. A second `ReverseProxy` deployment at the primaries handles ingestion/write-back (BDR-015 cluster-GDS revision) |
 
 ## Troubleshooting
 
@@ -130,6 +131,15 @@ kubectl port-forward svc/studio-full 8080:8080
   or supply the CA via `config`/`configFromSecrets`.
 - **No license** — Studio logs `running unlicensed` and still starts (BDR-015 §3); add a license Secret
   (key `nes.license`) to remove the warning.
+- **GDS in a cluster: `no procedure gds.*` / `50N42 … server-side routing is disabled`** — a `ReverseProxy`
+  deployment cannot serve cluster GDS (the HTTP Query API runs write-mode and lands on a GDS-less primary).
+  Use a `Direct` deployment targeting `neo4jRef.pool: analytics` and expose that pool with
+  `secondaries.analytics.service.publicHost` on the `Neo4j` ([`05-cluster-gds.yaml`](05-cluster-gds.yaml)).
+  Also ensure the queried database is allocated to the analytics server (`ALTER DATABASE <db> SET TOPOLOGY
+  … SECONDARIES` when it predates the pool), and that the browser trusts the Bolt cert's CA.
+- **Direct deployment resolve error: pool has no `service.publicHost`** — a `Direct` deployment against a
+  pool needs a browser-reachable address; set `secondaries.<pool>.service.publicHost` (the operator then
+  derives `bolt+s://…`), set an explicit `deployments[].publicUri`, or use `ReverseProxy`.
 - **Stuck `Pending` / reason `StudioProvisioning`** (only with `assetStore.provision`) — the operator
   cannot open an admin Bolt session to the `neo4jRef` target yet. Confirm the target is `Available` and
   that it allows admin Bolt (NEO-004): set `spec.trust.certificates.bolt` (verified TLS) or

@@ -1,0 +1,109 @@
+# Purpose: run Graph Data Science (GDS) on a Neo4j cluster through Enterprise Studio, the supported way
+#   (BDR-015 cluster-GDS revision). GDS lives only on the analytics pool, its graph catalog is
+#   server-local, and the analytics members are read-only secondaries — so a GDS call must use a DIRECT,
+#   non-routing Bolt connection pinned to the analytics pool. Neo4j routing / the HTTP Query API would
+#   land it on a primary that has no GDS. This mirrors Neo4j's own "GDS in a cluster" guidance: a Studio
+#   deployment in Direct mode pointing at the secondary, plus a second deployment at the primaries for
+#   data loads and write-back.
+#
+# What this demonstrates:
+#   - secondaries.analytics.service → the operator renders the analytics pool's OWN external Bolt Service
+#     (the north-south client Service fronts only primaries), with publicHost added to the Bolt cert SANs,
+#   - a Direct Studio deployment targeting pool: analytics → the operator derives a non-routing
+#     bolt+s://<publicHost>:7687 publicUri automatically (no hand-written publicUri, no trust editing),
+#   - a second ReverseProxy deployment at the primaries for ingestion / gds.*.write* (the analytics pool
+#     is read/compute-only).
+#
+# Prerequisites:
+#   1. This operator installed; cert-manager installed (the Bolt cert is issued by a ClusterIssuer).
+#   2. A ClusterIssuer named corp-ca (any CA your clients trust — see the TLS note at the bottom).
+#   3. A DNS record for gds.example.com pointing at the analytics Service's external address once the
+#      LoadBalancer is provisioned (or run external-dns; the annotation below is a hint for it). A
+#      certificate cannot be issued for a raw IP, so a stable DNS name is required.
+#   4. Each end user's browser must TRUST the CA that signs the Bolt certificate (the one unavoidable
+#      manual step — see the TLS note at the bottom).
+#
+# Apply:   kubectl apply -f examples/studio/05-cluster-gds.yaml
+# Then in Studio pick the "GDS (analytics)" deployment and run:  CALL gds.graph.list()
+---
+apiVersion: neo4j.com/v1
+kind: Neo4j
+metadata:
+  name: cl
+spec:
+  edition: enterprise
+  topology:
+    mode: Cluster
+    primaries:
+      members: 3
+    secondaries:
+      analytics:
+        members: 1
+        plugins: [gds]                   # GDS opens on the analytics pool (also implicit — it is its purpose)
+        service:                         # expose THIS pool's Bolt endpoint for a direct GDS client
+          type: LoadBalancer
+          loadBalancerSourceRanges:      # required for LoadBalancer (ADD-08) — restrict to your clients
+            - 0.0.0.0/0                  # REPLACE_ME with your office/VPN CIDRs
+          annotations:
+            external-dns.alpha.kubernetes.io/hostname: gds.example.com
+          publicHost: gds.example.com    # REPLACE_ME — the external DNS clients dial; added to Bolt SANs
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: 10Gi
+  connectivity:
+    listeners:
+      bolt: 7687
+  trust:
+    enabled: true
+    certManager:
+      enabled: true
+      issuerRef:
+        name: corp-ca                    # any CA your clients trust (see the TLS note)
+      dnsNames: [gds.example.com]        # also folded into the Bolt SANs (publicHost is added automatically too)
+    certificates:
+      bolt:
+        secretName: cl-bolt-tls
+      https:
+        secretName: cl-https-tls
+---
+apiVersion: neo4j.com/v1
+kind: Neo4jStudio
+metadata:
+  name: studio-gds
+spec:
+  deployments:
+    # GDS reads/compute — Direct to the analytics pool. No publicUri needed: the operator derives
+    # bolt+s://gds.example.com:7687 (non-routing) from secondaries.analytics.service.publicHost above.
+    - name: GDS (analytics)
+      neo4jRef:
+        name: cl
+        pool: analytics
+      mode: Direct
+    # Data loads + gds.*.write* — the analytics pool is read-only, so write-back goes to the primaries.
+    - name: cl (ingest / write)
+      neo4jRef:
+        name: cl                         # default north-south client Service (primaries); mode ReverseProxy
+  assetStore:
+    neo4jRef:
+      name: cl
+    provision: true                      # operator CREATEs the asset DB + architect account + grant
+    database: studio-assets
+    auth:
+      secretRef:
+        name: studio-gds-assetstore-auth # omitted Secret → operator generates it (user "studio")
+  connectivity:
+    service:
+      type: ClusterIP
+#
+# TLS note (the one piece no operator can automate): a Direct Bolt client uses bolt+s, which VERIFIES
+# the certificate, so each end user's browser must trust the CA that signs cl-bolt-tls. This is standard
+# PKI, solved by issuer choice:
+#   - Enterprise: issue from a corporate CA already trusted by managed devices (corp-ca above).
+#   - Public: a publicly-trusted cert for gds.example.com. Note a single Bolt-policy cert cannot carry
+#     both *.svc.cluster.local AND a public-CA-signed public DNS SAN, so a publicly-trusted external
+#     endpoint needs a separate TLS-terminating front for the Bolt port (an advanced topology).
+# The operator automates the Service, the SAN, and the bolt+s publicUri; trusting the CA stays a
+# deliberate PKI decision.

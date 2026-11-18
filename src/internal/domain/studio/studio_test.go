@@ -163,6 +163,50 @@ func TestResolveDeployments(t *testing.T) {
 		}
 	})
 
+	t.Run("Direct to an exposed analytics pool derives a non-routing bolt+s publicUri", func(t *testing.T) {
+		// Cluster GDS: pool exposed via secondaries.analytics.service.publicHost + bolt TLS → the browser
+		// gets bolt+s://<publicHost>:7687 (non-routing, pinned to analytics), not an internal/routing URI.
+		n := neo4j("cl", neo4jv1.EditionEnterprise)
+		n.Spec.Topology = neo4jv1.TopologySpec{
+			Mode:      neo4jv1.TopologyModeCluster,
+			Primaries: &neo4jv1.PrimariesSpec{Members: 3},
+			Secondaries: &neo4jv1.SecondariesSpec{Analytics: &neo4jv1.SecondaryPoolSpec{
+				Members: 1,
+				Service: &neo4jv1.PoolServiceSpec{Type: "LoadBalancer", PublicHost: "gds.example.com"},
+			}},
+		}
+		// Bolt TLS on → bolt+s (verified); the operator adds publicHost to the Bolt SANs.
+		n.Spec.Trust = &neo4jv1.TrustSpec{
+			Enabled:      true,
+			CertManager:  &neo4jv1.CertManagerSpec{Enabled: true, IssuerRef: &neo4jv1.IssuerRef{Name: "corp-ca"}},
+			Certificates: &neo4jv1.TrustCertificatesSpec{Bolt: &neo4jv1.TLSPolicySpec{SecretName: "cl-bolt-tls"}},
+		}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "gds", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "cl", Pool: "analytics"}, Mode: neo4jv1.StudioModeDirect})
+		got, rerr := ResolveDeployments(context.Background(), c, cr)
+		if rerr != nil {
+			t.Fatalf("unexpected error: %v", rerr)
+		}
+		if got[0].PublicURI != "bolt+s://gds.example.com:7687" {
+			t.Fatalf("Direct pool PublicURI = %q, want bolt+s://gds.example.com:7687", got[0].PublicURI)
+		}
+	})
+
+	t.Run("Direct to a pool with no publicHost and no publicUri fails fast", func(t *testing.T) {
+		n := neo4j("cl", neo4jv1.EditionEnterprise)
+		n.Spec.Topology = neo4jv1.TopologySpec{
+			Mode:        neo4jv1.TopologyModeCluster,
+			Primaries:   &neo4jv1.PrimariesSpec{Members: 3},
+			Secondaries: &neo4jv1.SecondariesSpec{Analytics: &neo4jv1.SecondaryPoolSpec{Members: 1}},
+		}
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(n).Build()
+		cr := studioCR(neo4jv1.StudioDeployment{Name: "gds", Neo4jRef: &neo4jv1.StudioNeo4jRef{Name: "cl", Pool: "analytics"}, Mode: neo4jv1.StudioModeDirect})
+		_, rerr := ResolveDeployments(context.Background(), c, cr)
+		if rerr == nil {
+			t.Fatal("want a resolve error for a Direct pool target without publicHost/publicUri, got nil")
+		}
+	})
+
 	t.Run("neo4jRef.pool on an unconfigured pool fails fast", func(t *testing.T) {
 		n := neo4j("cl", neo4jv1.EditionEnterprise)
 		n.Spec.Topology = neo4jv1.TopologySpec{Mode: neo4jv1.TopologyModeCluster, Primaries: &neo4jv1.PrimariesSpec{Members: 3}}

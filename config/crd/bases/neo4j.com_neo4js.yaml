@@ -20175,6 +20175,51 @@ spec:
                                   More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                 type: object
                             type: object
+                          service:
+                            description: |-
+                              Service optionally exposes this pool's own client (Bolt) endpoint on a dedicated Service. The
+                              north-south client Service fronts only primaries, so a direct, non-routing connection to this
+                              pool (the supported path for Graph Data Science on the analytics pool, which Neo4j routing cannot
+                              deliver — BDR-015) needs the pool's own Service. Omit to keep the pool reachable in-cluster only.
+                            properties:
+                              annotations:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              loadBalancerSourceRanges:
+                                description: LoadBalancerSourceRanges restricts client
+                                  access when type is LoadBalancer (ADD-08; required
+                                  by CEL).
+                                items:
+                                  type: string
+                                type: array
+                              publicHost:
+                                description: |-
+                                  PublicHost is the external DNS name clients use to reach this pool's Bolt endpoint. The operator
+                                  adds it to the Bolt (and HTTPS) certificate SANs so bolt+s verifies, and emits it as the Studio
+                                  Direct publicUri (bolt+s://<publicHost>:<boltPort>). A stable DNS name the user owns (point it at
+                                  the Service's external address, e.g. via external-dns); a certificate cannot be issued for a
+                                  raw IP. Omit when the pool Service is internal (ClusterIP) only.
+                                type: string
+                              type:
+                                allOf:
+                                - enum:
+                                  - ClusterIP
+                                  - LoadBalancer
+                                  - NodePort
+                                - enum:
+                                  - ClusterIP
+                                  - LoadBalancer
+                                  - NodePort
+                                default: ClusterIP
+                                description: ServiceType for client connectivity service.
+                                type: string
+                            type: object
+                            x-kubernetes-validations:
+                            - message: secondaries.<pool>.service.loadBalancerSourceRanges
+                                is required when service type is LoadBalancer
+                              rule: self.type != 'LoadBalancer' || (has(self.loadBalancerSourceRanges)
+                                && size(self.loadBalancerSourceRanges) > 0)
                         type: object
                       read:
                         description: SecondaryPoolSpec configures analytics or read
@@ -20257,6 +20302,51 @@ spec:
                                   More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                 type: object
                             type: object
+                          service:
+                            description: |-
+                              Service optionally exposes this pool's own client (Bolt) endpoint on a dedicated Service. The
+                              north-south client Service fronts only primaries, so a direct, non-routing connection to this
+                              pool (the supported path for Graph Data Science on the analytics pool, which Neo4j routing cannot
+                              deliver — BDR-015) needs the pool's own Service. Omit to keep the pool reachable in-cluster only.
+                            properties:
+                              annotations:
+                                additionalProperties:
+                                  type: string
+                                type: object
+                              loadBalancerSourceRanges:
+                                description: LoadBalancerSourceRanges restricts client
+                                  access when type is LoadBalancer (ADD-08; required
+                                  by CEL).
+                                items:
+                                  type: string
+                                type: array
+                              publicHost:
+                                description: |-
+                                  PublicHost is the external DNS name clients use to reach this pool's Bolt endpoint. The operator
+                                  adds it to the Bolt (and HTTPS) certificate SANs so bolt+s verifies, and emits it as the Studio
+                                  Direct publicUri (bolt+s://<publicHost>:<boltPort>). A stable DNS name the user owns (point it at
+                                  the Service's external address, e.g. via external-dns); a certificate cannot be issued for a
+                                  raw IP. Omit when the pool Service is internal (ClusterIP) only.
+                                type: string
+                              type:
+                                allOf:
+                                - enum:
+                                  - ClusterIP
+                                  - LoadBalancer
+                                  - NodePort
+                                - enum:
+                                  - ClusterIP
+                                  - LoadBalancer
+                                  - NodePort
+                                default: ClusterIP
+                                description: ServiceType for client connectivity service.
+                                type: string
+                            type: object
+                            x-kubernetes-validations:
+                            - message: secondaries.<pool>.service.loadBalancerSourceRanges
+                                is required when service type is LoadBalancer
+                              rule: self.type != 'LoadBalancer' || (has(self.loadBalancerSourceRanges)
+                                && size(self.loadBalancerSourceRanges) > 0)
                         type: object
                     type: object
                 required:

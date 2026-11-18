@@ -42,6 +42,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 			return shared.Failed(err)
 		}
 
+		// Optional external client Service for a secondary pool (secondaries.<pool>.service) — the
+		// direct, non-routing Bolt endpoint cluster GDS via Studio Direct mode needs (BDR-015).
+		if poolSvc := renderconn.PoolClientService(ctxRender); poolSvc != nil {
+			log.Info("reconciling service", "pool", string(pool), "role", "pool-client", "name", poolSvc.Name, "type", poolSvc.Spec.Type)
+			svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: poolSvc.Name, Namespace: poolSvc.Namespace}}
+			if err := shared.Apply(ctx, r.Client, r.Scheme, neo4j, svc, func() error {
+				svc.Labels = poolSvc.Labels
+				svc.Annotations = poolSvc.Annotations
+				preserveServiceServerFields(&svc.Spec, &poolSvc.Spec)
+				svc.Spec = poolSvc.Spec
+				return nil
+			}); err != nil {
+				return shared.Failed(err)
+			}
+		}
+
 		if render.IsClusterMode(neo4j) {
 			for _, memberSvc := range renderconn.ClusterMemberServices(ctxRender) {
 				log.Info("reconciling service", "pool", string(pool), "role", "internals", "name", memberSvc.Name)

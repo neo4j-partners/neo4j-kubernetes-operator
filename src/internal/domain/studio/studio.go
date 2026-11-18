@@ -246,10 +246,30 @@ func ResolveDeployments(ctx context.Context, c client.Client, s *neo4jv1.Neo4jSt
 		host, useFacade := backingHost(&neo4j, d.Neo4jRef.Pool)
 		rd := renderstudio.ResolvedDeployment{Name: d.Name, URI: httpURI(rc, host, useFacade), Mode: string(mode)}
 		if mode == neo4jv1.StudioModeDirect {
-			// Browser-reachable Bolt: explicit override wins, else the in-cluster Service DNS.
+			// Browser-reachable Bolt. An explicit publicUri always wins. Otherwise, for a pool target
+			// exposed via secondaries.<pool>.service.publicHost, derive a NON-routing bolt(+s):// URI to
+			// that external name — non-routing because a routing (neo4j://) table hands a browser the
+			// cluster's internal advertised addresses it cannot reach (BDR-015 cluster GDS). bolt+s when
+			// the target runs Bolt TLS (NES rejects bolt+ssc; bolt+s needs the publicHost SAN the operator
+			// adds + the browser trusting the CA). No publicHost and no publicUri → unreachable, so fail.
 			rd.PublicURI = d.PublicURI
 			if rd.PublicURI == "" {
-				rd.PublicURI = fmt.Sprintf("bolt://%s:%d", host, rc.BoltPort())
+				pool := d.Neo4jRef.Pool
+				switch {
+				case poolPublicHost(&neo4j, pool) != "":
+					rd.PublicURI = fmt.Sprintf("%s://%s:%d", directBoltScheme(&neo4j), poolPublicHost(&neo4j, pool), rc.BoltPort())
+				case pool == string(render.PoolAnalytics) || pool == string(render.PoolRead):
+					// A pool target that declares no service.publicHost has nothing browser-reachable to
+					// emit — admission lets a pool Direct through without publicUri (the operator is meant
+					// to derive it), so guard it here instead of rendering an unreachable address.
+					return nil, &ResolveError{Deployment: d.Name, Kind: ResolveTargetNotFound,
+						Detail: fmt.Sprintf("deployment %q: Direct mode against pool %q needs a browser-reachable address — expose it with secondaries.%s.service.publicHost (the operator then derives bolt+s://…), set deployments[].publicUri, or use ReverseProxy", d.Name, pool, pool)}
+				default:
+					// Non-pool in-cluster Direct: admission (CEL) requires an explicit publicUri, so this
+					// in-cluster Bolt DNS fallback is only reachable from in-code callers that bypass it.
+					// TLS-aware so it is never a plaintext bolt:// against a REQUIRED-TLS listener.
+					rd.PublicURI = fmt.Sprintf("%s://%s:%d", directBoltScheme(&neo4j), host, rc.BoltPort())
+				}
 			}
 		}
 		out = append(out, rd)
@@ -278,6 +298,31 @@ func backingHost(neo4j *neo4jv1.Neo4j, pool string) (host string, useFacade bool
 		}
 	}
 	return host, useFacade
+}
+
+// poolPublicHost returns the external DNS name a cluster pool is exposed at
+// (secondaries.<pool>.service.publicHost), or "" when the pool is not externally exposed (or the
+// target is a standalone, or pool is primary/unset). Drives the Direct-mode bolt+s publicUri.
+func poolPublicHost(neo4j *neo4jv1.Neo4j, pool string) string {
+	if !render.IsClusterMode(neo4j) {
+		return ""
+	}
+	svc := render.NewContext(neo4j, render.PoolID(pool)).PoolService()
+	if svc == nil {
+		return ""
+	}
+	return svc.PublicHost
+}
+
+// directBoltScheme is the non-routing Bolt scheme for a Direct-mode publicUri: bolt+s when the target
+// runs Bolt TLS (REQUIRED-TLS listener), else plaintext bolt. Never bolt+ssc — NES rejects it, and
+// bolt+s is the only non-routing TLS scheme NES accepts (the publicHost SAN + browser CA trust make it
+// verify). Routing schemes (neo4j*) are wrong for a browser outside the cluster (BDR-015).
+func directBoltScheme(neo4j *neo4jv1.Neo4j) string {
+	if rendertrust.BoltTLSEnabled(neo4j) {
+		return "bolt+s"
+	}
+	return "bolt"
 }
 
 // httpURI builds the HTTP(S) endpoint for a resolved host. It follows whatever the Neo4j publishes:

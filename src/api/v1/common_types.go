@@ -663,6 +663,31 @@ type SecondaryPoolSpec struct {
 	// global block entirely; unset requests/limits are filled from the operator defaults (NEO-014).
 	// Leave unset to inherit spec.resources.
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	// Service optionally exposes this pool's own client (Bolt) endpoint on a dedicated Service. The
+	// north-south client Service fronts only primaries, so a direct, non-routing connection to this
+	// pool (the supported path for Graph Data Science on the analytics pool, which Neo4j routing cannot
+	// deliver — BDR-015) needs the pool's own Service. Omit to keep the pool reachable in-cluster only.
+	Service *PoolServiceSpec `json:"service,omitempty"`
+}
+
+// PoolServiceSpec exposes a secondary pool's client endpoints on a dedicated Kubernetes Service, so a
+// client can open a direct (non-routing) Bolt connection pinned to that pool — required for cluster GDS
+// via Enterprise Studio Direct mode (BDR-015). publicHost is the external DNS clients dial; the operator
+// adds it to the Bolt/HTTPS certificate SANs and emits it as the Studio Direct publicUri.
+// +kubebuilder:validation:XValidation:rule="self.type != 'LoadBalancer' || (has(self.loadBalancerSourceRanges) && size(self.loadBalancerSourceRanges) > 0)",message="secondaries.<pool>.service.loadBalancerSourceRanges is required when service type is LoadBalancer"
+type PoolServiceSpec struct {
+	// +kubebuilder:validation:Enum=ClusterIP;LoadBalancer;NodePort
+	// +kubebuilder:default=ClusterIP
+	Type        ServiceType       `json:"type,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// LoadBalancerSourceRanges restricts client access when type is LoadBalancer (ADD-08; required by CEL).
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
+	// PublicHost is the external DNS name clients use to reach this pool's Bolt endpoint. The operator
+	// adds it to the Bolt (and HTTPS) certificate SANs so bolt+s verifies, and emits it as the Studio
+	// Direct publicUri (bolt+s://<publicHost>:<boltPort>). A stable DNS name the user owns (point it at
+	// the Service's external address, e.g. via external-dns); a certificate cannot be issued for a
+	// raw IP. Omit when the pool Service is internal (ClusterIP) only.
+	PublicHost string `json:"publicHost,omitempty"`
 }
 
 // SecondariesSpec holds fixed V1 secondary pools analytics and read.

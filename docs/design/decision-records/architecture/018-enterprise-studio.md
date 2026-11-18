@@ -285,6 +285,43 @@ give NES the CA of an in-cluster `neo4jRef` target so it can verify that target'
 
 ---
 
+## Cluster GDS via Direct-to-pool revision — execution (2026-11-18)
+
+Implements the [BDR-015 cluster GDS via Direct-to-pool revision](../business/studio/015-enterprise-studio.md#cluster-gds-via-direct-to-pool-revision-2026-11-18):
+expose an analytics/read pool externally and let a `Direct` Studio deployment reach it over `bolt+s`.
+
+- **API (`PoolServiceSpec` on `SecondaryPoolSpec`).** A new optional `service` block on
+  `secondaries.{analytics,read}`: `type` (ClusterIP/LoadBalancer/NodePort, default ClusterIP),
+  `annotations`, `loadBalancerSourceRanges`, `publicHost`. A struct CEL mirrors ADD-08
+  (`type == LoadBalancer` ⇒ non-empty `loadBalancerSourceRanges`). It lives on `Neo4j` because the
+  workload owns its pods, Services, and certificate.
+- **Render (`render/connectivity.PoolClientService`).** When the pool's `service` is set, renders a
+  pool-scoped client Service named `<name>-<pool>-client` (`Context.PoolClientServiceName`), selecting
+  that pool's pods (`SelectorLabels` — instance + `neo4j.com/pool`), exposing the client connectors with
+  facade ports — the same builder shape as the north-south `ClientService`, but pool-selected so it
+  fronts the analytics/read members the client Service never does. Applied in
+  `domain/connectivity.Reconcile` per active pool (same apply + `preserveServiceServerFields` path as the
+  other Services).
+- **SAN (`render/trust.dnsNamesFor`).** Each pool's `service.publicHost` is folded into the
+  caller-facing policies' SANs (`bolt` + `https`, the `certManagerSANs` policies), alongside
+  `trust.certManager.dnsNames`, so `bolt+s` to `publicHost` verifies. One Bolt cert still covers the
+  whole deployment; this just adds the external name.
+- **Resolver (`domain/studio.ResolveDeployments`).** For `mode: Direct` with a `neo4jRef.pool` that
+  declares `service.publicHost`, `publicUri` resolves to `bolt+s://<publicHost>:<boltPort>` (`bolt` when
+  `!trust.BoltTLSEnabled`) — **non-routing**, so the browser dials the pool Service directly instead of
+  being handed the cluster's internal advertised addresses a `neo4j://` routing table would return. An
+  explicit `deployments[].publicUri` still wins. `poolPublicHost` reads the target's pool `service`;
+  when a Direct pool target has neither `publicHost` nor an explicit `publicUri`, the resolver returns a
+  `ResolveError` (surfaced as status) rather than emitting an unreachable in-cluster address. This also
+  retires the former hard-coded `bolt://<host>` fallback (now TLS-aware).
+- **Admission (CEL on `StudioDeployment`).** The usability rule `Direct` + `neo4jRef` ⇒ `publicUri` is
+  relaxed to also accept a pool target (`neo4jRef.pool in ['analytics','read']`), since the operator can
+  derive the address from the pool's exposure; the non-pool (primary/default) in-cluster Direct case
+  still requires an explicit `publicUri` ([ADR-001](001-crd-validation-process.md) — CEL stays structural,
+  the cross-CR check is a reconcile-time resolve error).
+
+---
+
 ## References
 
 - [BDR-015](../business/studio/015-enterprise-studio.md) — `Neo4jStudio` CRD contract (this ADR implements it)

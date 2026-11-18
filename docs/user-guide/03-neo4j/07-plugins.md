@@ -107,6 +107,15 @@ quorum:
 APOC is fine anywhere. The analytics pool also gets GDS procedures opened even when you did not list
 the plugin, since that is the pool's purpose.
 
+**Reaching GDS on the analytics pool.** GDS's graph catalog is server-local and the analytics members
+run as read-only secondaries, so a GDS call must use a **direct, non-routing** Bolt connection pinned to
+the analytics pool — Neo4j routing (and the HTTP Query API, which runs write-mode) will land it on a
+primary that has no GDS. To expose the pool for a direct client (e.g. Enterprise Studio in `Direct`
+mode), set `secondaries.analytics.service` with a `publicHost`; the operator renders the pool's own Bolt
+Service and adds `publicHost` to the Bolt certificate SANs so `bolt+s` verifies. The analytics pool is
+read/compute-only — data loads and `gds.*.write*` write-back need a connection to a primary. See the
+Studio cluster-GDS example: [`examples/studio/05-cluster-gds.yaml`](../../../examples/studio/05-cluster-gds.yaml).
+
 Example: [`examples/cluster/11-plugins-apoc.yaml`](../../../examples/cluster/11-plugins-apoc.yaml).
 
 ## What the operator configures for you
@@ -261,7 +270,8 @@ kubectl exec -n default dev-server-0 -- \
 
 `Unknown function` or `no procedure with that name` after a successful start usually means the plugin
 is not on that member. In a cluster, check you queried the pool that carries it — a GDS call routed to
-a primary will fail by design.
+a primary will fail by design; use a direct, non-routing connection to the analytics pool (see *Reaching
+GDS on the analytics pool* above).
 
 ## Next
 
