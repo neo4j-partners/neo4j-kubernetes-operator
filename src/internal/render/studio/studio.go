@@ -43,7 +43,7 @@ const (
 	DefaultImageRepository = "neo4j/enterprise-studio"
 	// DefaultVersion is the operator's pinned, validated Studio tag, used when spec.version is unset
 	// (BDR-015 usability revision). ponytail: bump this with each validated NES release.
-	DefaultVersion = "2025.01"
+	DefaultVersion = "2026.10.29"
 	// DefaultPort is NES_server_port's default (container port 8080).
 	DefaultPort = int32(8080)
 
