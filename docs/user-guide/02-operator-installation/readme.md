@@ -22,7 +22,7 @@ Neo4j license you will need on the resources you create later.
 ## Choice A — install the published release
 
 Each release publishes three artefacts: the controller image, the Helm chart as an OCI artefact,
-and the CRDs (all four kinds, bundled in one file) as a downloadable asset. Take the version from the
+and the CRDs (all five kinds, bundled in one file) as a downloadable asset. Take the version from the
 [latest release](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases) without its
 leading `v`:
 

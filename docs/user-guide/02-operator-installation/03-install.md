@@ -1,7 +1,7 @@
 # Install the operator
 
-Install the operator's CustomResourceDefinitions — `Neo4j`, `Neo4jBackup`, `Neo4jBackupSchedule` and
-`Neo4jRestore` — and the controller into `neo4j-operator-system`. The procedure is identical on every
+Install the operator's CustomResourceDefinitions — `Neo4j`, `Neo4jBackup`, `Neo4jBackupSchedule`,
+`Neo4jRestore` and `Neo4jStudio` — and the controller into `neo4j-operator-system`. The procedure is identical on every
 Kubernetes distribution; only where the image comes from differs, which is the choice described in
 [Operator installation](readme.md).
 
@@ -20,7 +20,7 @@ version, and both artefacts are public. `VERSION` is the release tag without its
 ```bash
 VERSION=1.1.0
 
-# 1. CRDs — all four kinds, bundled in one asset. Server-side apply is required:
+# 1. CRDs — all five kinds, bundled in one asset. Server-side apply is required:
 #    the Neo4j schema alone exceeds the client-side annotation size limit.
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
@@ -42,7 +42,7 @@ The same two steps against your working tree, run from the repository root: the 
 checked-in kustomize base, the chart from the local path.
 
 ```bash
-# 1. CRDs — all four, server-side. `make install` runs this same apply.
+# 1. CRDs — all five, server-side. `make install` runs this same apply.
 kubectl apply --server-side --force-conflicts -k config/crd/bases
 
 # 2. Operator from the working-tree chart. Defaults to the published image at
@@ -135,7 +135,7 @@ for the manifest path, or through chart values for Helm. Keep it consistent with
 
 ```bash
 kubectl get crd neo4js.neo4j.com neo4jbackups.neo4j.com \
-  neo4jbackupschedules.neo4j.com neo4jrestores.neo4j.com
+  neo4jbackupschedules.neo4j.com neo4jrestores.neo4j.com neo4jstudios.neo4j.com
 
 kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager \
   -n neo4j-operator-system --timeout=120s

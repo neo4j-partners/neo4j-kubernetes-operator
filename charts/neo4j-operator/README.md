@@ -15,7 +15,7 @@ This is not the Neo4j *workload* chart (`helm-charts/neo4j`).
 Released charts and images are published to GHCR under `neo4j-partners`. The CRDs are
 **not** bundled (the `Neo4j` schema alone is ~1.5 MB — near the etcd object limit — and Helm never
 upgrades `crds/`), so apply them once with **server-side apply** from the release asset — one file
-containing all four CRDs — then install or upgrade the chart. `VERSION` is the release without the
+containing all five CRDs — then install or upgrade the chart. `VERSION` is the release without the
 leading `v`.
 
 ```bash

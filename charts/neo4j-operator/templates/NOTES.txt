@@ -1,4 +1,4 @@
-1. CRDs (required — the Neo4j schema is large, so server-side apply; the release asset bundles all four):
+1. CRDs (required — the Neo4j schema is large, so server-side apply; the release asset bundles all five):
 
    From a release asset:
    kubectl apply --server-side --force-conflicts \

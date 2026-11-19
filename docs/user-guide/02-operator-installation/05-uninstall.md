@@ -89,7 +89,7 @@ behind so the data is recoverable, and you clean them up yourself. See
 
 ## Remove the CRDs
 
-Only once no `Neo4j`, `Neo4jBackup`, `Neo4jBackupSchedule` or `Neo4jRestore` resource remains
+Only once no `Neo4j`, `Neo4jBackup`, `Neo4jBackupSchedule`, `Neo4jRestore` or `Neo4jStudio` resource remains
 anywhere in the cluster:
 
 ```bash

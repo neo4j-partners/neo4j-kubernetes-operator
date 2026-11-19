@@ -145,7 +145,7 @@ helm upgrade --install neo4j-operator \
 Verify the CRDs and controller:
 
 ```bash
-kubectl get crd neo4js.neo4j.com neo4jbackups.neo4j.com neo4jbackupschedules.neo4j.com neo4jrestores.neo4j.com
+kubectl get crd neo4js.neo4j.com neo4jbackups.neo4j.com neo4jbackupschedules.neo4j.com neo4jrestores.neo4j.com neo4jstudios.neo4j.com
 kubectl get pods -n neo4j-operator-system
 ```
 
