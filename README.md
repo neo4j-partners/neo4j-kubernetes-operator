@@ -21,7 +21,7 @@ On a Kubernetes cluster you already have, installing means applying the CRD and 
 `VERSION` is the tag of the [latest release](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases) without its leading `v`:
 
 ```bash
-VERSION=1.0.0
+VERSION=1.1.0
 
 # 1. The CRD
 kubectl apply --server-side --force-conflicts \
@@ -76,7 +76,7 @@ but unverified, from what is planned with a settled design, and from what is not
 | [User guide](docs/user-guide/readme.md) | Installing the operator and running Neo4j — the entry point |
 | [Getting started](docs/user-guide/01-getting-started/readme.md) | kind and AKS walkthroughs, your first instance |
 | [What works today](docs/user-guide/01-getting-started/feature-status.md) | Implementation status, field by field |
-| [Neo4j topics](docs/user-guide/03-neo4j/readme.md) | Clustering, storage, connectivity, security, configuration, plugins, monitoring, operations |
+| [Neo4j topics](docs/user-guide/03-neo4j/readme.md) | Clustering, storage, connectivity, security, configuration, plugins, monitoring, operations, backup/restore, Enterprise Studio |
 | [Troubleshooting](docs/user-guide/04-troubleshooting/01-common-issues.md) | Symptoms, causes, fixes |
 | [API reference](docs/user-guide/05-reference/api.md) | Every `spec` and `status` field, with defaults and constraints |
 | [Developer guide](docs/developer-guide/readme.md) | Contributing, CI gates, code layout |

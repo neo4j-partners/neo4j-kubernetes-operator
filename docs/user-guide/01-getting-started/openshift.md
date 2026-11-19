@@ -76,7 +76,7 @@ If you pull from another project's ImageStream, that project's `default` Service
 ```bash
 oc new-project neo4j-operator-system 2>/dev/null || oc project neo4j-operator-system
 
-VERSION=1.0.0
+VERSION=1.1.0
 
 oc apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml

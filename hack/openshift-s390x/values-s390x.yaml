@@ -8,7 +8,7 @@
 
 image:
   repository: image-registry.openshift-image-registry.svc:5000/neo4j-operator-system/neo4j-operator
-  tag: "1.0.0"
+  tag: "1.1.0"
   pullPolicy: Always
 
 # Watch the workload project.

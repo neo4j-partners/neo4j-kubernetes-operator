@@ -7,7 +7,7 @@
 #
 # Resulting in-cluster pull references (reachable from every node, no external egress at runtime):
 #   image-registry.openshift-image-registry.svc:5000/neo4j/neo4j:2026.09.0-enterprise
-#   image-registry.openshift-image-registry.svc:5000/neo4j-operator-system/neo4j-operator:1.0.0
+#   image-registry.openshift-image-registry.svc:5000/neo4j-operator-system/neo4j-operator:1.1.0
 ---
 apiVersion: image.openshift.io/v1
 kind: ImageStream
@@ -72,7 +72,7 @@ spec:
   output:
     to:
       kind: ImageStreamTag
-      name: neo4j-operator:1.0.0
+      name: neo4j-operator:1.1.0
   resources:
     requests:
       cpu: 200m

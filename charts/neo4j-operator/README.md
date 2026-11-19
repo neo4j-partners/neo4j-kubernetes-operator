@@ -19,7 +19,7 @@ containing all four CRDs — then install or upgrade the chart. `VERSION` is the
 leading `v`.
 
 ```bash
-VERSION=1.0.0
+VERSION=1.1.0
 
 # 1. CRDs (once per version; safe to re-run on upgrade)
 kubectl apply --server-side --force-conflicts \
@@ -96,7 +96,7 @@ Pin an immutable image (recommended for production):
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   -n neo4j-operator-system \
   --set image.digest=sha256:YOUR_DIGEST
-# or: --set image.tag=1.0.0
+# or: --set image.tag=1.1.0
 ```
 
 Released images are a manifest index covering `linux/amd64` and `linux/arm64`, so a tag needs no
@@ -106,7 +106,7 @@ take the **index** digest — the one `docker buildx imagetools inspect` prints 
 operator to that architecture and will fail to start on any other node:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/neo4j-partners/neo4j-kubernetes-operator:1.0.0
+docker buildx imagetools inspect ghcr.io/neo4j-partners/neo4j-kubernetes-operator:1.1.0
 ```
 
 ## OpenShift

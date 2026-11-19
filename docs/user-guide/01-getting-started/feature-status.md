@@ -112,6 +112,18 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 Cluster-wide watch is not a gap: it is refused on purpose, as explained in
 [Watch scope](../02-operator-installation/04-operator-scope.md).
 
+## Enterprise Studio
+
+The `Neo4jStudio` CRD runs Neo4j Enterprise Studio and points it at one or more `Neo4j` deployments.
+
+| Capability | Status | Where |
+|------------|--------|-------|
+| `Neo4jStudio` — Studio Deployment, Service, optional Ingress | Implemented | [Enterprise Studio](../03-neo4j/11-enterprise-studio.md) |
+| Served deployments — `ReverseProxy` and `Direct`, in-cluster `neo4jRef` or external `uri` | Implemented | [Enterprise Studio](../03-neo4j/11-enterprise-studio.md#serving-a-neo4j) |
+| Asset store — BYO, or operator-provisioned on an in-cluster `neo4jRef` | Implemented | [Enterprise Studio](../03-neo4j/11-enterprise-studio.md#the-asset-store) |
+| Backing-DB TLS trust — private CA mounted automatically for `neo4jRef` targets | Implemented | [Enterprise Studio](../03-neo4j/11-enterprise-studio.md#tls-and-trust) |
+| Cluster GDS — `Direct` to the analytics pool over non-routing `bolt+s` | Implemented | [Enterprise Studio](../03-neo4j/11-enterprise-studio.md#cluster-gds) |
+
 ## If something is Planned or Not decided
 
 Leave the corresponding fields out of your manifests. A field that does nothing today may start doing

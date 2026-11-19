@@ -57,7 +57,7 @@ oc start-build neo4j-operator-s390x -n neo4j-operator-system --from-dir=. --foll
 
 # 4. Confirm both tags landed in the registry
 oc get istag -n neo4j neo4j:2026.09.0-enterprise
-oc get istag -n neo4j-operator-system neo4j-operator:1.0.0
+oc get istag -n neo4j-operator-system neo4j-operator:1.1.0
 
 # 5. CRDs. platform auto (any OpenShift, not only s390x) leaves the Neo4j UID unset —
 #    see ../../docs/user-guide/03-neo4j/05-security.md#pod-and-container-hardening

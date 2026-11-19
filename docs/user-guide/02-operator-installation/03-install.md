@@ -18,7 +18,7 @@ Nothing to build and no image to name: the chart defaults to the published contr
 version, and both artefacts are public. `VERSION` is the release tag without its leading `v`.
 
 ```bash
-VERSION=1.0.0
+VERSION=1.1.0
 
 # 1. CRDs — all four kinds, bundled in one asset. Server-side apply is required:
 #    the Neo4j schema alone exceeds the client-side annotation size limit.
@@ -57,7 +57,7 @@ To run your own build and widen the scope, add `--set` flags:
 helm upgrade --install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace \
   --set image.repository=myregistry.example.com/neo4j-operator \
-  --set image.tag=1.0.0 \
+  --set image.tag=1.1.0 \
   --set 'watchNamespaces={default,team-a}'
 ```
 

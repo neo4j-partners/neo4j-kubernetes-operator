@@ -2,8 +2,8 @@ apiVersion: v2
 name: neo4j-operator
 description: Neo4j Kubernetes Operator controller (CRDs, RBAC, Deployment)
 type: application
-version: 1.0.0
-appVersion: "1.0.0"
+version: 1.1.0
+appVersion: "1.1.0"
 # Oldest Kubernetes the operator supports, including OpenShift 4.21.
 # The CRDs use the CEL quantity library (quantity()/isQuantity()) to block a volume shrink;
 # that library is always-on from 1.29, so 1.34 satisfies it.

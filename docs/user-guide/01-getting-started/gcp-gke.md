@@ -76,7 +76,7 @@ The CRDs ship as a release asset and the controller as a chart. Take the version
 leading `v`:
 
 ```bash
-VERSION=1.0.0
+VERSION=1.1.0
 
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v${VERSION}/neo4j-crd-${VERSION}.yaml
