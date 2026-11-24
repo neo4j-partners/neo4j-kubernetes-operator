@@ -373,6 +373,18 @@ func (a *driverAdmin) CreateUserIfNotExists(ctx context.Context, username, passw
 	return err
 }
 
+// AlterUserPassword sets an existing user's password over the system database (admin password
+// rotation, ADR-019). The password is a Bolt parameter, never interpolated. CHANGE NOT REQUIRED
+// keeps the rotated credential usable by the operator's own session (a forced change would lock
+// the operator out of the very connection it just authenticated).
+func (a *driverAdmin) AlterUserPassword(ctx context.Context, username, password string) error {
+	_, err := neo4j.ExecuteQuery(ctx, a.driver,
+		"ALTER USER $user SET PASSWORD $password CHANGE NOT REQUIRED",
+		map[string]any{"user": username, "password": password}, neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
 // GrantRole grants a built-in role to a user. Neo4j does not accept a parameter in the ROLE position,
 // so role is interpolated as a literal — callers MUST pass a validated, known-safe role name.
 func (a *driverAdmin) GrantRole(ctx context.Context, role, username string) error {

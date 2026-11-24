@@ -72,6 +72,7 @@ validates and does nothing — see [the last section](#if-something-is-planned-o
 |------------|--------|-------|
 | Generated initial password | Verified | [Security](../03-neo4j/05-security.md#authentication) |
 | Bring your own password Secret | Verified | [Security](../03-neo4j/05-security.md#bring-your-own-password) |
+| Admin password rotation — externally staged, applied over Bolt | Implemented | [Security](../03-neo4j/05-security.md#rotating-the-admin-password) — `Neo4jPasswordRotation` |
 | Opt-in labels on every Secret the operator mounts | Verified | [Security](../03-neo4j/05-security.md#why-the-operator-requires-opt-in-labels) |
 | Bring your own TLS for Bolt, HTTPS and cluster traffic | Implemented | [Security](../03-neo4j/05-security.md#transport-security) |
 | Client certificate authentication and trusted certificate bundles | Implemented | [Security](../03-neo4j/05-security.md#transport-security) |

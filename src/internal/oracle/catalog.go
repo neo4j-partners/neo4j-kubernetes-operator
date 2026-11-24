@@ -234,6 +234,8 @@ var (
 		"The backup schedule's cron cadences are valid and active, or intentionally suspended")
 	ConditionStudioReady = declareCondition("StudioReady", GateFalseBlocks,
 		"The Enterprise Studio Deployment is Available and every served deployment resolved")
+	ConditionRotationReady = declareCondition("RotationReady", GateNone,
+		"The admin password rotation finished: the database password was changed and the live auth Secret synced. A satellite run record, it does not gate the instance's Ready")
 )
 
 // Ready — the headline condition (ADR-004).
@@ -423,6 +425,31 @@ var (
 		asEvent("Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail"))
 	ReasonRestoreMetadataFailed = declare("RestoreMetadataFailed", SeverityError, SurfaceBoth,
 		on(ConditionRestoreReady, "The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail"))
+)
+
+// RotationReady — a Neo4jPasswordRotation run-to-completion record (BDR-017 / ADR-019). The owner
+// stages the new password in its own Secret; the operator authenticates with the still-live old
+// value, runs ALTER USER … SET PASSWORD over the system database, then writes the new value into
+// the live auth Secret. No StatefulSet roll (the auth Secret is in no checksum).
+var (
+	ReasonRotationSucceeded = declareNominal("RotationSucceeded", SurfaceCondition,
+		on(ConditionRotationReady, "The admin password was changed in the database and the live auth Secret now holds the new value"))
+	ReasonRotationTargetNotFound = declare("RotationTargetNotFound", SeverityWarn, SurfaceCondition,
+		on(ConditionRotationReady, "`spec.neo4jRef` does not resolve to a Neo4j in this namespace yet"))
+	ReasonRotationBeforeReady = declare("RotationBeforeReady", SeverityWarn, SurfaceCondition,
+		on(ConditionRotationReady, "The target is not Ready yet; rotation waits before opening an admin session so it dials a live leader"))
+	ReasonRotationAuthDisabled = declareNominal("RotationAuthDisabled", SurfaceCondition,
+		on(ConditionRotationReady, "Authentication is disabled on the target (NEO4J_AUTH: none); there is no admin password to rotate"))
+	ReasonRotationNewSecretInvalid = declare("RotationNewSecretInvalid", SeverityError, SurfaceBoth,
+		on(ConditionRotationReady, "`spec.newPasswordSecretRef` does not resolve to a Secret carrying a valid NEO4J_AUTH (`user/password`) for the same admin user as the live auth Secret"))
+	ReasonRotationAuthUndelegated = declare("RotationAuthUndelegated", SeverityError, SurfaceBoth,
+		on(ConditionRotationReady, "The live or staged auth Secret is not delegated to the operator (NEO-005); rotation refuses to read a Secret it was not granted"))
+	ReasonRotationAuthFailed = declare("RotationAuthFailed", SeverityWarn, SurfaceCondition,
+		on(ConditionRotationReady, "Neither the current nor the new credential authenticates over admin Bolt; the database password may have been changed out of band — rotation keeps retrying"))
+	ReasonRotationAlterFailed = declare("RotationAlterFailed", SeverityError, SurfaceBoth,
+		on(ConditionRotationReady, "The ALTER USER … SET PASSWORD statement failed; the message carries the Neo4j error detail"))
+	ReasonRotationSecretWriteBackFailed = declare("RotationSecretWriteBackFailed", SeverityWarn, SurfaceCondition,
+		on(ConditionRotationReady, "The password was changed in the database but writing the new value into the live auth Secret failed; rotation retries and converges (dial-new then write-back)"))
 )
 
 // Neo4jBackupSchedule — cron owner that emits Neo4jBackup objects (BDR-014 §10).

@@ -1,0 +1,37 @@
+# Purpose: rotate the admin (neo4j) password of a running Neo4j without a pod restart (BDR-017 /
+#   ADR-019). The NEW password is staged in its own delegated Secret; the live `<name>-auth` Secret
+#   (the OLD value) is left untouched. The operator authenticates with the still-live old value, runs
+#   ALTER USER neo4j SET PASSWORD over the system database, then writes the new value into `<name>-auth`
+#   — so the old password survives until the change lands (no window where the operator is locked out).
+# Prerequisites:
+#   - a Neo4j named `dev` that is Ready;
+#   - admin Bolt reachable: either spec.trust.certificates.bolt (verified TLS) or, for a lab,
+#     spec.trust.insecureAdminConnection: true (NEO-004) — the rotation opens an admin session;
+#   - the staged Secret below delegated to `dev` (both labels), NEO4J_AUTH as neo4j/<new-password>.
+# Apply: kubectl apply -f examples/password-rotation/01-rotate.yaml
+#   then: kubectl get n4jpr rotate-dev -w   # Phase -> Succeeded (RotationSucceeded)
+# Note: do not commit a real password — generate the staged Secret locally, e.g.
+#   kubectl create secret generic dev-new-credential \
+#     --from-literal="NEO4J_AUTH=neo4j/$(openssl rand -base64 24)" --dry-run=client -o yaml | \
+#   kubectl label --local -f - neo4j.com/mountable-by-operator=true neo4j.com/allowed-for=dev -o yaml | \
+#   kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dev-new-credential
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    neo4j.com/allowed-for: dev            # must equal the Neo4j metadata.name
+stringData:
+  NEO4J_AUTH: "neo4j/REPLACE_WITH_A_STRONG_PASSWORD"
+---
+apiVersion: neo4j.com/v1
+kind: Neo4jPasswordRotation
+metadata:
+  name: rotate-dev
+spec:
+  neo4jRef:
+    name: dev
+  newPasswordSecretRef:
+    name: dev-new-credential
+  deleteNewSecretOnSuccess: false         # true -> operator deletes the staged Secret after Succeeded

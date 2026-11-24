@@ -35,6 +35,16 @@ func Dial(ctx context.Context, c client.Client, recorder record.EventRecorder, n
 	if err != nil {
 		return nil, err
 	}
+	return DialWith(ctx, c, recorder, neo4j, user, pass)
+}
+
+// DialWith opens an admin Bolt session with explicit credentials, reusing the same NEO-004 TLS
+// policy as Dial. Callers that already hold a validated credential — notably password rotation,
+// which must try the old password read from the live auth Secret and the new one staged in a
+// separate Secret (ADR-019) — use this instead of Dial, which always reads the instance's live
+// auth Secret. The caller is responsible for the delegation check on whichever Secret the
+// credential came from.
+func DialWith(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1.Neo4j, user, pass string) (intneo4j.Admin, error) {
 	opts, err := dialOpts(ctx, c, recorder, neo4j)
 	if err != nil {
 		return nil, err

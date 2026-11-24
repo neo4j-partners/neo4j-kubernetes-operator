@@ -200,6 +200,7 @@ rules:
   - neo4jbackups/finalizers
   - neo4jbackupschedules/finalizers
   - neo4jrestores/finalizers
+  - neo4jpasswordrotations/finalizers
   verbs:
   - update
 - apiGroups:
@@ -229,6 +230,7 @@ rules:
   - neo4jbackupschedules
   - neo4jrestores
   - neo4jstudios
+  - neo4jpasswordrotations
   verbs:
   - create
   - delete
@@ -244,6 +246,7 @@ rules:
   - neo4jbackupschedules/status
   - neo4jrestores/status
   - neo4jstudios/status
+  - neo4jpasswordrotations/status
   verbs:
   - get
   - patch

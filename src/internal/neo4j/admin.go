@@ -68,6 +68,11 @@ type Admin interface {
 	CreateUserIfNotExists(ctx context.Context, username, password string) error
 	GrantRole(ctx context.Context, role, username string) error
 
+	// AlterUserPassword sets an existing user's password (admin password rotation, ADR-019). Both
+	// arguments go as Bolt parameters (no literal interpolation); CHANGE NOT REQUIRED so the rotated
+	// credential is immediately usable by the operator's own non-interactive session.
+	AlterUserPassword(ctx context.Context, username, password string) error
+
 	Close(ctx context.Context) error
 }
 

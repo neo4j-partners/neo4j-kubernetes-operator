@@ -116,8 +116,8 @@ func (r *RotationReconciler) Reconcile(ctx, req) (Result, error) {
         return done // immutable record; never re-run
     }
     n4j := getNeo4j(rot.Spec.Neo4jRef)                 // TargetNotFound → Failed
-    if !Ready(n4j) {                                    // same gate restore uses (standalone+cluster)
-        return retryable(RotationBeforeReady)
+    if !Ready(n4j) && status.Reason != SecretWriteBackFailed { // gate as restore does, except while
+        return retryable(RotationBeforeReady)                  // only the write-back is outstanding
     }
     oldAuth := readAuthSecret(n4j)                      // live Secret = OLD; delegation-guarded
     newAuth := readSecret(rot.Spec.NewPasswordSecretRef)// staged = NEW;  delegation-guarded
@@ -173,7 +173,7 @@ If the `ALTER` succeeds but the live-Secret write-back fails, the state is `DB =
 
 Two consequences, accepted and documented:
 
-- **Divergence window.** Until write-back lands, operator admin consumers that dial with the live Secret (formation, backup, restore) hit a transient auth failure — an availability blip, not data loss, that self-heals on the next reconcile. The write-back requeues immediately to keep it to seconds.
+- **Divergence window.** Until write-back lands, operator admin consumers that dial with the live Secret (formation, backup, restore) hit a transient auth failure — an availability blip, not data loss, that self-heals on the next reconcile. The write-back requeues immediately to keep it to seconds. In Cluster this blip can drop the target's `Ready` (formation dials the stale Secret every pass), which would otherwise trap the recovery behind its own `Ready` gate; so the recovery pass — identified by `status.reason == RotationSecretWriteBackFailed`, set only after the `ALTER` has already landed — **bypasses the `Ready` gate**. Standalone never drops `Ready` for this (formation skips it), so the two topologies converge the same way.
 - **The staged Secret is the sole copy of the new password until write-back succeeds.** The operator deletes it only after `Succeeded` (never on the failure path), and the contract requires the owner **not** to delete it before the record reports `Succeeded`. If both copies of the new value are lost while the DB is already on new, neither credential authenticates → terminal `OldAuthFailed`, needing manual recovery via a `system`-db admin path.
 
 ### No StatefulSet roll
@@ -182,7 +182,7 @@ Rotation must **not** stamp any pod-template checksum. `NEO4J_AUTH` is a bootstr
 
 ### Sequencing
 
-Gate on `ConditionReady` before dialing (the same conservative gate `RestoreReconciler` uses, which is satisfied by both Standalone and Cluster). Rotation never touches topology or formation.
+Gate on `ConditionReady` before dialing (the same conservative gate `RestoreReconciler` uses, which is satisfied by both Standalone and Cluster) — **except** on a recovery pass whose only outstanding step is the write-back (`status.reason == RotationSecretWriteBackFailed`), where the gate is skipped so a Cluster that lost `Ready` to the stale live Secret can still converge (see Partial failure & recovery). Rotation never touches topology or formation.
 
 ### Finalizers
 

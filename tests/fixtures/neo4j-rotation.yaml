@@ -1,0 +1,29 @@
+# Password-rotation e2e target: an Enterprise Standalone Neo4j with a generated bootstrap password
+# (BDR-017 / ADR-019). rotation/apply stages a new credential in its own Secret and files a
+# Neo4jPasswordRotation; the operator ALTERs the password over admin Bolt and syncs <cr>-auth.
+# insecureAdminConnection opts in to plaintext admin Bolt on kind (NEO-004) — the rotation opens an
+# admin session the same way restore does. __CR_NAME__/__DATA_SIZE__/__STORAGE_CLASS__/__NEO4J_VERSION__
+# are substituted by the harness (same placeholders as the other fixtures).
+apiVersion: neo4j.com/v1
+kind: Neo4j
+metadata:
+  name: __CR_NAME__
+spec:
+  edition: enterprise
+  version: "__NEO4J_VERSION__"
+  license:
+    accept: "yes"
+  topology:
+    mode: Standalone
+  storage:
+    volumes:
+      data:
+        mode: Dynamic
+        dynamic:
+          size: __DATA_SIZE__
+          storageClassName: __STORAGE_CLASS__
+  auth:
+    generatePassword: true
+  trust:
+    enabled: false
+    insecureAdminConnection: true
