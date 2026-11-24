@@ -14,6 +14,7 @@ run on the cheapest topology), and `operator-*` (operator behavior, not the work
 | `feature-config` | [suites/feature-config.yaml](suites/feature-config.yaml) | `spec.config` passthrough (AC-NEO-CONFIG-001) + invalid-setting startup error (AC-NEO-CONFIG-002) + live config change via controlled restart, Standalone (RSTR-01) and 3-primary cluster rolled one-by-one with quorum held (RSTR-02) (NEO-2-010) |
 | `feature-upgrade` | [suites/feature-upgrade.yaml](suites/feature-upgrade.yaml) | Rolling upgrade of `spec.version` on a 3-primary cluster with a read pool — downgrade refused, read pool upgraded before the primaries, quorum held, `status.upgrade`/`status.version` reported, data preserved (ADR-017) |
 | `feature-credentials` | [suites/feature-credentials.yaml](suites/feature-credentials.yaml) | Generated password vs `passwordSecretRef`, each verified with a real bolt query |
+| `feature-password-rotation` | [suites/feature-password-rotation.yaml](suites/feature-password-rotation.yaml) | Externally staged admin password applied over admin Bolt (`ALTER USER`), live auth Secret synced, old password invalidated (BDR-017 / ADR-019) |
 | `feature-tls` | [suites/feature-tls.yaml](suites/feature-tls.yaml) | TLS issued by cert-manager — operator issues one `Certificate` per policy against a self-signed CA Issuer, cluster forms and serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo` | [suites/feature-tls-byo.yaml](suites/feature-tls-byo.yaml) | TLS from Bring-Your-Own Secrets — Standalone bolt leaf supplied via labelled Secrets, operator mounts and verifies it (Ready is the SAN gate), Neo4j serves Bolt over TLS, plaintext Bolt refused |
 | `feature-tls-byo-cluster` | [suites/feature-tls-byo-cluster.yaml](suites/feature-tls-byo-cluster.yaml) | Cluster BYO TLS — private CA signs shared bolt + cluster leaves with per-member SANs, members do mTLS (clientAuth Require), cluster forms and serves Bolt over TLS |
@@ -146,6 +147,19 @@ when CI exports them, and a dummy otherwise; the acceptance checks are skipped i
 ### `feature-credentials` — NEO-2-004
 - [x] Operator-generated password authenticates over bolt — NEO-3-004-CRED-01 · AC-NEO-SECRETS
 - [x] Password from referenced Secret authenticates over bolt — NEO-3-004-CRED-02 · AC-NEO-SECRETS
+
+### `feature-password-rotation` — NEO-2-004 (BDR-017 / ADR-019)
+
+Admin password rotation driven by an external owner: the new password is staged in its own
+delegated Secret, the live `<cr>-auth` (old value) is left untouched until the `ALTER` lands.
+Runs on Standalone (cheapest topology), which exercises the admin session there the same way
+Cluster does.
+
+- [x] Externally staged password applied over admin Bolt: `Neo4jPasswordRotation` reaches `Succeeded` / `RotationReady=True/RotationSucceeded`
+- [x] Live auth Secret `<cr>-auth` synced to the new password — no pod restart (the auth Secret is in no StatefulSet checksum)
+- [x] New password authenticates over bolt **and** the old password is rejected — proving the `ALTER` landed in the database, not just that the Secret was rewritten
+- [x] Standalone opens the admin session the same way Cluster does (NEO-004 via `insecureAdminConnection`)
+- [x] Recovery converges identically in both topologies: when the ALTER has landed but write-back is outstanding (`RotationSecretWriteBackFailed`), the retry bypasses the `Ready` gate and finishes the write-back — unit-tested (`TestRotationRecoveryBypassesReadyGate`), so a Cluster that dropped `Ready` to the stale live Secret cannot deadlock. Not forced end to end (the ALTER-then-write-back-crash is not injected in the suite)
 
 ### `feature-tls` — NEO-2-005
 

@@ -22,9 +22,12 @@ kubectl get neo4j dev -n default -o jsonpath='{.status.credentials.secretName}{"
 kubectl get secret dev-auth -n default -o jsonpath='{.data.NEO4J_AUTH}' | base64 -d && echo
 ```
 
-This is a bootstrap credential, not a managed one. Rotating it afterwards is a Neo4j operation —
-`ALTER CURRENT USER SET PASSWORD` — and editing the Secret later does not change the password inside
-a database that has already been initialised.
+This is a bootstrap credential: `NEO4J_AUTH` is read once, when the database is first initialised.
+Editing `<name>-auth` by hand afterwards does **not** change the password inside a running database —
+the value is already baked in, and the operator would then be holding a Secret that disagrees with the
+live password. To change the password of a running instance, file a
+[`Neo4jPasswordRotation`](#rotating-the-admin-password): the operator runs the `ALTER USER` for you and
+updates the Secret in the same step, so the two never drift.
 
 ### Bring your own password
 
@@ -61,6 +64,81 @@ Example: [`examples/standalone/02-auth-existing-secret.yaml`](../../../examples/
 with more detail in [`examples/secrets/README.md`](../../../examples/secrets/README.md).
 
 `spec.auth.ldap` exists in the schema and does nothing yet.
+
+### Rotating the admin password
+
+`NEO4J_AUTH` only sets the password at first boot (see above), so rotation is two changes that must
+land together: the password inside the running database, and the `NEO4J_AUTH` the operator
+authenticates with. Overwriting `<name>-auth` in place does neither safely — it destroys the only
+credential the operator could use to reach the database and run the change (a chicken-and-egg: to
+`ALTER` the password you must first authenticate with the current one).
+
+A `Neo4jPasswordRotation` closes that gap. An external owner — a human, or a secret manager such as
+Vault / External Secrets — stages the **new** password in its own Secret and leaves the live
+`<name>-auth` (the **old** value) untouched. The operator authenticates with the still-live old value,
+runs `ALTER USER neo4j SET PASSWORD` over the `system` database, then writes the new value into
+`<name>-auth`. The old password therefore survives until the `ALTER` lands — there is no window where
+the operator cannot reach the database.
+
+```yaml
+# The staged Secret: the NEW credential, delegated to the operator for this instance.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dev-new-credential
+  labels:
+    neo4j.com/mountable-by-operator: "true"
+    neo4j.com/allowed-for: dev            # must equal the Neo4j metadata.name
+stringData:
+  NEO4J_AUTH: "neo4j/a-new-strong-password"
+---
+apiVersion: neo4j.com/v1
+kind: Neo4jPasswordRotation
+metadata:
+  name: rotate-dev
+spec:
+  neo4jRef:
+    name: dev
+  newPasswordSecretRef:
+    name: dev-new-credential
+  deleteNewSecretOnSuccess: false         # default; see below
+```
+
+```bash
+kubectl apply -f rotate-dev.yaml
+kubectl get neo4jpasswordrotation rotate-dev -n default -w   # short name: n4jpr
+# NAME         CLUSTER   PHASE       REASON
+# rotate-dev   dev       Succeeded   RotationSucceeded
+```
+
+On `Succeeded`, `<name>-auth` holds the new password and the database accepts it; the old password no
+longer works. The record is a **one-shot, immutable run log** (like `Neo4jRestore`): its spec cannot be
+edited, and re-applying it does nothing. To rotate again, file a new `Neo4jPasswordRotation`.
+
+What to know before you use it:
+
+- **The target must be `Ready`.** The operator waits (`RotationBeforeReady`) rather than dialing a
+  database that is not serving yet.
+- **Admin Bolt needs TLS or the opt-in.** Rotation opens an admin session, so the instance needs
+  either `trust.certificates.bolt` (verified TLS) or `trust.insecureAdminConnection: true` — the same
+  NEO-004 rule as [the operator's own admin session](#the-operators-own-admin-session). This applies in
+  **Standalone** as well as Cluster.
+- **The staged Secret is delegated, like a BYO password.** It needs both labels above, carries
+  `NEO4J_AUTH` in `neo4j/<password>` form, and its user must be `neo4j` (rotation changes the password,
+  not the user). An undelegated Secret is refused with `RotationAuthUndelegated`.
+- **The staged Secret is the only copy of the new password until write-back lands**, so the operator
+  never deletes it on a failure. Set `deleteNewSecretOnSuccess: true` to have it cleaned up once the
+  rotation reports `Succeeded`; the default (`false`) leaves it to its owner.
+- **No pod restart.** The auth Secret is in no StatefulSet checksum, so rotation does not roll the
+  workload.
+- **Roll-forward, never rollback.** If the `ALTER` succeeds but writing `<name>-auth` back fails, the
+  database holds the new password while the Secret still holds the old. The operator retries: it finds
+  the old credential no longer authenticates, confirms the new one does, and finishes the write-back —
+  converging without ever reverting the database. A failed `ALTER` is terminal (`RotationAlterFailed`)
+  and leaves both the database and the Secret on the old password.
+
+Reasons the record can carry are in [Errors](../05-reference/errors.md). Example:
+[`examples/password-rotation/01-rotate.yaml`](../../../examples/password-rotation/01-rotate.yaml).
 
 ## Why the operator requires opt-in labels
 
@@ -206,8 +284,11 @@ spec:
 A Cluster declaring neither is rejected at admission, since the operator could form nothing. The flag
 opens no port and weakens no protocol — without `bolt` TLS the connector is already in the clear for
 every client — it only records that you accept the operator's password travelling that way, and it
-raises a Warning event each time the session is opened. In Standalone mode the operator opens no admin
-session, so the field does nothing. See
+raises a Warning event each time the session is opened. In Standalone mode the operator forms nothing,
+so it opens an admin session only for on-demand operations — [restoring a database](10-backup-restore.md)
+and [rotating the admin password](#rotating-the-admin-password). A Standalone that runs one of those
+needs the same TLS-or-opt-in (otherwise the operation stops with the admin-Bolt TLS requirement); a
+Standalone that never does needs neither. See
 [Clustering](02-clustering.md#the-operator-needs-an-admin-session).
 
 ### Client certificates

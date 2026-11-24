@@ -180,6 +180,7 @@ projection of the same catalog: the [error reference](../../../user-guide/05-ref
 | `RestoreReady` | At least one successful restore exists for this Neo4j instance | Yes — `False` holds `Ready` back |
 | `ScheduleReady` | The backup schedule's cron cadences are valid and active, or intentionally suspended | No |
 | `StudioReady` | The Enterprise Studio Deployment is Available and every served deployment resolved | Yes — `False` holds `Ready` back |
+| `RotationReady` | The admin password rotation finished: the database password was changed and the live auth Secret synced. A satellite run record, it does not gate the instance's Ready | No |
 <!-- END GENERATED oracle:conditions -->
 
 ### Planned for a later version

@@ -94,6 +94,13 @@ Reasons that report a problem, a decision, or an operation in progress.
 | RestoreReady | RestoreMetadataApplying | info | condition | Databases are online; a post-seed Job is reapplying the backed-up users, roles, and privileges to the system database (spec.restoreMetadata) |
 | — (Event only) | RestoreMetadataConflict | warn | event | Post-seed metadata apply completed with skipped statements (a role/user already existed on the target); the restore still Succeeded and the Event carries the detail |
 | RestoreReady | RestoreMetadataFailed | error | condition+event | The post-seed metadata Job could not run (bad artifact, or the system database was unreachable); the message carries the failure detail |
+| RotationReady | RotationTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
+| RotationReady | RotationBeforeReady | warn | condition | The target is not Ready yet; rotation waits before opening an admin session so it dials a live leader |
+| RotationReady | RotationNewSecretInvalid | error | condition+event | `spec.newPasswordSecretRef` does not resolve to a Secret carrying a valid NEO4J_AUTH (`user/password`) for the same admin user as the live auth Secret |
+| RotationReady | RotationAuthUndelegated | error | condition+event | The live or staged auth Secret is not delegated to the operator (NEO-005); rotation refuses to read a Secret it was not granted |
+| RotationReady | RotationAuthFailed | warn | condition | Neither the current nor the new credential authenticates over admin Bolt; the database password may have been changed out of band — rotation keeps retrying |
+| RotationReady | RotationAlterFailed | error | condition+event | The ALTER USER … SET PASSWORD statement failed; the message carries the Neo4j error detail |
+| RotationReady | RotationSecretWriteBackFailed | warn | condition | The password was changed in the database but writing the new value into the live auth Secret failed; rotation retries and converges (dial-new then write-back) |
 | ScheduleReady | ScheduleSuspended | info | condition | `spec.suspend` is true; no backups are emitted until it is cleared |
 | ScheduleReady | ScheduleTargetNotFound | warn | condition | `spec.neo4jRef` does not resolve to a Neo4j in this namespace yet |
 | ScheduleReady | ScheduleEditionUnsupported | error | condition+event | Backup requires Enterprise edition; the target is community |
@@ -133,6 +140,8 @@ so automation can tell "fine" from "not fine" without a hardcoded list.
 | ServersPendingDrain | NoDrain | info | condition | No server is waiting to be drained |
 | BackupReady | BackupSucceeded | info | condition | The backup Job completed and artifacts were written |
 | RestoreReady | RestoreSucceeded | info | condition | Every requested database was seeded and is online |
+| RotationReady | RotationSucceeded | info | condition | The admin password was changed in the database and the live auth Secret now holds the new value |
+| RotationReady | RotationAuthDisabled | info | condition | Authentication is disabled on the target (NEO4J_AUTH: none); there is no admin password to rotate |
 | ScheduleReady | ScheduleActive | info | condition | Cadences are parsed and the schedule is emitting Neo4jBackup objects on time |
 | — (Event only) | ScheduleBackupEmitted | info | event | A cadence tick emitted a Neo4jBackup; the Event names the backup, its type, and the chain |
 | — (Event only) | SchedulePruned | info | event | Retention removed a whole expired backup chain — its stored artifacts (PVC files, or the object-store prefix purged by the rclone prune Job) and its records; the Event names the chain and how many backups were pruned (BDR-014 §10) |

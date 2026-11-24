@@ -12,7 +12,7 @@
 #   oracle_nominal <reason>          success if the reason means things are fine
 
 oracle_conditions() {
-  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady PluginsReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady StudioReady
+  printf '%s\n' Ready Reconciling Installed Error StorageReady TLSReady PluginsReady ClusterFormed ServersPendingDrain BackupReady RestoreReady ScheduleReady StudioReady RotationReady
 }
 
 oracle_reasons_for() {  # <condition>
@@ -30,6 +30,7 @@ oracle_reasons_for() {  # <condition>
     RestoreReady) printf '%s\n' RestoreSucceeded RestoreInProgress RestoreTargetNotFound RestoreEditionUnsupported RestoreBeforeFormation RestoreSourceNotFound RestoreSourceUnsupported RestoreDatabaseExists RestoreBoltUnavailable RestoreSeedFailed RestoreMetadataApplying RestoreMetadataFailed ;;
     ScheduleReady) printf '%s\n' ScheduleActive ScheduleSuspended ScheduleTargetNotFound ScheduleEditionUnsupported ScheduleInvalidCron ;;
     StudioReady) printf '%s\n' StudioAvailable StudioProgressing StudioTargetNotFound StudioEditionUnsupported StudioDegraded StudioProvisioning ;;
+    RotationReady) printf '%s\n' RotationSucceeded RotationTargetNotFound RotationBeforeReady RotationAuthDisabled RotationNewSecretInvalid RotationAuthUndelegated RotationAuthFailed RotationAlterFailed RotationSecretWriteBackFailed ;;
     event) printf '%s\n' RestoreMetadataConflict ScheduleBackupEmitted SchedulePruned SchedulePruneFailed ScheduleCompacted ScheduleAggregateFailed DuplicateEntry DatabaseTopologyResized InsecureAdminConnection AdminBoltTLSRequired SecretMounted StorageResizeCompleted AssetStoreSecretGenerated ;;
     *) return 1 ;;
   esac
@@ -113,6 +114,15 @@ oracle_severity() {  # <reason>
     RestoreMetadataApplying) echo info ;;
     RestoreMetadataConflict) echo warn ;;
     RestoreMetadataFailed) echo error ;;
+    RotationSucceeded) echo info ;;
+    RotationTargetNotFound) echo warn ;;
+    RotationBeforeReady) echo warn ;;
+    RotationAuthDisabled) echo info ;;
+    RotationNewSecretInvalid) echo error ;;
+    RotationAuthUndelegated) echo error ;;
+    RotationAuthFailed) echo warn ;;
+    RotationAlterFailed) echo error ;;
+    RotationSecretWriteBackFailed) echo warn ;;
     ScheduleActive) echo info ;;
     ScheduleSuspended) echo info ;;
     ScheduleTargetNotFound) echo warn ;;
@@ -142,7 +152,7 @@ oracle_severity() {  # <reason>
 
 oracle_nominal() {  # <reason>
   case "$1" in
-    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|StudioAvailable|SecretMounted|StorageResizeCompleted|AssetStoreSecretGenerated) return 0 ;;
+    AllMembersReady|InProgress|Completed|ObjectsCreated|NoError|PVCBound|TrustDisabled|SecretsPresent|PluginsInstalled|Formed|NoDrain|BackupSucceeded|RestoreSucceeded|RotationSucceeded|RotationAuthDisabled|ScheduleActive|ScheduleBackupEmitted|SchedulePruned|ScheduleCompacted|StudioAvailable|SecretMounted|StorageResizeCompleted|AssetStoreSecretGenerated) return 0 ;;
     *) return 1 ;;
   esac
 }
