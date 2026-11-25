@@ -108,6 +108,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 		return out
 	}
 
+	// Delete the Services of a secondary pool the spec dropped, once formation has torn its
+	// StatefulSet down — otherwise they linger orphaned (BDR-007 pool teardown).
+	if err := shared.PruneRemovedPoolObjects(ctx, r.Client, neo4j, &corev1.ServiceList{}); err != nil {
+		return shared.Failed(err)
+	}
+
 	return shared.Done()
 }
 

@@ -65,6 +65,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 			}
 		}
 	}
+
+	// Delete the neo4j.conf / apoc ConfigMaps of a secondary pool the spec dropped, once formation
+	// has torn its StatefulSet down — otherwise they linger orphaned (BDR-008 pool teardown).
+	if err := shared.PruneRemovedPoolObjects(ctx, r.Client, neo4j, &corev1.ConfigMapList{}); err != nil {
+		return shared.Failed(err)
+	}
 	return shared.Done()
 }
 

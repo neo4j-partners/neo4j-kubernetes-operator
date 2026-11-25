@@ -28,7 +28,7 @@ func ConfigMap(ctx render.Context) *corev1.ConfigMap {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.ConfigMapName(),
 			Namespace: ctx.Namespace(),
-			Labels:    ctx.CommonLabels("config"),
+			Labels:    ctx.PoolScopedLabels("config"),
 		},
 		Data: neo4jConfData(ctx),
 	}
@@ -43,7 +43,7 @@ func ApocConfigMap(ctx render.Context) *corev1.ConfigMap {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.ApocConfigMapName(),
 			Namespace: ctx.Namespace(),
-			Labels:    ctx.CommonLabels("config"),
+			Labels:    ctx.PoolScopedLabels("config"),
 		},
 		Data: map[string]string{
 			"apoc.conf": renderApocConf(ctx),
