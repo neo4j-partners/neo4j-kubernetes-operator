@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -264,6 +265,66 @@ func TestReconcileDrainsTail(t *testing.T) {
 	servers, _ := admin.ShowServers(t.Context())
 	if _, ok := intneo4j.FindByAddress(servers, "prod-primary-1.default.svc.cluster.local:7687"); ok {
 		t.Fatal("tail server should be dropped")
+	}
+}
+
+// Removing a secondary pool (deleting its topology.secondaries key) must not orphan it: the
+// operator drains and drops its servers, then deletes the StatefulSet — it does not leave the pool
+// running untracked, which is what happened when ActivePools simply stopped listing it.
+func TestReconcileTearsDownRemovedSecondaryPool(t *testing.T) {
+	neo4j := testClusterCR(3) // no secondaries declared → the running analytics pool is "removed"
+	scheme := runtime.NewScheme()
+	_ = neo4jv1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	p3, a1 := int32(3), int32(1)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&neo4jv1.Neo4j{}).WithObjects(
+		neo4j.DeepCopy(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-primary", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &p3}},
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "prod-analytics", Namespace: "default"}, Spec: appsv1.StatefulSetSpec{Replicas: &a1}},
+	).Build()
+
+	admin := &fakeAdmin{
+		servers: []intneo4j.Server{
+			{Name: "s0", Address: "prod-primary-0.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s1", Address: "prod-primary-1.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "s2", Address: "prod-primary-2.default.svc.cluster.local:7687", State: "Enabled"},
+			{Name: "a0", Address: "prod-analytics-0.default.svc.cluster.local:7687", State: "Enabled"},
+		},
+		dbs: []intneo4j.DatabaseTopology{{
+			Name: "neo4j", Type: "standard", HasTopology: true,
+			RequestedPrimaries: 1, RequestedSecondaries: 0,
+			CurrentPrimaries: 1, CurrentSecondaries: 0,
+		}},
+	}
+	r := &Reconciler{
+		Client:  c,
+		Connect: func(context.Context, *neo4jv1.Neo4j) (intneo4j.Admin, error) { return admin, nil },
+	}
+
+	var serverDropped, stsGone bool
+	for i := 0; i < 8; i++ {
+		if out := r.Reconcile(t.Context(), neo4j); out.Err != nil {
+			t.Fatalf("pass %d: %v", i, out.Err)
+		}
+		servers, _ := admin.ShowServers(t.Context())
+		_, still := intneo4j.FindByAddress(servers, "prod-analytics-0.default.svc.cluster.local:7687")
+		serverDropped = !still
+		var sts appsv1.StatefulSet
+		stsGone = apierrors.IsNotFound(c.Get(t.Context(), types.NamespacedName{Name: "prod-analytics", Namespace: "default"}, &sts))
+		if serverDropped && stsGone {
+			break
+		}
+		_ = c.Get(t.Context(), types.NamespacedName{Name: "prod", Namespace: "default"}, neo4j)
+	}
+	if !serverDropped {
+		t.Fatal("removed analytics server should have been dropped from the cluster")
+	}
+	if !stsGone {
+		t.Fatal("removed analytics StatefulSet should have been deleted")
+	}
+	var prim appsv1.StatefulSet
+	if err := c.Get(t.Context(), types.NamespacedName{Name: "prod-primary", Namespace: "default"}, &prim); err != nil {
+		t.Fatalf("primary StatefulSet must survive pool teardown: %v", err)
 	}
 }
 

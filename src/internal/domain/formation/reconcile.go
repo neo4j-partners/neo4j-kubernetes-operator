@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -102,7 +103,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 		log.Info("system primary scale-out blocked", "reason", "UnsupportedSystemScaleUp")
 	}
 
-	scalingIn := false
+	// Pools the spec no longer declares but that still have a StatefulSet (a removed
+	// secondaries.analytics/read key). ActivePools stopped managing them, so without a teardown they
+	// would linger as orphaned StatefulSets and Enabled servers. A non-empty set forces the scale-in
+	// path below, so database topologies shrink to the pools that remain before any DEALLOCATE.
+	teardownPools, err := r.teardownPools(ctx, neo4j)
+	if err != nil {
+		return shared.Requeue(requeueAfter)
+	}
+
+	scalingIn := len(teardownPools) > 0
 	for _, pool := range render.ActivePools(neo4j) {
 		ctxPool := render.ContextForPool(neo4j, pool)
 		var sts appsv1.StatefulSet
@@ -218,6 +228,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4j) shared
 			return shared.Failed(err)
 		}
 		return shared.Requeue(time.Second) // let workload apply shrink
+	}
+
+	// Retire pools the spec dropped: drain, drop, then delete the orphaned StatefulSet. Runs after
+	// the active-pool scale-in has settled its status so the two never race on status.drainOK.
+	if len(teardownPools) > 0 {
+		if res, done := r.tearDownRemovedPools(ctx, admin, neo4j, servers, drainExempt, teardownPools); done {
+			return res
+		}
 	}
 
 	if pendingDrain {
@@ -462,6 +480,88 @@ func dropServer(ctx context.Context, admin intneo4j.Admin, s intneo4j.Server) (b
 		return false, fmt.Errorf("DROP SERVER %s: %w", s.Name, err)
 	}
 	return false, nil
+}
+
+// teardownPools returns the removed pools (render.RemovedPools) whose StatefulSet still exists —
+// pools the spec dropped but that are still running and must be drained, dropped, and deleted. The
+// StatefulSet existence check is what keeps a pool that was never created out of the teardown path.
+func (r *Reconciler) teardownPools(ctx context.Context, neo4j *neo4jv1.Neo4j) ([]render.PoolID, error) {
+	var out []render.PoolID
+	for _, pool := range render.RemovedPools(neo4j) {
+		ctxPool := render.ContextForPool(neo4j, pool)
+		var sts appsv1.StatefulSet
+		key := types.NamespacedName{Name: ctxPool.STSName(), Namespace: ctxPool.Namespace()}
+		err := r.Client.Get(ctx, key, &sts)
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pool)
+	}
+	return out, nil
+}
+
+// tearDownRemovedPools drains and drops every member of each removed pool, then deletes its
+// StatefulSet and (when storage.volumeClaimRetention.whenScaled is Delete) its PVCs. The member
+// DROPs reuse the scale-in path (ensureDropped); a removed pool's servers are read-only
+// secondaries, so retiring them costs neither data nor quorum. Returns done=true with the
+// StepResult to return whenever it acted or is still waiting; done=false means nothing was left.
+//
+// ponytail: the pool's headless / pool-client Services, server-config ConfigMap, PDB and
+// Certificates stay behind, owner-referenced to the CR — inert without pods and GC'd when the CR is
+// deleted. TODO(pool-teardown): prune those by pool label so a removed pool leaves nothing behind.
+func (r *Reconciler) tearDownRemovedPools(ctx context.Context, admin intneo4j.Admin, neo4j *neo4jv1.Neo4j,
+	servers []intneo4j.Server, exempt map[string]bool, pools []render.PoolID) (shared.StepResult, bool) {
+	log := ctrllog.FromContext(ctx)
+	for _, pool := range pools {
+		ctxPool := render.ContextForPool(neo4j, pool)
+		var sts appsv1.StatefulSet
+		stsKey := types.NamespacedName{Name: ctxPool.STSName(), Namespace: ctxPool.Namespace()}
+		if err := r.Client.Get(ctx, stsKey, &sts); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return shared.Requeue(requeueAfter), true
+		}
+		current := int32(0)
+		if sts.Spec.Replicas != nil {
+			current = *sts.Spec.Replicas
+		}
+		// Drain and drop every member (desired 0 → TailMembers returns ordinals [current-1 .. 0]).
+		for _, m := range TailMembers(neo4j, pool, current) {
+			done, err := r.ensureDropped(ctx, admin, servers, m, exempt)
+			if err != nil {
+				return adminErrResult(neo4j, err), true
+			}
+			if !done {
+				if waited := drainWaited(neo4j); waited > drainBudget {
+					return r.reportDrainTimeout(ctx, neo4j, servers, m, waited), true
+				}
+				log.Info("draining removed-pool member", "pool", string(pool), "pod", m.PodName)
+				setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonDraining,
+					fmt.Sprintf("draining %s (pool %s removed from spec)", m.PodName, pool))
+				return shared.Requeue(requeueAfter), true
+			}
+			var err2 error
+			if servers, err2 = admin.ShowServers(ctx); err2 != nil {
+				return shared.Requeue(requeueAfter), true
+			}
+		}
+		// Every member dropped — delete the PVCs (per whenScaled) then the orphaned StatefulSet.
+		if err := persistence.WipeStaleMemberPVCs(ctx, r.Client, neo4j, pool, 0); err != nil {
+			return shared.Failed(err), true
+		}
+		if err := r.Client.Delete(ctx, &sts); err != nil && !apierrors.IsNotFound(err) {
+			return shared.Failed(fmt.Errorf("delete removed pool %s StatefulSet %s: %w", pool, ctxPool.STSName(), err)), true
+		}
+		log.Info("removed pool torn down", "pool", string(pool), "sts", ctxPool.STSName())
+		setCondition(neo4j, oracle.ConditionServersPendingDrain, metav1.ConditionTrue, oracle.ReasonAwaitingSTSShrink,
+			fmt.Sprintf("removed pool %s drained and dropped; deleting its StatefulSet", pool))
+		return shared.Requeue(requeueAfter), true
+	}
+	return shared.Done(), false
 }
 
 // drainExemptDatabases lists the databases that may stay in a departing member's hosting without
