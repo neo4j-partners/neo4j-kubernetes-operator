@@ -40,8 +40,9 @@ type AggregateInputs struct {
 	PVCClaim    string
 	DBArtifacts map[string]string // PVC only: db -> artifact path (chain's last link)
 	ObjectURL   string
-	Databases   []string                        // object store: db operands to aggregate
-	Credentials *neo4jv1.BackupCredentials // object store: static-key Secret (nil → workload identity)
+	Databases   []string                      // object store: db operands to aggregate
+	Credentials *neo4jv1.BackupCredentials    // object store: static-key Secret (nil → workload identity)
+	TLS         *neo4jv1.BackupObjectStoreTLS // object store: private-CA trust (nil → public CA)
 	// Scratch sizes the --temp-path staging volume (same semantics as a backup's spec.scratch): an
 	// aggregate also writes a working copy before producing the recovered full, so a large chain
 	// needs real disk here too. Nil → emptyDir.
@@ -115,6 +116,13 @@ func AggregateJob(neo4j *neo4jv1.Neo4j, jobName string, in AggregateInputs) (*ba
 		container.EnvFrom = []corev1.EnvFromSource{{
 			SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: in.Credentials.SecretName}},
 		}}
+	}
+	// Private-CA trust for an object-store endpoint signed by a corporate PKI (same wiring as the
+	// backup Job): mount the CA and point neo4j-admin's S3 client at it via AWS_CA_BUNDLE / SSL_CERT_FILE.
+	if vol, mnt, env := objectStoreCATrust(neo4jv1.BackupDestination{Type: neo4jv1.BackupDestinationS3, TLS: in.TLS}); vol != nil {
+		volumes = append(volumes, *vol)
+		container.VolumeMounts = append(container.VolumeMounts, *mnt)
+		container.Env = append(container.Env, env...)
 	}
 	if neo4j.Spec.Image != nil && neo4j.Spec.Image.PullPolicy != "" {
 		container.ImagePullPolicy = corev1.PullPolicy(neo4j.Spec.Image.PullPolicy)

@@ -129,6 +129,7 @@ block swapped):
 | [`backup/04-backup-aggregate.yaml`](backup/04-backup-aggregate.yaml) | `Neo4jBackup` type `Aggregate` (collapse chain → recovered full) |
 | [`backup/05-restore.yaml`](backup/05-restore.yaml) | `Neo4jRestore` by `source.backupRef` |
 | [`backup/06-schedule.yaml`](backup/06-schedule.yaml) | `Neo4jBackupSchedule` + `aggregate.enabled` + `full.retention.keepLast` |
+| [`backup/07-backup-s3-private-ca.yaml`](backup/07-backup-s3-private-ca.yaml) | S3 backup trusting a private/corporate CA via `destination.tls` (StorageGrid/Ceph/NetApp/MinIO) |
 
 Concepts and field reference: [Backup and restore](../docs/user-guide/03-neo4j/10-backup-restore.md).
 
