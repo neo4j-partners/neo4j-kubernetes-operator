@@ -263,6 +263,17 @@ func (c Context) WorkloadLabels() map[string]string {
 	return labels
 }
 
+// PoolScopedLabels are CommonLabels plus the pool label. Used on per-pool objects (headless /
+// member / pool-client Services, neo4j.conf + apoc ConfigMaps) so a prune can select and delete
+// them by {instance, managed-by, pool} once the pool leaves topology.secondaries — see
+// shared.PruneRemovedPoolObjects. Instance-wide objects (client / admin Services, PDB) keep plain
+// CommonLabels so the per-pool selector never reaches them.
+func (c Context) PoolScopedLabels(component string) map[string]string {
+	labels := c.CommonLabels(component)
+	labels[LabelPool] = string(c.Pool)
+	return labels
+}
+
 // SelectorLabels returns the minimal label set for Service selectors.
 func (c Context) SelectorLabels() map[string]string {
 	return map[string]string{

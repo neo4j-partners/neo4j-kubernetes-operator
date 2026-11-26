@@ -16,7 +16,7 @@ func HeadlessService(ctx render.Context) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ctx.HeadlessServiceName(),
 			Namespace: ctx.Namespace(),
-			Labels:    ctx.CommonLabels("connectivity"),
+			Labels:    ctx.PoolScopedLabels("connectivity"),
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP:                "None",
@@ -72,7 +72,7 @@ func PoolClientService(ctx render.Context) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        ctx.PoolClientServiceName(),
 			Namespace:   ctx.Namespace(),
-			Labels:      ctx.CommonLabels("connectivity"),
+			Labels:      ctx.PoolScopedLabels("connectivity"),
 			Annotations: svc.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
@@ -141,7 +141,7 @@ func MemberClientService(ctx render.Context, podName string) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: ctx.Namespace(),
-			Labels:    ctx.CommonLabels("connectivity"),
+			Labels:    ctx.PoolScopedLabels("connectivity"),
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
@@ -153,7 +153,7 @@ func MemberClientService(ctx render.Context, podName string) *corev1.Service {
 
 // MemberInternalsService builds a per-pod internals Service for K8S cluster discovery (BDR-007).
 func MemberInternalsService(ctx render.Context, podName string) *corev1.Service {
-	labels := ctx.CommonLabels("connectivity")
+	labels := ctx.PoolScopedLabels("connectivity")
 	labels[render.LabelServiceRole] = render.ServiceRoleInternals
 	// Helm: helm.neo4j.com/clustering — only primaries are in the primary discovery set.
 	if ctx.Pool == render.PoolPrimary {

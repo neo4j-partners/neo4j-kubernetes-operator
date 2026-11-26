@@ -60,23 +60,29 @@ func loadBoltRootCAs(ctx context.Context, c client.Client, neo4j *neo4jv1.Neo4j)
 		}
 	}
 
-	// Self-signed / leaf-as-trust: use the public certificate when no CA pool was projected.
-	// Resolved through render/trust so the cert-manager shape (one Secret holding tls.crt)
-	// works here too, not just BYO privateKey/publicCertificate.
-	if mat, ok := rendertrust.PolicyMaterial(neo4j, "bolt"); ok && added == 0 {
-		var secret corev1.Secret
-		key := types.NamespacedName{Name: mat.CertSecret, Namespace: neo4j.Namespace}
-		if err := c.Get(ctx, key, &secret); err != nil {
-			return nil, fmt.Errorf("trust.certificates.bolt public certificate: %w", err)
+	// No explicit trustedCerts bundle projected: trust the policy's own anchor, resolved the
+	// same way a client does (rendertrust.TrustAnchorKeys) — under cert-manager that is the
+	// issuing CA (ca.crt), not the leaf tls.crt; for BYO it is the self-signed public cert.
+	// Trusting the cert-manager leaf here was a bug: cert-manager reissues the leaf on renewal
+	// or a SAN change (pool scale/teardown), the pods keep serving the previous leaf until they
+	// restart, and the dial then failed with "certificate signed by unknown authority". The CA
+	// survives every reissue, so this is also what the servers' clients trust.
+	if added == 0 {
+		for _, need := range rendertrust.TrustAnchorKeys(neo4j, "bolt") {
+			var secret corev1.Secret
+			key := types.NamespacedName{Name: need.SecretName, Namespace: neo4j.Namespace}
+			if err := c.Get(ctx, key, &secret); err != nil {
+				return nil, fmt.Errorf("trust.certificates.bolt trust anchor %q: %w", need.Key, err)
+			}
+			pemBytes, ok := secret.Data[need.Key]
+			if !ok || len(pemBytes) == 0 {
+				return nil, fmt.Errorf("trust.certificates.bolt trust anchor: secret %q missing key %q", need.SecretName, need.Key)
+			}
+			if !pool.AppendCertsFromPEM(pemBytes) {
+				return nil, fmt.Errorf("trust.certificates.bolt trust anchor: no certificates parsed from %q", need.Key)
+			}
+			added++
 		}
-		pemBytes, ok := secret.Data[mat.CertPath]
-		if !ok || len(pemBytes) == 0 {
-			return nil, fmt.Errorf("trust.certificates.bolt public certificate: secret %q missing key %q", secret.Name, mat.CertPath)
-		}
-		if !pool.AppendCertsFromPEM(pemBytes) {
-			return nil, fmt.Errorf("trust.certificates.bolt public certificate: no certificates parsed from %q", mat.CertPath)
-		}
-		added++
 	}
 
 	if added == 0 {

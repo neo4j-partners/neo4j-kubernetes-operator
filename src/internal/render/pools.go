@@ -25,6 +25,31 @@ func ActivePools(neo4j *neo4jv1.Neo4j) []PoolID {
 	return pools
 }
 
+// secondaryPools are the fixed V1 secondary pools, in teardown order.
+var secondaryPools = []PoolID{PoolAnalytics, PoolRead}
+
+// RemovedPools returns the secondary pools the current spec no longer declares (their
+// topology.secondaries key was deleted, or the whole block was). A pool listed here may still have
+// a running StatefulSet and Enabled servers from an earlier generation: ActivePools stops managing
+// a pool the instant its key leaves the spec, so formation uses this to find pools to drain, drop,
+// and delete instead of orphaning them. Empty outside cluster mode.
+func RemovedPools(neo4j *neo4jv1.Neo4j) []PoolID {
+	if !IsClusterMode(neo4j) {
+		return nil
+	}
+	active := map[PoolID]bool{}
+	for _, p := range ActivePools(neo4j) {
+		active[p] = true
+	}
+	var out []PoolID
+	for _, p := range secondaryPools {
+		if !active[p] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // ContextForPool builds a render context for the given pool.
 func ContextForPool(neo4j *neo4jv1.Neo4j, pool PoolID) Context {
 	return NewContext(neo4j, pool)
