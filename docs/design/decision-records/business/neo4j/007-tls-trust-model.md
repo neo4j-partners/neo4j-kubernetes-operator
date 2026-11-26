@@ -224,9 +224,8 @@ Identical to Helm `_ssl.tpl`:
 
 | Pod path | Source |
 |----------|--------|
-| `/var/lib/neo4j/certificates/{policy}/private.key` | `privateKey.secretName` key `subPath` (default `private.key`) **or** cert-manager `tls.key` |
-| `/var/lib/neo4j/certificates/{policy}/public.crt` | `publicCertificate.secretName` key `subPath` (default `public.crt`) **or** cert-manager `tls.crt` |
-| `/var/lib/neo4j/certificates/{policy}/trusted/*` | `trustedCerts.sources` projected volume (Helm `_ssl.tpl` trusted mount) |
+| `/var/lib/neo4j/certificates/{policy}/live/` (or `live-cert/` + `live-key/`) | `privateKey`/`publicCertificate` Secret(s) **or** cert-manager Secret, mounted as whole-Secret directories (no `subPath`) so kubelet refreshes them in place; `public_certificate`/`private_key` conf keys point at the file inside, named by the data key (`subPath` default `private.key`/`public.crt`, or cert-manager `tls.key`/`tls.crt`) |
+| `/var/lib/neo4j/certificates/{policy}/trusted/*` | `trustedCerts.sources` projected volume, per-item `subPath` (Helm `_ssl.tpl` trusted mount) |
 
 Neo4j config injected when `privateKey` material present (BYO) or policy `secretName` populated (cert-manager):
 
@@ -514,20 +513,30 @@ Options A, C, and D are rejected or deferred. Option A residual (`revokedCerts`)
 
 - `revokedCerts` still V1.1 — rare CRL use cases via `additionalMounts` until then.
 
-### Known deviation — in-place rotation does not reach the pod
+### Resolved — in-place rotation now reaches the pod with `reload.enabled`
 
-Decision item 3 recommends `reload.enabled: true` for cert-manager renewal and in-place BYO Secret
-rotation. As implemented (and as the Helm chart behaves), the leaf key and certificate are mounted
-with `subPath`, because the Secret data key is user-named while Neo4j requires the files at
-`private.key` and `public.crt`. Kubernetes does not propagate Secret updates into `subPath` mounts,
-so `dbms.security.tls_reload_enabled` has nothing to pick up for a rotated leaf: the pods must
-restart. `trustedCerts` are projected per item and do propagate, so CA bundle changes reload.
+Originally the leaf key and certificate were mounted with `subPath` (the Secret data key is
+user-named while Neo4j wants the files at `private.key`/`public.crt`). Kubernetes does not propagate
+Secret updates into `subPath` mounts, so `dbms.security.tls_reload_enabled` had nothing to pick up
+for a rotated or reissued leaf: every pod had to restart. For a cert-manager cluster this meant the
+whole cluster rolled on any member-set change (the per-member SANs move, so the shared cert
+reissues) and on every renewal — rolling the primaries for a change they did not need.
 
-Removing the deviation means mounting each policy directory as a single projected volume with item
-renames instead of `subPath`. That is deferred because it changes the rendered StatefulSet (forcing a
-restart on operator upgrade) and makes the policy directory read-only, which needs verification
-against the Neo4j image — the entrypoint expects to be able to create `trusted/` and `revoked/`
-under `certificates/{policy}/`.
+This is now fixed. The leaf cert+key are mounted as **whole-Secret directories** instead of
+`subPath` (`…/{policy}/live/`, or `live-cert/` + `live-key/` when key and cert come from different
+Secrets), which kubelet refreshes in place; `public_certificate`/`private_key` in `neo4j.conf` point
+at the files inside those dirs. The policy's `base_directory` and `trusted_dir` stay at their Neo4j
+defaults, so the Secret's `..data` symlink dir lands in an unscanned subdir and is never parsed as
+PEM. With `reload.enabled` the pod-template `tls-checksum` roll is then scoped to only the material
+Neo4j *cannot* reload in place — the `subPath`-mounted `trustedCerts` bundles — via
+`RestartCriticalSecretKeys`. Net effect: a leaf reissue (scale, or renewal) no longer rolls the
+pods when `reload.enabled`; a CA bundle change still does; and with `reload` off everything rolls as
+before. Deploying this change itself re-renders the StatefulSet once (the mount layout changes), so
+expect a single rollout on operator upgrade.
+
+`trustedCerts` keep their per-item `subPath` projected mount (CA bundles change rarely and the
+directory-scan `..data` concern is real for the scanned `trusted/` dir); making those hot-reloadable
+too is a later step if needed.
 
 ---
 

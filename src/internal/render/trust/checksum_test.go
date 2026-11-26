@@ -1,6 +1,39 @@
 package trust
 
-import "testing"
+import (
+	"testing"
+
+	neo4jv1 "github.com/neo4j/neo4j-kubernetes-operator/src/api/v1"
+)
+
+// With trust.reload the leaf cert+key are live-directory mounts Neo4j hot-reloads, so a reissue
+// (new leaf bytes on scale/renewal) must not move the restart checksum — that is what stops the
+// pods rolling. A subPath-mounted trustedCerts CA cannot hot-update, so it stays restart-critical.
+func TestRestartCriticalSecretKeysReloadExcludesLeaf(t *testing.T) {
+	n := clusterWithCertManager()
+	n.Spec.Trust.Reload = &neo4jv1.TrustReloadSpec{Enabled: true}
+
+	on := RestartCriticalSecretKeys(n)
+	for _, k := range on {
+		if k.Key == certManagerCertKey || k.Key == certManagerKeyKey {
+			t.Fatalf("reload on: hot-reloaded leaf/key %q must be excluded from the restart checksum, got %#v", k.Key, on)
+		}
+	}
+	foundCA := false
+	for _, k := range on {
+		if k.Key == certManagerCAKey {
+			foundCA = true
+		}
+	}
+	if !foundCA {
+		t.Fatalf("reload on: subPath trustedCerts ca.crt must stay restart-critical, got %#v", on)
+	}
+
+	n.Spec.Trust.Reload = nil
+	if off := RestartCriticalSecretKeys(n); len(off) <= len(on) {
+		t.Fatalf("reload off must add the leaf+key back: off=%#v on=%#v", off, on)
+	}
+}
 
 func TestMaterialChecksumChangesWithCertBytes(t *testing.T) {
 	neo4j := standaloneWithBoltTrust()

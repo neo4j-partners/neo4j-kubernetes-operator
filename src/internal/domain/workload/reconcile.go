@@ -448,7 +448,7 @@ func randomPassword(n int) (string, error) {
 }
 
 func (r *Reconciler) tlsChecksum(ctx context.Context, neo4j *neo4jv1.Neo4j) string {
-	keys := rendertrust.MountedSecretKeys(neo4j)
+	keys := rendertrust.RestartCriticalSecretKeys(neo4j)
 	if len(keys) == 0 {
 		return ""
 	}

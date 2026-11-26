@@ -16,6 +16,15 @@ const (
 	defaultPublicCert = "public.crt"
 	secretVolumeMode  = int32(0o440)
 
+	// liveDir/liveCertDir/liveKeyDir hold the leaf cert + key as whole-Secret *directory* mounts
+	// (not subPath), so kubelet refreshes them in place when cert-manager reissues. With
+	// trust.reload Neo4j hot-reloads the new leaf and the pods never restart (BDR-006). liveDir is
+	// used when key and cert share one Secret (cert-manager, and the common BYO shape); the split
+	// dirs cover a BYO setup whose key and cert live in different Secrets.
+	liveDir     = "live"
+	liveCertDir = "live-cert"
+	liveKeyDir  = "live-key"
+
 	// cert-manager issues kubernetes.io/tls Secrets with these fixed data keys.
 	certManagerKeyKey  = "tls.key"
 	certManagerCertKey = "tls.crt"
@@ -220,43 +229,34 @@ func AppendVolumes(ctx render.Context, container *corev1.Container, podSpec *cor
 
 func appendPolicyVolumes(policy string, spec *neo4jv1.TLSPolicySpec, mat Material, container *corev1.Container, podSpec *corev1.PodSpec) {
 	mode := secretVolumeMode
-	certVol := policy + "-cert"
-	keyVol := policy + "-key"
 
-	podSpec.Volumes = append(podSpec.Volumes,
-		corev1.Volume{
-			Name: certVol,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  mat.CertSecret,
-					DefaultMode: &mode,
-				},
-			},
-		},
-		corev1.Volume{
-			Name: keyVol,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  mat.KeySecret,
-					DefaultMode: &mode,
-				},
-			},
-		},
-	)
-	container.VolumeMounts = append(container.VolumeMounts,
-		corev1.VolumeMount{
-			Name:      certVol,
-			MountPath: path.Join(certDir, policy, defaultPublicCert),
-			SubPath:   mat.CertPath,
+	// Leaf cert + key: whole-Secret directory mounts (no subPath) so kubelet refreshes them on a
+	// reissue. public_certificate/private_key in the conf point at the files inside (Neo4jConfKeys
+	// → policyLivePaths). base_directory and trusted_dir stay at their Neo4j defaults, so the
+	// Secret's ..data symlink dir lands in an unscanned subdir and is never parsed as PEM.
+	if mat.CertSecret == mat.KeySecret {
+		vol := policy + "-tls"
+		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+			Name:         vol,
+			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: mat.CertSecret, DefaultMode: &mode}},
+		})
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      vol,
+			MountPath: path.Join(certDir, policy, liveDir),
 			ReadOnly:  true,
-		},
-		corev1.VolumeMount{
-			Name:      keyVol,
-			MountPath: path.Join(certDir, policy, defaultPrivateKey),
-			SubPath:   mat.KeyPath,
-			ReadOnly:  true,
-		},
-	)
+		})
+	} else {
+		certVol := policy + "-cert"
+		keyVol := policy + "-key"
+		podSpec.Volumes = append(podSpec.Volumes,
+			corev1.Volume{Name: certVol, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: mat.CertSecret, DefaultMode: &mode}}},
+			corev1.Volume{Name: keyVol, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: mat.KeySecret, DefaultMode: &mode}}},
+		)
+		container.VolumeMounts = append(container.VolumeMounts,
+			corev1.VolumeMount{Name: certVol, MountPath: path.Join(certDir, policy, liveCertDir), ReadOnly: true},
+			corev1.VolumeMount{Name: keyVol, MountPath: path.Join(certDir, policy, liveKeyDir), ReadOnly: true},
+		)
+	}
 
 	if spec.TrustedCerts == nil || len(spec.TrustedCerts.Sources) == 0 {
 		return
@@ -313,11 +313,16 @@ func Neo4jConfKeys(ctx render.Context) map[string]string {
 		"internal.dbms.ssl.system.ignore_dot_files": "true",
 	}
 	for _, def := range tlsPolicies {
-		spec, _, ok := policyActive(ctx.Neo4j, def)
+		spec, mat, ok := policyActive(ctx.Neo4j, def)
 		if !ok {
 			continue
 		}
 		keys["dbms.ssl.policy."+def.name+".enabled"] = "true"
+		// Point Neo4j at the live-directory mounts (appendPolicyVolumes); the defaults assume a
+		// single file at base_directory, which no longer holds now that these are directory mounts.
+		certFile, keyFile := policyLivePaths(def.name, mat)
+		keys["dbms.ssl.policy."+def.name+".public_certificate"] = certFile
+		keys["dbms.ssl.policy."+def.name+".private_key"] = keyFile
 		if def.forceClientAuth != "" {
 			keys["dbms.ssl.policy."+def.name+".client_auth"] = def.forceClientAuth
 		} else {
@@ -327,10 +332,29 @@ func Neo4jConfKeys(ctx render.Context) map[string]string {
 			keys["server.bolt.tls_level"] = "REQUIRED"
 		}
 	}
-	if ctx.Neo4j.Spec.Trust.Reload != nil && ctx.Neo4j.Spec.Trust.Reload.Enabled {
+	if ReloadEnabled(ctx.Neo4j) {
 		keys["dbms.security.tls_reload_enabled"] = "true"
 	}
 	return keys
+}
+
+// ReloadEnabled reports whether trust.reload is on: Neo4j watches its SSL dirs and hot-reloads
+// material, so the operator can skip the pod roll for anything kubelet refreshes in place.
+func ReloadEnabled(neo4j *neo4jv1.Neo4j) bool {
+	return TrustEnabled(neo4j) && neo4j.Spec.Trust.Reload != nil && neo4j.Spec.Trust.Reload.Enabled
+}
+
+// policyLivePaths resolves the in-pod public_certificate / private_key paths, matching the
+// whole-Secret directory mounts appendPolicyVolumes creates (one shared dir when key and cert
+// come from the same Secret, split dirs otherwise). The filename inside each dir is the Secret's
+// own data key (tls.crt/tls.key for cert-manager, the BYO subPath otherwise).
+func policyLivePaths(policy string, mat Material) (certFile, keyFile string) {
+	base := path.Join(certDir, policy)
+	if mat.CertSecret == mat.KeySecret {
+		d := path.Join(base, liveDir)
+		return path.Join(d, mat.CertPath), path.Join(d, mat.KeyPath)
+	}
+	return path.Join(base, liveCertDir, mat.CertPath), path.Join(base, liveKeyDir, mat.KeyPath)
 }
 
 func clientAuthValue(auth neo4jv1.TLSClientAuth) string {

@@ -78,26 +78,26 @@ func TestAppendVolumesClusterBYO(t *testing.T) {
 	foundKey, foundCert, foundTrusted := false, false, false
 	for _, m := range container.VolumeMounts {
 		switch m.MountPath {
-		case "/var/lib/neo4j/certificates/cluster/private.key":
+		case "/var/lib/neo4j/certificates/cluster/live-key":
 			foundKey = true
-			if m.SubPath != "private.key" {
-				t.Fatalf("key subPath = %q", m.SubPath)
+			if m.SubPath != "" {
+				t.Fatalf("key must be a directory mount (no subPath), got %q", m.SubPath)
 			}
-		case "/var/lib/neo4j/certificates/cluster/public.crt":
+		case "/var/lib/neo4j/certificates/cluster/live-cert":
 			foundCert = true
+			if m.SubPath != "" {
+				t.Fatalf("cert must be a directory mount (no subPath), got %q", m.SubPath)
+			}
 		case "/var/lib/neo4j/certificates/cluster/trusted/ca.crt":
 			foundTrusted = true
+			if m.SubPath != "ca.crt" {
+				t.Fatalf("trusted ca.crt subPath = %q", m.SubPath)
+			}
 		}
 	}
 	if !foundKey || !foundCert || !foundTrusted {
 		t.Fatalf("missing mounts key=%v cert=%v trusted=%v mounts=%v", foundKey, foundCert, foundTrusted, container.VolumeMounts)
 	}
-	for _, m := range container.VolumeMounts {
-		if m.MountPath == "/var/lib/neo4j/certificates/cluster/trusted/ca.crt" && m.SubPath == "ca.crt" {
-			return
-		}
-	}
-	t.Fatal("expected trusted ca.crt subPath mount")
 }
 
 func TestAppendVolumesBoltAndHTTPS(t *testing.T) {
@@ -107,21 +107,26 @@ func TestAppendVolumesBoltAndHTTPS(t *testing.T) {
 	podSpec := &corev1.PodSpec{}
 	AppendVolumes(ctx, container, podSpec)
 
-	want := map[string]string{
-		"/var/lib/neo4j/certificates/https/public.crt": "public.crt",
-		"/var/lib/neo4j/certificates/bolt/private.key":  "private.key",
-		"/var/lib/neo4j/certificates/bolt/public.crt":   "public.crt",
+	// Leaf cert+key are directory mounts (no subPath) so kubelet refreshes them on a reissue.
+	want := []string{
+		"/var/lib/neo4j/certificates/https/live-cert",
+		"/var/lib/neo4j/certificates/https/live-key",
+		"/var/lib/neo4j/certificates/bolt/live-cert",
+		"/var/lib/neo4j/certificates/bolt/live-key",
 	}
-	for path, sub := range want {
+	for _, p := range want {
 		found := false
 		for _, m := range container.VolumeMounts {
-			if m.MountPath == path && m.SubPath == sub {
+			if m.MountPath == p {
 				found = true
+				if m.SubPath != "" {
+					t.Fatalf("mount %s must be a directory mount (no subPath), got %q", p, m.SubPath)
+				}
 				break
 			}
 		}
 		if !found {
-			t.Fatalf("missing mount %s subPath=%s in %#v", path, sub, container.VolumeMounts)
+			t.Fatalf("missing mount %s in %#v", p, container.VolumeMounts)
 		}
 	}
 }
@@ -137,6 +142,13 @@ func TestNeo4jConfKeysCluster(t *testing.T) {
 	}
 	if keys["internal.dbms.ssl.system.ignore_dot_files"] != "true" {
 		t.Fatalf("ignore_dot_files = %q", keys["internal.dbms.ssl.system.ignore_dot_files"])
+	}
+	// public_certificate/private_key point at the live-directory mounts (split secrets here).
+	if got := keys["dbms.ssl.policy.cluster.public_certificate"]; got != "/var/lib/neo4j/certificates/cluster/live-cert/public.crt" {
+		t.Fatalf("public_certificate = %q", got)
+	}
+	if got := keys["dbms.ssl.policy.cluster.private_key"]; got != "/var/lib/neo4j/certificates/cluster/live-key/private.key" {
+		t.Fatalf("private_key = %q", got)
 	}
 }
 
@@ -178,7 +190,7 @@ func TestValidateStandaloneTrust(t *testing.T) {
 	AppendVolumes(ctx, container, podSpec)
 	foundBolt := false
 	for _, m := range container.VolumeMounts {
-		if m.MountPath == "/var/lib/neo4j/certificates/bolt/public.crt" {
+		if m.MountPath == "/var/lib/neo4j/certificates/bolt/live-cert" {
 			foundBolt = true
 		}
 		if strings.Contains(m.MountPath, "/certificates/cluster/") {
