@@ -129,10 +129,10 @@ func certManagerBoltCR() *neo4jv1.Neo4j {
 	}
 }
 
-// The operator's own bolt+s dial must trust the cert-manager-issued material. loadBoltRootCAs
-// resolves through PolicyMaterial, so the cert-manager shape (one Secret, tls.crt) works with no
-// BYO publicCertificate — this is the path ClusterFormed depends on.
-func TestLoadBoltRootCAsTrustsCertManagerLeaf(t *testing.T) {
+// The operator's own bolt+s dial must trust the cert-manager issuing CA (ca.crt), the same
+// anchor clients use, not the leaf tls.crt — otherwise every cert reissue breaks the dial with
+// "signed by unknown authority". The junk tls.crt here proves the CA key is the one read.
+func TestLoadBoltRootCAsTrustsCertManagerCA(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = neo4jv1.AddToScheme(scheme)
@@ -140,7 +140,11 @@ func TestLoadBoltRootCAsTrustsCertManagerLeaf(t *testing.T) {
 	neo4j := certManagerBoltCR()
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev-bolt-tls", Namespace: "ns"},
-		Data:       map[string][]byte{"tls.crt": selfSignedPEM(t), "tls.key": []byte("key")},
+		Data: map[string][]byte{
+			"ca.crt":  selfSignedPEM(t),
+			"tls.crt": []byte("not-a-pem-leaf"), // must be ignored; CA is the trust anchor
+			"tls.key": []byte("key"),
+		},
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()
 
@@ -149,11 +153,13 @@ func TestLoadBoltRootCAsTrustsCertManagerLeaf(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if pool == nil || len(pool.Subjects()) == 0 { //nolint:staticcheck // Subjects ok for test assertion
-		t.Fatal("expected the issued leaf in the trust pool")
+		t.Fatal("expected the issuing CA in the trust pool")
 	}
 }
 
-func TestLoadBoltRootCAsCertManagerSecretMissingKey(t *testing.T) {
+// ca.crt absent means cert-manager has not finished issuing: the dial must fail (and requeue)
+// rather than fall back to trusting the leaf.
+func TestLoadBoltRootCAsCertManagerMissingCA(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = neo4jv1.AddToScheme(scheme)
@@ -161,11 +167,11 @@ func TestLoadBoltRootCAsCertManagerSecretMissingKey(t *testing.T) {
 	neo4j := certManagerBoltCR()
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "dev-bolt-tls", Namespace: "ns"},
-		Data:       map[string][]byte{"tls.key": []byte("key")}, // tls.crt not issued yet
+		Data:       map[string][]byte{"tls.crt": selfSignedPEM(t), "tls.key": []byte("key")}, // ca.crt not issued yet
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()
 
 	if _, err := loadBoltRootCAs(t.Context(), c, neo4j); err == nil {
-		t.Fatal("expected an error when tls.crt is absent")
+		t.Fatal("expected an error when ca.crt is absent")
 	}
 }
