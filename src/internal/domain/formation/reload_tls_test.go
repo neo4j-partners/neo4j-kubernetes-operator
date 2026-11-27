@@ -8,7 +8,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -76,7 +78,7 @@ func newReloadReconciler(t *testing.T, neo4j *neo4jv1.Neo4j, certPEM []byte) (*T
 			spy.record(uri)
 			return &fakeAdmin{}, nil
 		},
-		ServedLeaf: func(_ context.Context, addr string) (string, error) { return spy.serve(addr), nil },
+		ServedLeaf: func(_ context.Context, addr string) (string, error) { return spy.serve(addr) },
 	}
 	return r, spy
 }
@@ -85,11 +87,19 @@ type reloadSpy struct {
 	mu       sync.Mutex
 	reloaded []string
 	served   string // fingerprint every member currently serves
+	failPort string // addr suffix (e.g. ":7473") whose served read returns an error
 }
 
 func (s *reloadSpy) record(uri string) { s.mu.Lock(); defer s.mu.Unlock(); s.reloaded = append(s.reloaded, uri) }
-func (s *reloadSpy) serve(string) string { s.mu.Lock(); defer s.mu.Unlock(); return s.served }
-func (s *reloadSpy) count() int          { s.mu.Lock(); defer s.mu.Unlock(); return len(s.reloaded) }
+func (s *reloadSpy) serve(addr string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failPort != "" && strings.HasSuffix(addr, s.failPort) {
+		return "", fmt.Errorf("connection refused")
+	}
+	return s.served, nil
+}
+func (s *reloadSpy) count() int { s.mu.Lock(); defer s.mu.Unlock(); return len(s.reloaded) }
 
 func TestTLSReloadDisabledIsNoOp(t *testing.T) {
 	certPEM, _ := genLeafPEM(t)
@@ -143,5 +153,28 @@ func TestTLSReloadTriggersThenConverges(t *testing.T) {
 	}
 	if spy.count() != 3 {
 		t.Fatalf("steady state re-dialed members (now %d, want 3)", spy.count())
+	}
+}
+
+// A secondary pool member whose https port is unreachable must still converge on the bolt read —
+// a port we cannot read must not wedge the loop (the cl-analytics-0 symptom).
+func TestTLSReloadUnreadablePortDoesNotWedge(t *testing.T) {
+	certPEM, wantFP := genLeafPEM(t)
+	neo4j := reloadTestCR()
+	neo4j.Spec.Trust.Certificates.HTTPS = &neo4jv1.TLSPolicySpec{SecretName: "prod-bolt-tls"}
+	r, spy := newReloadReconciler(t, neo4j, certPEM)
+
+	spy.served = wantFP     // every reachable port already serves the new leaf
+	spy.failPort = ":7473"  // but https is refused on every member
+
+	out := r.Reconcile(t.Context(), neo4j)
+	if out.Err != nil || out.Result.RequeueAfter != 0 {
+		t.Fatalf("a refused https read must not wedge convergence, got %+v", out)
+	}
+	if neo4j.Status.TLSReloadChecksum == "" {
+		t.Fatal("must converge on the reachable bolt read when https is unreadable")
+	}
+	if spy.count() != 0 {
+		t.Fatalf("already-current members must not be reloaded (got %d)", spy.count())
 	}
 }

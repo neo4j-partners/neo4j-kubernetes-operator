@@ -111,20 +111,25 @@ func (r *TLSReloadReconciler) Reconcile(ctx context.Context, neo4j *neo4jv1.Neo4
 	converged := true
 	for _, m := range members {
 		host := boltHost(m)
-		stale := false
+		// A member is converged when every port we could actually read serves the new leaf. A read
+		// *error* (a secondary pool does not expose https on its per-member Service, a member is
+		// briefly down) is skipped, not treated as stale — otherwise an unreachable port wedges the
+		// loop forever. A successful read that mismatches still counts as stale, so a real lag is
+		// never masked. readable==0 (nothing answered) keeps the member unconverged so we retry.
+		readable, matched := 0, 0
 		for policy, fp := range desired {
 			addr := fmt.Sprintf("%s:%d", host, readableClientPorts[policy])
 			got, serr := served(ctx, addr)
 			if serr != nil {
-				log.V(1).Info("tls reload: served read failed", "member", m.PodName, "policy", policy, "err", serr.Error())
-				stale = true
+				log.V(1).Info("tls reload: served read failed, skipping port", "member", m.PodName, "policy", policy, "err", serr.Error())
 				continue
 			}
-			if got != fp {
-				stale = true
+			readable++
+			if got == fp {
+				matched++
 			}
 		}
-		if !stale {
+		if readable > 0 && matched == readable {
 			continue
 		}
 		converged = false
