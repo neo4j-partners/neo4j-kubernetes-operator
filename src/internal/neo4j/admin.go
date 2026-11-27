@@ -68,6 +68,11 @@ type Admin interface {
 	CreateUserIfNotExists(ctx context.Context, username, password string) error
 	GrantRole(ctx context.Context, role, username string) error
 
+	// ReloadTLS runs dbms.security.reloadTLS() (Enterprise, Neo4j 2025.03+): the member re-reads
+	// its SSL material from disk and serves it on new connections without a restart. It is
+	// node-local, so the operator must call it on a direct (non-routed) connection to each member.
+	ReloadTLS(ctx context.Context) error
+
 	Close(ctx context.Context) error
 }
 

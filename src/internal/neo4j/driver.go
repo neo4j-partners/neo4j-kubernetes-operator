@@ -75,6 +75,15 @@ func rewriteAdminURI(uri string, opts ConnectOpts) (string, error) {
 	}
 }
 
+func (a *driverAdmin) ReloadTLS(ctx context.Context) error {
+	// System DB, like every other admin op (and the connectivity probe). reloadTLS reloads all
+	// configured SSL policies on the member that executes it; it must therefore be issued on a
+	// direct bolt:// connection to that member, never a neo4j:// routed one.
+	_, err := neo4j.ExecuteQuery(ctx, a.driver, "CALL dbms.security.reloadTLS()", nil,
+		neo4j.EagerResultTransformer, neo4j.ExecuteQueryWithDatabase("system"))
+	return err
+}
+
 func (a *driverAdmin) Close(ctx context.Context) error {
 	return a.driver.Close(ctx)
 }

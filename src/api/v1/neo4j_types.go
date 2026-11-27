@@ -160,6 +160,11 @@ type Neo4jStatus struct {
 	// to Delete cannot silently arm data destruction.
 	// +kubebuilder:validation:Enum=Retain;Delete
 	VolumeClaimRetentionWhenDeleted *VolumeClaimRetentionPolicyType `json:"volumeClaimRetentionWhenDeleted,omitempty"`
+	// TLSReloadChecksum is the leaf TLS material checksum the operator has already driven onto
+	// every member with dbms.security.reloadTLS() (BDR-007). While trust.reload is on, a leaf
+	// reissue (scale or renewal) does not roll the pods; this records the material the running
+	// members already serve, so the operator re-triggers reloadTLS only when it changes.
+	TLSReloadChecksum string `json:"tlsReloadChecksum,omitempty"`
 }
 
 // +kubebuilder:object:root=true

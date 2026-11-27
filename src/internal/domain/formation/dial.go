@@ -22,6 +22,13 @@ import (
 // this instead of duplicating the dial. Unlike the Reconciler's own path it emits any TLS
 // warning directly on recorder (no advisory memo) — a restore is one-shot, not a hot loop.
 func Dial(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1.Neo4j) (intneo4j.Admin, error) {
+	return dialAt(ctx, c, recorder, neo4j, AdminBoltURI(neo4j))
+}
+
+// dialAt is Dial against an explicit Bolt URI. The system-DB admin path uses AdminBoltURI (neo4j://
+// routing to the leader); the TLS-reload path dials each member's own bolt:// directly, because
+// dbms.security.reloadTLS() is node-local and routing would reload an arbitrary member.
+func dialAt(ctx context.Context, c client.Client, recorder record.EventRecorder, neo4j *neo4jv1.Neo4j, uri string) (intneo4j.Admin, error) {
 	ctxRender := render.ClientServiceContext(neo4j)
 	var secret corev1.Secret
 	key := types.NamespacedName{Name: ctxRender.AuthSecretName(), Namespace: ctxRender.Namespace()}
@@ -39,7 +46,7 @@ func Dial(ctx context.Context, c client.Client, recorder record.EventRecorder, n
 	if err != nil {
 		return nil, err
 	}
-	return intneo4j.Connect(ctx, AdminBoltURI(neo4j), user, pass, opts)
+	return intneo4j.Connect(ctx, uri, user, pass, opts)
 }
 
 // dialOpts builds NEO-004 connect options without the Reconciler's advisory memo. It reuses

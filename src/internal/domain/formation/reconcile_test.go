@@ -107,6 +107,8 @@ func (f *fakeAdmin) DropServer(_ context.Context, name string) error {
 	return nil
 }
 
+func (f *fakeAdmin) ReloadTLS(context.Context) error { return nil }
+
 func (f *fakeAdmin) Close(context.Context) error { return nil }
 
 // Restore surface — unused by formation tests; present to satisfy intneo4j.Admin.

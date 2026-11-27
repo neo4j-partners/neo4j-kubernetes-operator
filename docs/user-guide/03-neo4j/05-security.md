@@ -246,24 +246,26 @@ spec:
       enabled: true
 ```
 
-This turns on Neo4j's own TLS reload (`dbms.security.tls_reload_enabled`), so Neo4j picks up changed
-certificate files without a restart.
+This turns on reload without a restart: a reissued or renewed **leaf** certificate is applied to the
+running pods in place, so scaling the cluster (which reissues the shared cert as the per-member SANs
+change) and cert-manager renewals no longer roll the primaries.
 
-There is a Kubernetes-level caveat you need to plan around. The key and certificate are mounted with
-`subPath`, because the data key inside your Secret can be named anything while Neo4j requires the
-files at `private.key` and `public.crt`. Kubernetes does not propagate Secret updates into `subPath`
-mounts, so **editing a certificate Secret in place does not reach the running pod** and there is
-nothing for the reload to pick up. This matches the Helm chart's behaviour, which mounts the same way.
+How it works, and what to plan around:
 
-In practice that means:
+- **Leaf cert/key are picked up without a restart.** They are mounted as whole-Secret directories
+  that Kubernetes refreshes in place, and the operator then runs Neo4j's `dbms.security.reloadTLS()`
+  on each member and confirms each one serves the new certificate before it considers the rotation
+  done. You need an admin Bolt path for this — `trust.certificates.bolt` (recommended) or
+  `trust.insecureAdminConnection`.
+- **Trusted CA bundles still roll the pods.** `trustedCerts.sources` stay `subPath`-mounted, so
+  changing a CA bundle hashes onto the StatefulSet (`neo4j.com/tls-checksum`) and starts a rolling
+  restart. CA changes are rare; leaf rotation is the frequent case and is the one made restart-free.
+- **With `reload.enabled` off**, any TLS material change (leaf or CA) rolls the pods, as before.
+  `kubectl rollout restart` always works — the operator keeps `kubectl.kubernetes.io/restartedAt`
+  instead of overwriting it on the next reconcile.
 
-- **Trusted CA bundles do propagate.** `trustedCerts.sources` are projected per item, so adding or
-  rotating a CA reaches the pod and the reload applies it.
-- **Renewing a leaf certificate rolls the pods.** The operator hashes the mounted key and certificate
-  bytes onto the StatefulSet (`neo4j.com/tls-checksum`) and watches those Secrets, so a cert-manager
-  reissue or an in-place Secret edit starts a rolling restart. `kubectl rollout restart` also works —
-  the operator keeps `kubectl.kubernetes.io/restartedAt` instead of overwriting it on the next
-  reconcile.
+Upgrading to the operator version that ships this change re-renders the StatefulSet once (the leaf
+mount layout changes), so expect a single rolling restart the first time.
 
 ### Certificates issued by cert-manager
 

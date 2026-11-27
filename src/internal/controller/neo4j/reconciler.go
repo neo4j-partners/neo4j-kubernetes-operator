@@ -50,6 +50,7 @@ type Neo4jReconciler struct {
 	Workload     *workload.Reconciler
 	Connectivity *connectivity.Reconciler
 	Formation    *formation.Reconciler
+	TLSReload    *formation.TLSReloadReconciler
 	StatusWriter *status.Writer
 
 	// MaxConcurrentReconciles defaults to 2 so one wedged CR cannot starve others (NEO-014).
@@ -225,6 +226,14 @@ func (r *Neo4jReconciler) runPipeline(ctx context.Context, neo4j *neo4jv1.Neo4j)
 		{"connectivity", r.Connectivity},
 		{"formation", r.Formation},
 	}
+	// Last so a reload requeue (waiting for kubelet to propagate a reissued leaf) never starves the
+	// earlier domains. Guarded: some tests build the reconciler without it.
+	if r.TLSReload != nil {
+		steps = append(steps, struct {
+			name string
+			step shared.Reconciler
+		}{"tls-reload", r.TLSReload})
+	}
 	for _, s := range steps {
 		// Named logger + keys so Apply and domain code inherit domain/reconciler.
 		stepLog := log.WithName(s.name).WithValues("domain", s.name, "reconciler", s.name)
@@ -348,6 +357,7 @@ func NewReconciler(mgr ctrl.Manager) *Neo4jReconciler {
 		Workload:     workload.New(c, scheme),
 		Connectivity: connectivity.New(c, scheme),
 		Formation:    formation.New(c, scheme, mgr.GetEventRecorderFor("neo4j-controller")),
+		TLSReload:    &formation.TLSReloadReconciler{Client: c, Recorder: mgr.GetEventRecorderFor("neo4j-controller")},
 		StatusWriter: writer,
 	}
 }

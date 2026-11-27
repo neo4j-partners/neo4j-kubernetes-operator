@@ -187,7 +187,7 @@ See [Connectivity](../03-neo4j/04-connectivity.md).
 | `spec.trust.certificates.*.dnsNames` | []string | — | Extra SANs on that policy's cert-manager Certificate |
 | `spec.trust.certificates.*.clientAuth` | string | `None` | `None`, `Optional` or `Require`; `Optional` and `Require` both require `trustedCerts.sources` |
 | `spec.trust.certificates.*.trustedCerts.sources` | []VolumeProjection | — | CA bundles; items must be named |
-| `spec.trust.reload.enabled` | bool | `false` | Turns on Neo4j TLS reload. Leaf key/cert are `subPath` mounts; the operator rolls pods when those Secret bytes change — see [Security](../03-neo4j/05-security.md#certificate-renewal) |
+| `spec.trust.reload.enabled` | bool | `false` | Applies leaf cert/key changes without a restart: the operator runs `dbms.security.reloadTLS()` on each member and verifies it. A CA-bundle change still rolls the pods. Needs an admin Bolt path (`certificates.bolt` or `insecureAdminConnection`) — see [Security](../03-neo4j/05-security.md#certificate-renewal) |
 | `spec.trust.certManager.enabled` | bool | `false` | Operator creates one `Certificate` per policy; requires cert-manager installed and `issuerRef.name` |
 | `spec.trust.certManager.issuerRef` | object | — | `name`, `kind` (`Issuer` or `ClusterIssuer`, default `ClusterIssuer`) |
 | `spec.trust.certManager.dnsNames` | []string | — | Extra SANs merged into the bolt and https Certificates only |

@@ -54,6 +54,53 @@ func RestartCriticalSecretKeys(neo4j *neo4jv1.Neo4j) []SecretKeyNeed {
 	return out
 }
 
+// LeafMaterial names one active policy's hot-reloadable leaf cert+key — the material a running
+// Neo4j adopts via dbms.security.reloadTLS() without a restart.
+type LeafMaterial struct {
+	Policy     string
+	CertSecret string
+	CertKey    string
+	KeySecret  string
+	KeyKey     string
+}
+
+// ActiveLeafMaterials lists the leaf cert+key of every enabled TLS policy (BYO and cert-manager).
+func ActiveLeafMaterials(neo4j *neo4jv1.Neo4j) []LeafMaterial {
+	var out []LeafMaterial
+	for _, def := range tlsPolicies {
+		_, mat, ok := policyActive(neo4j, def)
+		if !ok {
+			continue
+		}
+		out = append(out, LeafMaterial{
+			Policy:     def.name,
+			CertSecret: mat.CertSecret,
+			CertKey:    mat.CertPath,
+			KeySecret:  mat.KeySecret,
+			KeyKey:     mat.KeyPath,
+		})
+	}
+	return out
+}
+
+// HotLeafKeys is the Secret data keys the operator drives into the running members with
+// dbms.security.reloadTLS() while trust.reload is on — exactly the keys RestartCriticalSecretKeys
+// drops from the restart checksum. Empty when reload is off (the leaf then rolls like any other
+// restart-critical material).
+func HotLeafKeys(neo4j *neo4jv1.Neo4j) []SecretKeyNeed {
+	if !ReloadEnabled(neo4j) {
+		return nil
+	}
+	var out []SecretKeyNeed
+	for _, m := range ActiveLeafMaterials(neo4j) {
+		out = append(out,
+			SecretKeyNeed{SecretName: m.CertSecret, Key: m.CertKey},
+			SecretKeyNeed{SecretName: m.KeySecret, Key: m.KeyKey},
+		)
+	}
+	return out
+}
+
 // ReferencesSecret reports whether an active TLS policy mounts data from name.
 func ReferencesSecret(neo4j *neo4jv1.Neo4j, name string) bool {
 	if name == "" {

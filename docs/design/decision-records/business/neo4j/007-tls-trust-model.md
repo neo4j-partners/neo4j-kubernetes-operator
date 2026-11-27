@@ -522,21 +522,41 @@ for a rotated or reissued leaf: every pod had to restart. For a cert-manager clu
 whole cluster rolled on any member-set change (the per-member SANs move, so the shared cert
 reissues) and on every renewal — rolling the primaries for a change they did not need.
 
-This is now fixed. The leaf cert+key are mounted as **whole-Secret directories** instead of
-`subPath` (`…/{policy}/live/`, or `live-cert/` + `live-key/` when key and cert come from different
-Secrets), which kubelet refreshes in place; `public_certificate`/`private_key` in `neo4j.conf` point
-at the files inside those dirs. The policy's `base_directory` and `trusted_dir` stay at their Neo4j
-defaults, so the Secret's `..data` symlink dir lands in an unscanned subdir and is never parsed as
-PEM. With `reload.enabled` the pod-template `tls-checksum` roll is then scoped to only the material
-Neo4j *cannot* reload in place — the `subPath`-mounted `trustedCerts` bundles — via
-`RestartCriticalSecretKeys`. Net effect: a leaf reissue (scale, or renewal) no longer rolls the
-pods when `reload.enabled`; a CA bundle change still does; and with `reload` off everything rolls as
-before. Deploying this change itself re-renders the StatefulSet once (the mount layout changes), so
-expect a single rollout on operator upgrade.
+This is now fixed with **two** coordinated pieces — one on the mount, one in the reconciler —
+because `dbms.security.tls_reload_enabled` is not automatic. That setting only *permits* reload; a
+member re-reads its SSL material from disk solely when it executes the node-local procedure
+`CALL dbms.security.reloadTLS()` (Enterprise, Neo4j 2025.03+). Nothing on a file-change watch fires
+it (verified live: a reissued leaf sat on disk for 14h while the pod kept serving the old one).
 
-`trustedCerts` keep their per-item `subPath` projected mount (CA bundles change rarely and the
-directory-scan `..data` concern is real for the scanned `trusted/` dir); making those hot-reloadable
-too is a later step if needed.
+1. **Mount.** The leaf cert+key are mounted as whole-Secret **directories** instead of `subPath`
+   (`…/{policy}/live/`, or `live-cert/` + `live-key/` when key and cert come from different
+   Secrets), which kubelet refreshes in place; `public_certificate`/`private_key` in the rendered
+   config point at the files inside. `base_directory`/`trusted_dir` stay at their Neo4j defaults so
+   the Secret's `..data` symlink dir lands in an unscanned subdir and is never parsed as PEM. This
+   is the exact shape Neo4j's own Kubernetes guide requires for reload.
+
+2. **Trigger.** A pipeline step (`formation.TLSReloadReconciler`, runs last) detects a leaf
+   material change (`HotLeafKeys` checksum vs `status.tlsReloadChecksum`) and, over a **direct**
+   Bolt connection to each member (routing would reload an arbitrary node), runs `reloadTLS()`. It
+   then **verifies** by reading the served leaf back on the server-auth client ports (bolt/https);
+   a member whose kubelet has not yet propagated is retried on requeue rather than left silently
+   stale, and `status.tlsReloadChecksum` only advances once every member serves the new leaf. The
+   mTLS `cluster` policy rides along on the same `reloadTLS()` call (it reissues in lockstep with
+   bolt/https, since every policy enumerates the same per-member SANs).
+
+With `reload.enabled` the pod-template `tls-checksum` roll is scoped (via
+`RestartCriticalSecretKeys`) to only the material the operator cannot drive in this way — the
+`subPath`-mounted `trustedCerts` bundles. Net effect: a leaf reissue (scale or renewal) no longer
+rolls the pods; a CA bundle change still does; and with `reload` off everything rolls as before.
+Deploying this change itself re-renders the StatefulSet once (the mount layout changes), so expect a
+single rollout on operator upgrade.
+
+Reload needs an admin Bolt path to each member — `trust.certificates.bolt` (verified) or
+`trust.insecureAdminConnection`. ponytail ceilings: a deployment whose only server-auth port is
+unreadable (cluster-only, or bolt/https set to `clientAuth: Require`) falls back to a best-effort
+reload-once-per-change (no served verification); and `trustedCerts` keep their per-item `subPath`
+projected mount, so a CA-bundle change still rolls (CA changes are rare and the scanned `trusted/`
+dir has its own `..data` concern).
 
 ---
 
